@@ -69,6 +69,11 @@ createApp({
             employeeChartData: [],
             employeeChartInstance: null,
             employeeChartLoading: false,
+            employeeTaskDetails: [],
+            employeeTaskDetailsLoading: false,
+            employeeTaskDetailsTotalRevenue: 0,
+            employeeTaskDetailsTotalDrawings: 0,
+            employeeTaskDetailsPeriod: '',
             sortColumn: null, // Column to sort employee stats by
             sortDirection: 'asc', // 'asc' or 'desc'
             showReactionColumns: false, // 良い / 悪い columns in employee list
@@ -80,12 +85,14 @@ createApp({
             filters: {
                 period_type: 'month',
                 selected_month: getCurrentMonth() // Default to current month (Format: YYYY-MM)
-            }
+            },
+            _skipUrlSync: false
         }
     },
     
     mounted() {
         this.initYearOptions();
+        this.applyFiltersFromUrl();
         this.loadTeams();
         this.loadDepartments(); // used by teams + employees tabs
         // Auto load statistics for last 12 months
@@ -97,6 +104,10 @@ createApp({
         
         // Auto calculate statistics on first visit
         this.autoCalculateStatistics();
+        this.$nextTick(async () => {
+            await this.refreshChartsForFilters();
+            this.syncFiltersToUrl();
+        });
     },
     
     computed: {
@@ -375,6 +386,113 @@ createApp({
     },
     
     methods: {
+        parseBoolParam(value, defaultValue = false) {
+            if (value === null || value === undefined || value === '') {
+                return defaultValue;
+            }
+            const v = String(value).toLowerCase();
+            if (['1', 'true', 'yes', 'on'].includes(v)) return true;
+            if (['0', 'false', 'no', 'off'].includes(v)) return false;
+            return defaultValue;
+        },
+
+        applyFiltersFromUrl() {
+            const params = new URLSearchParams(window.location.search || '');
+            if (![...params.keys()].length) {
+                return false;
+            }
+
+            this._skipUrlSync = true;
+
+            if (params.has('selected_month')) {
+                const month = params.get('selected_month') || '';
+                if (month === 'all' || month === '') {
+                    this.filters.selected_month = '';
+                } else if (/^\d{4}-\d{2}$/.test(month)) {
+                    this.filters.selected_month = clampStatsMonth(month);
+                }
+            }
+
+            if (params.has('department_id')) {
+                const dept = params.get('department_id');
+                this.sharedFilters.department_id = (dept && dept !== 'null') ? dept : null;
+                if (this.sharedFilters.department_id) {
+                    this.selectedDepartmentId = this.sharedFilters.department_id;
+                }
+            }
+
+            if (params.has('team_id')) {
+                const team = params.get('team_id');
+                this.sharedFilters.team_id = (team && team !== 'null') ? team : null;
+            }
+
+            const tab = params.get('tab') || '';
+            if (['departments', 'teams', 'employees', 'annual'].includes(tab)) {
+                this.activeTab = tab;
+            }
+
+            if (params.has('year')) {
+                const year = parseInt(params.get('year'), 10);
+                if (!Number.isNaN(year) && year >= STATS_MIN_FISCAL_END_YEAR) {
+                    this.selectedYear = year;
+                }
+            }
+
+            if (params.has('show_reaction')) {
+                this.showReactionColumns = this.parseBoolParam(params.get('show_reaction'), false);
+            }
+            if (params.has('show_workload_breakdown')) {
+                this.showWorkloadBreakdownColumns = this.parseBoolParam(params.get('show_workload_breakdown'), false);
+            }
+
+            this._skipUrlSync = false;
+            return true;
+        },
+
+        syncFiltersToUrl() {
+            if (this._skipUrlSync) {
+                return;
+            }
+
+            const params = new URLSearchParams();
+            if (this.filters.selected_month) {
+                params.set('selected_month', String(this.filters.selected_month));
+            } else {
+                params.set('selected_month', 'all');
+            }
+
+            if (this.sharedFilters.department_id != null && this.sharedFilters.department_id !== '') {
+                params.set('department_id', String(this.sharedFilters.department_id));
+            }
+            if (this.sharedFilters.team_id != null && this.sharedFilters.team_id !== '') {
+                params.set('team_id', String(this.sharedFilters.team_id));
+            }
+
+            if (this.activeTab && this.activeTab !== 'departments') {
+                params.set('tab', this.activeTab);
+            }
+
+            if (this.activeTab === 'annual' && this.selectedYear) {
+                params.set('year', String(this.selectedYear));
+            }
+
+            if (this.showReactionColumns) {
+                params.set('show_reaction', '1');
+            }
+            if (this.showWorkloadBreakdownColumns) {
+                params.set('show_workload_breakdown', '1');
+            }
+
+            const qs = params.toString();
+            const nextUrl = qs
+                ? `${window.location.pathname}?${qs}`
+                : window.location.pathname;
+            const currentUrl = `${window.location.pathname}${window.location.search}`;
+            if (nextUrl !== currentUrl) {
+                window.history.replaceState({}, '', nextUrl);
+            }
+        },
+
         getSelectedFiscalEndYear() {
             if (this.activeTab === 'annual' && this.selectedYear) {
                 return parseInt(this.selectedYear, 10);
@@ -473,6 +591,7 @@ createApp({
             if (this.activeTab === 'annual') {
                 await this.loadAnnualSummary();
             }
+            this.syncFiltersToUrl();
         },
 
         initYearOptions() {
@@ -494,6 +613,7 @@ createApp({
             
             this.sharedFilters.team_id = teamId;
             this.loadMonthlyStatistics();
+            this.syncFiltersToUrl();
         },
         
         clearTeamSelection() {
@@ -502,6 +622,7 @@ createApp({
                 this.chartInstance.destroy();
                 this.chartInstance = null;
             }
+            this.syncFiltersToUrl();
         },
         
         isTeamSelected(teamId) {
@@ -793,10 +914,47 @@ createApp({
             await this.$nextTick();
             await this.refreshChartsForFilters();
             await this.loadRevenueTargets();
+            if (this.selectedUserId && this.activeTab === 'employees') {
+                await this.loadEmployeeMonthlyStatistics();
+                await this.loadEmployeeTaskDrawingDetails();
+            }
+            this.syncFiltersToUrl();
+        },
+
+        async resetFilters() {
+            this.filters.selected_month = getCurrentMonth();
+            this.sharedFilters.department_id = null;
+            this.sharedFilters.team_id = null;
+            this.selectedDepartmentId = null;
+            this.selectedUserId = null;
+            this.selectedUserName = '';
+            if (this.chartInstance) {
+                this.chartInstance.destroy();
+                this.chartInstance = null;
+            }
+            if (this.employeeChartInstance) {
+                this.employeeChartInstance.destroy();
+                this.employeeChartInstance = null;
+            }
+            if (this.departmentChartInstance) {
+                this.departmentChartInstance.destroy();
+                this.departmentChartInstance = null;
+            }
+            await this.loadStatistics();
+            await this.loadSummary();
+            await this.loadDepartmentSummary();
+            await this.loadRevenueTargets();
+            if (this.activeTab === 'annual') {
+                await this.loadAnnualSummary();
+            }
+            await this.$nextTick();
+            await this.refreshChartsForFilters();
+            this.syncFiltersToUrl();
         },
 
         onYearChange() {
             this.loadAnnualSummary();
+            this.syncFiltersToUrl();
         },
         
         async loadRevenueTargets() {
@@ -995,6 +1153,7 @@ createApp({
             // Clear selection when switching tabs
             if (tab === 'employees') {
                 this.loadDepartments();
+                this.loadStatistics();
             } else if (tab === 'teams') {
                 this.loadDepartments();
                 this.selectedUserId = null;
@@ -1030,6 +1189,7 @@ createApp({
                 }
                 this.loadAnnualSummary();
             }
+            this.syncFiltersToUrl();
         },
 
         isDepartmentSelected(departmentId) {
@@ -1050,14 +1210,20 @@ createApp({
             this.sharedFilters.department_id = departmentId;
             this.selectedDepartmentId = departmentId;
             this.loadDepartmentMonthlyStatistics();
+            this.syncFiltersToUrl();
         },
 
-        clearDepartmentSelection() {
+        async clearDepartmentSelection() {
+            this.sharedFilters.department_id = null;
             this.selectedDepartmentId = null;
             if (this.departmentChartInstance) {
                 this.departmentChartInstance.destroy();
                 this.departmentChartInstance = null;
             }
+            // Reload team/employee lists loaded with the previous department filter (e.g. after URL reload).
+            await this.loadSummary();
+            await this.loadStatistics();
+            this.syncFiltersToUrl();
         },
 
         formatWorkload(value) {
@@ -1295,6 +1461,7 @@ createApp({
             this.selectedUserId = userId;
             this.selectedUserName = userName;
             this.loadEmployeeMonthlyStatistics();
+            this.loadEmployeeTaskDrawingDetails();
             
             // Scroll to chart after a short delay to ensure it's rendered
             this.$nextTick(() => {
@@ -1313,9 +1480,71 @@ createApp({
         clearEmployeeSelection() {
             this.selectedUserId = null;
             this.selectedUserName = '';
+            this.employeeTaskDetails = [];
+            this.employeeTaskDetailsTotalRevenue = 0;
+            this.employeeTaskDetailsTotalDrawings = 0;
+            this.employeeTaskDetailsPeriod = '';
             if (this.employeeChartInstance) {
                 this.employeeChartInstance.destroy();
                 this.employeeChartInstance = null;
+            }
+        },
+
+        async refreshEmployeeDetail() {
+            await Promise.all([
+                this.loadEmployeeMonthlyStatistics(),
+                this.loadEmployeeTaskDrawingDetails()
+            ]);
+        },
+
+        async loadEmployeeTaskDrawingDetails() {
+            if (!this.selectedUserId) {
+                this.employeeTaskDetails = [];
+                this.employeeTaskDetailsTotalRevenue = 0;
+                this.employeeTaskDetailsTotalDrawings = 0;
+                this.employeeTaskDetailsPeriod = '';
+                return;
+            }
+
+            this.employeeTaskDetailsLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    model: 'employeestatistics',
+                    method: 'getUserTaskDrawingDetails',
+                    user_id: this.selectedUserId,
+                    months: 12
+                });
+                this.appendFiscalFilterParams(params);
+
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});
+                if (data && data.status === 'success') {
+                    this.employeeTaskDetails = Array.isArray(data.tasks) ? data.tasks : [];
+                    this.employeeTaskDetailsTotalRevenue = parseFloat(data.total_revenue) || 0;
+                    this.employeeTaskDetailsTotalDrawings = parseInt(data.total_drawings, 10) || 0;
+                    if (data.period_start && data.period_end) {
+                        this.employeeTaskDetailsPeriod = `${data.period_start} ～ ${data.period_end}`;
+                    } else {
+                        this.employeeTaskDetailsPeriod = '';
+                    }
+                } else {
+                    this.employeeTaskDetails = [];
+                    this.employeeTaskDetailsTotalRevenue = 0;
+                    this.employeeTaskDetailsTotalDrawings = 0;
+                    this.employeeTaskDetailsPeriod = '';
+                    if (data && data.message) {
+                        this.showError(data.message);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading employee task drawing details:', error);
+                this.employeeTaskDetails = [];
+                this.employeeTaskDetailsTotalRevenue = 0;
+                this.employeeTaskDetailsTotalDrawings = 0;
+                this.employeeTaskDetailsPeriod = '';
+                this.showError('タスク別図面売上の読み込みに失敗しました');
+            } finally {
+                this.employeeTaskDetailsLoading = false;
             }
         },
         
@@ -1697,9 +1926,8 @@ createApp({
                 if (this.sharedFilters.department_id) {
                     params.append('department_id', this.sharedFilters.department_id);
                 }
-                if (this.sharedFilters.team_id) {
-                    params.append('team_id', this.sharedFilters.team_id);
-                }
+                // Do not pass team_id: keep full team list for the department.
+                // Selected team is filtered client-side in displayedTeamStatistics.
                 
                 const response = await axios.get(`/api/index.php?${params.toString()}`);
                 this.teamStatistics = response.data || [];

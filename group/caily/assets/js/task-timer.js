@@ -311,9 +311,16 @@
                 this.els.taskLink.textContent = title;
                 this.els.taskLink.title = title;
                 const projectId = this.active.project_id;
-                this.els.taskLink.href = projectId
-                    ? `/project/task.php?project_id=${projectId}`
-                    : 'javascript:void(0);';
+                const taskId = this.active.task_id;
+                if (projectId) {
+                    let href = `/project/task.php?project_id=${projectId}`;
+                    if (taskId) {
+                        href += `&task_id=${taskId}`;
+                    }
+                    this.els.taskLink.href = href;
+                } else {
+                    this.els.taskLink.href = 'javascript:void(0);';
+                }
             }
             if (this.els.label && this.els.label.dataset.i18n) {
                 this.els.label.textContent = t(this.els.label.dataset.i18n);

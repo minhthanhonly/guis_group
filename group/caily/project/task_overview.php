@@ -34,9 +34,9 @@ if($_SESSION['show_project'] == 0){
         </div>
         <div class="col-md-3 mb-2" v-if="canSelectUser">
             <label class="form-label"><span data-i18n="ユーザー">ユーザー</span></label>
-            <select class="form-select" v-model="filters.user_id" @change="onUserChange">
+            <select id="overviewUserFilter" class="form-select" ref="userFilterSelect">
                 <option value="" data-i18n="すべて">すべて</option>
-                <option v-for="user in filteredUsers" :key="user.id" :value="user.id">{{ user.realname }}</option>
+                <option v-for="user in filteredUsers" :key="user.id" :value="String(user.id)">{{ user.realname }}</option>
             </select>
         </div>
         <div class="col-md-3 mb-2">
@@ -46,7 +46,7 @@ if($_SESSION['show_project'] == 0){
                 <option v-for="month in createdMonthOptions" :key="month.value" :value="month.value">{{ month.label }}</option>
             </select>
         </div>
-        <div class="col-md-12 mt-4 d-flex flex-wrap gap-4">
+        <div class="col-md-12 mt-4 d-flex flex-wrap align-items-center gap-4">
             <div class="form-check form-switch mb-1">
                 <input class="form-check-input" type="checkbox" id="excludeCompleted"
                        v-model="filters.excludeCompleted" @change="loadOverview">
@@ -59,14 +59,17 @@ if($_SESSION['show_project'] == 0){
             </div>
             <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
-                       v-model="filters.timerActiveOnly">
+                       v-model="filters.timerActiveOnly" @change="syncFiltersToUrl">
                 <label class="form-check-label text-nowrap" for="filterTimerActiveOnly" data-i18n="作業計測中のタスクのみ">作業計測中のタスクのみ</label>
             </div>
             <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="showUnassignedTasks"
-                       v-model="filters.showUnassignedTasks">
+                       v-model="filters.showUnassignedTasks" @change="syncFiltersToUrl">
                 <label class="form-check-label text-nowrap" for="showUnassignedTasks" data-i18n="未割り当てタスクを表示">未割り当てタスクを表示</label>
             </div>
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="resetFilters" :disabled="loading || weeklyLoading">
+                <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
+            </button>
         </div>
     </div>
 
@@ -76,7 +79,7 @@ if($_SESSION['show_project'] == 0){
             <ul class="nav nav-tabs" role="tablist">
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" :class="{ active: activeTab === 'tasks' }"
-                            @click="activeTab = 'tasks'" type="button">
+                            @click="setActiveTab('tasks')" type="button">
                         <i class="fa fa-list me-1"></i><span data-i18n="タスク一覧">タスク一覧</span>
                     </button>
                 </li>
@@ -89,7 +92,7 @@ if($_SESSION['show_project'] == 0){
                 <?php if($_SESSION['isProjectManager']): ?>
                 <li class="nav-item" role="presentation">
                     <button class="nav-link" :class="{ active: activeTab === 'unassigned' }"
-                                @click="activeTab = 'unassigned'" type="button">
+                                @click="setActiveTab('unassigned')" type="button">
                                 <i class="fa fa-user-times me-1"></i><span data-i18n="タスク未割り当てユーザー">タスク未割り当てユーザー</span>
                             </button>
                         </li>
@@ -145,7 +148,7 @@ if($_SESSION['show_project'] == 0){
                                         </a>
                                     </td>
                                     <td>
-                                        <a :href="`task.php?project_id=${task.project_id}`" class="text-decoration-none fw-bold">
+                                        <a :href="getTaskPageUrl(task)" class="text-decoration-none fw-bold">
                                             <span class="badge bg-label-secondary me-1">#{{ task.id }}</span>
                                             {{ task.title }}
                                         </a>
@@ -236,8 +239,38 @@ if($_SESSION['show_project'] == 0){
                     <h5 class="card-title mb-0">
                         <span data-i18n="週間タスク">週間タスク</span>
                         <span v-if="weeklyUserName" class="text-muted fw-normal ms-2">{{ weeklyUserName }}</span>
+                        <span v-if="!weeklyLoading" class="ms-3 fs-6">
+                            <span class="badge bg-label-primary">
+                                <span data-i18n="週の工数合計">週の工数合計</span>:
+                                <span class="fw-bold" :class="{ 'text-danger': weeklyTotalWeekHours < 0 }">
+                                    {{ formatEstimatedHours(weeklyTotalWeekHours) || '0h' }}
+                                </span>
+                            </span>
+                        </span>
                     </h5>
-                    <div class="d-flex align-items-center gap-2">
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <div class="form-check form-switch mb-0 me-1">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="weeklyHoursByWeek"
+                                v-model="weeklyHoursByWeek"
+                                @change="syncFiltersToUrl">
+                            <label class="form-check-label text-nowrap" for="weeklyHoursByWeek">
+                                <span data-i18n="週単位で計算">週単位で計算</span>
+                            </label>
+                        </div>
+                        <div class="form-check form-switch mb-0 me-1">
+                            <input
+                                class="form-check-input"
+                                type="checkbox"
+                                id="weeklyShowEntries"
+                                v-model="weeklyShowEntries"
+                                @change="syncFiltersToUrl">
+                            <label class="form-check-label text-nowrap" for="weeklyShowEntries">
+                                <span data-i18n="作業時間を表示">作業時間を表示</span>
+                            </label>
+                        </div>
                         <button class="btn btn-sm btn-outline-secondary" type="button" @click="shiftWeeklyWeek(-1)" :disabled="weeklyLoading">
                             <i class="fa fa-chevron-left"></i>
                         </button>
@@ -264,37 +297,32 @@ if($_SESSION['show_project'] == 0){
                         <p class="mb-0"><span data-i18n="この週のタスクがありません">この週のタスクがありません</span></p>
                     </div>
                     <div v-else class="table-responsive">
-                        <table class="table table-hover align-middle">
-                            <thead class="table-light">
+                        <table class="table align-middle m mb-0 weekly-tasks-table">
+                            <thead>
                                 <tr>
-                                    <th style="width: 2.5rem;"></th>
                                     <th><span data-i18n="案件">案件</span></th>
                                     <th><span data-i18n="タスク">タスク</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
-                                    <th class="text-center"><span data-i18n="週の工数">週の工数</span></th>
+                                    <th class="text-center">
+                                        {{ weeklyHoursByWeek ? $t('週の工数') : $t('ユーザー工数') }}
+                                    </th>
                                     <th class="text-center"><span data-i18n="工数合計">工数合計</span></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <template v-for="task in weeklyTasks" :key="'weekly-' + task.id">
-                                    <tr>
-                                        <td>
-                                            <button
-                                                type="button"
-                                                class="btn btn-sm btn-outline-secondary"
-                                                @click="toggleWeeklyEntries(task.id)"
-                                                :title="$t('作業時間を表示')">
-                                                <i class="fa" :class="isWeeklyExpanded(task.id) ? 'fa-eye-slash' : 'fa-eye'"></i>
-                                            </button>
-                                        </td>
+                                    <tr class="weekly-task-row">
                                         <td>
                                             <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
+                                                <span v-if="task.project_construction_number" class="badge bg-label-info me-1">
+                                                    <span data-i18n="工事">工事</span>: {{ task.project_construction_number }}
+                                                </span>
                                                 <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
                                                 <span>{{ task.project_name }}</span>
                                             </a>
                                         </td>
                                         <td>
-                                            <a :href="`task.php?project_id=${task.project_id}`" class="text-decoration-none fw-bold">
+                                            <a :href="getTaskPageUrl(task)" class="text-decoration-none fw-bold">
                                                 <span class="badge bg-label-secondary me-1">#{{ task.id }}</span>
                                                 {{ task.title }}
                                             </a>
@@ -302,38 +330,66 @@ if($_SESSION['show_project'] == 0){
                                         <td>
                                             <span class="badge" :class="'bg-' + getStatusColor(task.status)">{{ getStatusLabel(task.status) || '-' }}</span>
                                         </td>
-                                        <td class="text-center fw-semibold">{{ formatEstimatedHours(task.week_hours) || '0h' }}</td>
+                                        <td class="text-center fw-semibold" :class="{ 'text-danger': Number(getWeeklyHoursDisplay(task)) < 0 }">
+                                            {{ formatEstimatedHours(getWeeklyHoursDisplay(task)) || '0h' }}
+                                        </td>
                                         <td class="text-center">{{ formatEstimatedHours(task.estimated_hours) || '—' }}</td>
                                     </tr>
-                                    <tr v-if="isWeeklyExpanded(task.id)">
-                                        <td></td>
-                                        <td colspan="5" class="bg-light">
-                                            <div v-if="!task.time_entries || task.time_entries.length === 0" class="text-muted small py-2">
+                                    <tr v-if="weeklyShowEntries" class="weekly-entries-row">
+                                        <td colspan="5">
+                                            <div v-if="!task.time_entries || task.time_entries.length === 0" class="weekly-entries-empty text-muted small">
                                                 <span data-i18n="作業時間がありません">作業時間がありません</span>
                                             </div>
-                                            <table v-else class="table table-sm mb-0">
-                                                <thead>
-                                                    <tr>
-                                                        <th><span data-i18n="ユーザー">ユーザー</span></th>
-                                                        <th><span data-i18n="開始">開始</span></th>
-                                                        <th><span data-i18n="終了">終了</span></th>
-                                                        <th class="text-center"><span data-i18n="工数">工数</span></th>
-                                                        <th><span data-i18n="メモ">メモ</span></th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <tr v-for="entry in task.time_entries" :key="entry.id" :class="{ 'table-warning': entry.in_week }">
-                                                        <td class="small">{{ entry.user_name || entry.user_id || '—' }}</td>
-                                                        <td class="small">{{ formatDate(entry.start_time) }}</td>
-                                                        <td class="small">
-                                                            <span v-if="entry.running" class="badge bg-success" data-i18n="作業計測中">作業計測中</span>
-                                                            <span v-else>{{ formatDate(entry.end_time) }}</span>
-                                                        </td>
-                                                        <td class="text-center small" :class="{ 'text-danger': Number(entry.hours) < 0 }">{{ entry.running ? '—' : (formatEstimatedHours(entry.hours) || '0h') }}</td>
-                                                        <td class="small">{{ entry.description || '—' }}</td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
+                                            <div v-else class="weekly-entries-wrap">
+                                                <table class="table table-borderless table-sm mb-0 weekly-time-entries-table">
+                                                    <colgroup>
+                                                        <col class="col-user">
+                                                        <col class="col-start">
+                                                        <col class="col-end">
+                                                        <col class="col-hours">
+                                                        <col class="col-note">
+                                                        <col v-if="canEditWeeklyTimeEntries" class="col-actions">
+                                                    </colgroup>
+                                                    <thead>
+                                                        <tr>
+                                                            <th><span data-i18n="ユーザー">ユーザー</span></th>
+                                                            <th><span data-i18n="開始">開始</span></th>
+                                                            <th><span data-i18n="終了">終了</span></th>
+                                                            <th class="text-center"><span data-i18n="工数">工数</span></th>
+                                                            <th><span data-i18n="メモ">メモ</span></th>
+                                                            <th v-if="canEditWeeklyTimeEntries" class="text-center"><span data-i18n="操作">操作</span></th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody>
+                                                        <tr
+                                                            v-for="entry in task.time_entries"
+                                                            :key="entry.id"
+                                                            :class="{
+                                                                'is-cross-day': isCrossDayTimeEntry(entry),
+                                                                'is-in-week': !isCrossDayTimeEntry(entry) && weeklyHoursByWeek && entry.in_week
+                                                            }">
+                                                            <td class="small">{{ entry.user_name || entry.user_id || '—' }}</td>
+                                                            <td class="small" :class="{ 'text-danger fw-semibold': isCrossDayTimeEntry(entry) }">{{ formatDate(entry.start_time) }}</td>
+                                                            <td class="small" :class="{ 'text-danger fw-semibold': isCrossDayTimeEntry(entry) }">
+                                                                <span v-if="entry.running" class="badge bg-success" data-i18n="作業計測中">作業計測中</span>
+                                                                <span v-else>{{ formatDate(entry.end_time) }}</span>
+                                                            </td>
+                                                            <td class="text-center small" :class="{ 'text-danger': Number(entry.hours) < 0 }">{{ entry.running ? '—' : (formatEstimatedHours(entry.hours) || '0h') }}</td>
+                                                            <td class="small text-truncate" :title="entry.description || ''">{{ entry.description || '—' }}</td>
+                                                            <td v-if="canEditWeeklyTimeEntries" class="text-center">
+                                                                <button
+                                                                    v-if="!entry.running"
+                                                                    type="button"
+                                                                    class="btn btn-sm btn-icon btn-text-secondary rounded-pill"
+                                                                    :title="$t('編集')"
+                                                                    @click="openWeeklyTimeEntryModal(task, entry)">
+                                                                    <i class="fa fa-pencil-alt"></i>
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         </td>
                                     </tr>
                                 </template>
@@ -379,6 +435,55 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
     </div>
+
+    <!-- Modal: admin edit weekly time entry (same UX as task.php 工数 modal) -->
+    <div v-if="weeklyEntryModal.show" class="modal-backdrop fade show" @click="closeWeeklyTimeEntryModal"></div>
+    <div class="modal fade" tabindex="-1" :class="{show: weeklyEntryModal.show}" style="display: block;" v-if="weeklyEntryModal.show">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><span data-i18n="工数を編集">工数を編集</span></h5>
+                    <button type="button" class="btn-close" @click="closeWeeklyTimeEntryModal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small mb-1" for="weeklyEntryStartAtPicker"><span data-i18n="開始">開始</span></label>
+                        <input type="text"
+                               id="weeklyEntryStartAtPicker"
+                               class="form-control"
+                               autocomplete="off">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small mb-1" for="weeklyEntryEndAtPicker"><span data-i18n="終了">終了</span></label>
+                        <input type="text"
+                               id="weeklyEntryEndAtPicker"
+                               class="form-control"
+                               autocomplete="off">
+                    </div>
+                    <div class="row g-2 align-items-end">
+                        <div class="col">
+                            <label class="form-label small mb-1"><span data-i18n="時間">時間</span></label>
+                            <input type="number" class="form-control" step="1" v-model.number="weeklyEntryModal.hours" @keyup.enter="confirmWeeklyTimeEntryModal">
+                        </div>
+                        <div class="col-auto pb-2 text-muted">:</div>
+                        <div class="col">
+                            <label class="form-label small mb-1"><span data-i18n="分">分</span></label>
+                            <input type="number" class="form-control" step="1" v-model.number="weeklyEntryModal.minutes" @keyup.enter="confirmWeeklyTimeEntryModal">
+                        </div>
+                    </div>
+                    <p class="small text-muted mt-2 mb-0">
+                        <span data-i18n="換算">換算</span>: {{ getWeeklyEntryModalPreview() }}
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @click="closeWeeklyTimeEntryModal"><span data-i18n="キャンセル">キャンセル</span></button>
+                    <button type="button" class="btn btn-primary" @click="confirmWeeklyTimeEntryModal" :disabled="weeklyEntryModal.saving">
+                        <span data-i18n="保存">保存</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <style>
@@ -398,6 +503,122 @@ if($_SESSION['show_project'] == 0){
     background-color: transparent;
     animation: none;
 }
+
+/* Weekly overview tables — theme tokens (light / dark via data-bs-theme) */
+.weekly-tasks-table {
+    --weekly-surface: var(--bs-paper-bg);
+    --weekly-muted: rgba(var(--bs-base-color-rgb, 47, 43, 61), 0.04);
+    --weekly-hover: rgba(var(--bs-primary-rgb), 0.06);
+    --weekly-line: var(--bs-border-color);
+    --weekly-accent: var(--bs-primary);
+    border-collapse: separate;
+    border-spacing: 0;
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-border-color: transparent;
+}
+.weekly-tasks-table > thead > tr > th {
+    background: color-mix(in sRGB, var(--bs-primary) 10%, var(--bs-paper-bg));
+    color: var(--bs-heading-color);
+    font-size: 0.75rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border-bottom: 2px solid var(--weekly-accent);
+    white-space: nowrap;
+    padding: 0.65rem 0.75rem;
+}
+.weekly-tasks-table > tbody > tr.weekly-task-row > td {
+    border-top: 1px solid var(--weekly-line);
+    background: var(--weekly-surface);
+    padding: 0.7rem 0.75rem;
+}
+.weekly-tasks-table > tbody > tr.weekly-task-row:hover > td {
+    background: var(--weekly-hover);
+}
+.weekly-tasks-table > tbody > tr.weekly-entries-row > td {
+    padding: 0 0 0.65rem;
+    border-top: 0;
+    background: var(--weekly-muted);
+}
+
+/* Child entries — flat, nested, less chrome */
+.weekly-entries-wrap,
+.weekly-entries-empty {
+    margin: 0.35rem 0.75rem 0 1.5rem;
+    padding: 0.15rem 0 0.15rem 0.85rem;
+    border-left: 2px solid color-mix(in sRGB, var(--bs-primary) 55%, transparent);
+    background: transparent;
+}
+.weekly-entries-empty {
+    padding-top: 0.35rem;
+    padding-bottom: 0.35rem;
+    border-left-color: var(--bs-border-color);
+}
+
+.weekly-time-entries-table {
+    table-layout: fixed;
+    width: 100%;
+    margin: 0;
+    background: transparent;
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--bs-body-color);
+    --bs-table-border-color: transparent;
+}
+.weekly-time-entries-table col.col-user { width: 14%; }
+.weekly-time-entries-table col.col-start { width: 18%; }
+.weekly-time-entries-table col.col-end { width: 18%; }
+.weekly-time-entries-table col.col-hours { width: 8%; }
+.weekly-time-entries-table col.col-note { width: auto; }
+.weekly-time-entries-table col.col-actions { width: 3.25rem; }
+.weekly-time-entries-table th,
+.weekly-time-entries-table td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: middle;
+    border: 0 !important;
+}
+.weekly-time-entries-table > thead > tr > th {
+    color: var(--bs-secondary-color);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 0.25rem 0.5rem 0.35rem;
+    text-transform: none;
+    background: transparent;
+}
+.weekly-time-entries-table > tbody > tr > td {
+    padding: 0.32rem 0.5rem;
+    color: var(--bs-body-color);
+    background: transparent;
+}
+.weekly-time-entries-table > tbody > tr + tr > td {
+    box-shadow: inset 0 1px 0 color-mix(in sRGB, var(--bs-border-color) 55%, transparent);
+}
+.weekly-time-entries-table > tbody > tr.is-in-week > td {
+    background: #fff8e8;
+}
+.weekly-time-entries-table > tbody > tr.is-cross-day > td {
+    background: #fdeeee;
+}
+[data-bs-theme=dark] .weekly-time-entries-table > tbody > tr.is-in-week > td {
+    background: color-mix(in sRGB, #ffb400 18%, var(--bs-paper-bg));
+}
+[data-bs-theme=dark] .weekly-time-entries-table > tbody > tr.is-cross-day > td {
+    background: color-mix(in sRGB, var(--bs-danger) 18%, var(--bs-paper-bg));
+}
+.weekly-time-entries-table .btn-icon {
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0;
+    line-height: 1.75rem;
+}
+
+/* Flatpickr inside weekly time-entry modal */
+#app .flatpickr-calendar.static {
+    z-index: 1100;
+}
 </style>
 
 <?php
@@ -414,6 +635,6 @@ window.currentUser = {
 };
 </script>
 
-<script src="assets/js/task-overview.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/task-overview.js?v=<?=STATS_CACHE_VERSION?>"></script>
 
 

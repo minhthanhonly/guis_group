@@ -57,6 +57,9 @@ if($_SESSION['show_project'] == 0){
                                 <span v-if="calculating">計算中...</span>
                                 <span v-else>統計計算</span>
                             </button>
+                            <button class="btn btn-outline-secondary" type="button" @click="resetFilters" :disabled="loading || calculating">
+                                <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
+                            </button>
                             <!-- <button class="btn btn-danger" @click="deleteStatistics" :disabled="deleting">
                                 <i class="fa fa-trash me-1"></i>
                                 <span v-if="deleting">削除中...</span>
@@ -194,7 +197,7 @@ if($_SESSION['show_project'] == 0){
         </div>
 
         <!-- Team Monthly Chart Section -->
-        <div class="col-12 mb-4" v-show="sharedFilters.team_id && activeTab === 'teams'">
+        <div class="col-12 mb-4 mt-4" v-show="sharedFilters.team_id && activeTab === 'teams'">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
@@ -313,7 +316,7 @@ if($_SESSION['show_project'] == 0){
         </div>
 
         <!-- Department Monthly Chart Section -->
-        <div class="col-12 mb-4" v-show="sharedFilters.department_id && activeTab === 'departments'">
+        <div class="col-12 mb-4 mt-4" v-show="sharedFilters.department_id && activeTab === 'departments'">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
@@ -343,12 +346,12 @@ if($_SESSION['show_project'] == 0){
                     <h5 class="card-title mb-0">従業員統計一覧</h5>
                     <div class="d-flex align-items-center gap-3">
                         <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="showReactionColumnsSwitch" v-model="showReactionColumns">
-                            <label class="form-check-label small" for="showReactionColumnsSwitch" data-i18n="良い / 悪いを表示">良い / 悪いを表示</label>
+                            <input class="form-check-input" type="checkbox" id="showReactionColumnsSwitch" v-model="showReactionColumns" @change="syncFiltersToUrl">
+                            <label class="form-check-label small" for="showReactionColumnsSwitch" data-i18n="評価の表示">評価の表示</label>
                         </div>
                         <div class="form-check form-switch mb-0">
-                            <input class="form-check-input" type="checkbox" id="showWorkloadBreakdownColumnsSwitch" v-model="showWorkloadBreakdownColumns">
-                            <label class="form-check-label small" for="showWorkloadBreakdownColumnsSwitch" data-i18n="種別別工数を表示">種別別工数を表示</label>
+                            <input class="form-check-input" type="checkbox" id="showWorkloadBreakdownColumnsSwitch" v-model="showWorkloadBreakdownColumns" @change="syncFiltersToUrl">
+                            <label class="form-check-label small" for="showWorkloadBreakdownColumnsSwitch" data-i18n="工数の種別表示">種別別工数を表示</label>
                         </div>
                         <button class="btn btn-sm btn-outline-secondary" @click="loadStatistics">
                             <i class="fa fa-refresh me-1"></i>更新
@@ -519,7 +522,7 @@ if($_SESSION['show_project'] == 0){
         </div>
 
         <!-- Employee Monthly Chart Section -->
-        <div id="employee-chart-section" class="col-12 mb-4" v-show="selectedUserId && activeTab === 'employees'">
+        <div id="employee-chart-section" class="col-12 mb-4 mt-4" v-show="selectedUserId && activeTab === 'employees'">
             <div class="card">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
@@ -530,7 +533,7 @@ if($_SESSION['show_project'] == 0){
                         <button class="btn btn-sm btn-outline-primary" @click="clearEmployeeSelection">
                             <i class="fa fa-times me-1"></i>閉じる
                         </button>
-                        <button class="btn btn-sm btn-outline-secondary" @click="loadEmployeeMonthlyStatistics">
+                        <button class="btn btn-sm btn-outline-secondary" @click="refreshEmployeeDetail">
                             <i class="fa fa-refresh me-1"></i>更新
                         </button>
                     </div>
@@ -547,6 +550,67 @@ if($_SESSION['show_project'] == 0){
                     <!-- Chart Container -->
                     <div v-else>
                         <div id="employee-monthly-chart" style="min-height: 400px;"></div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-top">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                            <h6 class="mb-0">
+                                <i class="fa fa-list me-1"></i>
+                                <span data-i18n="タスク別図面売上">タスク別図面売上</span>
+                                <small v-if="employeeTaskDetailsPeriod" class="text-muted ms-2">{{ employeeTaskDetailsPeriod }}</small>
+                            </h6>
+                            <div class="small">
+                                <span class="me-3">
+                                    <span data-i18n="図面数">図面数</span>:
+                                    <strong>{{ employeeTaskDetailsTotalDrawings }}</strong>
+                                </span>
+                                <span>
+                                    <span data-i18n="売上合計">売上合計</span>:
+                                    <strong class="text-info">¥{{ formatNumber(employeeTaskDetailsTotalRevenue) }}</strong>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div v-if="employeeTaskDetailsLoading" class="text-center py-4">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        </div>
+                        <div v-else-if="employeeTaskDetails.length === 0" class="text-center text-muted py-4">
+                            <span data-i18n="該当するタスクがありません">該当するタスクがありません</span>
+                        </div>
+                        <div v-else class="table-responsive">
+                            <table class="table table-sm table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th><span data-i18n="案件">案件</span></th>
+                                        <th><span data-i18n="タスク">タスク</span></th>
+                                        <th class="text-center"><span data-i18n="図面数">図面数</span></th>
+                                        <th class="text-end"><span data-i18n="図面売上">図面売上</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(row, idx) in employeeTaskDetails" :key="(row.task_id || 'x') + '-' + idx">
+                                        <td>
+                                            <a v-if="row.project_id" :href="`detail.php?id=${row.project_id}`" class="text-decoration-none">
+                                                <span class="badge bg-label-primary me-1">#{{ row.project_id }}</span>
+                                                {{ row.project_name || '-' }}
+                                            </a>
+                                            <span v-else>-</span>
+                                        </td>
+                                        <td>
+                                            <a v-if="row.task_id && row.project_id"
+                                               :href="`task.php?project_id=${row.project_id}&task_id=${row.task_id}`"
+                                               class="text-decoration-none fw-semibold">
+                                                <span class="badge bg-label-secondary me-1">#{{ row.task_id }}</span>
+                                                {{ row.task_title || '-' }}
+                                            </a>
+                                            <span v-else class="text-muted">{{ row.task_title || '-' }}</span>
+                                        </td>
+                                        <td class="text-center">{{ row.drawing_count }}</td>
+                                        <td class="text-end text-info">¥{{ formatNumber(row.drawings_revenue) }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -723,5 +787,5 @@ $root = ROOT;
 ?>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="<?=$root?>assets/vendor/libs/apex-charts/apexcharts.js"></script>
-<script src="assets/js/employee-statistics.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/employee-statistics.js?v=<?=STATS_CACHE_VERSION?>"></script>
 

@@ -49,6 +49,14 @@ class Task extends ApplicationModel {
         return max(0, round(floatval($value), 2));
     }
 
+    /** Time entry hours may be negative (adjustment / correction). */
+    private function normalize_time_entry_hours($value) {
+        if ($value === '' || $value === null) {
+            return 0;
+        }
+        return round(floatval($value), 2);
+    }
+
     private function getCompletedTimeEntryHoursSum($taskId) {
         $taskId = intval($taskId);
         if ($taskId <= 0) {
@@ -72,7 +80,7 @@ class Task extends ApplicationModel {
         $ownerFilter = '';
         if ($ownerUserId !== null && $ownerUserId !== '') {
             $ownerFilter = sprintf(
-                " AND user_id COLLATE utf8mb4_general_ci = '%s' COLLATE utf8mb4_general_ci",
+                " AND user_id = '%s'",
                 $this->quote((string) $ownerUserId)
             );
         }
@@ -167,7 +175,7 @@ class Task extends ApplicationModel {
              FROM %stime_entries te
              WHERE te.task_id = %d
                AND te.end_time IS NOT NULL
-               AND te.user_id COLLATE utf8mb4_general_ci IN (%s)
+               AND te.user_id IN (%s)
              GROUP BY te.user_id
              ORDER BY COALESCE(SUM(te.hours), 0) DESC, te.user_id ASC
              LIMIT 1",
@@ -193,7 +201,49 @@ class Task extends ApplicationModel {
         return sprintf('工数調整 (編集者: %s)', $editorName);
     }
 
-    private function insertTimeEntryHoursAdjustment($taskId, $hoursDelta, $taskRow = null) {
+    private function parseAdjustmentDateTime($value) {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return date('Y-m-d H:i:s');
+        }
+        // Prefer explicit formats from the overview/task UI (avoid ambiguous strtotime slash parsing).
+        if (preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?$/', $value, $m)) {
+            return sprintf(
+                '%04d-%02d-%02d %02d:%02d:%02d',
+                (int) $m[1],
+                (int) $m[2],
+                (int) $m[3],
+                (int) $m[4],
+                (int) $m[5],
+                isset($m[6]) && $m[6] !== '' ? (int) $m[6] : 0
+            );
+        }
+        if (preg_match('/^(\d{4})\/(\d{1,2})\/(\d{1,2})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?$/', $value, $m)) {
+            return sprintf(
+                '%04d-%02d-%02d %02d:%02d:%02d',
+                (int) $m[1],
+                (int) $m[2],
+                (int) $m[3],
+                (int) $m[4],
+                (int) $m[5],
+                isset($m[6]) && $m[6] !== '' ? (int) $m[6] : 0
+            );
+        }
+        $normalized = $this->normalize_datetime_with_default($value, date('H:i'));
+        if (!$normalized) {
+            return date('Y-m-d H:i:s');
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/', $normalized)) {
+            return $normalized . ':00';
+        }
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $normalized)) {
+            return $normalized;
+        }
+        $ts = strtotime($normalized);
+        return $ts !== false ? date('Y-m-d H:i:s', $ts) : date('Y-m-d H:i:s');
+    }
+
+    private function insertTimeEntryHoursAdjustment($taskId, $hoursDelta, $taskRow = null, $adjustmentAt = null) {
         $taskId = intval($taskId);
         $hoursDelta = round(floatval($hoursDelta), 2);
         if ($taskId <= 0 || abs($hoursDelta) < 0.005) {
@@ -209,19 +259,14 @@ class Task extends ApplicationModel {
         }
 
         $now = date('Y-m-d H:i:s');
-        $lastEntryTimes = $this->getLastTimeEntryTimesForAdjustment($taskId, $userId);
-        if (!$lastEntryTimes) {
-            $lastEntryTimes = $this->getLastTimeEntryTimesForAdjustment($taskId);
-        }
-        $entryStartTime = $lastEntryTimes ? $lastEntryTimes['start_time'] : $now;
-        $entryEndTime = $lastEntryTimes ? $lastEntryTimes['end_time'] : $now;
+        $entryTime = $this->parseAdjustmentDateTime($adjustmentAt);
         $prevTable = $this->table;
         $this->table = DB_PREFIX . 'time_entries';
         $entryId = $this->query_insert(array(
             'task_id' => $taskId,
             'user_id' => $userId,
-            'start_time' => $entryStartTime,
-            'end_time' => $entryEndTime,
+            'start_time' => $entryTime,
+            'end_time' => $entryTime,
             'hours' => $hoursDelta,
             'description' => $this->buildHoursAdjustmentDescription(),
             'created_at' => $now,
@@ -250,14 +295,14 @@ class Task extends ApplicationModel {
     /**
      * Set task 工数 to $targetHours by inserting a time_entries adjustment for the delta.
      */
-    private function applyTaskHoursTarget($taskId, $targetHours, $taskRow = null) {
+    private function applyTaskHoursTarget($taskId, $targetHours, $taskRow = null, $adjustmentAt = null) {
         $taskId = intval($taskId);
         $targetHours = $this->normalize_estimated_hours($targetHours);
         if ($taskId <= 0) {
             return $targetHours;
         }
         $currentSum = $this->getCompletedTimeEntryHoursSum($taskId);
-        $this->insertTimeEntryHoursAdjustment($taskId, round($targetHours - $currentSum, 2), $taskRow);
+        $this->insertTimeEntryHoursAdjustment($taskId, round($targetHours - $currentSum, 2), $taskRow, $adjustmentAt);
         return $this->syncTaskEstimatedHoursFromTimeEntries($taskId);
     }
 
@@ -1873,13 +1918,111 @@ class Task extends ApplicationModel {
         if ($oldHours <= 0) {
             $oldHours = isset($old['estimated_hours']) ? $this->normalize_estimated_hours($old['estimated_hours']) : 0;
         }
-        $estimatedHours = $this->applyTaskHoursTarget($id, $estimatedHours, $old);
+        $adjustmentAt = isset($_POST['adjustment_at']) ? $_POST['adjustment_at'] : null;
+        $estimatedHours = $this->applyTaskHoursTarget($id, $estimatedHours, $old, $adjustmentAt);
 
         if ($oldHours != $estimatedHours) {
             $this->logTaskAction($id, 'updated', '工数を変更', $oldHours, $estimatedHours);
         }
 
         return ['status' => 'success', 'estimated_hours' => $estimatedHours];
+    }
+
+    /**
+     * Admin-only: update one time_entries row (start/end/hours) and resync task 工数.
+     */
+    function updateTimeEntryByAdmin() {
+        if (!isset($_SESSION['authority']) || $_SESSION['authority'] !== 'administrator') {
+            return [
+                'status' => 'error',
+                'message' => '権限がありません',
+                'http_status' => 403,
+            ];
+        }
+
+        $entryId = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if ($entryId <= 0) {
+            return ['status' => 'error', 'message' => 'Missing time entry id'];
+        }
+
+        $entry = $this->fetchOne(sprintf(
+            "SELECT * FROM %stime_entries WHERE id = %d LIMIT 1",
+            DB_PREFIX,
+            $entryId
+        ));
+        if (!$entry) {
+            return ['status' => 'error', 'message' => 'Time entry not found'];
+        }
+        if (empty($entry['end_time'])) {
+            return ['status' => 'error', 'message' => '作業計測中のエントリは編集できません'];
+        }
+
+        $taskId = intval($entry['task_id'] ?? 0);
+        if ($taskId <= 0) {
+            return ['status' => 'error', 'message' => 'Task not found'];
+        }
+
+        $hours = $this->normalize_time_entry_hours(isset($_POST['hours']) ? $_POST['hours'] : ($entry['hours'] ?? 0));
+
+        $hasStart = isset($_POST['start_time']) && trim((string) $_POST['start_time']) !== '';
+        $hasEnd = isset($_POST['end_time']) && trim((string) $_POST['end_time']) !== '';
+        $hasAdjustment = isset($_POST['adjustment_at']) && trim((string) $_POST['adjustment_at']) !== '';
+
+        if ($hasStart || $hasEnd) {
+            $startTime = $hasStart
+                ? $this->parseAdjustmentDateTime($_POST['start_time'])
+                : (string) ($entry['start_time'] ?? date('Y-m-d H:i:s'));
+            $endTime = $hasEnd
+                ? $this->parseAdjustmentDateTime($_POST['end_time'])
+                : (string) ($entry['end_time'] ?? $startTime);
+        } elseif ($hasAdjustment) {
+            $entryTime = $this->parseAdjustmentDateTime($_POST['adjustment_at']);
+            $startTime = $entryTime;
+            $endTime = $entryTime;
+        } else {
+            $startTime = (string) ($entry['start_time'] ?? date('Y-m-d H:i:s'));
+            $endTime = (string) ($entry['end_time'] ?? $startTime);
+        }
+
+        $now = date('Y-m-d H:i:s');
+
+        $prevTable = $this->table;
+        $this->table = DB_PREFIX . 'time_entries';
+        $updateResult = $this->query_update(
+            array(
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+                'hours' => $hours,
+                'updated_at' => $now,
+            ),
+            array('id' => $entryId)
+        );
+        $this->table = $prevTable;
+
+        if ($updateResult < 0) {
+            return ['status' => 'error', 'message' => 'Update failed'];
+        }
+
+        $estimatedHours = $this->syncTaskEstimatedHoursFromTimeEntries($taskId);
+        $this->logTaskAction(
+            $taskId,
+            'updated',
+            '作業時間エントリを変更',
+            isset($entry['hours']) ? $this->normalize_time_entry_hours($entry['hours']) : 0,
+            $hours
+        );
+
+        return [
+            'status' => 'success',
+            'entry' => array(
+                'id' => $entryId,
+                'task_id' => $taskId,
+                'start_time' => $startTime,
+                'end_time' => $endTime,
+                'hours' => $hours,
+            ),
+            'estimated_hours' => $estimatedHours,
+        ];
     }
 
     function updateNote() {
@@ -3843,9 +3986,7 @@ class Task extends ApplicationModel {
         if ($team_id > 0) {
             $userWhereArr[] = "tm.team_id = " . intval($team_id);
         }
-        if ($user_id > 0) {
-            $userWhereArr[] = "u.id = " . intval($user_id);
-        }
+        // Do not filter users dropdown by selected user_id (user_id only filters tasks).
         $userWhere = "WHERE " . implode(" AND ", $userWhereArr);
 
         $userRows = $this->fetchAll(
@@ -4169,7 +4310,7 @@ class Task extends ApplicationModel {
         $weekEnd = $sunday->format('Y-m-d');
 
         $useridEsc = $this->quote($user['userid']);
-        $userJoin = "u.userid COLLATE utf8mb4_general_ci = te.user_id COLLATE utf8mb4_general_ci";
+        $userJoin = "CONVERT(u.userid USING utf8mb4) = CONVERT(te.user_id USING utf8mb4)";
         $weekStartQ = "'" . $this->quote($weekStart) . "'";
         $weekEndQ = "'" . $this->quote($weekEnd) . "'";
 
@@ -4177,7 +4318,7 @@ class Task extends ApplicationModel {
         $weekTaskRows = $this->fetchAll(sprintf(
             "SELECT DISTINCT te.task_id
              FROM %stime_entries te
-             WHERE te.user_id COLLATE utf8mb4_general_ci = '%s' COLLATE utf8mb4_general_ci
+             WHERE te.user_id = '%s'
                AND (
                     (te.end_time IS NOT NULL AND DATE(te.end_time) BETWEEN %s AND %s)
                     OR (te.end_time IS NULL AND DATE(te.start_time) BETWEEN %s AND %s)
@@ -4262,11 +4403,14 @@ class Task extends ApplicationModel {
                 t.note,
                 p.name AS project_name,
                 p.department_id,
-                p.end_date AS project_end_date
+                p.end_date AS project_end_date,
+                pp.construction_number AS project_construction_number
              FROM %stasks t
              LEFT JOIN %sprojects p ON t.project_id = p.id
+             LEFT JOIN %sparent_projects pp ON p.parent_project_id = pp.id
              WHERE t.id IN (%s)
              ORDER BY t.id ASC",
+            DB_PREFIX,
             DB_PREFIX,
             DB_PREFIX,
             $idList
@@ -4308,6 +4452,7 @@ class Task extends ApplicationModel {
                 'id' => $taskId,
                 'project_id' => isset($row['project_id']) ? intval($row['project_id']) : 0,
                 'project_name' => $row['project_name'] ?? '',
+                'project_construction_number' => $row['project_construction_number'] ?? '',
                 'title' => $row['title'] ?? '',
                 'status' => $row['status'] ?? '',
                 'priority' => $row['priority'] ?? '',

@@ -5179,6 +5179,12 @@ var projectTable;
         });
 
         // ----- 確認必要メモ: hover pencil & context menu -----
+        // Remove previous menus/handlers so department switch does not leave duplicate IDs
+        $('#confirmationNoteContextMenu').remove();
+        $('#projectRowContextMenu').remove();
+        $('#projectTable tbody').off('contextmenu.projectRowMenu');
+        $(document).off('click.projectRowMenuHide');
+
         // Custom context menu for adding confirmation notes (legacy: per note column, hiện chỉ để tránh lỗi khi hide/click)
         const $noteContextMenu = $('<div id="confirmationNoteContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
         $noteContextMenu.append('<button class="dropdown-item" type="button" id="addConfirmationNoteBtn"><i class="fa fa-plus me-1"></i><span data-i18n="メモを追加">メモを追加</span></button>');
@@ -5199,6 +5205,12 @@ var projectTable;
         let contextMenuIsManagerOnly = false;
         let contextMenuTodoEl = null;
         let contextMenuRowData = null;
+
+        function canEditBusinessDocumentsForContextMenu() {
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+            if (window.app && window.app.userPermissions && window.app.userPermissions.project_director_edit == 1) return true;
+            return !!(window.app && window.app.canEditBusinessDocuments);
+        }
 
         function isCurrentUserManagerOfProject(rowData) {
             if (typeof USER_AUTH_ID === 'undefined' || !USER_AUTH_ID || !rowData || !rowData.manager_id) return false;
@@ -5227,7 +5239,7 @@ var projectTable;
             }
         }
 
-        $('#projectTable tbody').on('contextmenu', 'tr', function(e) {
+        $('#projectTable tbody').on('contextmenu.projectRowMenu', 'tr', function(e) {
             if (!window.app) return;
             if (!projectTable) return;
             const rowData = projectTable.row($(this)).data();
@@ -5253,21 +5265,21 @@ var projectTable;
             e.preventDefault();
             contextMenuRowProjectId = rowData.id;
             contextMenuIsManagerOnly = !canFullEdit && isManagerOfProject;
-            $('#copyProjectInfoRowBtn').show();
-            $('#quickEditProjectRowBtn').toggle(canShowEdit);
-            $('#editParentConstructionNumberRowBtn').toggle(canEditParentConstruction);
-            var canEditBd = window.app && window.app.canEditBusinessDocuments;
-            $('#editBusinessDocumentRowBtn').toggle(!!canEditBd);
-            $('#addNoteFromRowBtn').toggle(hasNoteColumn);
-            $('#addToTodoFromRowBtn').toggle(!!contextMenuTodoEl);
+            var canEditBd = canEditBusinessDocumentsForContextMenu();
+            $rowContextMenu.find('#copyProjectInfoRowBtn').show();
+            $rowContextMenu.find('#quickEditProjectRowBtn').toggle(canShowEdit);
+            $rowContextMenu.find('#editParentConstructionNumberRowBtn').toggle(canEditParentConstruction);
+            $rowContextMenu.find('#editBusinessDocumentRowBtn').toggle(!!canEditBd);
+            $rowContextMenu.find('#addNoteFromRowBtn').toggle(hasNoteColumn);
+            $rowContextMenu.find('#addToTodoFromRowBtn').toggle(!!contextMenuTodoEl);
             var hasSecondaryActions = canShowEdit || canEditParentConstruction || !!canEditBd || hasNoteColumn || !!contextMenuTodoEl;
-            $('.project-row-context-divider').toggle(hasSecondaryActions);
+            $rowContextMenu.find('.project-row-context-divider').toggle(hasSecondaryActions);
             $rowContextMenu
                 .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
                 .show();
         });
 
-        $(document).on('click', function() {
+        $(document).on('click.projectRowMenuHide', function() {
             $rowContextMenu.hide();
         });
         $rowContextMenu.on('click', '#copyProjectInfoRowBtn', async function(ev) {

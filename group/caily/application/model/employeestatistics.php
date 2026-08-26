@@ -399,14 +399,12 @@ class Employeestatistics extends ApplicationModel {
             FROM " . DB_PREFIX . "project_drawings pd
             INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
             WHERE (FIND_IN_SET('%s', pd.created_by) > 0 OR pd.created_by = '%s')
-            AND pd.completed_at IS NOT NULL
-            AND DATE(pd.completed_at) BETWEEN '%s' AND '%s'
+            AND %s
             AND pd.price IS NOT NULL
             AND %s",
             $this->quote($user_id),
             $this->quote($user_id),
-            $this->quote($period_start),
-            $this->quote($period_end),
+            $this->getDrawingPeriodSql('p', $period_start, $period_end),
             $this->getDrawingRevenueEligibilitySql('pd', 'p')
         );
         
@@ -1025,20 +1023,23 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Projects that count toward drawing revenue: CAILY or GUIS 納品済み.
+     * Projects that count toward drawing revenue:
+     * - CAILY/GUIS 納品済み (delivered), or
+     * - project status completed (完了) even if delivery flag is not set yet.
      */
     private function getCompletedProjectStatusSql($alias = 'p') {
         $a = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $alias);
         $prefix = $a !== '' ? $a . '.' : '';
         return sprintf(
-            "(%s LIKE '%%納品済み%%' OR %s LIKE '%%納品済み%%')",
+            "(%s LIKE '%%納品済み%%' OR %s LIKE '%%納品済み%%' OR %s = 'completed')",
             $prefix . 'caily_nouki_status',
-            $prefix . 'guis_nouki_status'
+            $prefix . 'guis_nouki_status',
+            $prefix . 'status'
         );
     }
 
     /**
-     * Drawing revenue eligibility: completed drawing on a delivered project.
+     * Drawing revenue eligibility: completed drawing on a delivered/completed project.
      */
     private function getDrawingRevenueEligibilitySql($drawingAlias = 'pd', $projectAlias = 'p') {
         return $this->getCompletedDrawingStatusSql($drawingAlias)
@@ -1046,17 +1047,35 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
-     * Drawing period filter (completed_at).
+     * True when a datetime column is NULL / empty / zero-date (strict-mode safe).
      */
-    private function getDrawingPeriodSql($alias = 'pd', $start_date, $end_date) {
-        $a = preg_replace('/[^a-zA-Z0-9_]/', '', $alias) ?: 'pd';
-        return sprintf(
-            "%s.completed_at IS NOT NULL AND DATE(%s.completed_at) BETWEEN '%s' AND '%s'",
-            $a,
-            $a,
-            $this->quote($start_date),
-            $this->quote($end_date)
-        );
+    private function getEmptyDatetimeSql($columnExpr) {
+        $col = (string) $columnExpr;
+        return '(' . $col . " IS NULL OR CAST(" . $col . " AS CHAR) LIKE '0000-00-00%'"
+            . ' OR TRIM(CAST(' . $col . " AS CHAR)) = '')";
+    }
+
+    /**
+     * Drawing revenue date: caily_nouki → guis_nouki → project end_date.
+     */
+    private function getDrawingRevenueDateExpr($projectAlias = 'p') {
+        $p = preg_replace('/[^a-zA-Z0-9_]/', '', $projectAlias) ?: 'p';
+        $cailyEmpty = $this->getEmptyDatetimeSql($p . '.caily_nouki');
+        $guisEmpty = $this->getEmptyDatetimeSql($p . '.guis_nouki');
+        return '(CASE'
+            . ' WHEN NOT ' . $cailyEmpty . ' THEN ' . $p . '.caily_nouki'
+            . ' WHEN NOT ' . $guisEmpty . ' THEN ' . $p . '.guis_nouki'
+            . ' ELSE ' . $p . '.end_date'
+            . ' END)';
+    }
+
+    /**
+     * Drawing period filter (caily_nouki / guis_nouki, else project end_date).
+     */
+    private function getDrawingPeriodSql($alias = 'p', $start_date, $end_date) {
+        $dateExpr = $this->getDrawingRevenueDateExpr($alias);
+        return 'NOT ' . $this->getEmptyDatetimeSql($dateExpr)
+            . ' AND DATE(' . $dateExpr . ") BETWEEN '" . $this->quote($start_date) . "' AND '" . $this->quote($end_date) . "'";
     }
 
     /**
@@ -1138,7 +1157,7 @@ class Employeestatistics extends ApplicationModel {
             GROUP BY p.department_id",
             $this->getDrawingRevenueEligibilitySql('pd', 'p'),
             $this->getProjectDepartmentWhereSql('p', $department_id),
-            $this->getDrawingPeriodSql('pd', $start_date, $end_date)
+            $this->getDrawingPeriodSql('p', $start_date, $end_date)
         );
         $map = [];
         foreach ($this->fetchAll($query) as $row) {
@@ -1245,7 +1264,7 @@ class Employeestatistics extends ApplicationModel {
             $creatorJoin,
             $this->getDrawingRevenueEligibilitySql('pd', 'p'),
             $projectScope,
-            $this->getDrawingPeriodSql('pd', $start_date, $end_date),
+            $this->getDrawingPeriodSql('p', $start_date, $end_date),
             $teamWhereSql,
             $this->getActiveEmployeeStatsSql('u')
         ));
@@ -1339,7 +1358,7 @@ class Employeestatistics extends ApplicationModel {
 
         $drawingWhereArr = [
             $this->getTeamProjectScopeSql('te', 'p', $department_id),
-            $this->getDrawingPeriodSql('pd', $start_date, $end_date),
+            $this->getDrawingPeriodSql('p', $start_date, $end_date),
             $this->getDrawingRevenueEligibilitySql('pd', 'p'),
             "pd.price IS NOT NULL",
             "te.is_active = 1",
@@ -1356,7 +1375,7 @@ class Employeestatistics extends ApplicationModel {
 
         $drawingRows = $this->fetchAll(sprintf(
             "SELECT u.userid, tm.team_id,
-                DATE_FORMAT(pd.completed_at, '%%Y-%%m') AS ym,
+                DATE_FORMAT(%s, '%%Y-%%m') AS ym,
                 COUNT(*) AS drawing_count,
                 COALESCE(SUM(pd.price), 0) AS total_revenue
             FROM " . DB_PREFIX . "project_drawings pd
@@ -1366,6 +1385,7 @@ class Employeestatistics extends ApplicationModel {
             INNER JOIN " . DB_PREFIX . "team te ON tm.team_id = te.id
             %s
             GROUP BY u.userid, tm.team_id, ym",
+            $this->getDrawingRevenueDateExpr('p'),
             $creatorJoin,
             $drawingWhere
         ));
@@ -1894,6 +1914,94 @@ class Employeestatistics extends ApplicationModel {
     }
 
     /**
+     * Task-level drawing revenue details for one user (selected month / last N months).
+     */
+    function getUserTaskDrawingDetails() {
+        $userId = isset($_GET['user_id']) ? trim((string) $_GET['user_id']) : '';
+        if ($userId === '') {
+            return [
+                'status' => 'error',
+                'message' => 'user_id required',
+                'tasks' => [],
+                'total_revenue' => 0,
+                'total_drawings' => 0,
+            ];
+        }
+
+        $months = isset($_GET['months']) ? intval($_GET['months']) : 12;
+        $range = $this->getStatisticsDateRange($months);
+        $startDate = $range['start_date'];
+        $endDate = $range['end_date'];
+        $creatorJoin = $this->getDrawingCreatorJoinSql('pd', 'u');
+
+        $rows = $this->fetchAll(sprintf(
+            "SELECT
+                t.id AS task_id,
+                t.title AS task_title,
+                t.status AS task_status,
+                t.project_id,
+                p.name AS project_name,
+                p.status AS project_status,
+                COUNT(pd.id) AS drawing_count,
+                COALESCE(SUM(pd.price), 0) AS drawings_revenue
+             FROM %sproject_drawings pd
+             INNER JOIN %sprojects p ON pd.project_id = p.id
+             INNER JOIN %suser u ON %s
+             LEFT JOIN %stasks t ON pd.task_id = t.id
+             WHERE u.userid = '%s'
+               AND pd.price IS NOT NULL
+               AND %s
+               AND %s
+             GROUP BY
+                t.id,
+                t.title,
+                t.status,
+                t.project_id,
+                p.name,
+                p.status
+             ORDER BY drawings_revenue DESC, drawing_count DESC, t.id DESC",
+            DB_PREFIX,
+            DB_PREFIX,
+            DB_PREFIX,
+            $creatorJoin,
+            DB_PREFIX,
+            $this->quote($userId),
+            $this->getDrawingRevenueEligibilitySql('pd', 'p'),
+            $this->getDrawingPeriodSql('p', $startDate, $endDate)
+        ));
+
+        $tasks = [];
+        $totalRevenue = 0;
+        $totalDrawings = 0;
+        foreach ($rows as $row) {
+            $revenue = round(floatval($row['drawings_revenue'] ?? 0), 2);
+            $drawingCount = intval($row['drawing_count'] ?? 0);
+            $totalRevenue += $revenue;
+            $totalDrawings += $drawingCount;
+            $tasks[] = [
+                'task_id' => isset($row['task_id']) && $row['task_id'] !== null ? intval($row['task_id']) : null,
+                'task_title' => $row['task_title'] ?? '',
+                'task_status' => $row['task_status'] ?? '',
+                'project_id' => isset($row['project_id']) ? intval($row['project_id']) : 0,
+                'project_name' => $row['project_name'] ?? '',
+                'project_status' => $row['project_status'] ?? '',
+                'drawing_count' => $drawingCount,
+                'drawings_revenue' => $revenue,
+            ];
+        }
+
+        return [
+            'status' => 'success',
+            'user_id' => $userId,
+            'period_start' => $startDate,
+            'period_end' => $endDate,
+            'tasks' => $tasks,
+            'total_revenue' => round($totalRevenue, 2),
+            'total_drawings' => $totalDrawings,
+        ];
+    }
+
+    /**
      * Monthly statistics for a department (chart data).
      */
     function getMonthlyByDepartment() {
@@ -1934,7 +2042,7 @@ class Employeestatistics extends ApplicationModel {
         ));
 
         $drawingRows = $this->fetchAll(sprintf(
-            "SELECT DATE_FORMAT(pd.completed_at, '%%Y-%%m') AS ym,
+            "SELECT DATE_FORMAT(%s, '%%Y-%%m') AS ym,
                 COALESCE(SUM(pd.price), 0) AS revenue
             FROM " . DB_PREFIX . "project_drawings pd
             INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
@@ -1944,9 +2052,10 @@ class Employeestatistics extends ApplicationModel {
               AND %s
             GROUP BY ym
             ORDER BY ym ASC",
+            $this->getDrawingRevenueDateExpr('p'),
             $department_id,
             $this->getDrawingRevenueEligibilitySql('pd', 'p'),
-            $this->getDrawingPeriodSql('pd', $start_date, $end_date)
+            $this->getDrawingPeriodSql('p', $start_date, $end_date)
         ));
 
         $statsMap = [];
@@ -2066,7 +2175,7 @@ class Employeestatistics extends ApplicationModel {
         $projectScope = $this->getTeamIdProjectScopeSql($team_id, 'p');
         $activeUserSql = $this->getActiveEmployeeStatsSql('u');
         $taskPeriodSql = $this->getTaskPeriodSql('t', $start_date, $end_date);
-        $drawingPeriodSql = $this->getDrawingPeriodSql('pd', $start_date, $end_date);
+        $drawingPeriodSql = $this->getDrawingPeriodSql('p', $start_date, $end_date);
 
         $taskRows = $this->fetchAll(sprintf(
             "SELECT DATE_FORMAT(COALESCE(t.actual_end_date, t.due_date), '%%Y-%%m') AS ym,
@@ -2106,7 +2215,7 @@ class Employeestatistics extends ApplicationModel {
         ));
 
         $drawingRows = $this->fetchAll(sprintf(
-            "SELECT DATE_FORMAT(pd.completed_at, '%%Y-%%m') AS ym,
+            "SELECT DATE_FORMAT(%s, '%%Y-%%m') AS ym,
                 COALESCE(SUM(pd.price), 0) AS drawing_revenue
             FROM " . DB_PREFIX . "project_drawings pd
             INNER JOIN " . DB_PREFIX . "projects p ON pd.project_id = p.id
@@ -2120,6 +2229,7 @@ class Employeestatistics extends ApplicationModel {
               AND %s
             GROUP BY ym
             ORDER BY ym ASC",
+            $this->getDrawingRevenueDateExpr('p'),
             $creatorJoin,
             $team_id,
             $this->getDrawingRevenueEligibilitySql('pd', 'p'),
@@ -2309,7 +2419,7 @@ class Employeestatistics extends ApplicationModel {
         $creatorJoin = $this->getDrawingCreatorJoinSql('pd', 'u');
         $projectScope = $this->getTeamProjectScopeSql('te', 'p', $department_id);
         $taskPeriodSql = $this->getTaskPeriodSql('t', $startDate, $endDate);
-        $drawingPeriodSql = $this->getDrawingPeriodSql('pd', $startDate, $endDate);
+        $drawingPeriodSql = $this->getDrawingPeriodSql('p', $startDate, $endDate);
 
         $teamMemberScope = '';
         if ($team_id) {
@@ -2329,7 +2439,7 @@ class Employeestatistics extends ApplicationModel {
                 SUM(task_count) AS task_count
              FROM (
                 SELECT tm.team_id,
-                    DATE_FORMAT(pd.completed_at, '%%Y-%%m') AS ym,
+                    DATE_FORMAT(%s, '%%Y-%%m') AS ym,
                     COALESCE(SUM(pd.price), 0) AS revenue,
                     0 AS likes,
                     0 AS dislikes,
@@ -2382,6 +2492,7 @@ class Employeestatistics extends ApplicationModel {
                 GROUP BY tm.team_id, ym
              ) monthly_stats
              GROUP BY team_id, ym",
+            $this->getDrawingRevenueDateExpr('p'),
             $creatorJoin,
             $this->getDrawingRevenueEligibilitySql('pd', 'p'),
             $projectScope,

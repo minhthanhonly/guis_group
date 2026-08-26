@@ -92,10 +92,11 @@ const TaskApp = createApp({
                 { value: '検討', label: '検討', i18nKey: '検討', color: 'secondary' },
                 { value: '相談・会議', label: '相談・会議', i18nKey: '相談・会議', color: 'dark' }
             ],
-            filterStatus: '',
+            selectedStatusKeys: [],
             filterPriority: '',
             filterDueDate: '',
             filterMyTasksOnly: false,
+            highlightTaskId: null,
             addingTaskInline: false,
             inlineTasks: [],
             drawingCountSavingTaskIds: {},
@@ -123,6 +124,7 @@ const TaskApp = createApp({
                 taskId: null,
                 hours: 0,
                 minutes: 0,
+                adjustmentAt: '',
                 saving: false
             },
             editingInlineId: null,
@@ -223,6 +225,9 @@ const TaskApp = createApp({
             // Quyền chung: chỉ manager hoặc team_leader mới được like/dislike
             return this.permission.can_manage_project || this.permission.is_team_leader;
         },
+        isAllStatusFilterSelected() {
+            return !this.selectedStatusKeys || this.selectedStatusKeys.length === 0;
+        },
         sortedTaskLogs() {
             if (!this.taskLogs) return [];
             // Sắp xếp giảm dần theo thời gian
@@ -242,7 +247,9 @@ const TaskApp = createApp({
         filteredTasks() {
             return this.tasks.filter(task => {
                 let match = true;
-                if (this.filterStatus && task.status !== this.filterStatus) match = false;
+                if (this.selectedStatusKeys.length > 0 && this.selectedStatusKeys.indexOf(task.status) === -1) {
+                    match = false;
+                }
                 if (this.filterPriority && task.priority !== this.filterPriority) match = false;
                 if (this.filterMyTasksOnly && !this.isAssignedToMe(task)) match = false;
                 //if (this.filterDueDate && task.due_date !== this.filterDueDate) match = false;
@@ -333,12 +340,17 @@ const TaskApp = createApp({
         // Lấy project ID từ URL
         const urlParams = new URLSearchParams(window.location.search);
         this.projectId = urlParams.get('project_id');
+        const highlightTaskId = urlParams.get('task_id');
+        this.highlightTaskId = highlightTaskId && /^\d+$/.test(String(highlightTaskId))
+            ? parseInt(highlightTaskId, 10)
+            : null;
         
         if (!this.projectId) {
             alert('プロジェクトIDが指定されていません。');
             window.location.href = 'index.php';
             return;
         }
+        this.loadStatusFilterFromStorage();
         (async()=>{
             await this.loadPermission();
             await this.loadProjectInfo();
@@ -460,7 +472,7 @@ const TaskApp = createApp({
         this._onI18nLanguageChanged = () => {
             this.$forceUpdate();
             this.$nextTick(() => {
-                this.initFlatpickr();
+                this.initFlatpickr(true);
                 this.applyAppDataI18n();
             });
         };
@@ -663,6 +675,10 @@ const TaskApp = createApp({
                 if (window.TaskTimer && window.TaskTimer.active) {
                     await window.TaskTimer.refresh();
                 }
+
+                if (this.highlightTaskId) {
+                    this.applyTaskHighlightFromUrl();
+                }
                 
                 // Sau khi load tasks, load số comment chưa đọc
                 // await this.loadUnreadComments( );
@@ -672,6 +688,36 @@ const TaskApp = createApp({
             } finally {
                 this.tasksLoaded = true;
             }
+        },
+
+        applyTaskHighlightFromUrl() {
+            const taskId = parseInt(this.highlightTaskId, 10);
+            if (!taskId) {
+                return;
+            }
+            const taskExists = this.tasks.some((task) => parseInt(task.id, 10) === taskId);
+            if (!taskExists) {
+                return;
+            }
+            this.selectedStatusKeys = [];
+            this.filterPriority = '';
+            this.filterMyTasksOnly = false;
+            this.$nextTick(() => {
+                window.setTimeout(() => this.scrollToHighlightedTask(taskId), 80);
+            });
+        },
+
+        scrollToHighlightedTask(taskId) {
+            const selector = `.task-list .card[data-id="${taskId}"]`;
+            const el = document.querySelector(selector);
+            if (!el) {
+                return;
+            }
+            document.querySelectorAll('.task-list .card.task-highlight').forEach((card) => {
+                card.classList.remove('task-highlight');
+            });
+            el.classList.add('task-highlight');
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         },
         
      
@@ -985,6 +1031,29 @@ const TaskApp = createApp({
             if (total <= 0) return '0h';
             return this.formatEstimatedHours(total);
         },
+        initWorkloadAdjustmentFlatpickr() {
+            const el = document.getElementById('workloadAdjustmentAtPicker');
+            if (!el || !window.flatpickr) return;
+            if (el._flatpickr) {
+                el._flatpickr.destroy();
+            }
+            const self = this;
+            window.flatpickr(el, {
+                ...this.getFlatpickrOptions(),
+                altInputClass: 'form-control',
+                defaultDate: this.workloadModal.adjustmentAt || undefined,
+                onChange: function(selectedDates, dateStr) {
+                    self.workloadModal.adjustmentAt = dateStr;
+                    el.value = dateStr;
+                }
+            });
+        },
+        destroyWorkloadAdjustmentFlatpickr() {
+            const el = document.getElementById('workloadAdjustmentAtPicker');
+            if (el && el._flatpickr) {
+                el._flatpickr.destroy();
+            }
+        },
         openWorkloadModal(task) {
             if (!task || !task.id || !this.canEditTaskWorkload(task) || this.isEstimatedHoursSaving(task.id)) {
                 return;
@@ -993,18 +1062,22 @@ const TaskApp = createApp({
             this.workloadModal.taskId = task.id;
             this.workloadModal.hours = parts.hours;
             this.workloadModal.minutes = parts.minutes;
+            this.workloadModal.adjustmentAt = this.getDefaultStartDateTime();
             this.workloadModal.saving = false;
             this.workloadModal.show = true;
             // Modal is v-if; re-apply translations after DOM mount
             this.$nextTick(() => {
+                this.initWorkloadAdjustmentFlatpickr();
                 this.applyAppDataI18n();
             });
         },
         closeWorkloadModal() {
+            this.destroyWorkloadAdjustmentFlatpickr();
             this.workloadModal.show = false;
             this.workloadModal.taskId = null;
             this.workloadModal.hours = 0;
             this.workloadModal.minutes = 0;
+            this.workloadModal.adjustmentAt = '';
             this.workloadModal.saving = false;
         },
         async confirmWorkloadModal() {
@@ -1016,9 +1089,14 @@ const TaskApp = createApp({
                 this.workloadModal.hours,
                 this.workloadModal.minutes
             );
+            const adjustmentAt = String(this.workloadModal.adjustmentAt || '').trim();
+            if (!adjustmentAt) {
+                this.showMessage('日時を入力してください', true);
+                return;
+            }
             this.workloadModal.saving = true;
             try {
-                await this.saveTaskEstimatedHours(task, hours);
+                await this.saveTaskEstimatedHours(task, hours, adjustmentAt);
                 this.closeWorkloadModal();
             } finally {
                 this.workloadModal.saving = false;
@@ -1295,7 +1373,7 @@ const TaskApp = createApp({
                 canonical.drawing_count = count;
             }
         },
-        async saveTaskEstimatedHours(task, value) {
+        async saveTaskEstimatedHours(task, value, adjustmentAt) {
             if (!task || !task.id || !this.canEditTaskWorkload(task)) {
                 return;
             }
@@ -1318,6 +1396,12 @@ const TaskApp = createApp({
                 formData.append('id', task.id);
                 formData.append('project_id', this.projectId);
                 formData.append('estimated_hours', hours);
+                if (adjustmentAt) {
+                    formData.append(
+                        'adjustment_at',
+                        this.fromTaskDateTimeInputValue(adjustmentAt) || adjustmentAt
+                    );
+                }
                 const response = await axios.post('/api/index.php?model=task&method=updateEstimatedHours', formData);
                 if (response.data && response.data.status === 'success') {
                     const savedHours = response.data.estimated_hours != null ? response.data.estimated_hours : hours;
@@ -1914,6 +1998,7 @@ const TaskApp = createApp({
                 dateFormat: TASK_DATETIME_FLATPICKR_FORMAT,
                 time_24hr: true,
                 allowInput: true,
+                closeOnSelect: false,
                 locale: this.getFlatpickrLocale()
             };
             if (!isVi) {
@@ -2144,6 +2229,65 @@ const TaskApp = createApp({
         getStatusButtonClass(status) {
             const s = this.taskStatuses.find(s => s.value === status);
             return `btn-${s?.color || 'secondary'}`;
+        },
+
+        isStatusFilterSelected(status) {
+            const key = status && status.value;
+            if (!key) return false;
+            return this.selectedStatusKeys.indexOf(key) !== -1;
+        },
+
+        selectAllStatusFilter() {
+            this.selectedStatusKeys = [];
+            this.saveStatusFilterToStorage();
+        },
+
+        toggleTaskStatusFilter(status) {
+            const key = status && status.value;
+            if (!key) return;
+            const allowed = this.taskStatuses.some((s) => s.value === key);
+            if (!allowed) return;
+            const idx = this.selectedStatusKeys.indexOf(key);
+            if (idx >= 0) {
+                this.selectedStatusKeys.splice(idx, 1);
+            } else {
+                this.selectedStatusKeys.push(key);
+            }
+            this.saveStatusFilterToStorage();
+        },
+
+        getTaskStatusFilterStorageKey() {
+            return 'caily_task_status_filter';
+        },
+
+        loadStatusFilterFromStorage() {
+            try {
+                const raw = localStorage.getItem(this.getTaskStatusFilterStorageKey());
+                if (!raw) {
+                    this.selectedStatusKeys = [];
+                    return;
+                }
+                const parsed = JSON.parse(raw);
+                const keys = Array.isArray(parsed)
+                    ? parsed
+                    : (Array.isArray(parsed && parsed.statusKeys) ? parsed.statusKeys : []);
+                const allowed = new Set(this.taskStatuses.map((s) => s.value));
+                this.selectedStatusKeys = keys.filter((k) => allowed.has(k));
+            } catch (e) {
+                console.warn('Failed to load task status filter from localStorage', e);
+                this.selectedStatusKeys = [];
+            }
+        },
+
+        saveStatusFilterToStorage() {
+            try {
+                localStorage.setItem(
+                    this.getTaskStatusFilterStorageKey(),
+                    JSON.stringify(this.selectedStatusKeys.slice())
+                );
+            } catch (e) {
+                console.warn('Failed to save task status filter to localStorage', e);
+            }
         },
         
         updateTaskStatusLocal(task, value) {
@@ -2454,11 +2598,18 @@ const TaskApp = createApp({
                 .join('\n');
         },
         
-        initFlatpickr() {
+        initFlatpickr(force = false) {
             if (!window.flatpickr) return;
             const flatpickrOptions = this.getFlatpickrOptions();
             document.querySelectorAll('.datetimepicker').forEach(el => {
                 if (el._flatpickr) {
+                    // Never rebuild while calendar is open (time arrows trigger Vue updates).
+                    if (el._flatpickr.isOpen) {
+                        return;
+                    }
+                    if (!force) {
+                        return;
+                    }
                     el._flatpickr.destroy();
                 }
                 window.flatpickr(el, {
@@ -2671,6 +2822,10 @@ const TaskApp = createApp({
             }
         },
         canIncreaseIndent(task) {
+            // Đã là subtask thì không cho indent thêm
+            if (!task || task.parent_id || (task.indent_level && task.indent_level > 0)) {
+                return false;
+            }
             // Task đầu tiên không thể tăng indent
             if (this.isFirstTask(task)) {
                 return false;

@@ -176,13 +176,38 @@ if($_SESSION['show_project'] == 0){
         </div> -->
         <!-- Tiêu đề các cột và nút tạo task -->
          
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <div class="d-flex align-items-center gap-2">
-            <select class="form-select" v-model="filterStatus">
-                <option value="">{{ $t('全てのステータス') }}</option>
-                <option v-for="status in taskStatuses" :key="status.value" :value="status.value">{{ $t(status.i18nKey || status.label) }}</option>
-            </select>
-            <select class="form-select" v-model="filterPriority">
+        <div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+            <div class="btn-group flex-wrap task-status-filter-group">
+                <button
+                    type="button"
+                    class="btn btn-sm status-filter-btn"
+                    :class="{
+                        'btn-label-secondary': !isAllStatusFilterSelected,
+                        'btn-secondary': isAllStatusFilterSelected,
+                        'active': isAllStatusFilterSelected
+                    }"
+                    @click="selectAllStatusFilter"
+                >
+                    <span data-i18n="すべて">{{ $t('すべて') }}</span>
+                    <span v-show="isAllStatusFilterSelected" class="active-indicator"></span>
+                </button>
+                <button
+                    v-for="status in taskStatuses"
+                    :key="status.value"
+                    type="button"
+                    class="btn btn-sm status-filter-btn"
+                    :class="{
+                        [`btn-label-${status.color}`]: !isStatusFilterSelected(status),
+                        [`btn-${status.color}`]: isStatusFilterSelected(status),
+                        'active': isStatusFilterSelected(status)
+                    }"
+                    @click="toggleTaskStatusFilter(status)"
+                >
+                    {{ $t(status.i18nKey || status.label) }}
+                    <span v-show="isStatusFilterSelected(status)" class="active-indicator"></span>
+                </button>
+            </div>
+            <select class="form-select form-select-sm w-auto" v-model="filterPriority">
                 <option value="">{{ $t('全ての優先度') }}</option>
                 <option v-for="priority in taskPriorities" :key="priority.value" :value="priority.value">{{ $t(priority.i18nKey || priority.label) }}</option>
             </select>
@@ -190,20 +215,19 @@ if($_SESSION['show_project'] == 0){
                 <input class="form-check-input" type="checkbox" id="filterMyTasksOnly" v-model="filterMyTasksOnly">
                 <label class="form-check-label text-nowrap" for="filterMyTasksOnly" data-i18n="自分のタスクのみ">自分のタスクのみ</label>
             </div>
-            </div>
-            <div class="d-flex justify-content-end gap-2">
-                <button v-if="canCreateMissingDefaultTasks" class="btn btn-outline-primary ms-2" @click="createMissingDefaultTasks" :disabled="creatingDefaultTasks">
+            <div class="d-flex justify-content-end gap-2 ms-auto">
+                <button v-if="canCreateMissingDefaultTasks" class="btn btn-outline-primary" @click="createMissingDefaultTasks" :disabled="creatingDefaultTasks">
                     <i class="fa fa-list-check me-1"></i>
                     <span data-i18n="既定タスク追加">既定タスク追加</span>
                 </button>
-                <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary ms-2" @click="openNewTaskModal">
+                <button v-if="permission.can_manage_project || permission.is_member || (permission.rule && permission.rule.task_add == 1)" class="btn btn-primary" @click="openNewTaskModal">
                     <i class="fa fa-plus me-1"></i> <span data-i18n="新規タスク">新規タスク</span>
                 </button>
             </div>
         </div>
         
-        <div class="d-flex align-items-center justify-content-between mb-2">
-            <div class="task-table-header w-100 g-0 align-items-center fw-bold text-primary bg-light">
+        <div class="task-table-wrap mb-2">
+            <div class="task-table-header g-0 align-items-center fw-bold text-primary bg-light">
                 <div class="task-col-title py-2 px-2"><span data-i18n="タスク">タスク</span></div>
                 <div class="task-col-kind py-2 pe-2"><span data-i18n="種別">種別</span></div>
                 <div class="task-col-drawing py-2 pe-2"><span data-i18n="作業比重">作業比重</span></div>
@@ -220,7 +244,7 @@ if($_SESSION['show_project'] == 0){
             </div>
         </div>
         <!-- Danh sách task dạng div card/list -->
-        <div class="task-list">
+        <div class="task-list task-table-wrap">
             <div v-if="!tasksLoaded" class="text-center py-5">
                 <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
                     <span class="visually-hidden">Loading...</span>
@@ -232,7 +256,7 @@ if($_SESSION['show_project'] == 0){
                 <i class="bi bi-inbox fs-1 mb-2"></i>
                 <div class="card mb-2 p-2"><span data-i18n="タスクがありません">タスクがありません</span></div>
             </div>
-            <div v-for="task in displayTasks" :key="task.id || 'inline-' + task._inlineIndex" class="card mb-2" :data-id="task.id" :class="{'subtask': task.indent_level > 0}" :style="{marginLeft: (task.indent_level * 20) + 'px'}">
+            <div v-for="task in displayTasks" :key="task.id || 'inline-' + task._inlineIndex" class="card mb-2" :data-id="task.id" :class="{'subtask': task.indent_level > 0}">
                 <!-- Inline Edit Mode -->
                 <div v-if="task._isInlineEdit" class="row g-0 align-items-center">
                     <div class="task-col-title">
@@ -641,13 +665,23 @@ if($_SESSION['show_project'] == 0){
 
     <!-- Modal chỉnh 工数 (giờ / phút) -->
     <div class="modal fade" tabindex="-1" :class="{show: workloadModal.show}" style="display: block;" v-if="workloadModal.show">
-        <div class="modal-dialog modal-sm">
+        <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title"><span data-i18n="工数を編集">工数を編集</span></h5>
                     <button type="button" class="btn-close" @click="closeWorkloadModal"></button>
                 </div>
                 <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small mb-1" for="workloadAdjustmentAtPicker"><span data-i18n="日時">日時</span></label>
+                        <input type="text"
+                               id="workloadAdjustmentAtPicker"
+                               class="form-control"
+                               autocomplete="off"
+                               :value="workloadModal.adjustmentAt"
+                               @input="workloadModal.adjustmentAt = $event.target.value"
+                               @keyup.enter="confirmWorkloadModal">
+                    </div>
                     <div class="row g-2 align-items-end">
                         <div class="col">
                             <label class="form-label small mb-1"><span data-i18n="時間">時間</span></label>
@@ -917,23 +951,73 @@ if($_SESSION['show_project'] == 0){
     border-left: 1px solid #ccc;
 }
 
-/* Task table columns: custom classes + % width (no col-md-xx) */
+/* Task table: shared CSS grid so header and rows stay aligned */
+.task-table-wrap {
+    width: 100%;
+    box-sizing: border-box;
+}
+.task-list .card.subtask {
+    /* indent content without shrinking grid width */
+    border-left: 3px solid var(--bs-primary);
+    background-color: var(--bs-primary-bg-subtle);
+    left: 10px; /* 20px visual indent minus 3px border */
+    box-sizing: border-box;
+}
 .task-table-header,
 .task-list .task-row,
 .task-list .row.g-0.align-items-center {
-    display: flex;
-    flex-wrap: nowrap;
+    display: grid !important;
+    grid-template-columns:
+        minmax(8rem, 1.7fr)   /* title */
+        minmax(4.5rem, 0.5fr) /* kind */
+        minmax(5.5rem, 0.5fr) /* drawing / 作業比重 */
+        minmax(2rem, 0.3fr) /* priority */
+        minmax(5.5rem, 0.8fr) /* period */
+        minmax(2.75rem, 0.4fr) /* assignee */
+        minmax(2.5rem, 0.4fr) /* ack */
+        minmax(2.25rem, 0.3fr) /* creator */
+        minmax(4.5rem, 0.55fr) /* status */
+        minmax(3.5rem, 0.4fr) /* progress */
+        minmax(5rem, 0.6fr)  /* workload */
+        minmax(3.5rem, 0.7fr) /* note */
+        minmax(7rem, 1.1fr);  /* actions */
     width: 100%;
+    align-items: center;
+    box-sizing: border-box;
+    margin-left: 0;
+    margin-right: 0;
+    --bs-gutter-x: 0;
+}
+.task-table-header {
+    border: 1px solid var(--bs-border-color, #d9dee3);
+    border-radius: var(--bs-border-radius, 0.375rem);
+    overflow: hidden;
 }
 .task-table-header > div,
 .task-list .task-row > div,
 .task-list .row.g-0.align-items-center > div {
-    flex: 0 0 auto;
+    min-width: 0;
+    max-width: none;
+    width: auto;
     box-sizing: border-box;
 }
-.task-col-title { width: 16%; min-width: 0; }
-.task-col-kind { width: 6%; min-width: 5rem; }
-.task-col-drawing { width: 9%; min-width: 10rem; }
+.task-col-title,
+.task-col-kind,
+.task-col-drawing,
+.task-col-priority,
+.task-col-period,
+.task-col-assignee,
+.task-col-ack,
+.task-col-creator,
+.task-col-status,
+.task-col-progress,
+.task-col-workload,
+.task-col-note,
+.task-col-actions {
+    width: auto;
+    min-width: 0;
+    max-width: none;
+}
 .task-drawing-count-input {
     width: 4rem;
     min-width: 4rem;
@@ -955,14 +1039,7 @@ if($_SESSION['show_project'] == 0){
         box-shadow: 0 0 0 3px rgba(105, 108, 255, 0.25);
     }
 }
-.task-col-workload { width: 8%; min-width: 4rem; justify-content: flex-start; }
-.task-col-note { width: 8%; min-width: 4.5rem; }
-.task-col-priority { width: 5%; min-width: 3.5rem; }
-.task-col-period { width: 7%; min-width: 0; }
-.task-col-assignee { width: 5%; min-width: 0; max-width: 4rem; }
-.task-list .row.g-0.align-items-center .task-col-assignee {
-    max-width: none;
-}
+.task-col-workload { justify-content: flex-start; }
 .inline-assignee-placeholder {
     color: var(--bs-primary);
     text-decoration: underline;
@@ -977,11 +1054,6 @@ if($_SESSION['show_project'] == 0){
     padding: 0.1rem 0.35rem;
     white-space: nowrap;
 }
-.task-col-ack { width: 5%; min-width: 3rem; }
-.task-col-creator { width: 5%; min-width: 0; }
-.task-col-status { width: 8%; min-width: 4rem; }
-.task-col-progress { width: 6%; min-width: 3.5rem; }
-.task-col-actions { width: 12%; min-width: 0; }
 
 .task-note-cell {
     cursor: pointer;
@@ -1010,18 +1082,34 @@ if($_SESSION['show_project'] == 0){
     pointer-events: auto; /* enable interactions on hover */
 }
 
-/* Indent styling */
-.subtask {
-    border-left: 3px solid var(--bs-primary);
-    background-color: var(--bs-primary-bg-subtle);
-}
+/* Indent styling handled on .task-list .card.subtask */
 
 .task-list .card {
-    transition: all 0.2s ease;
+    width: 100%;
+    margin-left: 0 !important;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    box-sizing: border-box;
+    border-width: 1px;
 }
 
 .task-list .card:hover {
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.task-list .card.task-highlight {
+    border-color: #0d6efd !important;
+    border-width: 1px !important;
+    background-color: transparent;
+    animation: task-highlight-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes task-highlight-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.85);
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(13, 110, 253, 0.25);
+    }
 }
 
 
@@ -1071,6 +1159,56 @@ if($_SESSION['show_project'] == 0){
 .dropdown-menu.progress-dropdown {
     max-height: 200px;
     overflow-y: auto;
+}
+
+/* Status filter buttons (same pattern as project list) */
+.task-status-filter-group {
+    overflow: visible !important;
+}
+.status-filter-btn {
+    position: relative;
+    overflow: visible;
+}
+.status-filter-btn::after {
+    content: '';
+    position: absolute;
+    bottom: -0.65rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    z-index: 10;
+    pointer-events: none;
+    display: none;
+}
+.status-filter-btn.active::after {
+    display: block;
+}
+.status-filter-btn.btn-secondary.active::after,
+.status-filter-btn.btn-label-secondary.active::after {
+    background-color: #6c757d !important;
+}
+.status-filter-btn.btn-info.active::after,
+.status-filter-btn.btn-label-info.active::after {
+    background-color: #0dcaf0 !important;
+}
+.status-filter-btn.btn-primary.active::after,
+.status-filter-btn.btn-label-primary.active::after {
+    background-color: #7650b0 !important;
+}
+.status-filter-btn.btn-success.active::after,
+.status-filter-btn.btn-label-success.active::after {
+    background-color: #198754 !important;
+}
+.status-filter-btn.btn-warning.active::after,
+.status-filter-btn.btn-label-warning.active::after {
+    background-color: #ffc107 !important;
+}
+.status-filter-btn.btn-danger.active::after,
+.status-filter-btn.btn-label-danger.active::after {
+    background-color: #dc3545 !important;
 }
 
 </style>

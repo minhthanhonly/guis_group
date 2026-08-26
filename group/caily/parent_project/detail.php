@@ -583,17 +583,18 @@ $view->heading('建物詳細');
                                                 :key="item.trim()" class="badge me-1" :class="getOrderTypeBadgeClass(item.trim())">{{ item.trim() }}</span>
                                         </span>
                                         <span v-else>-</span>
-                                        <div v-if="mapDepartmentNameToRequestType(project.department_name)" class="mt-1">
-                                            <span class="badge" :class="getParentRequestBadgeClass(mapDepartmentNameToRequestType(project.department_name))">
-                                                {{ mapDepartmentNameToRequestType(project.department_name) }}
-                                            </span>
-                                        </div>
                                     </td>
                                     <td style="min-width: 150px;">
                                         <a :href="'../project/detail.php?id=' + project.id"
                                             class="text-decoration-none">
                                             {{ project.name }}
                                         </a>
+                                        
+                                        <div v-if="mapDepartmentNameToRequestType(project.department_name)" class="mt-1">
+                                            <span class="badge" :class="getParentRequestBadgeClass(mapDepartmentNameToRequestType(project.department_name))">
+                                                {{ mapDepartmentNameToRequestType(project.department_name) }}
+                                            </span>
+                                        </div>
                                     </td>
                                     <td style="min-width: 150px; max-width: 250px;">
                                         <span :class="{ 'text-muted': !project.description }"
