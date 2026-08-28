@@ -124,11 +124,7 @@
 	position: absolute;
 	z-index: 9999;
 	visibility: hidden;
-	background-color: #222;
-	color: #fff;
-}
-.layerwrapper select {
-	color: #fff;
+	background-color: #fff;
 }
 .layer {
 	border: 1px solid #333;
@@ -141,6 +137,11 @@
 	background-repeat: repeat-x;
 	height: 28px;
 } */
+
+.layerlistcaption .operator{
+	color: var(--bs-primary);
+	display: block;
+}
 
 .selected_items{
 	margin-top: 10px;

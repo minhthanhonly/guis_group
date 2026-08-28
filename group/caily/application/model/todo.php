@@ -17,6 +17,7 @@ class Todo extends ApplicationModel {
 		'todo_priority'=>array('numeric', 'notnull', 'except'=>array('search')),
 		'todo_comment'=>array('備考', 'length:10000', 'line:100'),
 		'todo_complete'=>array('fix'=>0, 'except'=>array('search', 'update')),
+		'todo_sort'=>array('numeric', 'except'=>array('search')),
 		'todo_completedate'=>array('except'=>array('search')),
 		'todo_user'=>array('except'=>array('search', 'update')));
 	
@@ -200,10 +201,18 @@ class Todo extends ApplicationModel {
 	}
 
 	function api_index() {
-		$this->where[] = "(owner = '".$this->quote($_SESSION['userid'])."')";
-		// Default sort
-		$sort = 'todo_complete, todo_completedate DESC, todo_priority DESC, todo_term';
-		$desc = 0; // Handled in sort string
+		$this->ensureTodoSortColumn();
+		$owner = $_SESSION['userid'];
+		$needBackfill = $this->fetchOne(sprintf(
+			"SELECT COUNT(*) AS cnt FROM %s WHERE owner = '%s' AND todo_sort = 0",
+			$this->table,
+			$this->quote($owner)
+		));
+		if (!empty($needBackfill['cnt'])) {
+			$this->backfillTodoSortForOwner($owner);
+		}
+		$this->where[] = "(owner = '".$this->quote($owner)."')";
+		$sort = 'todo_complete ASC, todo_sort ASC, todo_completedate DESC, todo_priority DESC, todo_term ASC, id ASC';
 		
 		// Reuse findLimit logic but return clean array
 		if (isset($_REQUEST['sort']) && strlen($_REQUEST['sort']) > 0) {
@@ -214,14 +223,92 @@ class Todo extends ApplicationModel {
 		
 		$where = "WHERE ".implode(" AND ", $this->where);
 		// Minimal fields for list
-		$query = sprintf("SELECT id, todo_title, todo_link, todo_comment, todo_priority, todo_complete, todo_term, todo_noterm, todo_completedate FROM %s %s %s", $this->table, $where, $order);
+		$query = sprintf("SELECT id, todo_title, todo_link, todo_comment, todo_priority, todo_complete, todo_sort, todo_term, todo_noterm, todo_completedate FROM %s %s %s", $this->table, $where, $order);
 		
 		$list = $this->fetchAll($query);
 		return $list;
 	}
 
+	function ensureTodoSortColumn() {
+		static $ensured = false;
+		if ($ensured) {
+			return;
+		}
+		$ensured = true;
+		$table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+		if ($table === '') {
+			return;
+		}
+		$row = $this->fetchOne(
+			"SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+			. "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' AND COLUMN_NAME = 'todo_sort'"
+		);
+		$columnAdded = false;
+		if (empty($row['cnt'])) {
+			$this->query(
+				"ALTER TABLE `{$table}` ADD COLUMN `todo_sort` INT NOT NULL DEFAULT 0 "
+				. "COMMENT 'Display order in custom todo widget' AFTER `todo_complete`"
+			);
+			$columnAdded = true;
+		}
+		if ($columnAdded) {
+			$this->backfillTodoSortForAllOwners();
+		}
+	}
+
+	private function backfillTodoSortForAllOwners() {
+		$owners = $this->fetchAll("SELECT DISTINCT owner FROM " . $this->table);
+		if (!is_array($owners)) {
+			return;
+		}
+		foreach ($owners as $ownerRow) {
+			$owner = isset($ownerRow['owner']) ? $ownerRow['owner'] : '';
+			if ($owner === '') {
+				continue;
+			}
+			$this->backfillTodoSortForOwner($owner);
+		}
+	}
+
+	private function backfillTodoSortForOwner($owner) {
+		if ($owner === '') {
+			return;
+		}
+		$rows = $this->fetchAll(sprintf(
+			"SELECT id FROM %s WHERE owner = '%s' ORDER BY todo_complete ASC, todo_completedate DESC, todo_priority DESC, todo_term ASC, id ASC",
+			$this->table,
+			$this->quote($owner)
+		));
+		if (!is_array($rows)) {
+			return;
+		}
+		foreach ($rows as $index => $row) {
+			$id = isset($row['id']) ? intval($row['id']) : 0;
+			if ($id <= 0) {
+				continue;
+			}
+			$this->query(sprintf(
+				"UPDATE %s SET todo_sort = %d WHERE id = %d AND owner = '%s'",
+				$this->table,
+				$index + 1,
+				$id,
+				$this->quote($owner)
+			));
+		}
+	}
+
+	private function getNextTodoSortForOwner($owner) {
+		$row = $this->fetchOne(sprintf(
+			"SELECT COALESCE(MAX(todo_sort), 0) AS max_sort FROM %s WHERE owner = '%s'",
+			$this->table,
+			$this->quote($owner)
+		));
+		return intval(isset($row['max_sort']) ? $row['max_sort'] : 0) + 1;
+	}
+
 	function api_add() {
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+			$this->ensureTodoSortColumn();
 			$this->validateSchema('insert');
 			// Custom API validation if needed
 			if (count($this->error) <= 0) {
@@ -236,6 +323,7 @@ class Todo extends ApplicationModel {
 					if (!isset($this->post['todo_parent'])) {
 						$this->post['todo_parent'] = 0;
 					}
+					$this->post['todo_sort'] = $this->getNextTodoSortForOwner($_SESSION['userid']);
 					
 					$keys = [];
 					$values = [];
@@ -244,6 +332,10 @@ class Todo extends ApplicationModel {
 							$keys[] = $key;
 							$values[] = $this->quote($this->post[$key]);
 						}
+					}
+					if (!in_array('todo_sort', $keys, true) && isset($this->post['todo_sort'])) {
+						$keys[] = 'todo_sort';
+						$values[] = $this->quote($this->post['todo_sort']);
 					}
 					
 					// Insert
@@ -351,6 +443,43 @@ class Todo extends ApplicationModel {
 			return ['status' => 'success'];
 		}
 		return ['status' => 'error', 'message' => 'Delete failed'];
+	}
+
+	function api_reorder() {
+		if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+			return ['status' => 'error', 'message' => 'Invalid method'];
+		}
+		$this->ensureTodoSortColumn();
+		$owner = $_SESSION['userid'];
+		$idsRaw = isset($_POST['ids']) ? $_POST['ids'] : '';
+		if (is_array($idsRaw)) {
+			$ids = array_values(array_filter(array_map('intval', $idsRaw)));
+		} else {
+			$ids = array_values(array_filter(array_map('intval', explode(',', (string) $idsRaw))));
+		}
+		if (empty($ids)) {
+			return ['status' => 'error', 'message' => 'Invalid IDs'];
+		}
+		$idList = implode(',', $ids);
+		$rows = $this->fetchAll(sprintf(
+			"SELECT id FROM %s WHERE owner = '%s' AND id IN (%s)",
+			$this->table,
+			$this->quote($owner),
+			$idList
+		));
+		if (!is_array($rows) || count($rows) !== count($ids)) {
+			return ['status' => 'error', 'message' => 'Not found or permission denied'];
+		}
+		foreach ($ids as $index => $id) {
+			$this->query(sprintf(
+				"UPDATE %s SET todo_sort = %d WHERE id = %d AND owner = '%s'",
+				$this->table,
+				$index + 1,
+				$id,
+				$this->quote($owner)
+			));
+		}
+		return ['status' => 'success'];
 	}
 }
 

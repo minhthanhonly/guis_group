@@ -44,11 +44,11 @@ if($_SESSION['show_project'] == 0){
         </div>
     </nav>
     <div class="mb-2">
-      <button class="btn btn-outline-primary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#projectFilterBox" aria-expanded="false">
+      <button class="btn btn-outline-primary btn-sm" type="button" id="projectFilterToggleBtn" data-bs-toggle="collapse" data-bs-target="#projectFilterBox" aria-expanded="false">
         <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
       </button>
     </div>
-    <div class="collapse show" id="projectFilterBox">
+    <div class="collapse" id="projectFilterBox">
       <div class="card mb-3">
         <div class="card-body pb-4 pt-3">
           <form class="row g-3" id="projectFilterForm" autocomplete="off">
@@ -105,6 +105,18 @@ if($_SESSION['show_project'] == 0){
                 <option value="GUIS">GUIS</option>
               </select>
             </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="納品状況">納品状況</label>
+              <select class="form-select form-select-sm" id="filterDeliveryStatus">
+                <option value="" data-i18n="すべて">すべて</option>
+                <option value="納品済み" data-i18n="納品済み">納品済み</option>
+                <option value="未納品" data-i18n="未納品">未納品</option>
+              </select>
+            </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="予定工程">予定工程</label>
+              <input type="text" class="form-control form-control-sm" id="filterYoteiMonth" autocomplete="off">
+            </div>
             <div class="col-md-4 col-12">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
               <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">
@@ -130,26 +142,49 @@ if($_SESSION['show_project'] == 0){
                 <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">
                   <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
                 </button>
-                <div class="form-check mb-0 form-switch">
-                  <input class="form-check-input" type="checkbox" id="filterKeepTeamOnReset">
-                  <label class="form-check-label small text-nowrap" for="filterKeepTeamOnReset" data-i18n="リセット時にチームを保持">リセット時にチームを保持</label>
-                </div>
-                <div class="form-check mb-0 form-switch">
-                  <input class="form-check-input" type="checkbox" id="filterKeepCompanyOnReset">
-                  <label class="form-check-label small text-nowrap" for="filterKeepCompanyOnReset" data-i18n="リセット時に会社を保持">リセット時に会社を保持</label>
-                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="projectGanttFilterResetPrefsBtn"
+                        data-bs-toggle="offcanvas" data-bs-target="#offcanvasProjectGanttFilterResetPrefs"
+                        aria-controls="offcanvasProjectGanttFilterResetPrefs" title="フィルター設定">
+                  <i class="fa fa-sliders-h me-1"></i><span data-i18n="フィルター設定">フィルター設定</span>
+                </button>
               </div>
             </div>
           </form>
         </div>
       </div>
     </div>
+
+<!-- Offcanvas: Gantt reset filter preferences (left side) -->
+<div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasProjectGanttFilterResetPrefs"
+     aria-labelledby="offcanvasProjectGanttFilterResetPrefsLabel" style="width: min(360px, 92vw);">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title" id="offcanvasProjectGanttFilterResetPrefsLabel">
+            <i class="fa fa-sliders-h me-2"></i><span data-i18n="フィルター設定">フィルター設定</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="閉じる"></button>
+    </div>
+    <div class="offcanvas-body d-flex flex-column">
+        <p class="text-muted small mb-3" data-i18n="チェックした項目は「リセット」後も値が保持されます。">
+            チェックした項目は「リセット」後も値が保持されます。
+        </p>
+        <div id="projectGanttFilterResetPrefsList" class="flex-grow-1 overflow-auto"></div>
+        <div class="d-flex gap-2 mt-3 pt-3 border-top">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="projectGanttFilterResetPrefsSelectAll">
+                <span data-i18n="すべて選択">すべて選択</span>
+            </button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="projectGanttFilterResetPrefsClearAll">
+                <span data-i18n="すべて解除">すべて解除</span>
+            </button>
+        </div>
+    </div>
+</div>
+
     <div class="card">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">ガントチャート - {{ selectedDepartment ? selectedDepartment.name : '部署を選択してください' }}</h5>
                
-                <div class="d-flex gap-2 align-items-center">
+                <div class="d-flex gap-2 align-items-center flex-wrap">
                     <!-- Status Filter -->
                     <div class="btn-group flex-wrap">
                         <button 
@@ -167,9 +202,42 @@ if($_SESSION['show_project'] == 0){
                             {{ status.name }}
                         </button>
                     </div>
-                    
-                    <!-- Team Filter -->
-                    
+
+                    <!-- Sort Controls -->
+                    <div class="dropdown project-gantt-sort-dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="projectGanttSortDropdown"
+                                data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
+                            <i class="fa fa-sort me-1"></i><span data-i18n="並べ替え">並べ替え</span>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end p-3 project-gantt-sort-dropdown-menu" aria-labelledby="projectGanttSortDropdown" style="min-width: 260px;">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="ganttSortByStatusSwitch" checked>
+                                <label class="form-check-label" for="ganttSortByStatusSwitch" data-i18n="ステータス順で並べ替え">ステータス順で並べ替え</label>
+                            </div>
+                            <div class="mb-2">
+                                <label class="form-label form-label-sm mb-1" for="projectGanttSortColumn" data-i18n="並べ替え項目">並べ替え項目</label>
+                                <select class="form-select form-select-sm" id="projectGanttSortColumn">
+                                    <option value="" data-i18n="デフォルト">デフォルト</option>
+                                    <option value="yotei" data-i18n="予定工程">予定工程</option>
+                                    <option value="start_date" data-i18n="開始日">開始日</option>
+                                    <option value="caily_nouki" data-i18n="CAILY納期">CAILY納期</option>
+                                    <?php if (!$isCailyBranchUser): ?>
+                                    <option value="guis_nouki" data-i18n="GUIS納期">GUIS納期</option>
+                                    <option value="end_date" data-i18n="期限日">期限日</option>
+                                    <?php endif; ?>
+                                    <option value="estimate_date" data-director-only="1" data-i18n="見積日">見積日</option>
+                                    <option value="invoice_date" data-director-only="1" data-i18n="請求日">請求日</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="form-label form-label-sm mb-1" for="projectGanttSortDir" data-i18n="並び順">並び順</label>
+                                <select class="form-select form-select-sm" id="projectGanttSortDir">
+                                    <option value="asc" data-i18n="昇順">昇順</option>
+                                    <option value="desc" data-i18n="降順">降順</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div id="activeFilters" class="mb-2"></div>
@@ -314,6 +382,23 @@ body > .select2-container--default,
 }
 .btn-group {
     overflow: visible !important;
+}
+.project-gantt-sort-dropdown {
+    position: relative;
+    z-index: 100000;
+}
+.project-gantt-sort-dropdown .dropdown-menu,
+.project-gantt-sort-dropdown-menu {
+    z-index: 100000 !important;
+}
+.project-gantt-sort-dropdown select {
+    position: relative;
+    z-index: 100000;
+}
+.card > .card-header {
+    overflow: visible;
+    position: relative;
+    z-index: 1001;
 }
 .status-filter-btn {
     position: relative;

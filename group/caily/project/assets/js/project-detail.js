@@ -2980,17 +2980,9 @@ const vueApp = createApp({
                 this.showNotification('内容を入力してください', 'error');
                 return;
             }
-            // Auto-generate title from content (first line, max 50 chars, strip HTML tags)
-            let title = (this.editingNote.title || '').trim();
-            if (!title) {
-                const textContent = rawContent.replace(/<[^>]*>/g, '').trim();
-                title = textContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
-            }
-            
             try {
                 const formData = new FormData();
                 formData.append('project_id', this.projectId);
-                formData.append('title', title);
                 formData.append('content', rawContent);
                 formData.append('is_important', this.editingNote.is_important ? 1 : 0);
                 formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);

@@ -18,11 +18,21 @@ class ProjectNote extends ApplicationModel {
         $this->connect();
     }
 
+    private function defaultNoteTitle() {
+        return 'メモ';
+    }
+
+    private function noteContentHasText($content) {
+        $text = trim(strip_tags((string)$content));
+        $text = str_replace("\xc2\xa0", ' ', $text);
+        return $text !== '';
+    }
+
     function create($params = null) {
         $data = array(
             'project_id' => isset($_POST['project_id']) ? intval($_POST['project_id']) : 0,
             'user_id' => $_SESSION['userid'],
-            'title' => isset($_POST['title']) ? $_POST['title'] : '',
+            'title' => $this->defaultNoteTitle(),
             'content' => isset($_POST['content']) ? $_POST['content'] : '',
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
             'needs_confirmation' => isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0,
@@ -31,7 +41,7 @@ class ProjectNote extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
         
-        if (!$data['project_id'] || !$data['title']) {
+        if (!$data['project_id'] || !$this->noteContentHasText($data['content'])) {
             return ['status' => 'error', 'error' => 'Missing required fields'];
         }
         
@@ -100,7 +110,6 @@ class ProjectNote extends ApplicationModel {
         }
         
         $data = array(
-            'title' => isset($_POST['title']) ? $_POST['title'] : '',
             'content' => isset($_POST['content']) ? $_POST['content'] : '',
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
             'needs_confirmation' => isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0,
@@ -108,8 +117,8 @@ class ProjectNote extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
         
-        if (!$data['title']) {
-            return ['status' => 'error', 'error' => 'Title is required'];
+        if (!$this->noteContentHasText($data['content'])) {
+            return ['status' => 'error', 'error' => 'Content is required'];
         }
         
         $result = $this->query_update($data, ['id' => $id]);

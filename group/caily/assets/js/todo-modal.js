@@ -116,7 +116,9 @@ function mountTodoApp() {
                     },
                     quillTaskNoteInstance: null,
                     quillTaskNoteContent: '',
-                    quillTaskNoteInitTimer: null
+                    quillTaskNoteInitTimer: null,
+                    todoSortableInstance: null,
+                    savingTodoOrder: false
                 };
             },
             computed: {
@@ -173,7 +175,10 @@ function mountTodoApp() {
                 }
             },
             updated() {
-                this.$nextTick(() => this.initMyTaskStatusDropdowns());
+                this.$nextTick(() => {
+                    this.initMyTaskStatusDropdowns();
+                    this.initTodoSortable();
+                });
             },
             beforeUnmount() {
                 if (this.refreshIntervalId) {
@@ -187,6 +192,7 @@ function mountTodoApp() {
                     document.removeEventListener('task-timer-changed', this._onTaskTimerChangedBound);
                 }
                 this.destroyFpEdit();
+                this.destroyTodoSortable();
                 this.destroyQuillTaskNoteEditor();
                 if (typeof i18next !== 'undefined' && i18next.off && this._onI18nLanguageChanged) {
                     i18next.off('languageChanged', this._onI18nLanguageChanged);
@@ -293,6 +299,89 @@ function mountTodoApp() {
                     } finally {
                         this.loadingTodos = false;
                         this.updateTotalCount();
+                        this.$nextTick(() => this.initTodoSortable());
+                    }
+                },
+
+                destroyTodoSortable() {
+                    if (this.todoSortableInstance) {
+                        this.todoSortableInstance.destroy();
+                        this.todoSortableInstance = null;
+                    }
+                },
+
+                initTodoSortable() {
+                    if (this.activeTab !== 'todos' || this.loadingTodos || this.editingTodoId) {
+                        this.destroyTodoSortable();
+                        return;
+                    }
+                    const listBody = document.getElementById('customTodoListBody');
+                    if (!listBody || typeof Sortable === 'undefined') {
+                        return;
+                    }
+                    if (this.todoSortableInstance && this.todoSortableInstance.el === listBody) {
+                        return;
+                    }
+                    this.destroyTodoSortable();
+                    this.todoSortableInstance = Sortable.create(listBody, {
+                        animation: 150,
+                        handle: '.todo-drag-handle',
+                        draggable: 'tr',
+                        ghostClass: 'sortable-ghost',
+                        chosenClass: 'sortable-chosen',
+                        filter: '.todo-row-editing',
+                        preventOnFilter: true,
+                        onMove: (evt) => {
+                            const draggedComplete = evt.dragged.classList.contains('table-secondary');
+                            const relatedComplete = evt.related.classList.contains('table-secondary');
+                            return draggedComplete === relatedComplete;
+                        },
+                        onEnd: (evt) => {
+                            if (evt.oldIndex === evt.newIndex) {
+                                return;
+                            }
+                            this.onTodoDragEnd(evt);
+                        }
+                    });
+                },
+
+                async onTodoDragEnd(evt) {
+                    const listBody = document.getElementById('customTodoListBody');
+                    if (!listBody) {
+                        return;
+                    }
+                    const rowEls = Array.from(listBody.querySelectorAll('tr[data-id]'));
+                    const orderedIds = rowEls
+                        .map((row) => parseInt(row.getAttribute('data-id'), 10))
+                        .filter((id) => !isNaN(id) && id > 0);
+                    if (orderedIds.length === 0) {
+                        return;
+                    }
+                    const prevTodos = this.todos.slice();
+                    const todoMap = {};
+                    prevTodos.forEach((todo) => {
+                        todoMap[todo.id] = todo;
+                    });
+                    this.todos = orderedIds.map((id) => todoMap[id]).filter(Boolean);
+                    if (this.savingTodoOrder) {
+                        return;
+                    }
+                    this.savingTodoOrder = true;
+                    try {
+                        const formData = new FormData();
+                        formData.append('ids', orderedIds.join(','));
+                        const response = await axios.post('/api/index.php?model=todo&method=api_reorder', formData);
+                        if (!response.data || response.data.status !== 'success') {
+                            this.todos = prevTodos;
+                            this.$nextTick(() => this.initTodoSortable());
+                            console.error('Failed to save todo order', response.data);
+                        }
+                    } catch (error) {
+                        this.todos = prevTodos;
+                        this.$nextTick(() => this.initTodoSortable());
+                        console.error('Error saving todo order', error);
+                    } finally {
+                        this.savingTodoOrder = false;
                     }
                 },
 
@@ -359,6 +448,7 @@ function mountTodoApp() {
                  */
                 startEditTodo(todo) {
                     if (todo.todo_complete == 1) return;
+                    this.destroyTodoSortable();
                     this.destroyFpEdit();
                     this.editingTodoId = todo.id;
                     this.editingTodoTitle = (todo.todo_title || '').trim();
@@ -415,6 +505,7 @@ function mountTodoApp() {
                     this.editingTodoTerm = '';
                     this.editingTodoLink = '';
                     this.editingTodoComment = '';
+                    this.$nextTick(() => this.initTodoSortable());
                 },
                 /**
                  * Save todo (all fields: title, priority, term)

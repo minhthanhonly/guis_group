@@ -53,7 +53,7 @@ if($_SESSION['show_project'] == 0){
             <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
         </button>
     </div>
-    <div class="collapse show" id="projectFilterBox">
+    <div class="collapse" id="projectFilterBox">
         <div class="card mb-3">
             <div class="card-body pb-4 pt-3">
                 <form class="row g-3" id="projectFilterForm" autocomplete="off">
@@ -117,6 +117,11 @@ if($_SESSION['show_project'] == 0){
                         <option v-if="!isCailyBranchUser" value="end_today" data-i18n="期限日=本日">期限日=本日</option>
                     </select>
                     </div>
+                    
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="予定工程">予定工程</label>
+                    <input type="text" class="form-control form-control-sm" id="filterYoteiMonth" autocomplete="off">
+                    </div>
                     <div class="col-md-3 col-6">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="受注形態">受注形態</label>
                     <select class="form-select form-select-sm" id="filterProjectOrderType">
@@ -125,6 +130,14 @@ if($_SESSION['show_project'] == 0){
                         <option value="new">新規・実施図</option>
                         <option value="edit">修正</option>
                         <option value="other">その他</option>
+                    </select>
+                    </div>
+                    <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="納品状況">納品状況</label>
+                    <select class="form-select form-select-sm" id="filterDeliveryStatus">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option value="納品済み" data-i18n="納品済み">納品済み</option>
+                        <option value="未納品" data-i18n="未納品">未納品</option>
                     </select>
                     </div>
                     <div class="col-md-3 col-6">
@@ -201,16 +214,12 @@ if($_SESSION['show_project'] == 0){
                     <button class="btn btn-sm btn-outline-primary" id="filterReset" type="button">
                         <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
                     </button>
-                    <div class="d-inline-flex align-items-center gap-3 flex-wrap" id="projectFilterKeepOnResetTourTarget">
-                        <div class="form-check mb-0 form-switch">
-                            <input class="form-check-input" type="checkbox" id="filterKeepTeamOnReset">
-                            <label class="form-check-label text-nowrap" for="filterKeepTeamOnReset" data-i18n="リセット時にチームを保持">リセット時にチームを保持</label>
-                        </div>
-                        <div class="form-check mb-0 form-switch">
-                            <input class="form-check-input" type="checkbox" id="filterKeepCompanyOnReset">
-                            <label class="form-check-label text-nowrap" for="filterKeepCompanyOnReset" data-i18n="リセット時に会社を保持">リセット時に会社を保持</label>
-                        </div>
-                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="projectFilterResetPrefsBtn"
+                            data-bs-toggle="offcanvas" data-bs-target="#offcanvasProjectFilterResetPrefs"
+                            aria-controls="offcanvasProjectFilterResetPrefs" title="フィルター設定">
+                        <i class="fa fa-sliders-h me-1"></i><span data-i18n="フィルター設定">フィルター設定</span>
+                    </button>
+                    <span id="projectFilterKeepOnResetTourTarget"></span>
                     <button type="button" class="btn btn-sm btn-success" id="projectExportExcelBtn" :disabled="!selectedDepartment || loading" @click="exportProjectListExcel" title="Excel出力">
                         <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
                     </button>
@@ -333,13 +342,38 @@ if($_SESSION['show_project'] == 0){
 
 
     <!-- Offcanvas: nội dung = #projectFilterBox (mở từ bottom giống Todo List) -->
-    <div class="offcanvas offcanvas-bottom" tabindex="-1" id="offcanvasProjectFilter" aria-labelledby="offcanvasProjectFilterLabel" style="height: 30rem;">
+    <div class="offcanvas offcanvas-bottom" tabindex="-1" id="offcanvasProjectFilter" aria-labelledby="offcanvasProjectFilterLabel" style="height: 40rem;">
         <div class="offcanvas-header border-bottom">
             <h5 class="offcanvas-title" id="offcanvasProjectFilterLabel"><i class="fa fa-filter me-2"></i><span data-i18n="高度なフィルター">高度なフィルター</span></h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="閉じる"></button>
         </div>
         <div class="offcanvas-body overflow-auto" id="projectFilterOffcanvasBody">
             <!-- Nội dung #projectFilterBox sẽ được chuyển vào đây khi mở offcanvas -->
+        </div>
+    </div>
+
+    <!-- Offcanvas: reset filter preferences (right side) -->
+    <div class="offcanvas offcanvas-start" tabindex="-1" id="offcanvasProjectFilterResetPrefs"
+         aria-labelledby="offcanvasProjectFilterResetPrefsLabel" style="width: min(360px, 92vw);">
+        <div class="offcanvas-header border-bottom">
+            <h5 class="offcanvas-title" id="offcanvasProjectFilterResetPrefsLabel">
+                <i class="fa fa-sliders-h me-2"></i><span data-i18n="フィルター設定">フィルター設定</span>
+            </h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="閉じる"></button>
+        </div>
+        <div class="offcanvas-body d-flex flex-column">
+            <p class="text-muted small mb-3" data-i18n="チェックした項目は「リセット」後も値が保持されます。">
+                チェックした項目は「リセット」後も値が保持されます。
+            </p>
+            <div id="projectFilterResetPrefsList" class="flex-grow-1 overflow-auto"></div>
+            <div class="d-flex gap-2 mt-3 pt-3 border-top">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="projectFilterResetPrefsSelectAll">
+                    <span data-i18n="すべて選択">すべて選択</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="projectFilterResetPrefsClearAll">
+                    <span data-i18n="すべて解除">すべて解除</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -678,7 +712,7 @@ if($_SESSION['show_project'] == 0){
                                 <i class="fa fa-trash me-2"></i> <span data-i18n="削除">削除</span>
                             </button>
                             <button class="btn btn-secondary" @click="closeNoteModal"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
-                            <button class="btn btn-primary" @click="saveNote" :disabled="!((quillNoteContent && quillNoteContent.trim()) || (editingNote.content && editingNote.content.trim()))">
+                            <button class="btn btn-primary" @click="saveNote" :disabled="savingNote || !canSaveNote">
                                 <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
                             </button>
                         </template>
@@ -1250,6 +1284,7 @@ body.pl-col-resizing * {
 #projectTable td.confirmation-notes-column .confirmation-note-item {
     position: relative;
     display: block;
+    cursor: pointer;
 }
 
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-text {
@@ -1276,6 +1311,12 @@ body.pl-col-resizing * {
     display: inline-flex;
     align-items: center;
     gap: 2px;
+    pointer-events: none;
+}
+
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-delete-icon {
+    pointer-events: auto;
+    cursor: pointer;
 }
 
 /* Highlight note being edited */
@@ -1305,6 +1346,7 @@ body.pl-col-resizing * {
 
 #projectTable td.confirmation-notes-column .empty-notes-cell .add-note-icon {
     font-size: 14px;
+    pointer-events: none;
 }
 
 /* Row background colors based on status (70% lighter = 30% opacity) */

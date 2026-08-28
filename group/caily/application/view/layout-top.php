@@ -731,7 +731,7 @@
                         </button>
                       </li>
                     </ul>
-                    <div class="tab-content flex-grow-1 overflow-auto pt-3 px-0">
+                    <div class="tab-content flex-grow-1 overflow-auto overflow-x-hidden pt-3 px-0">
                       <!-- My Tasks Tab -->
                       <div class="tab-pane fade" :class="{ 'show active': activeTab === 'tasks' }" id="navs-tasks" role="tabpanel">
                          <div v-if="loadingTasks" class="text-center py-5">
@@ -949,8 +949,9 @@
                             <table class="table table-sm table-hover align-middle mb-0">
                                 <thead class="table-light">
                                     <tr>
+                                        <th style="width: 28px;" class="text-center" title="ドラッグして並べ替え"><i class="fas fa-grip-vertical text-muted"></i></th>
                                         <th style="width: 36px;" class="text-center"><span data-i18n="完了">完了</span></th>
-                                        <th style="width: 30%;"><span data-i18n="Todo">Todo</span></th>
+                                        <th style="width: 20%;"><span data-i18n="Todo">Todo</span></th>
                                         <th><span data-i18n="優先度">優先度</span></th>
                                         <th><span data-i18n="期限">期限</span></th>
                                         <th style="min-width: 100px;"><span data-i18n="Link">リンク</span></th>
@@ -958,8 +959,11 @@
                                         <th style="width: 80px;"><span data-i18n="操作">操作</span></th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <tr v-for="todo in todos" :key="todo.id" :class="{'table-secondary': todo.todo_complete == 1}">
+                                <tbody id="customTodoListBody">
+                                    <tr v-for="todo in todos" :key="todo.id" :data-id="todo.id" :class="{'table-secondary': todo.todo_complete == 1, 'todo-row-editing': editingTodoId === todo.id}">
+                                        <td class="align-middle text-center todo-drag-handle" :class="{'text-muted': editingTodoId === todo.id}" :title="editingTodoId === todo.id ? '' : 'ドラッグして並べ替え'">
+                                            <i class="fas fa-grip-vertical" :class="editingTodoId === todo.id ? 'opacity-25' : 'text-muted'"></i>
+                                        </td>
                                         <td class="align-middle">
                                             <div class="form-check mb-0">
                                                 <input class="form-check-input" type="checkbox" :checked="todo.todo_complete == 1" @change="toggleTodo(todo)">
@@ -1143,6 +1147,25 @@
             .my-task-table {
               min-width: 1100px;
               font-size: 0.8125rem;
+            }
+            #customTodoListBody .todo-drag-handle {
+              cursor: grab;
+              width: 28px;
+              user-select: none;
+              touch-action: none;
+            }
+            #customTodoListBody .todo-drag-handle:active {
+              cursor: grabbing;
+            }
+            #customTodoListBody tr.todo-row-editing .todo-drag-handle {
+              cursor: default;
+            }
+            #customTodoListBody tr.sortable-ghost {
+              opacity: 0.45;
+              background: rgba(var(--bs-primary-rgb), 0.08);
+            }
+            #customTodoListBody tr.sortable-chosen {
+              background: rgba(var(--bs-primary-rgb), 0.06);
             }
             .my-task-table th,
             .my-task-table td {

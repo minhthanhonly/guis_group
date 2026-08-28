@@ -472,6 +472,28 @@ class Project extends ApplicationModel {
                     }
                 }
             }
+            if (isset($_GET['filterDeliveryStatus']) && $_GET['filterDeliveryStatus'] !== '') {
+                $deliveryStatus = (string)$_GET['filterDeliveryStatus'];
+                if ($deliveryStatus === '納品済み') {
+                    $whereArr[] = "(p.caily_nouki_status LIKE '%納品済み%' OR p.guis_nouki_status LIKE '%納品済み%')";
+                } elseif ($deliveryStatus === '未納品') {
+                    $whereArr[] = "(COALESCE(p.caily_nouki_status, '') NOT LIKE '%納品済み%' AND COALESCE(p.guis_nouki_status, '') NOT LIKE '%納品済み%')";
+                }
+            }
+            if (isset($_GET['filterYoteiMonth']) && $_GET['filterYoteiMonth'] !== ''
+                && preg_match('/^\d{4}-\d{2}$/', (string)$_GET['filterYoteiMonth'])) {
+                $yoteiMonth = $this->escape($_GET['filterYoteiMonth']);
+                $whereArr[] = "(
+                    p.yotei IS NOT NULL AND TRIM(p.yotei) != ''
+                    AND JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.from_month')) <= '{$yoteiMonth}'
+                    AND (
+                        JSON_EXTRACT(p.yotei, '$.to_month') IS NULL
+                        OR JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.to_month')) = ''
+                        OR JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.to_month')) = 'null'
+                        OR JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.to_month')) >= '{$yoteiMonth}'
+                    )
+                )";
+            }
             if (isset($_GET['filterPriority']) && $_GET['filterPriority'] !== '') {
                 $priority = $this->escape($_GET['filterPriority']);
                 $whereArr[] = "p.priority = '$priority'";
@@ -935,6 +957,28 @@ class Project extends ApplicationModel {
             if (isset($_GET['filterNoDates']) && $_GET['filterNoDates'] === '1') {
                 $whereArr[] = "(p.start_date IS NULL OR p.end_date IS NULL)";
             }
+            if (isset($_GET['filterDeliveryStatus']) && $_GET['filterDeliveryStatus'] !== '') {
+                $deliveryStatus = (string)$_GET['filterDeliveryStatus'];
+                if ($deliveryStatus === '納品済み') {
+                    $whereArr[] = "(p.caily_nouki_status LIKE '%納品済み%' OR p.guis_nouki_status LIKE '%納品済み%')";
+                } elseif ($deliveryStatus === '未納品') {
+                    $whereArr[] = "(COALESCE(p.caily_nouki_status, '') NOT LIKE '%納品済み%' AND COALESCE(p.guis_nouki_status, '') NOT LIKE '%納品済み%')";
+                }
+            }
+            if (isset($_GET['filterYoteiMonth']) && $_GET['filterYoteiMonth'] !== ''
+                && preg_match('/^\d{4}-\d{2}$/', (string)$_GET['filterYoteiMonth'])) {
+                $yoteiMonth = $this->escape($_GET['filterYoteiMonth']);
+                $whereArr[] = "(
+                    p.yotei IS NOT NULL AND TRIM(p.yotei) != ''
+                    AND JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.from_month')) <= '{$yoteiMonth}'
+                    AND (
+                        JSON_EXTRACT(p.yotei, '$.to_month') IS NULL
+                        OR JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.to_month')) = ''
+                        OR JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.to_month')) = 'null'
+                        OR JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.to_month')) >= '{$yoteiMonth}'
+                    )
+                )";
+            }
         }
         // 表示期間: chỉ lấy dự án giao với khoảng gantt_start_date ~ gantt_end_date (hoặc 期間未定)
         if (!empty($_GET['gantt_start_date']) && !empty($_GET['gantt_end_date'])) {
@@ -955,6 +999,53 @@ class Project extends ApplicationModel {
         if (!empty($where)) {
             $where = " WHERE " . $where;
         }
+        $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        $canViewDirectorColumns = $department_id > 0
+            ? $this->canUserViewProjectDirectorListColumns($department_id)
+            : false;
+        $directorColumnFields = array(
+            'amount', 'estimate_date', 'estimate_status', 'invoice_date',
+            'invoice_status', 'invoice_amount', 'payment_note',
+        );
+        $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'end_date';
+        if (!$canViewDirectorColumns && in_array($order_column, $directorColumnFields, true)) {
+            $order_column = 'end_date';
+        }
+        $order_dir = isset($_GET['order_dir']) ? $_GET['order_dir'] : 'ASC';
+        $sortByStatus = !(isset($_GET['sortByStatus']) && (
+            $_GET['sortByStatus'] === '0'
+            || $_GET['sortByStatus'] === 'false'
+            || $_GET['sortByStatus'] === false
+        ));
+        $statusOrder = "CASE p.status 
+            WHEN 'draft' THEN 1 
+            WHEN 'open' THEN 2 
+            WHEN 'confirming' THEN 3 
+            WHEN 'quotation' THEN 4 
+            WHEN 'contract' THEN 5 
+            WHEN 'waiting_documents' THEN 6 
+            WHEN 'in_progress' THEN 7 
+            WHEN 'completed' THEN 10 
+            WHEN 'paused' THEN 8 
+            WHEN 'cancelled' THEN 9 
+            ELSE 11 
+        END";
+        $order_dir = strtoupper($order_dir) === 'DESC' ? 'DESC' : 'ASC';
+        $orderExpr = $this->resolveProjectListOrderExpression($order_column, $user_id);
+        if ($order_column === 'status') {
+            $orderBy = sprintf('ORDER BY %s %s', $statusOrder, $order_dir);
+        } elseif ($sortByStatus) {
+            $orderBy = $this->buildProjectListOrderByNullsLast($orderExpr, $order_dir, $statusOrder . ' ASC');
+        } else {
+            $orderBy = $this->buildProjectListOrderByNullsLast($orderExpr, $order_dir);
+        }
+        $showInactiveForOrder = isset($_GET['showInactive']) && $_GET['showInactive'] === '1';
+        if ($showInactiveForOrder) {
+            $orderBy .= ", (CASE WHEN p.status IN ('completed','cancelled','deleted') THEN 1 ELSE 0 END) ASC, p.end_date ASC";
+        }
+        if (!isset($_GET['order_column']) || trim((string)$_GET['order_column']) === '') {
+            $orderBy .= ', p.created_at DESC';
+        }
         $listJoins = $this->getProjectListCustomerJoinSql();
         $ganttLimit = 3000;
         $query = sprintf(
@@ -972,13 +1063,14 @@ class Project extends ApplicationModel {
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
             " . $listJoins . "
             %s
-            ORDER BY p.start_date ASC, p.created_at DESC
+            %s
             LIMIT %d",
             $this->sqlEffectiveBranchName(),
             $this->sqlEffectiveContactName(),
             $this->sqlEffectiveCompanyName(),
             $this->sqlEffectiveCustomerName(),
             $where,
+            $orderBy,
             $ganttLimit
         );
         $data = $this->fetchAll($query);
@@ -7851,11 +7943,7 @@ class Project extends ApplicationModel {
             $content = nl2br(htmlspecialchars($content, ENT_QUOTES, 'UTF-8'), false);
         }
 
-        $title = isset($params['title']) ? trim((string)$params['title']) : '';
-        if ($title === '') {
-            $plain = trim(preg_replace('/\s+/u', ' ', strip_tags($content)));
-            $title = $plain !== '' ? mb_substr($plain, 0, 50) : 'メモ';
-        }
+        $title = 'メモ';
 
         $user_id = isset($params['user_id']) ? trim((string)$params['user_id']) : '';
         if ($user_id === '') {

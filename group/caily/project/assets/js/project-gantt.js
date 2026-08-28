@@ -2,6 +2,77 @@ var gantt;
 var projectData = [];
 var teamIdToName = {};
 
+var PROJECT_GANTT_SORT_FIELDS = [
+    'yotei',
+    'start_date',
+    'caily_nouki',
+    'guis_nouki',
+    'end_date',
+    'estimate_date',
+    'invoice_date'
+];
+
+function normalizeProjectGanttSortColumn(value) {
+    var key = String(value || '').trim();
+    if (isCailyBranchUser() && (key === 'guis_nouki' || key === 'end_date')) {
+        return '';
+    }
+    return PROJECT_GANTT_SORT_FIELDS.indexOf(key) >= 0 ? key : '';
+}
+
+function normalizeProjectGanttSortDir(value) {
+    return String(value || '').toLowerCase() === 'desc' ? 'desc' : 'asc';
+}
+
+function getProjectGanttSortColumnFromUi() {
+    return normalizeProjectGanttSortColumn($('#projectGanttSortColumn').val());
+}
+
+function getProjectGanttSortDirFromUi() {
+    return normalizeProjectGanttSortDir($('#projectGanttSortDir').val());
+}
+
+function canViewProjectGanttDirectorColumns() {
+    if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+    if (typeof window.ganttApp === 'undefined' || !window.ganttApp.userPermissions) return false;
+    var p = window.ganttApp.userPermissions;
+    return p.project_director == 1
+        || p.project_director_stat == 1
+        || p.project_director_view == 1
+        || p.project_director_edit == 1;
+}
+
+function refreshProjectGanttSortFieldOptions() {
+    var $sel = $('#projectGanttSortColumn');
+    if (!$sel.length) return;
+    var showDirector = canViewProjectGanttDirectorColumns();
+    $sel.find('option[data-director-only="1"]').each(function() {
+        var $opt = $(this);
+        if (showDirector) {
+            $opt.prop('disabled', false).show();
+        } else {
+            if ($sel.val() === $opt.attr('value')) {
+                $sel.val('');
+            }
+            $opt.prop('disabled', true).hide();
+        }
+    });
+}
+
+function getProjectGanttSortColumnLabel(key) {
+    var labels = {
+        '': 'デフォルト',
+        yotei: '予定工程',
+        start_date: '開始日',
+        caily_nouki: 'CAILY納期',
+        guis_nouki: 'GUIS納期',
+        end_date: '期限日',
+        estimate_date: '見積日',
+        invoice_date: '請求日'
+    };
+    return labels[key] || key;
+}
+
 function isCailyBranchUser() {
     return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
 }
@@ -126,9 +197,473 @@ $(document).ready(function() {
 
     // LocalStorage filter state
     const FILTER_STORAGE_KEY = 'projectGanttFilters';
+    const FILTER_RESET_PREFS_KEY = 'projectGanttFilterResetPrefs';
     const KEEP_TEAM_ON_RESET_KEY = 'project_list_keep_team_on_reset';
     const KEEP_COMPANY_ON_RESET_KEY = 'project_list_keep_company_on_reset';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment'; // Dùng chung với project-list.js
+    const PROJECT_FILTER_BOX_OPEN_KEY = 'projectAdvancedFilterBoxOpen';
+    var ganttFilterPersistSuspended = false;
+
+    function reapplyGanttSortFromStorage() {
+        var filters = {};
+        try {
+            filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            return;
+        }
+        refreshProjectGanttSortFieldOptions();
+        if (filters.sortByStatus !== undefined) {
+            $('#ganttSortByStatusSwitch').prop('checked', filters.sortByStatus != 0);
+        }
+        if (filters.listSortColumn !== undefined) {
+            $('#projectGanttSortColumn').val(normalizeProjectGanttSortColumn(filters.listSortColumn));
+        }
+        if (filters.listSortDir !== undefined) {
+            $('#projectGanttSortDir').val(normalizeProjectGanttSortDir(filters.listSortDir));
+        }
+    }
+
+    function onGanttFilterChanged(reloadProjects) {
+        if (ganttFilterPersistSuspended) {
+            return;
+        }
+        saveFiltersToLocalStorage();
+        renderActiveFilters();
+        if (reloadProjects !== false && window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
+            window.ganttApp.loadProjects();
+        }
+    }
+
+    function restoreGanttFiltersFromStorage() {
+        var filters = {};
+        try {
+            filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+        } catch (e) {
+            filters = {};
+        }
+        ganttFilterPersistSuspended = true;
+        try {
+            applyProjectGanttFiltersToUi(filters);
+            if (window.ganttApp) {
+                window.ganttApp.selectedStatusKeys = normalizeProjectStatusKeys(
+                    filters.statusKeys || filters.statusKey || ''
+                );
+            }
+            window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
+            window.ganttTreeOpen = $('#toggleTaskTree').is(':checked');
+            reapplyGanttSortFromStorage();
+            renderActiveFilters();
+        } finally {
+            ganttFilterPersistSuspended = false;
+        }
+    }
+
+    function initProjectFilterBoxCollapseState() {
+        var box = document.getElementById('projectFilterBox');
+        if (!box) return;
+
+        var open = false;
+        try {
+            open = localStorage.getItem(PROJECT_FILTER_BOX_OPEN_KEY) === '1';
+        } catch (e) {}
+
+        if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+            var collapse = bootstrap.Collapse.getOrCreateInstance(box, { toggle: false });
+            if (open) {
+                collapse.show();
+            }
+        } else if (open) {
+            box.classList.add('show');
+            var btn = document.getElementById('projectFilterToggleBtn');
+            if (btn) btn.setAttribute('aria-expanded', 'true');
+        }
+
+        if (!box._projectFilterBoxStateBound) {
+            box._projectFilterBoxStateBound = true;
+            box.addEventListener('shown.bs.collapse', function() {
+                try { localStorage.setItem(PROJECT_FILTER_BOX_OPEN_KEY, '1'); } catch (e) {}
+            });
+            box.addEventListener('hidden.bs.collapse', function() {
+                try { localStorage.setItem(PROJECT_FILTER_BOX_OPEN_KEY, '0'); } catch (e) {}
+            });
+        }
+    }
+
+    var PROJECT_GANTT_FILTER_RESET_GROUPS = [
+        { id: 'project', labelKey: '案件' },
+        { id: 'org', labelKey: '組織' },
+        { id: 'status', labelKey: '状態' },
+        { id: 'display', labelKey: '表示' }
+    ];
+
+    var PROJECT_GANTT_SORT_FILTER_KEYS = ['sortByStatus', 'listSortColumn', 'listSortDir'];
+
+    var PROJECT_GANTT_FILTER_REGISTRY = [
+        { key: 'filterPriority', labelKey: '優先度', group: 'project', defaultValue: '' },
+        { key: 'filterProgress', labelKey: '進捗率', group: 'project', defaultValue: '' },
+        { key: 'filterTimeLeft', labelKey: '残り時間', group: 'project', defaultValue: '' },
+        { key: 'filterProjectOrderType', labelKey: '受注形態', group: 'project', defaultValue: '' },
+        { key: 'filterDeliveryStatus', labelKey: '納品状況', group: 'project', defaultValue: '' },
+        { key: 'filterYoteiMonth', labelKey: '予定工程', group: 'project', defaultValue: '' },
+        { key: 'filterTantou', labelKey: '担当', group: 'project', defaultValue: '' },
+        { key: 'filterNoDates', labelKey: '開始日・期限日未設定', group: 'project', defaultValue: 0 },
+        { key: 'filterKeyword', labelKey: 'キーワード', group: 'project', defaultValue: '' },
+        { key: 'filterProjectId', labelKey: '案件ID', group: 'project', defaultValue: '' },
+        { key: 'filterTeam', labelKey: 'チーム', group: 'org', defaultValue: [] },
+        { key: 'filterCompany', labelKey: '会社', group: 'org', defaultValue: [] },
+        { key: 'statusKeys', labelKey: '案件状況', group: 'status', defaultValue: [] },
+        { key: 'showInactive', labelKey: '完了・中止案件等も表示', group: 'status', defaultValue: 0 },
+        { key: 'myProjects', labelKey: '私の案件', group: 'status', defaultValue: 0 },
+        { key: 'showTaskText', labelKey: '案件名を表示', group: 'display', defaultValue: 0 },
+        { key: 'showTaskTree', labelKey: '各納期を表示', group: 'display', defaultValue: 0 },
+        { key: 'useCailyEndDate', labelKey: 'CAILY納期を表示', group: 'display', defaultValue: 0 },
+        { key: 'useGuisEndDate', labelKey: 'GUIS納期を表示', group: 'display', defaultValue: 0, hiddenOnCaily: true },
+        { key: 'useEndDate', labelKey: '期限日を表示', group: 'display', defaultValue: 0, hiddenOnCaily: true },
+        { key: 'useShowCailyStruct', labelKey: '構造データ送付 (CAILY)を表示', group: 'display', defaultValue: 0 },
+        { key: 'useShowGuisStruct', labelKey: '構造データ送付 (GUIS)を表示', group: 'display', defaultValue: 0 },
+        { key: 'useShowEquipmentNouki', labelKey: '設備 納期を表示', group: 'display', defaultValue: 0 }
+    ];
+
+    function cloneProjectGanttFilterValue(value) {
+        if (Array.isArray(value)) {
+            return value.slice();
+        }
+        return value;
+    }
+
+    function getDefaultProjectGanttFilterValues() {
+        var defaults = {};
+        PROJECT_GANTT_FILTER_REGISTRY.forEach(function(def) {
+            defaults[def.key] = cloneProjectGanttFilterValue(def.defaultValue);
+        });
+        return defaults;
+    }
+
+    function isProjectGanttFilterResetItemVisible(def) {
+        if (!def) return false;
+        if (def.hiddenOnCaily && isCailyBranchUser()) {
+            return false;
+        }
+        return true;
+    }
+
+    function getVisibleProjectGanttFilterResetItems() {
+        return PROJECT_GANTT_FILTER_REGISTRY.filter(isProjectGanttFilterResetItemVisible);
+    }
+
+    function migrateProjectGanttFilterResetPrefs(prefs) {
+        prefs = prefs && typeof prefs === 'object' ? prefs : {};
+        if (prefs._migrated) {
+            return prefs;
+        }
+        try {
+            if (localStorage.getItem(KEEP_TEAM_ON_RESET_KEY) === '1') {
+                prefs.filterTeam = true;
+            }
+            if (localStorage.getItem(KEEP_COMPANY_ON_RESET_KEY) === '1') {
+                prefs.filterCompany = true;
+            }
+        } catch (e) {}
+        prefs._migrated = true;
+        return prefs;
+    }
+
+    function sanitizeProjectGanttFilterResetPrefs(prefs) {
+        prefs = prefs && typeof prefs === 'object' ? prefs : {};
+        PROJECT_GANTT_SORT_FILTER_KEYS.forEach(function(key) {
+            delete prefs[key];
+        });
+        return prefs;
+    }
+
+    function loadProjectGanttFilterResetPrefs() {
+        var prefs = {};
+        try {
+            prefs = JSON.parse(localStorage.getItem(FILTER_RESET_PREFS_KEY) || '{}');
+        } catch (e) {
+            prefs = {};
+        }
+        return sanitizeProjectGanttFilterResetPrefs(migrateProjectGanttFilterResetPrefs(prefs));
+    }
+
+    function saveProjectGanttFilterResetPrefs(prefs) {
+        try {
+            localStorage.setItem(
+                FILTER_RESET_PREFS_KEY,
+                JSON.stringify(sanitizeProjectGanttFilterResetPrefs(migrateProjectGanttFilterResetPrefs(prefs || {})))
+            );
+        } catch (e) {
+            console.warn('Failed to save Gantt filter reset prefs', e);
+        }
+    }
+
+    function setProjectGanttFilterKeptOnReset(key, kept) {
+        if (PROJECT_GANTT_SORT_FILTER_KEYS.indexOf(key) >= 0) {
+            return;
+        }
+        var prefs = loadProjectGanttFilterResetPrefs();
+        if (kept) {
+            prefs[key] = true;
+        } else {
+            delete prefs[key];
+        }
+        saveProjectGanttFilterResetPrefs(prefs);
+    }
+
+    function escapeHtmlForGanttFilter(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function ganttFilterResetI18nHtml(key) {
+        var safeKey = escapeHtmlForGanttFilter(key);
+        return '<span data-i18n="' + safeKey + '">' + safeKey + '</span>';
+    }
+
+    function applyGanttFilterResetPrefsI18n(root) {
+        if (typeof window.applyDataI18n !== 'function') return;
+        var el = root;
+        if (!el) {
+            el = document.getElementById('offcanvasProjectGanttFilterResetPrefs');
+        }
+        if (el) {
+            window.applyDataI18n(el);
+        }
+    }
+
+    function applyGanttMonthFilterInputToUi(selector, value) {
+        var $el = $(selector);
+        if (!$el.length) return;
+        var v = value || '';
+        $el.val(v);
+        var fp = $el.data('flatpickr') || ($el[0] && $el[0]._flatpickr);
+        if (fp) {
+            if (v) {
+                fp.setDate(v, false);
+            } else {
+                fp.clear();
+            }
+        }
+    }
+
+    function collectProjectGanttFiltersFromUi() {
+        return {
+            filterPriority: $('#filterPriority').val() || '',
+            filterProgress: $('#filterProgress').val() || '',
+            filterTimeLeft: $('#filterTimeLeft').val() || '',
+            filterProjectOrderType: $('#filterProjectOrderType').val() || '',
+            filterDeliveryStatus: $('#filterDeliveryStatus').val() || '',
+            filterYoteiMonth: $('#filterYoteiMonth').val() || '',
+            filterTeam: getFilterTeamValue(),
+            filterCompany: getFilterCompanyValue(),
+            filterTantou: $('#filterTantou').val() || '',
+            filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
+            showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
+            myProjects: $('#filterMyProjects').is(':checked') ? 1 : 0,
+            showTaskText: $('#toggleTaskText').is(':checked') ? 1 : 0,
+            showTaskTree: $('#toggleTaskTree').is(':checked') ? 1 : 0,
+            useCailyEndDate: $('#useCailyEndDate').is(':checked') ? 1 : 0,
+            useGuisEndDate: isCailyBranchUser() ? 0 : ($('#useGuisEndDate').is(':checked') ? 1 : 0),
+            useEndDate: isCailyBranchUser() ? 0 : ($('#useEndDate').is(':checked') ? 1 : 0),
+            useShowCailyStruct: $('#useShowCailyStruct').is(':checked') ? 1 : 0,
+            useShowGuisStruct: $('#useShowGuisStruct').is(':checked') ? 1 : 0,
+            useShowEquipmentNouki: $('#useShowEquipmentNouki').is(':checked') ? 1 : 0,
+            filterKeyword: $('#filterKeyword').val() || '',
+            filterProjectId: $('#filterProjectId').val() || '',
+            sortByStatus: $('#ganttSortByStatusSwitch').is(':checked') ? 1 : 0,
+            listSortColumn: getProjectGanttSortColumnFromUi(),
+            listSortDir: getProjectGanttSortDirFromUi(),
+            statusKeys: getSelectedStatusKeysFromApp()
+        };
+    }
+
+    function applyProjectGanttFiltersToUi(filters) {
+        filters = filters || {};
+        if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
+        if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
+        if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
+        if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
+        if (filters.filterDeliveryStatus !== undefined) $('#filterDeliveryStatus').val(filters.filterDeliveryStatus);
+        if (filters.filterYoteiMonth !== undefined) applyGanttMonthFilterInputToUi('#filterYoteiMonth', filters.filterYoteiMonth);
+        if (filters.filterCompany !== undefined) {
+            var companyValues = parseFilterCompanyValue(filters.filterCompany);
+            $('#filterCompany').val(companyValues.length ? companyValues : null);
+            if (!ganttFilterPersistSuspended) {
+                $('#filterCompany').trigger('change');
+            }
+        }
+        if (filters.filterTeam !== undefined) {
+            var teamValues = parseFilterTeamValue(filters.filterTeam);
+            $('#filterTeam').val(teamValues.length ? teamValues : null);
+            if (!ganttFilterPersistSuspended) {
+                $('#filterTeam').trigger('change');
+            }
+        }
+        if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
+        if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
+        if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
+        if (filters.myProjects !== undefined) $('#filterMyProjects').prop('checked', filters.myProjects == 1);
+        if (filters.showTaskText !== undefined) $('#toggleTaskText').prop('checked', filters.showTaskText == 1);
+        if (filters.showTaskTree !== undefined) $('#toggleTaskTree').prop('checked', filters.showTaskTree == 1);
+        if (filters.useCailyEndDate !== undefined) $('#useCailyEndDate').prop('checked', filters.useCailyEndDate == 1);
+        if (!isCailyBranchUser() && filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
+        if (!isCailyBranchUser() && filters.useEndDate !== undefined) $('#useEndDate').prop('checked', filters.useEndDate == 1);
+        if (filters.useShowCailyStruct !== undefined) $('#useShowCailyStruct').prop('checked', filters.useShowCailyStruct == 1);
+        if (filters.useShowGuisStruct !== undefined) $('#useShowGuisStruct').prop('checked', filters.useShowGuisStruct == 1);
+        if (filters.useShowEquipmentNouki !== undefined) $('#useShowEquipmentNouki').prop('checked', filters.useShowEquipmentNouki == 1);
+        if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
+        if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
+        if (filters.sortByStatus !== undefined) {
+            $('#ganttSortByStatusSwitch').prop('checked', filters.sortByStatus != 0);
+        } else if ($('#ganttSortByStatusSwitch').length) {
+            $('#ganttSortByStatusSwitch').prop('checked', true);
+        }
+        refreshProjectGanttSortFieldOptions();
+        if (filters.listSortColumn !== undefined) {
+            $('#projectGanttSortColumn').val(normalizeProjectGanttSortColumn(filters.listSortColumn));
+        } else if ($('#projectGanttSortColumn').length) {
+            $('#projectGanttSortColumn').val('');
+        }
+        if (filters.listSortDir !== undefined) {
+            $('#projectGanttSortDir').val(normalizeProjectGanttSortDir(filters.listSortDir));
+        } else if ($('#projectGanttSortDir').length) {
+            $('#projectGanttSortDir').val('asc');
+        }
+        if (filters.statusKeys !== undefined && window.ganttApp) {
+            window.ganttApp.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys);
+        }
+    }
+
+    function buildProjectGanttFiltersAfterReset() {
+        var current = collectProjectGanttFiltersFromUi();
+        var prefs = loadProjectGanttFilterResetPrefs();
+        var defaults = getDefaultProjectGanttFilterValues();
+        var next = {};
+        PROJECT_GANTT_FILTER_REGISTRY.forEach(function(def) {
+            if (!isProjectGanttFilterResetItemVisible(def)) {
+                if (current[def.key] !== undefined) {
+                    next[def.key] = cloneProjectGanttFilterValue(current[def.key]);
+                }
+                return;
+            }
+            if (prefs[def.key]) {
+                next[def.key] = cloneProjectGanttFilterValue(current[def.key]);
+            } else {
+                next[def.key] = cloneProjectGanttFilterValue(defaults[def.key]);
+            }
+        });
+        PROJECT_GANTT_SORT_FILTER_KEYS.forEach(function(key) {
+            next[key] = cloneProjectGanttFilterValue(current[key]);
+        });
+        return next;
+    }
+
+    function resetProjectGanttFilters() {
+        var next = buildProjectGanttFiltersAfterReset();
+        applyProjectGanttFiltersToUi(next);
+        window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
+        window.ganttTreeOpen = $('#toggleTaskTree').is(':checked');
+        saveFiltersToLocalStorage();
+        renderActiveFilters();
+        if (typeof applyTreeToggleState === 'function') {
+            applyTreeToggleState();
+        }
+        if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
+            window.ganttApp.loadProjects();
+        } else if (typeof gantt !== 'undefined' && gantt && typeof gantt.render === 'function') {
+            gantt.render();
+        }
+    }
+
+    function renderProjectGanttFilterResetPrefsOffcanvas() {
+        var $root = $('#projectGanttFilterResetPrefsList');
+        if (!$root.length) return;
+        var prefs = loadProjectGanttFilterResetPrefs();
+        var html = [];
+        PROJECT_GANTT_FILTER_RESET_GROUPS.forEach(function(group) {
+            var items = getVisibleProjectGanttFilterResetItems().filter(function(def) {
+                return def.group === group.id;
+            });
+            if (!items.length) return;
+            html.push('<div class="mb-3">');
+            html.push('<div class="text-muted small fw-semibold mb-2">' + ganttFilterResetI18nHtml(group.labelKey) + '</div>');
+            items.forEach(function(def) {
+                var checked = prefs[def.key] ? ' checked' : '';
+                var inputId = 'ganttFilterResetKeep-' + def.key;
+                html.push(
+                    '<div class="form-check form-switch mb-2">'
+                    + '<input class="form-check-input project-gantt-filter-reset-pref-checkbox" type="checkbox"'
+                    + ' id="' + inputId + '" data-filter-key="' + def.key + '"' + checked + '>'
+                    + '<label class="form-check-label" for="' + inputId + '">'
+                    + ganttFilterResetI18nHtml(def.labelKey)
+                    + '</label></div>'
+                );
+            });
+            html.push('</div>');
+        });
+        $root.html(html.join(''));
+        applyGanttFilterResetPrefsI18n($root[0]);
+    }
+
+    function initProjectGanttFilterResetPrefsOffcanvas() {
+        renderProjectGanttFilterResetPrefsOffcanvas();
+        var offcanvasEl = document.getElementById('offcanvasProjectGanttFilterResetPrefs');
+        if (offcanvasEl) {
+            offcanvasEl.addEventListener('show.bs.offcanvas', function() {
+                renderProjectGanttFilterResetPrefsOffcanvas();
+            });
+            offcanvasEl.addEventListener('shown.bs.offcanvas', function() {
+                applyGanttFilterResetPrefsI18n(offcanvasEl);
+            });
+        }
+        $(document).off('change.projectGanttFilterResetPref').on('change.projectGanttFilterResetPref', '.project-gantt-filter-reset-pref-checkbox', function() {
+            var key = $(this).attr('data-filter-key');
+            if (!key) return;
+            setProjectGanttFilterKeptOnReset(key, $(this).is(':checked'));
+        });
+        $('#projectGanttFilterResetPrefsSelectAll').off('click.projectGanttFilterResetPref').on('click.projectGanttFilterResetPref', function() {
+            var prefs = loadProjectGanttFilterResetPrefs();
+            getVisibleProjectGanttFilterResetItems().forEach(function(def) {
+                prefs[def.key] = true;
+            });
+            saveProjectGanttFilterResetPrefs(prefs);
+            renderProjectGanttFilterResetPrefsOffcanvas();
+        });
+        $('#projectGanttFilterResetPrefsClearAll').off('click.projectGanttFilterResetPref').on('click.projectGanttFilterResetPref', function() {
+            var prefs = loadProjectGanttFilterResetPrefs();
+            getVisibleProjectGanttFilterResetItems().forEach(function(def) {
+                delete prefs[def.key];
+            });
+            saveProjectGanttFilterResetPrefs(prefs);
+            renderProjectGanttFilterResetPrefsOffcanvas();
+        });
+    }
+
+    function initGanttFilterYoteiMonthPicker() {
+        if (!window.flatpickr || typeof monthSelectPlugin === 'undefined' || !document.getElementById('filterYoteiMonth')) {
+            return;
+        }
+        var monthPickerLocale = (typeof getProjectFlatpickrLocale === 'function')
+            ? getProjectFlatpickrLocale()
+            : ((typeof i18next !== 'undefined' && i18next.language && i18next.language.indexOf('vi') === 0) ? 'vi' : 'ja');
+        var monthAltFormat = (typeof isVietnameseLocale === 'function' && isVietnameseLocale())
+            || (typeof i18next !== 'undefined' && i18next.language && i18next.language.indexOf('vi') === 0)
+            ? 'm/Y' : 'Y年m月';
+        $('#filterYoteiMonth').flatpickr({
+            locale: monthPickerLocale,
+            plugins: [new monthSelectPlugin({
+                shorthand: true,
+                dateFormat: 'Y-m',
+                altFormat: monthAltFormat
+            })],
+            onChange: function() {
+                onGanttFilterChanged(true);
+            }
+        });
+    }
 
     function ganttTranslateText(key) {
         if (typeof translateText === 'function') {
@@ -183,56 +718,6 @@ $(document).ready(function() {
         return keys.length ? keys.join(',') : '';
     }
 
-    function loadKeepTeamOnResetFromStorage() {
-        try {
-            return localStorage.getItem(KEEP_TEAM_ON_RESET_KEY) === '1';
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function saveKeepTeamOnResetToStorage(checked) {
-        try {
-            localStorage.setItem(KEEP_TEAM_ON_RESET_KEY, checked ? '1' : '0');
-        } catch (e) {}
-    }
-
-    function initFilterKeepTeamOnResetCheckbox() {
-        const $cb = $('#filterKeepTeamOnReset');
-        if (!$cb.length) {
-            return;
-        }
-        $cb.prop('checked', loadKeepTeamOnResetFromStorage());
-        $cb.off('change.keepTeamOnReset').on('change.keepTeamOnReset', function() {
-            saveKeepTeamOnResetToStorage($(this).is(':checked'));
-        });
-    }
-
-    function loadKeepCompanyOnResetFromStorage() {
-        try {
-            return localStorage.getItem(KEEP_COMPANY_ON_RESET_KEY) === '1';
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function saveKeepCompanyOnResetToStorage(checked) {
-        try {
-            localStorage.setItem(KEEP_COMPANY_ON_RESET_KEY, checked ? '1' : '0');
-        } catch (e) {}
-    }
-
-    function initFilterKeepCompanyOnResetCheckbox() {
-        const $cb = $('#filterKeepCompanyOnReset');
-        if (!$cb.length) {
-            return;
-        }
-        $cb.prop('checked', loadKeepCompanyOnResetFromStorage());
-        $cb.off('change.keepCompanyOnReset').on('change.keepCompanyOnReset', function() {
-            saveKeepCompanyOnResetToStorage($(this).is(':checked'));
-        });
-    }
-
     function bindFilterCompanySelect2Events($el) {
         $el.off('select2:open.filterCompany').on('select2:open.filterCompany', function() {
             setTimeout(function() {
@@ -283,12 +768,30 @@ $(document).ready(function() {
             minimumResultsForSearch: 0
         });
         bindFilterCompanySelect2Events($el);
-        $el.val(saved.length ? saved : null).trigger('change');
+        bindGanttFilterSelect2PersistEvents($el);
+        ganttFilterPersistSuspended = true;
+        try {
+            $el.val(saved.length ? saved : null).trigger('change');
+        } finally {
+            ganttFilterPersistSuspended = false;
+        }
+    }
+
+    function bindGanttFilterSelect2PersistEvents($el) {
+        $el.off('change.ganttFilterPersist select2:select.ganttFilterPersist select2:unselect.ganttFilterPersist')
+            .on('change.ganttFilterPersist select2:select.ganttFilterPersist select2:unselect.ganttFilterPersist', function() {
+                onGanttFilterChanged(true);
+            });
     }
 
     function syncFilterTeamSelect2Value($el, teamIds) {
         const ids = parseFilterTeamValue(teamIds);
-        $el.val(ids.length ? ids : null).trigger('change');
+        ganttFilterPersistSuspended = true;
+        try {
+            $el.val(ids.length ? ids : null).trigger('change');
+        } finally {
+            ganttFilterPersistSuspended = false;
+        }
     }
 
     function bindFilterTeamSelect2Events($el) {
@@ -357,37 +860,18 @@ $(document).ready(function() {
             }
         });
         bindFilterTeamSelect2Events($el);
+        bindGanttFilterSelect2PersistEvents($el);
         syncFilterTeamSelect2Value($el, saved);
     }
 
     function saveFiltersToLocalStorage() {
-        const filters = {
-            filterPriority: $('#filterPriority').val(),
-            filterProgress: $('#filterProgress').val(),
-            filterTimeLeft: $('#filterTimeLeft').val(),
-            filterProjectOrderType: $('#filterProjectOrderType').val(),
-            filterTeam: getFilterTeamValue(),
-            filterCompany: getFilterCompanyValue(),
-            filterTantou: $('#filterTantou').val(),
-            filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
-            showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
-            myProjects: $('#filterMyProjects').is(':checked') ? 1 : 0,
-            showTaskText: $('#toggleTaskText').is(':checked') ? 1 : 0,
-            showTaskTree: $('#toggleTaskTree').is(':checked') ? 1 : 0,
-            useCailyEndDate: $('#useCailyEndDate').is(':checked') ? 1 : 0,
-            useGuisEndDate: isCailyBranchUser() ? 0 : ($('#useGuisEndDate').is(':checked') ? 1 : 0),
-            useEndDate: isCailyBranchUser() ? 0 : ($('#useEndDate').is(':checked') ? 1 : 0),
-            useShowCailyStruct: $('#useShowCailyStruct').is(':checked') ? 1 : 0,
-            useShowGuisStruct: $('#useShowGuisStruct').is(':checked') ? 1 : 0,
-            useShowEquipmentNouki: $('#useShowEquipmentNouki').is(':checked') ? 1 : 0,
-            useShowEquipmentNouki: $('#useShowEquipmentNouki').is(':checked') ? 1 : 0,
-            filterKeyword: $('#filterKeyword').val(),
-            filterProjectId: $('#filterProjectId').val(),
-        };
+        if (ganttFilterPersistSuspended) {
+            return;
+        }
+        const filters = collectProjectGanttFiltersFromUi();
         // Lưu thêm trạng thái status đang chọn (header buttons, multi-select)
         try {
             filters.statusKeys = getSelectedStatusKeysFromApp();
-            // Backward compat for older readers
             filters.statusKey = filters.statusKeys.length === 1 ? filters.statusKeys[0] : '';
         } catch (e) {
             console.warn('Failed to read selectedStatusKeys when saving filters', e);
@@ -401,9 +885,9 @@ $(document).ready(function() {
             console.warn('Failed to read selectedDepartment when saving filters', e);
         }
         localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(filters));
-        // Cập nhật query string trên URL để có thể share link
         updateUrlFromFilters(filters);
     }
+    window.saveGanttFiltersToLocalStorage = saveFiltersToLocalStorage;
     function loadFiltersFromLocalStorage() {
         let filters = {};
         try {
@@ -413,30 +897,12 @@ $(document).ready(function() {
             localStorage.removeItem(FILTER_STORAGE_KEY);
             filters = {};
         }
-        if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
-        if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
-        if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
-        if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
-        if (filters.filterCompany !== undefined) {
-            const companyValues = parseFilterCompanyValue(filters.filterCompany);
-            $('#filterCompany').val(companyValues.length ? companyValues : null).trigger('change');
+        ganttFilterPersistSuspended = true;
+        try {
+            applyProjectGanttFiltersToUi(filters);
+        } finally {
+            ganttFilterPersistSuspended = false;
         }
-        // filterTeam: refreshFilterTeamSelect() khôi phục từ localStorage sau khi load teams
-        if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
-        if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
-        if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
-        if (filters.myProjects !== undefined) $('#filterMyProjects').prop('checked', filters.myProjects == 1);
-        if (filters.showTaskText !== undefined) $('#toggleTaskText').prop('checked', filters.showTaskText == 1);
-        if (filters.showTaskTree !== undefined) $('#toggleTaskTree').prop('checked', filters.showTaskTree == 1);
-        if (filters.useCailyEndDate !== undefined) $('#useCailyEndDate').prop('checked', filters.useCailyEndDate == 1);
-        if (!isCailyBranchUser() && filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
-        if (!isCailyBranchUser() && filters.useEndDate !== undefined) $('#useEndDate').prop('checked', filters.useEndDate == 1);
-        if (filters.useShowCailyStruct !== undefined) $('#useShowCailyStruct').prop('checked', filters.useShowCailyStruct == 1);
-        if (filters.useShowGuisStruct !== undefined) $('#useShowGuisStruct').prop('checked', filters.useShowGuisStruct == 1);
-        if (filters.useShowEquipmentNouki !== undefined) $('#useShowEquipmentNouki').prop('checked', filters.useShowEquipmentNouki == 1);
-        if (filters.useShowEquipmentNouki !== undefined) $('#useShowEquipmentNouki').prop('checked', filters.useShowEquipmentNouki == 1);
-        if (filters.filterKeyword !== undefined) $('#filterKeyword').val(filters.filterKeyword);
-        if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
     }
 
     function getFiltersFromLocalStorage() {
@@ -456,6 +922,8 @@ $(document).ready(function() {
             teamIds: parseFilterTeamValue(filters.filterTeam),
             companyKeys: parseFilterCompanyValue(filters.filterCompany),
             tantou: filters.filterTantou || '',
+            deliveryStatus: filters.filterDeliveryStatus || '',
+            yoteiMonth: filters.filterYoteiMonth || '',
             noDates: filters.filterNoDates == 1,
             keyword: filters.filterKeyword || '',
             projectId: filters.filterProjectId || '',
@@ -464,7 +932,10 @@ $(document).ready(function() {
             showTaskText: filters.showTaskText == 1,
             showTaskTree: filters.showTaskTree == 1,
             statusKeys: normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || ''),
-            department_id: filters.department_id || null
+            department_id: filters.department_id || null,
+            sortByStatus: filters.sortByStatus === undefined ? true : filters.sortByStatus != 0,
+            listSortColumn: normalizeProjectGanttSortColumn(filters.listSortColumn),
+            listSortDir: normalizeProjectGanttSortDir(filters.listSortDir)
         };
     }
 
@@ -485,6 +956,8 @@ $(document).ready(function() {
         setOrDelete('filterProgress', filters.filterProgress);
         setOrDelete('filterTimeLeft', filters.filterTimeLeft);
         setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
+        setOrDelete('filterDeliveryStatus', filters.filterDeliveryStatus);
+        setOrDelete('filterYoteiMonth', filters.filterYoteiMonth);
         setOrDelete('filterTeam', formatFilterTeamForApi(filters.filterTeam));
         setOrDelete('filterCompany', formatFilterCompanyForApi(filters.filterCompany));
         setOrDelete('filterTantou', filters.filterTantou);
@@ -502,8 +975,18 @@ $(document).ready(function() {
         setOrDelete('useShowCailyStruct', filters.useShowCailyStruct ? 1 : '');
         setOrDelete('useShowGuisStruct', filters.useShowGuisStruct ? 1 : '');
         setOrDelete('useShowEquipmentNouki', filters.useShowEquipmentNouki ? 1 : '');
-        setOrDelete('useShowEquipmentNouki', filters.useShowEquipmentNouki ? 1 : '');
         setOrDelete('department_id', filters.department_id);
+        if (filters.sortByStatus === 0 || filters.sortByStatus === false) {
+            params.set('sortByStatus', '0');
+        } else {
+            params.delete('sortByStatus');
+        }
+        setOrDelete('listSortColumn', normalizeProjectGanttSortColumn(filters.listSortColumn));
+        if (normalizeProjectGanttSortColumn(filters.listSortColumn)) {
+            params.set('listSortDir', normalizeProjectGanttSortDir(filters.listSortDir));
+        } else {
+            params.delete('listSortDir');
+        }
 
         const baseUrl = window.location.protocol + '//' + window.location.host + window.location.pathname;
         const query = params.toString();
@@ -532,9 +1015,13 @@ $(document).ready(function() {
             (!filters.teamIds || filters.teamIds.length === 0) &&
             (!filters.companyKeys || filters.companyKeys.length === 0) &&
             (!filters.tantou || filters.tantou.trim() === '') &&
+            (!filters.deliveryStatus || filters.deliveryStatus.trim() === '') &&
+            (!filters.yoteiMonth || filters.yoteiMonth.trim() === '') &&
             !filters.noDates &&
             !filters.showInactive &&
             !filters.myProjects &&
+            filters.sortByStatus !== false &&
+            !filters.listSortColumn &&
             (!filters.keyword || filters.keyword.trim() === '') &&
             (!filters.projectId || filters.projectId.trim() === '')
         ) {
@@ -590,6 +1077,12 @@ $(document).ready(function() {
             if (filters.tantou && filters.tantou.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1">担当: ${filters.tantou}</span>`);
             }
+            if (filters.deliveryStatus && filters.deliveryStatus.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1">納品状況: ${filters.deliveryStatus}</span>`);
+            }
+            if (filters.yoteiMonth && filters.yoteiMonth.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1">予定工程: ${filters.yoteiMonth}</span>`);
+            }
             if (filters.progress && filters.progress.trim() !== '') {
                 let label = '';
                 if (filters.progress === '0-50') label = '0-50%';
@@ -614,6 +1107,13 @@ $(document).ready(function() {
             }
             if (filters.showInactive) {
                 badges.push(`<span class="badge bg-label-info me-1">完了・中止案件等も表示</span>`);
+            }
+            if (filters.sortByStatus === false) {
+                badges.push(`<span class="badge bg-label-warning me-1">ステータス順オフ</span>`);
+            }
+            if (filters.listSortColumn) {
+                const dirLabel = filters.listSortDir === 'desc' ? '降順' : '昇順';
+                badges.push(`<span class="badge bg-label-info me-1">並べ替え: ${getProjectGanttSortColumnLabel(filters.listSortColumn)} (${dirLabel})</span>`);
             }
         }
 
@@ -645,6 +1145,8 @@ $(document).ready(function() {
         if (params.has('filterProgress')) merged.filterProgress = params.get('filterProgress') || '';
         if (params.has('filterTimeLeft')) merged.filterTimeLeft = params.get('filterTimeLeft') || '';
         if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
+        if (params.has('filterDeliveryStatus')) merged.filterDeliveryStatus = params.get('filterDeliveryStatus') || '';
+        if (params.has('filterYoteiMonth')) merged.filterYoteiMonth = params.get('filterYoteiMonth') || '';
         if (params.has('filterTeam')) merged.filterTeam = parseFilterTeamValue(params.get('filterTeam') || '');
         if (params.has('filterCompany')) merged.filterCompany = parseFilterCompanyValue(params.get('filterCompany') || '');
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
@@ -662,7 +1164,9 @@ $(document).ready(function() {
         if (params.has('useShowCailyStruct')) merged.useShowCailyStruct = getBool('useShowCailyStruct');
         if (params.has('useShowGuisStruct')) merged.useShowGuisStruct = getBool('useShowGuisStruct');
         if (params.has('useShowEquipmentNouki')) merged.useShowEquipmentNouki = getBool('useShowEquipmentNouki');
-        if (params.has('useShowEquipmentNouki')) merged.useShowEquipmentNouki = getBool('useShowEquipmentNouki');
+        if (params.has('sortByStatus')) merged.sortByStatus = getBool('sortByStatus');
+        if (params.has('listSortColumn')) merged.listSortColumn = normalizeProjectGanttSortColumn(params.get('listSortColumn') || '');
+        if (params.has('listSortDir')) merged.listSortDir = normalizeProjectGanttSortDir(params.get('listSortDir') || '');
 
         // Department id cho Gantt – giúp auto chọn đúng 部署 khi mở link
         if (params.has('department_id')) {
@@ -683,7 +1187,10 @@ $(document).ready(function() {
 
     // Ưu tiên áp dụng filter từ URL (nếu có) trước khi load từ localStorage
     applyFiltersFromUrlIfAny();
+    initProjectFilterBoxCollapseState();
+    initGanttFilterYoteiMonthPicker();
     loadFiltersFromLocalStorage();
+    initProjectGanttFilterResetPrefsOffcanvas();
 
     // Trạng thái hiển thị task text trên bar (task.text)
     window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
@@ -705,81 +1212,30 @@ $(document).ready(function() {
 
     renderActiveFilters();
     // Dùng event delegation để đảm bảo binding kể cả khi DOM thay đổi
-    $(document).on('change keyup', '#projectFilterForm select, #projectFilterForm input', function() {
-        console.log('filter changed');
-        saveFiltersToLocalStorage();
-        renderActiveFilters();
-        if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
-            window.ganttApp.loadProjects();
-        }
+    $(document).on('change keyup', '#projectFilterForm select:not(#filterTeam):not(#filterCompany), #projectFilterForm input', function() {
+        onGanttFilterChanged(true);
     });
     // Riêng checkbox タスク名を表示 nằm ngoài form, bind trực tiếp
     $(document).on('change', '#toggleTaskText', function() {
-        console.log('toggleTaskText changed');
-        saveFiltersToLocalStorage();
         window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
         if (gantt) gantt.render();
-        renderActiveFilters();
+        onGanttFilterChanged(false);
     });
     $(document).on('change', '#toggleTaskTree', function() {
-        saveFiltersToLocalStorage();
         window.ganttTreeOpen = $('#toggleTaskTree').is(':checked');
         applyTreeToggleState();
-        renderActiveFilters();
+        onGanttFilterChanged(false);
     });
     // Checkbox ẩn/hiện milestone CAILY納期・GUIS納期・構造データ送付 (độc lập)
     $(document).on('change', '#useCailyEndDate, #useGuisEndDate, #useEndDate, #useShowCailyStruct, #useShowGuisStruct, #useShowEquipmentNouki', function() {
-        saveFiltersToLocalStorage();
-        if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
-            window.ganttApp.loadProjects();
-        } else if (gantt) {
-            gantt.render();
-        }
+        onGanttFilterChanged(true);
     });
-    initFilterKeepTeamOnResetCheckbox();
-    initFilterKeepCompanyOnResetCheckbox();
-
+    $(document).on('change', '#ganttSortByStatusSwitch, #projectGanttSortColumn, #projectGanttSortDir', function() {
+        refreshProjectGanttSortFieldOptions();
+        onGanttFilterChanged(true);
+    });
     $(document).on('click', '#filterReset', function() {
-        const keepTeam = $('#filterKeepTeamOnReset').is(':checked');
-        const preservedTeams = keepTeam ? getFilterTeamValue() : [];
-        const keepCompany = $('#filterKeepCompanyOnReset').is(':checked');
-        const preservedCompanies = keepCompany ? getFilterCompanyValue() : [];
-
-        localStorage.removeItem(FILTER_STORAGE_KEY);
-        const form = document.getElementById('projectFilterForm');
-        if (form) form.reset();
-        $('#filterKeepTeamOnReset').prop('checked', keepTeam);
-        $('#filterKeepCompanyOnReset').prop('checked', keepCompany);
-        if (keepTeam) {
-            $('#filterTeam').val(preservedTeams.length ? preservedTeams : null).trigger('change');
-        } else {
-            $('#filterTeam').val(null).trigger('change');
-        }
-        $('#filterCompany').val(keepCompany && preservedCompanies.length ? preservedCompanies : null).trigger('change');
-        const preservedState = {};
-        if (keepTeam && preservedTeams.length) {
-            preservedState.filterTeam = preservedTeams;
-        }
-        if (keepCompany && preservedCompanies.length) {
-            preservedState.filterCompany = preservedCompanies;
-        }
-        if (Object.keys(preservedState).length > 0) {
-            try {
-                localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(preservedState));
-            } catch (e) {}
-        }
-        // Reset trạng thái status filter về "all" (không chọn gì)
-        if (window.ganttApp) {
-            window.ganttApp.selectedStatusKeys = [];
-        }
-        // Lưu lại trạng thái trống mới và cập nhật badge
-        if (typeof saveFiltersToLocalStorage === 'function') {
-            saveFiltersToLocalStorage();
-        }
-        renderActiveFilters();
-        if (window.ganttApp && typeof window.ganttApp.loadProjects === 'function') {
-            window.ganttApp.loadProjects();
-        }
+        resetProjectGanttFilters();
     });
 
     // Initialize Vue app first
@@ -922,6 +1378,7 @@ $(document).ready(function() {
                     });
                     if (Object.keys(response).length > 0) {
                         this.userPermissions = response || {};
+                        reapplyGanttSortFromStorage();
                     }
                 } catch (error) {
                     console.error('Error loading user permissions:', error);
@@ -995,7 +1452,7 @@ $(document).ready(function() {
                 
                 // Load teams for the selected department
                 await this.loadTeams();
-                
+                restoreGanttFiltersFromStorage();
                 this.loadProjects();
             },
             
@@ -1012,9 +1469,7 @@ $(document).ready(function() {
                     this.selectedStatusKeys.push(key);
                 }
                 this.loadProjects();
-                if (typeof saveFiltersToLocalStorage === 'function') {
-                    saveFiltersToLocalStorage();
-                }
+                onGanttFilterChanged(false);
                 renderActiveFilters();
             },
             filterProjectByStatus(status) {
@@ -1039,11 +1494,18 @@ $(document).ready(function() {
                     const filterTeam = formatFilterTeamForApi(getFilterTeamValue());
                     const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
                     const filterTantou = $('#filterTantou').val();
+                    const filterDeliveryStatus = $('#filterDeliveryStatus').val();
+                    const filterYoteiMonth = $('#filterYoteiMonth').val();
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
                     const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
                     const filterKeyword = $('#filterKeyword').val();
                     const filterProjectId = $('#filterProjectId').val();
+                    const sortByStatus = $('#ganttSortByStatusSwitch').length
+                        ? ($('#ganttSortByStatusSwitch').is(':checked') ? 1 : 0)
+                        : 1;
+                    const sortColumn = getProjectGanttSortColumnFromUi();
+                    const sortDir = getProjectGanttSortDirFromUi();
                     // 表示期間: từ gantt config hoặc từ input; lần đầu load dùng khoảng mặc định
                     let ganttStart = null, ganttEnd = null;
                     if (gantt && this.ganttInitialized && gantt.config.start_date && gantt.config.end_date) {
@@ -1079,12 +1541,19 @@ $(document).ready(function() {
                         filterTeam,
                         filterCompany,
                         filterTantou,
+                        filterDeliveryStatus,
+                        filterYoteiMonth,
                         filterNoDates,
                         showInactive,
                         my_projects: myProjects,
                         filterKeyword,
-                        filterProjectId
+                        filterProjectId,
+                        sortByStatus
                     };
+                    if (sortColumn) {
+                        params.order_column = sortColumn;
+                        params.order_dir = sortDir;
+                    }
                     params.gantt_start_date = ganttStart;
                     params.gantt_end_date = ganttEnd;
                     const response = await $.ajax({
@@ -2780,25 +3249,8 @@ $(document).ready(function() {
 
     // Sau khi Vue mount xong, apply lại trạng thái filter
     // (Vue có thể reset DOM về giá trị mặc định trong template)
-    loadFiltersFromLocalStorage();
-    // Khôi phục status filter từ localStorage (nếu có)
-    try {
-        const saved = getFiltersFromLocalStorage();
-        if (window.ganttApp) {
-            window.ganttApp.selectedStatusKeys = normalizeProjectStatusKeys(saved.statusKeys || saved.statusKey || '');
-        }
-    } catch (e) {
-        console.warn('Failed to restore status filter from storage', e);
-    }
-    // Đồng bộ lại biến global hiển thị task text
-    window.ganttShowTaskText = $('#toggleTaskText').is(':checked');
-    window.ganttTreeOpen = $('#toggleTaskTree').is(':checked');
-    // Sau khi mọi thứ đã sync, render badge và cập nhật URL để phản ánh filter hiện tại
-    renderActiveFilters();
-    if (typeof saveFiltersToLocalStorage === 'function') {
-        // Hàm này cũng sẽ gọi updateUrlFromFilters để đẩy trạng thái filter lên thanh address
-        saveFiltersToLocalStorage();
-    }
+    restoreGanttFiltersFromStorage();
+    updateUrlFromFilters(collectProjectGanttFiltersFromUi());
 });
 
 function getInitials(name) {

@@ -62,6 +62,7 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <?php if ($appAssets['needs_quill']): ?>
 <script src="<?=$root?>assets/vendor/libs/quill/quill.js"></script>
 <?php endif; ?>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" crossorigin="anonymous"></script>
 <script src="<?=$root?>assets/js/todo-modal.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/main.js?v=<?=$cv?>"></script>
 <link rel="stylesheet" href="<?=$root?>assets/css/task-timer.css?v=<?=$cv?>">

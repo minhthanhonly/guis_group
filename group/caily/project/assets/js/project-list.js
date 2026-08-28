@@ -152,16 +152,10 @@ var projectTable;
             hideHourglass();
         }
         if (typeof Swal !== 'undefined' && Swal.fire) {
-            Swal.fire({
-                title: 'Error!',
-                text: msg,
-                icon: 'error',
-                customClass: {
-                    confirmButton: 'btn btn-primary'
-                },
-                buttonsStyling: false
-            }).then(function() {
-                window.location.reload();
+            showProjectListError(msg, responseData, {
+                onClose: function() {
+                    window.location.reload();
+                }
             });
         } else if (typeof showMessage === 'function') {
             showMessage(msg, true);
@@ -197,6 +191,7 @@ var projectTable;
     ];
     // --- LocalStorage filter state ---
     const FILTER_STORAGE_KEY = 'projectListFilters';
+    const FILTER_RESET_PREFS_KEY = 'projectListFilterResetPrefs';
     const KEEP_TEAM_ON_RESET_KEY = 'project_list_keep_team_on_reset';
     const KEEP_COMPANY_ON_RESET_KEY = 'project_list_keep_company_on_reset';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
@@ -205,6 +200,38 @@ var projectTable;
     const COLUMN_ORDER_STORAGE_KEY = 'projectListColumnOrder';
     const COLUMN_WIDTH_STORAGE_KEY = 'projectListColumnWidths';
     const SCROLL_RESTORE_KEY = 'projectListScrollY';
+    const PROJECT_FILTER_BOX_OPEN_KEY = 'projectAdvancedFilterBoxOpen';
+
+    function initProjectFilterBoxCollapseState() {
+        var box = document.getElementById('projectFilterBox');
+        if (!box) return;
+
+        var open = false;
+        try {
+            open = localStorage.getItem(PROJECT_FILTER_BOX_OPEN_KEY) === '1';
+        } catch (e) {}
+
+        if (typeof bootstrap !== 'undefined' && bootstrap.Collapse) {
+            var collapse = bootstrap.Collapse.getOrCreateInstance(box, { toggle: false });
+            if (open) {
+                collapse.show();
+            }
+        } else if (open) {
+            box.classList.add('show');
+            var btn = document.getElementById('projectFilterToggleBtn');
+            if (btn) btn.setAttribute('aria-expanded', 'true');
+        }
+
+        if (!box._projectFilterBoxStateBound) {
+            box._projectFilterBoxStateBound = true;
+            box.addEventListener('shown.bs.collapse', function() {
+                try { localStorage.setItem(PROJECT_FILTER_BOX_OPEN_KEY, '1'); } catch (e) {}
+            });
+            box.addEventListener('hidden.bs.collapse', function() {
+                try { localStorage.setItem(PROJECT_FILTER_BOX_OPEN_KEY, '0'); } catch (e) {}
+            });
+        }
+    }
     const PROJECT_LIST_COL_MIN_WIDTH = 40;
     const PROJECT_LIST_COL_MAX_WIDTH = 1200;
 
@@ -476,13 +503,13 @@ var projectTable;
         if (isProjectListExporting) return;
         if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
             if (typeof showMessage === 'function') {
-                showMessage('テーブルが読み込まれていません。', true);
+                showProjectListError('テーブルが読み込まれていません。');
             }
             return;
         }
         if (!isProjectListExcelExportAvailable()) {
             if (typeof showMessage === 'function') {
-                showMessage('Excel出力機能が利用できません。', true);
+                showProjectListError('Excel出力機能が利用できません。');
             }
             return;
         }
@@ -490,7 +517,7 @@ var projectTable;
         var dt = projectTable;
         if (!ensureProjectListExcelButtons(dt)) {
             if (typeof showMessage === 'function') {
-                showMessage('Excel出力機能が利用できません。', true);
+                showProjectListError('Excel出力機能が利用できません。');
             }
             return;
         }
@@ -506,7 +533,7 @@ var projectTable;
             isProjectListExporting = false;
             if (app) app.loading = false;
             if (typeof showMessage === 'function') {
-                showMessage('出力するデータがありません。', true);
+                showProjectListError('出力するデータがありません。');
             }
             return;
         }
@@ -536,7 +563,7 @@ var projectTable;
                 isProjectListExporting = false;
                 if (app) app.loading = false;
                 if (typeof showMessage === 'function') {
-                    showMessage('Excel出力に失敗しました。', true);
+                    showProjectListError('Excel出力に失敗しました。');
                 }
             }
         });
@@ -547,7 +574,7 @@ var projectTable;
             } catch (err) {
                 console.error('Excel export failed:', err);
                 if (typeof showMessage === 'function') {
-                    showMessage('Excel出力に失敗しました。', true);
+                    showProjectListError('Excel出力に失敗しました。', err);
                 }
                 isProjectListExporting = false;
                 if (app) app.loading = false;
@@ -740,7 +767,7 @@ var projectTable;
         if (!window.app) {
             return;
         }
-        projectListBackNavigationHandled = true;
+            projectListBackNavigationHandled = true;
         if (!window.app.departments || window.app.departments.length === 0) {
             await window.app.loadDepartments();
             if (window.app.selectedDepartment && window.app.selectedDepartment.id) {
@@ -1460,6 +1487,7 @@ var projectTable;
         var out = {};
         var stringFields = [
             'filterStartMonth', 'filterEndMonth', 'filterEstimateMonth', 'filterInvoiceMonth',
+            'filterDeliveryStatus', 'filterYoteiMonth',
             'filterPriority', 'filterProgress', 'filterTimeLeft', 'filterToday',
             'filterProjectOrderType', 'filterTantou', 'filterProjectId'
         ];
@@ -1656,7 +1684,7 @@ var projectTable;
                     var config = normalizeProjectColumnConfigImport(data, defs);
                     if (!config) {
                         if (typeof showMessage === 'function') {
-                            showMessage(translateText('列設定ファイルの形式が正しくありません'), true);
+                            showProjectListError(translateText('列設定ファイルの形式が正しくありません'));
                         }
                         return;
                     }
@@ -1667,13 +1695,13 @@ var projectTable;
                     }
                 } catch (e) {
                     if (typeof showMessage === 'function') {
-                        showMessage(translateText('列設定ファイルの形式が正しくありません'), true);
+                        showProjectListError(translateText('列設定ファイルの形式が正しくありません'));
                     }
                 }
             };
             reader.onerror = function() {
                 if (typeof showMessage === 'function') {
-                    showMessage(translateText('列設定ファイルの形式が正しくありません'), true);
+                    showProjectListError(translateText('列設定ファイルの形式が正しくありません'));
                 }
             };
             reader.readAsText(file);
@@ -2190,6 +2218,77 @@ var projectTable;
             .replace(/&quot;/g, '"')
             .replace(/&amp;/g, '&')
             .replace(/&nbsp;/g, ' ');
+    }
+
+    function extractProjectListServerPayload(errorOrResponse) {
+        if (!errorOrResponse) return null;
+        if (errorOrResponse.response && errorOrResponse.response.data != null) {
+            return errorOrResponse.response.data;
+        }
+        if (errorOrResponse.data != null) {
+            return errorOrResponse.data;
+        }
+        if (typeof errorOrResponse === 'object') {
+            return errorOrResponse;
+        }
+        return null;
+    }
+
+    function formatProjectListServerDebugInfo(payload) {
+        if (payload == null) return '';
+        if (typeof payload === 'string') return payload;
+        try {
+            return JSON.stringify(payload, null, 2);
+        } catch (e) {
+            return String(payload);
+        }
+    }
+
+    function showProjectListError(message, errorOrResponse, options) {
+        options = options || {};
+        var payload = extractProjectListServerPayload(errorOrResponse);
+        var msg = message || 'エラーが発生しました。';
+        if (payload && typeof payload === 'object') {
+            var serverMsg = payload.message || payload.error;
+            if (serverMsg && String(serverMsg) !== String(msg)) {
+                msg += '\n\n' + serverMsg;
+            }
+        }
+        var debugText = formatProjectListServerDebugInfo(payload);
+        if (typeof hideHourglass === 'function') {
+            hideHourglass();
+        }
+        if (typeof Swal !== 'undefined' && Swal.fire) {
+            var swalOptions = {
+                title: 'Error!',
+                icon: 'error',
+                customClass: {
+                    confirmButton: 'btn btn-primary'
+                },
+                buttonsStyling: false
+            };
+            if (debugText) {
+                swalOptions.html = '<div class="text-start">' + escapeHtmlForNote(msg).replace(/\n/g, '<br>') + '</div>' +
+                    '<pre class="text-start small mt-3 mb-0 p-2 bg-light border rounded" style="max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;">' +
+                    escapeHtmlForNote(debugText) + '</pre>';
+            } else {
+                swalOptions.text = msg;
+            }
+            Swal.fire(swalOptions).then(function() {
+                if (typeof options.onClose === 'function') {
+                    options.onClose();
+                }
+            });
+            return;
+        }
+        if (typeof showMessage === 'function') {
+            showMessage(debugText ? (msg + '\n\n' + debugText) : msg, true);
+        } else if (typeof alert === 'function') {
+            alert(debugText ? (msg + '\n\n' + debugText) : msg);
+        }
+        if (typeof options.onClose === 'function') {
+            options.onClose();
+        }
     }
 
     function isVietnameseLocale() {
@@ -2775,56 +2874,6 @@ var projectTable;
         return keys.length ? keys.join(',') : '';
     }
 
-    function loadKeepTeamOnResetFromStorage() {
-        try {
-            return localStorage.getItem(KEEP_TEAM_ON_RESET_KEY) === '1';
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function saveKeepTeamOnResetToStorage(checked) {
-        try {
-            localStorage.setItem(KEEP_TEAM_ON_RESET_KEY, checked ? '1' : '0');
-        } catch (e) {}
-    }
-
-    function initFilterKeepTeamOnResetCheckbox() {
-        const $cb = $('#filterKeepTeamOnReset');
-        if (!$cb.length) {
-            return;
-        }
-        $cb.prop('checked', loadKeepTeamOnResetFromStorage());
-        $cb.off('change.keepTeamOnReset').on('change.keepTeamOnReset', function() {
-            saveKeepTeamOnResetToStorage($(this).is(':checked'));
-        });
-    }
-
-    function loadKeepCompanyOnResetFromStorage() {
-        try {
-            return localStorage.getItem(KEEP_COMPANY_ON_RESET_KEY) === '1';
-        } catch (e) {
-            return false;
-        }
-    }
-
-    function saveKeepCompanyOnResetToStorage(checked) {
-        try {
-            localStorage.setItem(KEEP_COMPANY_ON_RESET_KEY, checked ? '1' : '0');
-        } catch (e) {}
-    }
-
-    function initFilterKeepCompanyOnResetCheckbox() {
-        const $cb = $('#filterKeepCompanyOnReset');
-        if (!$cb.length) {
-            return;
-        }
-        $cb.prop('checked', loadKeepCompanyOnResetFromStorage());
-        $cb.off('change.keepCompanyOnReset').on('change.keepCompanyOnReset', function() {
-            saveKeepCompanyOnResetToStorage($(this).is(':checked'));
-        });
-    }
-
     function initFilterCompanySelect2() {
         const $el = $('#filterCompany');
         if (!$el.length) {
@@ -2917,6 +2966,300 @@ var projectTable;
         syncFilterTeamSelect2Value($el, saved);
     }
 
+    var PROJECT_LIST_FILTER_RESET_GROUPS = [
+        { id: 'date', labelKey: '日付' },
+        { id: 'project', labelKey: '案件' },
+        { id: 'org', labelKey: '組織' },
+        { id: 'status', labelKey: '状態' }
+    ];
+
+    var PROJECT_LIST_SORT_FILTER_KEYS = ['sortByStatus', 'listSortColumn', 'listSortDir'];
+
+    var PROJECT_LIST_FILTER_REGISTRY = [
+        { key: 'filterStartMonth', labelKey: '開始月', group: 'date', defaultValue: '' },
+        { key: 'filterEndMonth', labelKey: '期限月', group: 'date', defaultValue: '' },
+        { key: 'filterEstimateMonth', labelKey: '見積月', group: 'date', defaultValue: '', directorOnly: true },
+        { key: 'filterInvoiceMonth', labelKey: '請求月', group: 'date', defaultValue: '', directorOnly: true },
+        { key: 'filterYoteiMonth', labelKey: '予定工程', group: 'date', defaultValue: '' },
+        { key: 'filterBusinessDocumentStatus', labelKey: '見積・請求状況', group: 'project', defaultValue: '', directorOnly: true },
+        { key: 'filterDeliveryStatus', labelKey: '納品状況', group: 'project', defaultValue: '' },
+        { key: 'filterPriority', labelKey: '優先度', group: 'project', defaultValue: '' },
+        { key: 'filterProgress', labelKey: '進捗率', group: 'project', defaultValue: '' },
+        { key: 'filterTimeLeft', labelKey: '残り時間', group: 'project', defaultValue: '' },
+        { key: 'filterToday', labelKey: '本日フィルター', group: 'project', defaultValue: '' },
+        { key: 'filterProjectOrderType', labelKey: '受注形態', group: 'project', defaultValue: '' },
+        { key: 'filterTantou', labelKey: '担当', group: 'project', defaultValue: '' },
+        { key: 'filterKeyword', labelKey: 'キーワード', group: 'project', defaultValue: '' },
+        { key: 'filterProjectId', labelKey: '案件ID', group: 'project', defaultValue: '' },
+        { key: 'filterNoDates', labelKey: '開始日・期限日未設定', group: 'project', defaultValue: 0 },
+        { key: 'filterTeam', labelKey: 'チーム', group: 'org', defaultValue: [] },
+        { key: 'filterCompany', labelKey: '会社', group: 'org', defaultValue: [] },
+        { key: 'statusKeys', labelKey: '案件状況', group: 'status', defaultValue: [] },
+        { key: 'showInactive', labelKey: '完了・中止案件等も表示', group: 'status', defaultValue: 0 },
+        { key: 'myProjects', labelKey: '私の案件', group: 'status', defaultValue: 0 },
+        { key: 'favorites_only', labelKey: 'お気に入りのみ', group: 'status', defaultValue: 0 }
+    ];
+
+    function cloneProjectListFilterValue(value) {
+        if (Array.isArray(value)) {
+            return value.slice();
+        }
+        return value;
+    }
+
+    function getDefaultProjectListFilterValues() {
+        var defaults = {};
+        PROJECT_LIST_FILTER_REGISTRY.forEach(function(def) {
+            defaults[def.key] = cloneProjectListFilterValue(def.defaultValue);
+        });
+        return defaults;
+    }
+
+    function isProjectListFilterResetItemVisible(def) {
+        if (!def) return false;
+        if (def.directorOnly && !canViewProjectDirectorColumns()) {
+            return false;
+        }
+        return true;
+    }
+
+    function getVisibleProjectListFilterResetItems() {
+        return PROJECT_LIST_FILTER_REGISTRY.filter(isProjectListFilterResetItemVisible);
+    }
+
+    function migrateProjectListFilterResetPrefs(prefs) {
+        prefs = prefs && typeof prefs === 'object' ? prefs : {};
+        if (prefs._migrated) {
+            return prefs;
+        }
+        try {
+            if (localStorage.getItem(KEEP_TEAM_ON_RESET_KEY) === '1') {
+                prefs.filterTeam = true;
+            }
+            if (localStorage.getItem(KEEP_COMPANY_ON_RESET_KEY) === '1') {
+                prefs.filterCompany = true;
+            }
+        } catch (e) {}
+        prefs._migrated = true;
+        return prefs;
+    }
+
+    function sanitizeProjectListFilterResetPrefs(prefs) {
+        prefs = prefs && typeof prefs === 'object' ? prefs : {};
+        PROJECT_LIST_SORT_FILTER_KEYS.forEach(function(key) {
+            delete prefs[key];
+        });
+        return prefs;
+    }
+
+    function loadProjectListFilterResetPrefs() {
+        var prefs = {};
+        try {
+            prefs = JSON.parse(localStorage.getItem(FILTER_RESET_PREFS_KEY) || '{}');
+        } catch (e) {
+            prefs = {};
+        }
+        return sanitizeProjectListFilterResetPrefs(migrateProjectListFilterResetPrefs(prefs));
+    }
+
+    function saveProjectListFilterResetPrefs(prefs) {
+        try {
+            localStorage.setItem(
+                FILTER_RESET_PREFS_KEY,
+                JSON.stringify(sanitizeProjectListFilterResetPrefs(migrateProjectListFilterResetPrefs(prefs || {})))
+            );
+        } catch (e) {
+            console.warn('Failed to save filter reset prefs', e);
+        }
+    }
+
+    function isProjectListFilterKeptOnReset(key) {
+        var prefs = loadProjectListFilterResetPrefs();
+        return !!prefs[key];
+    }
+
+    function setProjectListFilterKeptOnReset(key, kept) {
+        if (PROJECT_LIST_SORT_FILTER_KEYS.indexOf(key) >= 0) {
+            return;
+        }
+        var prefs = loadProjectListFilterResetPrefs();
+        if (kept) {
+            prefs[key] = true;
+        } else {
+            delete prefs[key];
+        }
+        saveProjectListFilterResetPrefs(prefs);
+    }
+
+    function applyMonthFilterInputToUi(selector, value) {
+        var $el = $(selector);
+        if (!$el.length) return;
+        var v = value || '';
+        $el.val(v);
+        var fp = $el.data('flatpickr') || ($el[0] && $el[0]._flatpickr);
+        if (fp) {
+            if (v) {
+                fp.setDate(v, false);
+            } else {
+                fp.clear();
+            }
+        }
+    }
+
+    function applyProjectListFiltersToUi(filters) {
+        filters = filters || {};
+        if (filters.filterStartMonth !== undefined) applyMonthFilterInputToUi('#filterStartMonth', filters.filterStartMonth);
+        if (filters.filterEndMonth !== undefined) applyMonthFilterInputToUi('#filterEndMonth', filters.filterEndMonth);
+        if (filters.filterEstimateMonth !== undefined) applyMonthFilterInputToUi('#filterEstimateMonth', filters.filterEstimateMonth);
+        if (filters.filterInvoiceMonth !== undefined) applyMonthFilterInputToUi('#filterInvoiceMonth', filters.filterInvoiceMonth);
+        if (filters.filterYoteiMonth !== undefined) applyMonthFilterInputToUi('#filterYoteiMonth', filters.filterYoteiMonth);
+        if (filters.filterDeliveryStatus !== undefined) $('#filterDeliveryStatus').val(filters.filterDeliveryStatus);
+        if (filters.filterBusinessDocumentStatus !== undefined) {
+            $('#filterBusinessDocumentStatus').val(normalizeBusinessDocumentStatusFilterValue(filters.filterBusinessDocumentStatus));
+        }
+        if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
+        if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
+        if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
+        if (filters.filterToday !== undefined) $('#filterToday').val(filters.filterToday);
+        if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
+        if (filters.filterCompany !== undefined) {
+            var companyValues = parseFilterCompanyValue(filters.filterCompany);
+            $('#filterCompany').val(companyValues.length ? companyValues : null).trigger('change');
+        }
+        if (filters.filterTeam !== undefined) {
+            var teamValues = parseFilterTeamValue(filters.filterTeam);
+            $('#filterTeam').val(teamValues.length ? teamValues : null).trigger('change');
+        }
+        if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
+        if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
+        if (filters.filterKeyword !== undefined) $('#filterKeyword').val(normalizeFilterKeyword(filters.filterKeyword));
+        if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
+        if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
+        if (filters.sortByStatus !== undefined) {
+            $('#sortByStatusSwitch').prop('checked', filters.sortByStatus != 0);
+        } else if ($('#sortByStatusSwitch').length) {
+            $('#sortByStatusSwitch').prop('checked', true);
+        }
+        refreshProjectListSortFieldOptions();
+        if (filters.listSortColumn !== undefined) {
+            $('#projectListSortColumn').val(normalizeProjectListSortColumn(filters.listSortColumn));
+        } else if ($('#projectListSortColumn').length) {
+            $('#projectListSortColumn').val('');
+        }
+        if (filters.listSortDir !== undefined) {
+            $('#projectListSortDir').val(normalizeProjectListSortDir(filters.listSortDir));
+        } else if ($('#projectListSortDir').length) {
+            $('#projectListSortDir').val('asc');
+        }
+        if (filters.myProjects !== undefined && app) {
+            app.filterMyProjects = filters.myProjects == 1;
+        }
+        if (filters.favorites_only !== undefined) {
+            $('#filterFavoritesOnly').prop('checked', filters.favorites_only == 1);
+            if (app) app.showClearAllFavoritesBtn = filters.favorites_only == 1;
+        }
+        if (filters.statusKeys !== undefined && app) {
+            app.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys);
+        }
+    }
+
+    function buildProjectListFiltersAfterReset() {
+        var current = collectProjectListFiltersFromUi();
+        var prefs = loadProjectListFilterResetPrefs();
+        var defaults = getDefaultProjectListFilterValues();
+        var next = {};
+        PROJECT_LIST_FILTER_REGISTRY.forEach(function(def) {
+            if (!isProjectListFilterResetItemVisible(def)) {
+                if (current[def.key] !== undefined) {
+                    next[def.key] = cloneProjectListFilterValue(current[def.key]);
+                }
+                return;
+            }
+            if (prefs[def.key]) {
+                next[def.key] = cloneProjectListFilterValue(current[def.key]);
+            } else {
+                next[def.key] = cloneProjectListFilterValue(defaults[def.key]);
+            }
+        });
+        PROJECT_LIST_SORT_FILTER_KEYS.forEach(function(key) {
+            next[key] = cloneProjectListFilterValue(current[key]);
+        });
+        return next;
+    }
+
+    function resetProjectListFilters() {
+        var next = buildProjectListFiltersAfterReset();
+        applyProjectListFiltersToUi(next);
+        saveFiltersToLocalStorage();
+        renderActiveFilters();
+        if (getProjectListSortColumnFromUi()) {
+            syncProjectTableOrderFromSortUi(false);
+        } else {
+            applyProjectListDefaultSort();
+        }
+        reloadProjectTable(true);
+    }
+
+    function renderProjectListFilterResetPrefsOffcanvas() {
+        var $root = $('#projectFilterResetPrefsList');
+        if (!$root.length) return;
+        var prefs = loadProjectListFilterResetPrefs();
+        var html = [];
+        PROJECT_LIST_FILTER_RESET_GROUPS.forEach(function(group) {
+            var items = getVisibleProjectListFilterResetItems().filter(function(def) {
+                return def.group === group.id;
+            });
+            if (!items.length) return;
+            html.push('<div class="mb-3">');
+            html.push('<div class="text-muted small fw-semibold mb-2">' + escapeHtmlForNote(translateText(group.labelKey)) + '</div>');
+            items.forEach(function(def) {
+                var checked = prefs[def.key] ? ' checked' : '';
+                var inputId = 'filterResetKeep-' + def.key;
+                html.push(
+                    '<div class="form-check form-switch mb-2">'
+                    + '<input class="form-check-input project-filter-reset-pref-checkbox" type="checkbox"'
+                    + ' id="' + inputId + '" data-filter-key="' + def.key + '"' + checked + '>'
+                    + '<label class="form-check-label" for="' + inputId + '">'
+                    + escapeHtmlForNote(translateText(def.labelKey))
+                    + '</label></div>'
+                );
+            });
+            html.push('</div>');
+        });
+        $root.html(html.join(''));
+    }
+
+    function initProjectListFilterResetPrefsOffcanvas() {
+        renderProjectListFilterResetPrefsOffcanvas();
+        var offcanvasEl = document.getElementById('offcanvasProjectFilterResetPrefs');
+        if (offcanvasEl) {
+            offcanvasEl.addEventListener('show.bs.offcanvas', function() {
+                renderProjectListFilterResetPrefsOffcanvas();
+            });
+        }
+        $(document).off('change.projectFilterResetPref').on('change.projectFilterResetPref', '.project-filter-reset-pref-checkbox', function() {
+            var key = $(this).attr('data-filter-key');
+            if (!key) return;
+            setProjectListFilterKeptOnReset(key, $(this).is(':checked'));
+        });
+        $('#projectFilterResetPrefsSelectAll').off('click.projectFilterResetPref').on('click.projectFilterResetPref', function() {
+            var prefs = loadProjectListFilterResetPrefs();
+            getVisibleProjectListFilterResetItems().forEach(function(def) {
+                prefs[def.key] = true;
+            });
+            saveProjectListFilterResetPrefs(prefs);
+            renderProjectListFilterResetPrefsOffcanvas();
+        });
+        $('#projectFilterResetPrefsClearAll').off('click.projectFilterResetPref').on('click.projectFilterResetPref', function() {
+            var prefs = loadProjectListFilterResetPrefs();
+            getVisibleProjectListFilterResetItems().forEach(function(def) {
+                delete prefs[def.key];
+            });
+            saveProjectListFilterResetPrefs(prefs);
+            renderProjectListFilterResetPrefsOffcanvas();
+        });
+    }
+
     function collectProjectListFiltersFromUi() {
         return {
             filterStartMonth: $('#filterStartMonth').val() || '',
@@ -2924,6 +3267,8 @@ var projectTable;
             filterEstimateMonth: $('#filterEstimateMonth').val() || '',
             filterInvoiceMonth: $('#filterInvoiceMonth').val() || '',
             filterBusinessDocumentStatus: $('#filterBusinessDocumentStatus').val() || '',
+            filterDeliveryStatus: $('#filterDeliveryStatus').val() || '',
+            filterYoteiMonth: $('#filterYoteiMonth').val() || '',
             filterPriority: $('#filterPriority').val() || '',
             filterProgress: $('#filterProgress').val() || '',
             filterTimeLeft: $('#filterTimeLeft').val() || '',
@@ -2987,6 +3332,8 @@ var projectTable;
         if (params.has('filterEndMonth')) merged.filterEndMonth = params.get('filterEndMonth') || '';
         if (params.has('filterEstimateMonth')) merged.filterEstimateMonth = params.get('filterEstimateMonth') || '';
         if (params.has('filterInvoiceMonth')) merged.filterInvoiceMonth = params.get('filterInvoiceMonth') || '';
+        if (params.has('filterDeliveryStatus')) merged.filterDeliveryStatus = params.get('filterDeliveryStatus') || '';
+        if (params.has('filterYoteiMonth')) merged.filterYoteiMonth = params.get('filterYoteiMonth') || '';
         if (params.has('filterBusinessDocumentStatus')) {
             merged.filterBusinessDocumentStatus = normalizeBusinessDocumentStatusFilterValue(params.get('filterBusinessDocumentStatus') || '');
         }
@@ -3037,51 +3384,8 @@ var projectTable;
             localStorage.removeItem(FILTER_STORAGE_KEY);
             filters = {};
         }
-        if (filters.filterStartMonth !== undefined) $('#filterStartMonth').val(filters.filterStartMonth);
-        if (filters.filterEndMonth !== undefined) $('#filterEndMonth').val(filters.filterEndMonth);
-        if (filters.filterEstimateMonth !== undefined) $('#filterEstimateMonth').val(filters.filterEstimateMonth);
-        if (filters.filterInvoiceMonth !== undefined) $('#filterInvoiceMonth').val(filters.filterInvoiceMonth);
-        if (filters.filterBusinessDocumentStatus !== undefined) {
-            $('#filterBusinessDocumentStatus').val(normalizeBusinessDocumentStatusFilterValue(filters.filterBusinessDocumentStatus));
-        }
-        if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
-        if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
-        if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
-        if (filters.filterToday !== undefined) $('#filterToday').val(filters.filterToday);
-        if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
-        if (filters.filterCompany !== undefined) {
-            const companyValues = parseFilterCompanyValue(filters.filterCompany);
-            $('#filterCompany').val(companyValues.length ? companyValues : null).trigger('change');
-        }
-        // filterTeam: refreshFilterTeamSelect() khôi phục từ localStorage sau khi load teams
-        if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
-        if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
-        if (filters.filterKeyword !== undefined) $('#filterKeyword').val(normalizeFilterKeyword(filters.filterKeyword));
-        if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
-        if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
-        if (filters.sortByStatus !== undefined) {
-            $('#sortByStatusSwitch').prop('checked', filters.sortByStatus != 0);
-        } else {
-            $('#sortByStatusSwitch').prop('checked', true);
-        }
-        refreshProjectListSortFieldOptions();
-        if (filters.listSortColumn !== undefined) {
-            $('#projectListSortColumn').val(normalizeProjectListSortColumn(filters.listSortColumn));
-        } else {
-            $('#projectListSortColumn').val('');
-        }
-        if (filters.listSortDir !== undefined) {
-            $('#projectListSortDir').val(normalizeProjectListSortDir(filters.listSortDir));
-        } else {
-            $('#projectListSortDir').val('asc');
-        }
-        if (filters.myProjects !== undefined && app) app.filterMyProjects = filters.myProjects == 1;
-        // Only restore favorites_only if it's explicitly set in filters (not undefined)
-        if (filters.favorites_only !== undefined) {
-            $('#filterFavoritesOnly').prop('checked', filters.favorites_only == 1);
-            if (app) app.showClearAllFavoritesBtn = filters.favorites_only == 1;
-        } else {
-            // If not in filters, ensure it's unchecked
+        applyProjectListFiltersToUi(filters);
+        if (filters.favorites_only === undefined) {
             $('#filterFavoritesOnly').prop('checked', false);
             if (app) app.showClearAllFavoritesBtn = false;
         }
@@ -3101,6 +3405,8 @@ var projectTable;
             endMonth: filters.filterEndMonth || '',
             estimateMonth: filters.filterEstimateMonth || '',
             invoiceMonth: filters.filterInvoiceMonth || '',
+            deliveryStatus: filters.filterDeliveryStatus || '',
+            yoteiMonth: filters.filterYoteiMonth || '',
             businessDocumentStatus: filters.filterBusinessDocumentStatus || '',
             priority: filters.filterPriority || '',
             progress: filters.filterProgress || '',
@@ -3130,6 +3436,8 @@ var projectTable;
             (!filters.endMonth || filters.endMonth.trim() === '') &&
             (!filters.estimateMonth || filters.estimateMonth.trim() === '') &&
             (!filters.invoiceMonth || filters.invoiceMonth.trim() === '') &&
+            (!filters.deliveryStatus || filters.deliveryStatus.trim() === '') &&
+            (!filters.yoteiMonth || filters.yoteiMonth.trim() === '') &&
             (!filters.businessDocumentStatus || filters.businessDocumentStatus.trim() === '') &&
             (!filters.priority || filters.priority.trim() === '') &&
             (!filters.progress || filters.progress.trim() === '') &&
@@ -3205,6 +3513,12 @@ var projectTable;
             }
             if (filters.invoiceMonth && filters.invoiceMonth.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1" >請求月: ${filters.invoiceMonth}</span>`);
+            }
+            if (filters.deliveryStatus && filters.deliveryStatus.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1" >納品状況: ${filters.deliveryStatus}</span>`);
+            }
+            if (filters.yoteiMonth && filters.yoteiMonth.trim() !== '') {
+                badges.push(`<span class="badge bg-label-info me-1" >予定工程: ${filters.yoteiMonth}</span>`);
             }
             if (filters.businessDocumentStatus && filters.businessDocumentStatus.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1" >${getBusinessDocumentStatusFilterLabel(filters.businessDocumentStatus)}</span>`);
@@ -3311,6 +3625,8 @@ var projectTable;
         setOrDelete('filterEndMonth', filters.filterEndMonth);
         setOrDelete('filterEstimateMonth', filters.filterEstimateMonth);
         setOrDelete('filterInvoiceMonth', filters.filterInvoiceMonth);
+        setOrDelete('filterDeliveryStatus', filters.filterDeliveryStatus);
+        setOrDelete('filterYoteiMonth', filters.filterYoteiMonth);
         setOrDelete('filterBusinessDocumentStatus', filters.filterBusinessDocumentStatus);
         setOrDelete('filterPriority', filters.filterPriority);
         setOrDelete('filterProgress', filters.filterProgress);
@@ -4498,6 +4814,8 @@ var projectTable;
                     const filterEstimateMonth = canViewProjectDirectorColumns() ? $('#filterEstimateMonth').val() : '';
                     const filterInvoiceMonth = canViewProjectDirectorColumns() ? $('#filterInvoiceMonth').val() : '';
                     const filterBusinessDocumentStatus = canViewProjectDirectorColumns() ? $('#filterBusinessDocumentStatus').val() : '';
+                    const filterDeliveryStatus = $('#filterDeliveryStatus').val();
+                    const filterYoteiMonth = $('#filterYoteiMonth').val();
                     const filterPriority = $('#filterPriority').val();
                     const filterProgress = $('#filterProgress').val();
                     const filterTimeLeft = $('#filterTimeLeft').val();
@@ -4532,6 +4850,8 @@ var projectTable;
                         filterEstimateMonth,
                         filterInvoiceMonth,
                         filterBusinessDocumentStatus,
+                        filterDeliveryStatus,
+                        filterYoteiMonth,
                         filterPriority,
                         filterProgress,
                         filterTimeLeft,
@@ -4587,7 +4907,7 @@ var projectTable;
                         if (status.key === 'waiting_documents') {
                             $(row).addClass('table-row-status-waiting-documents');
                         } else {
-                            $(row).addClass(`table-row-status-${status.color}`);
+                        $(row).addClass(`table-row-status-${status.color}`);
                         }
                     }
                 }
@@ -5291,11 +5611,11 @@ var projectTable;
                 var copied = await window.ProjectClipboard.copy(text);
                 if (!copied) throw new Error('copy failed');
                 if (typeof showMessage === 'function') {
-                    showMessage(typeof translateText === 'function' ? translateText('案件情報をコピーしました') : '案件情報をコピーしました', false);
+                    showMessage(typeof translateText === 'function' ? translateText('案件情報をコピーしました') : '案件情報をコピーしました');
                 }
             } catch (err) {
                 if (typeof showMessage === 'function') {
-                    showMessage(typeof translateText === 'function' ? translateText('案件情報のコピーに失敗しました') : '案件情報のコピーに失敗しました', true);
+                    showProjectListError(typeof translateText === 'function' ? translateText('案件情報のコピーに失敗しました') : '案件情報のコピーに失敗しました');
                 }
             }
         });
@@ -5364,7 +5684,7 @@ var projectTable;
             var projectId = rowData.id ? String(rowData.id) : '';
             var parentProjectId = rowData.parent_project_id ? String(rowData.parent_project_id) : '';
             if (!parentProjectId) {
-                showMessage('親案件が設定されていません。', true);
+                showProjectListError('親案件が設定されていません。');
                 return;
             }
             if (editParentConstructionProjectIdInput) editParentConstructionProjectIdInput.value = projectId;
@@ -5395,7 +5715,7 @@ var projectTable;
                         var failMsg = (response && response.data && (response.data.message || response.data.error))
                             ? (response.data.message || response.data.error)
                             : '工事番号の更新に失敗しました。';
-                        showMessage(failMsg, true);
+                        showProjectListError(failMsg, response && response.data);
                         return;
                     }
                     showMessage(response.data.message || '工事番号を更新しました。', false);
@@ -5410,7 +5730,7 @@ var projectTable;
                     var msg = (err && err.response && err.response.data && (err.response.data.message || err.response.data.error))
                         ? (err.response.data.message || err.response.data.error)
                         : '工事番号の更新に失敗しました。';
-                    showMessage(msg, true);
+                    showProjectListError(msg, err);
                 } finally {
                     editParentConstructionSaveBtn.disabled = false;
                     if (editParentConstructionSaveSpinner) editParentConstructionSaveSpinner.classList.add('d-none');
@@ -6019,7 +6339,7 @@ var projectTable;
         $('#quickEditProjectSaveBtn').off('click.quickedit').on('click.quickedit', function() {
             const id = $('#quickEditProjectId').val();
             if (!id) {
-                if (typeof showMessage === 'function') showMessage(translateText('プロジェクトデータを読み込み中です。しばらくお待ちください。'), true);
+                if (typeof showMessage === 'function') showProjectListError(translateText('プロジェクトデータを読み込み中です。しばらくお待ちください。'));
                 return;
             }
             var $name = $('#quickEditName');
@@ -6140,7 +6460,7 @@ var projectTable;
             var quickEditStatus = $('#quickEditStatus').val() || 'draft';
             if (isCailyBranchUser() && quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
                 if (typeof showMessage === 'function') {
-                    showMessage(translateText('このステータスは選択できません。'), true);
+                    showProjectListError(translateText('このステータスは選択できません。'));
                 }
                 return;
             }
@@ -6198,9 +6518,9 @@ var projectTable;
             axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function(res) {
                 var data = res && res.data ? res.data : {};
                 if (data.status === 'success') {
-                    bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
-                    if (projectTable) reloadProjectTable(false);
-                    if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
+                bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
+                if (projectTable) reloadProjectTable(false);
+                if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
                     return;
                 }
                 if (handleProjectVersionConflict(data, function() {
@@ -6212,7 +6532,7 @@ var projectTable;
                     return;
                 }
                 var errMsg = data.message || data.error || translateText('更新に失敗しました。');
-                if (typeof showMessage === 'function') showMessage(errMsg, true);
+                if (typeof showMessage === 'function') showProjectListError(errMsg, data);
                 else if (typeof alert === 'function') alert(errMsg);
             }).catch(function(err) {
                 console.error('Quick edit save:', err);
@@ -6226,7 +6546,7 @@ var projectTable;
                     return;
                 }
                 if (typeof showMessage === 'function') {
-                    showMessage(errData.message || translateText('更新に失敗しました。'), true);
+                    showProjectListError(errData.message || translateText('更新に失敗しました。'), errData);
                 } else if (typeof alert === 'function') {
                     alert(errData.message ? errData.message : translateText('更新に失敗しました。'));
                 }
@@ -6267,10 +6587,10 @@ var projectTable;
             $(this).find('.empty-notes-text').removeClass('d-none');
         });
 
-        // Click add note icon to create new note
-        $('#projectTable tbody').on('click', '.empty-notes-cell .add-note-icon', function(e) {
+        // Click empty note cell to create new note
+        $('#projectTable tbody').on('click', '.empty-notes-cell', function(e) {
             e.stopPropagation();
-            const $cell = $(this).closest('.empty-notes-cell');
+            const $cell = $(this);
             const projectId = $cell.data('project-id');
             const noteType = $cell.closest('td').data('notes-type') === 'guis' ? 2 : 1;
             if (projectId && window.app && app.openNoteModalFromList) {
@@ -6278,35 +6598,14 @@ var projectTable;
             }
         });
 
-        // Click note item to edit the corresponding note
+        // Click note item (entire block) to edit the corresponding note
         $('#projectTable tbody').on('click', '.confirmation-note-item', function(e) {
-            // Don't trigger if clicking on action buttons
-            if ($(e.target).closest('.note-actions').length > 0) {
+            if ($(e.target).closest('.note-delete-icon').length > 0) {
                 return;
             }
             
             e.stopPropagation();
             const $item = $(this);
-            if (!projectTable) return;
-            const rowData = projectTable.row($item.closest('tr')).data();
-            if (!rowData) return;
-            const projectId = rowData.id;
-            const noteId = $item.data('note-id');
-            const noteText = $item.find('.note-text').text();
-            if (window.app) {
-                if (noteId && app.openNoteModalFromListById) {
-                    app.openNoteModalFromListById(projectId, noteId);
-                } else if (app.openNoteModalFromList) {
-                    // Fallback cho dữ liệu cũ nếu không có note-id
-                    app.openNoteModalFromList(projectId, noteText);
-                }
-            }
-        });
-
-        // Click pencil to edit the corresponding note
-        $('#projectTable tbody').on('click', '.confirmation-note-item .note-edit-icon', function(e) {
-            e.stopPropagation();
-            const $item = $(this).closest('.confirmation-note-item');
             if (!projectTable) return;
             const rowData = projectTable.row($item.closest('tr')).data();
             if (!rowData) return;
@@ -6344,11 +6643,11 @@ var projectTable;
                         reloadProjectTable(false);
                     }
                 } else {
-                    showMessage('メモの削除に失敗しました', true);
+                    showProjectListError('メモの削除に失敗しました', response.data);
                 }
             } catch (error) {
                 console.error('Error deleting note:', error);
-                showMessage('メモの削除に失敗しました', true);
+                showProjectListError('メモの削除に失敗しました', error);
             }
         });
 
@@ -6385,7 +6684,7 @@ var projectTable;
                     renderActiveFilters();
                 }
             });
-            $('#filterEstimateMonth, #filterInvoiceMonth').flatpickr({
+            $('#filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth').flatpickr({
                 locale: monthPickerLocale,
                 plugins: [new monthSelectPlugin({
                     shorthand: true,
@@ -6633,7 +6932,7 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterStartMonth, #filterEndMonth, #filterEstimateMonth, #filterInvoiceMonth, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterToday, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
+        $('#filterStartMonth, #filterEndMonth, #filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterToday, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
            renderActiveFilters();
         });
         let timer = null;
@@ -6643,74 +6942,18 @@ var projectTable;
                 renderActiveFilters();
             }, 500);
         });
-        initFilterKeepTeamOnResetCheckbox();
-        initFilterKeepCompanyOnResetCheckbox();
         initFilterCompanySelect2();
+        initProjectListFilterResetPrefsOffcanvas();
 
-        // Đảm bảo badge update khi reset filter
         $('#filterReset').on('click', function() {
-            const keepTeam = $('#filterKeepTeamOnReset').is(':checked');
-            const preservedTeams = keepTeam ? getFilterTeamValue() : [];
-            const keepCompany = $('#filterKeepCompanyOnReset').is(':checked');
-            const preservedCompany = keepCompany ? getFilterCompanyValue() : [];
-
-            // Reset các filter về mặc định
-            $('#projectFilterForm')[0].reset();
-            $('#filterStartMonth').val('');
-            $('#filterEndMonth').val('');
-            $('#filterEstimateMonth').val('');
-            $('#filterInvoiceMonth').val('');
-            $('#filterBusinessDocumentStatus').val('');
-            $('#filterPriority').val('');
-            $('#filterProgress').val('');
-            $('#filterTimeLeft').val('');
-            $('#filterToday').val('');
-            $('#filterProjectOrderType').val('');
-            if (keepTeam) {
-                $('#filterTeam').val(preservedTeams.length ? preservedTeams : null).trigger('change');
-            } else {
-                $('#filterTeam').val(null).trigger('change');
-            }
-            $('#filterCompany').val(keepCompany && preservedCompany.length ? preservedCompany : null).trigger('change');
-            $('#filterTantou').val('');
-            $('#filterNoDates').prop('checked', false);
-            $('#filterKeyword').val('');
-            $('#filterProjectId').val('');
-            $('#showInactiveSwitch').prop('checked', false);
-            // 並べ替え設定（ステータス順 / 項目 / 並び順）はリセットしない
-            // Reset favorites filter
-            $('#filterFavoritesOnly').prop('checked', false);
-            if (app) {
-                app.showClearAllFavoritesBtn = false;
-                app.filterMyProjects = false;
-            }
-            const preservedFilterState = {
-                sortByStatus: $('#sortByStatusSwitch').is(':checked') ? 1 : 0,
-                listSortColumn: getProjectListSortColumnFromUi(),
-                listSortDir: getProjectListSortDirFromUi()
-            };
-            if (keepTeam && preservedTeams.length) {
-                preservedFilterState.filterTeam = preservedTeams;
-            }
-            if (keepCompany && preservedCompany.length) {
-                preservedFilterState.filterCompany = preservedCompany;
-            }
-            try {
-                localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(preservedFilterState));
-            } catch (e) {}
-            // Reset status filter
-            if (app && app.selectedStatusKeys && app.selectedStatusKeys.length) {
-                app.selectedStatusKeys = [];
-            }
-            renderActiveFilters();
-            applyProjectListDefaultSort();
-            reloadProjectTable(true);
+            resetProjectListFilters();
         });
         
     }
     
     // Setup auto-refresh timer once (independent of DataTable initialization)
     $(document).ready(function() {
+        initProjectFilterBoxCollapseState();
         syncQuickEditStatusOptions();
         var savedScrollOnLoad = getSavedProjectListScroll();
         if (savedScrollOnLoad) {
@@ -6997,6 +7240,7 @@ var projectTable;
                 currentNoteProjectId: null,
                 quillNoteInstance: null,
                 quillNoteContent: '',
+                savingNote: false,
                 // Kadai queue properties
                 kadaiProjects: [],
                 isKadaiQueueExpanded: false,
@@ -7052,6 +7296,10 @@ var projectTable;
                     }
                 });
                 return list;
+            },
+            canSaveNote() {
+                const raw = (this.quillNoteContent || this.editingNote.content || '').trim();
+                return this.noteContentHasText(raw);
             }
         },
         mounted() {
@@ -7439,7 +7687,7 @@ var projectTable;
                     if (this.departments.length === 0) {
                         this.selectedDepartment = null;
                         this.loading = false;
-                        showMessage('どの部署にも所属していません。管理者に問い合わせてください。', true);
+                        showProjectListError('どの部署にも所属していません。管理者に問い合わせてください。');
                         return;
                     }
 
@@ -7456,23 +7704,23 @@ var projectTable;
                         this.selectedDepartment = null;
                     }
 
-                    const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
-                    if (savedDepartment) {
+                        const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
+                        if (savedDepartment) {
                         const department = this.departments.find(
                             (d) => d && d.id == savedDepartment.id && d.can_project == 1
                         );
-                        if (department) {
-                            this.viewProjects(department);
-                            return;
+                            if (department) {
+                                this.viewProjects(department);
+                                return;
+                            }
                         }
-                    }
-
+                        
                     const firstDepartment = this.departments.find((d) => d && d.can_project == 1);
-                    if (firstDepartment) {
-                        this.viewProjects(firstDepartment);
-                    } else {
-                        this.loading = false;
-                        showMessage('どの部署にも所属していません。管理者に問い合わせてください。', true);
+                        if (firstDepartment) {
+                            this.viewProjects(firstDepartment);
+                        } else {
+                            this.loading = false;
+                        showProjectListError('どの部署にも所属していません。管理者に問い合わせてください。');
                     }
                 } catch (error) {
                     console.error('Error loading departments:', error);
@@ -7481,7 +7729,7 @@ var projectTable;
                         return;
                     }
                     this.departments = [];
-                    showMessage('どの部署にも所属していません。管理者に問い合わせてください。', true);
+                    showProjectListError('どの部署にも所属していません。管理者に問い合わせてください。');
                 }
             },
             async getUserPermissions(departmentId) {
@@ -7569,6 +7817,7 @@ var projectTable;
                             display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : '',
                             user_id: match.user_id
                         };
+                        this.quillNoteContent = this.editingNote.content || '';
                     }
                     this.$nextTick(() => {
                         this.initQuillNoteEditor();
@@ -7610,9 +7859,11 @@ var projectTable;
                                 display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : (displayColumnKey || ''),
                                 user_id: match.user_id
                             };
+                            this.quillNoteContent = this.editingNote.content || '';
                         } else {
                             this.editingNote.content = decodeHtmlForNote(noteContent);
                             this.editingNote.needs_confirmation = noteType || 0;
+                            this.quillNoteContent = this.editingNote.content || '';
                         }
                     }
                     this.$nextTick(() => {
@@ -7623,6 +7874,7 @@ var projectTable;
             closeNoteModal() {
                 this.showNoteModal = false;
                 this.isNoteEditMode = false;
+                this.savingNote = false;
                 this.currentEditingNoteId = null; // Clear editing note tracking
                 this.destroyQuillNoteEditor();
                 
@@ -7643,8 +7895,26 @@ var projectTable;
                 const o = opts.find(function(x) { return x.value === value; });
                 return o ? o.text : value;
             },
+            getQuillNoteHtml() {
+                if (!this.quillNoteInstance) return '';
+                if (typeof this.quillNoteInstance.getSemanticHTML === 'function') {
+                    return this.quillNoteInstance.getSemanticHTML();
+                }
+                return this.quillNoteInstance.root ? this.quillNoteInstance.root.innerHTML : '';
+            },
+            syncNoteEditorContent() {
+                if (!this.quillNoteInstance) return;
+                this.quillNoteContent = this.getQuillNoteHtml();
+            },
+            noteContentHasText(rawContent) {
+                if (!rawContent) return false;
+                const text = String(rawContent).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
+                return text.length > 0;
+            },
             initQuillNoteEditor() {
-                if (this.quillNoteInstance || !this.isNoteEditMode || !this.showNoteModal) return;
+                if (!this.isNoteEditMode || !this.showNoteModal) return;
+                this.destroyQuillNoteEditor();
+                this.$nextTick(() => {
                 setTimeout(() => {
                     const toolbarOptions = [
                         ['bold', 'italic', 'underline', 'strike'],
@@ -7655,11 +7925,6 @@ var projectTable;
                     ];
                     const el = document.getElementById('quill_note_content');
                     if (!el) return;
-                    if (this.quillNoteInstance) {
-                        try {
-                            this.quillNoteInstance = null;
-                        } catch (e) {}
-                    }
                     this.quillNoteInstance = new Quill(el, {
                         bounds: el,
                         placeholder: 'メモの詳細を入力してください...',
@@ -7674,40 +7939,51 @@ var projectTable;
                         const html = typeof decodeHtmlEntities !== 'undefined' ? decodeHtmlEntities(this.editingNote.content) : this.editingNote.content;
                         this.quillNoteInstance.root.innerHTML = html;
                     }
-                    this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
+                        this.syncNoteEditorContent();
                     this.quillNoteInstance.on('text-change', () => {
-                        this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
+                            this.syncNoteEditorContent();
                     });
-                }, 200);
+                    }, 100);
+                });
             },
             destroyQuillNoteEditor() {
-                if (this.quillNoteInstance) {
-                    try {
-                        this.quillNoteInstance = null;
-                    } catch (e) {}
-                }
-                // Clear Quill DOM content to avoid reusing old HTML when creating new note
-                try {
                     const el = document.getElementById('quill_note_content');
                     if (el) {
-                        el.innerHTML = '';
+                    const editorRoot = el.closest('.custom_editor');
+                    if (editorRoot) {
+                        editorRoot.querySelectorAll('.ql-toolbar').forEach(function(toolbar) {
+                            toolbar.remove();
+                        });
                     }
-                } catch (e) {}
+                        el.innerHTML = '';
+                    el.className = 'custom_editor_content';
+                    }
+                this.quillNoteInstance = null;
                 this.quillNoteContent = '';
             },
+            getNoteEditorContent() {
+                const fromEditor = this.getQuillNoteHtml().trim();
+                if (fromEditor) return fromEditor;
+                return ((this.quillNoteContent || '').trim() || (this.editingNote.content || '').trim());
+            },
+            hasNoteEditorContent() {
+                return this.noteContentHasText(this.getNoteEditorContent());
+            },
             async saveNote() {
-                // Lấy nội dung từ Quill editor nếu có, nếu không dùng editingNote.content
-                const rawContent = (this.quillNoteContent && this.quillNoteContent.trim()) || (this.editingNote.content || '').trim();
-                let title = (this.editingNote.title || '').trim();
-                if (!title) {
-                    // Lấy dòng đầu tiên của nội dung, giới hạn độ dài (strip HTML tags)
-                    const textContent = rawContent.replace(/<[^>]*>/g, '').trim();
-                    title = textContent.split(/\r?\n/)[0].slice(0, 50) || 'メモ';
+                if (this.savingNote) return;
+                const rawContent = this.getNoteEditorContent();
+                if (!this.hasNoteEditorContent()) {
+                    showProjectListError('内容を入力してください');
+                    return;
                 }
+                if (!this.currentNoteProjectId) {
+                    showProjectListError('プロジェクトIDが取得できません');
+                    return;
+                }
+                this.savingNote = true;
                 try {
                     const formData = new FormData();
                     formData.append('project_id', this.currentNoteProjectId);
-                    formData.append('title', title);
                     formData.append('content', rawContent);
                     formData.append('is_important', this.editingNote.is_important ? 1 : 0);
                     formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
@@ -7728,11 +8004,13 @@ var projectTable;
                             reloadProjectTable(false);
                         }
                     } else {
-                        showMessage('メモの保存に失敗しました', true);
+                        showProjectListError('メモの保存に失敗しました', response.data);
                     }
                 } catch (error) {
                     console.error('Error saving note:', error);
-                    showMessage('メモの保存に失敗しました', true);
+                    showProjectListError('メモの保存に失敗しました', error);
+                } finally {
+                    this.savingNote = false;
                 }
             },
             async deleteCurrentNote() {
@@ -7749,11 +8027,11 @@ var projectTable;
                             reloadProjectTable(false);
                         }
                     } else {
-                        showMessage('メモの削除に失敗しました', true);
+                        showProjectListError('メモの削除に失敗しました', response.data);
                     }
                 } catch (error) {
                     console.error('Error deleting note:', error);
-                    showMessage('メモの削除に失敗しました', true);
+                    showProjectListError('メモの削除に失敗しました', error);
                 }
             },
             canEditNote(note) {
@@ -7936,11 +8214,11 @@ var projectTable;
                             }
                         }
                     } else {
-                        showMessage(response.data?.message || '操作に失敗しました。', true);
+                        showProjectListError(response.data?.message || '操作に失敗しました。', response.data);
                     }
                 } catch (error) {
                     console.error('Error toggling favorite:', error);
-                    showMessage('操作に失敗しました。', true);
+                    showProjectListError('操作に失敗しました。', error);
                 }
             },
             async clearAllFavorites() {
@@ -7968,12 +8246,12 @@ var projectTable;
                                 reloadProjectTable(true);
                             }
                         } else {
-                            showMessage(response.data?.message || '削除に失敗しました。', true);
+                            showProjectListError(response.data?.message || '削除に失敗しました。', response.data);
                         }
                     }
                 } catch (error) {
                     console.error('Error clearing all favorites:', error);
-                    showMessage('削除に失敗しました。', true);
+                    showProjectListError('削除に失敗しました。', error);
                 }
             },
             async loadProjects() {
@@ -8130,11 +8408,11 @@ var projectTable;
                             this.loadProjects();
                             this.resetProjectForm();
                         } else{
-                            showMessage('プロジェクトの保存に失敗しました。', true);
+                            showProjectListError('プロジェクトの保存に失敗しました。', response.data);
                         }
                     } catch (error) {
                         console.error('Error saving project:', error);
-                        showMessage('プロジェクトの保存に失敗しました。', true);
+                        showProjectListError('プロジェクトの保存に失敗しました。', error);
                     }
                 }
             },
@@ -8160,9 +8438,9 @@ var projectTable;
                 } catch (error) {
                     console.error('Error deleting project:', error);
                     if (error.response?.data?.error) {
-                        showMessage(error.response.data.error, true);
+                        showProjectListError(error.response.data.error, error.response.data);
                     } else {
-                        showMessage('プロジェクトの削除に失敗しました。', true);
+                        showProjectListError('プロジェクトの削除に失敗しました。', error);
                     }
                 }
             },
@@ -8385,11 +8663,11 @@ var projectTable;
                             reloadProjectTable(true);
                         }
                     } else {
-                        showMessage('プロジェクトの移動に失敗しました。', true);
+                        showProjectListError('プロジェクトの移動に失敗しました。', response.data);
                     }
                 } catch (error) {
                     console.error('Error moving project:', error);
-                    showMessage('プロジェクトの移動に失敗しました。', true);
+                    showProjectListError('プロジェクトの移動に失敗しました。', error);
                 }
             },
             
@@ -8441,11 +8719,11 @@ var projectTable;
                             reloadProjectTable(true);
                         }
                     } else {
-                        showMessage(response.data.message || 'プロジェクトの承認に失敗しました。', true);
+                        showProjectListError(response.data.message || 'プロジェクトの承認に失敗しました。', response.data);
                     }
                 } catch (error) {
                     console.error('Error confirming project:', error);
-                    showMessage('プロジェクトの承認に失敗しました。', true);
+                    showProjectListError('プロジェクトの承認に失敗しました。', error);
                 }
             },
             
@@ -8543,10 +8821,10 @@ var projectTable;
                     }
                 }
             } else {
-                showMessage(response.data?.message || '操作に失敗しました。', true);
+                showProjectListError(response.data?.message || '操作に失敗しました。', response.data);
             }
         } catch (error) {
             console.error('Error toggling favorite:', error);
-            showMessage('操作に失敗しました。', true);
+            showProjectListError('操作に失敗しました。', error);
         }
     };
