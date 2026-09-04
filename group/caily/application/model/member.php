@@ -14,7 +14,7 @@ class Member extends ApplicationModel {
 		'lastname_after_married'=>array('結婚後の姓', 'length:100'),
 		'firstname'=>array('名', 'length:100'),
 		'realname'=>array('名前', 'length:100'),
-		'user_ruby'=>array('かな', 'length:100'),
+		'user_ruby'=>array('カタカナ', 'length:100'),
 		'authority'=>array('権限', 'length:20'),
 		'user_postcode'=>array('郵便番号', 'postcode', 'length:8'),
 		'user_address'=>array('住所', 'length:1000'),
@@ -550,7 +550,6 @@ class Member extends ApplicationModel {
                 $this->post['realname'] .= ' '.$this->post['firstname'];
             }
 			//remve user_groupname from post
-			unset($this->post['user_ruby']);
 			unset($this->post['id']);
 			unset($this->post['user_postcode']);
 			unset($this->post['user_address']);
@@ -922,6 +921,9 @@ class Member extends ApplicationModel {
 				$_SESSION['realname'] = $this->post['lastname'];
 				if($this->post['firstname'] != '') {
 					$_SESSION['realname'] .= ' '.$this->post['firstname'];
+				}
+				if (isset($this->post['user_ruby'])) {
+					$_SESSION['user_ruby'] = $this->post['user_ruby'];
 				}
 				$_SESSION['user_updated'] = $this->post['updated'];
 			}

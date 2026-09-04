@@ -2767,6 +2767,7 @@ class Task extends ApplicationModel {
                 'project_director_stat' => 1,
                 'project_director_view' => 1,
                 'project_director_edit' => 1,
+                'project_view_end_date' => 1,
             ];
         }
 

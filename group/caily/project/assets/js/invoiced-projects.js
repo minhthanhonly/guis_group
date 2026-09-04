@@ -1028,13 +1028,13 @@
                 return !!String(this.paymentEditProject?.receipt_number || '').trim();
             },
             isPaymentEditPaidFieldsComplete() {
-                this.syncPaymentEditDateFromPicker();
+                // Do not call syncPaymentEditDateFromPicker() here — used in template during render;
+                // mutating reactive state would hang the page (RESULT_CODE_HUNG).
                 return this.hasPaymentEditDate()
                     && this.hasPaymentEditAmount()
                     && this.hasPaymentEditReceiptNumber();
             },
             getPaymentEditPaidFieldsValidationError() {
-                this.syncPaymentEditDateFromPicker();
                 const missing = [];
                 if (!this.hasPaymentEditDate()) {
                     missing.push(typeof translateText === 'function' ? translateText('入金日') : '入金日');

@@ -14,7 +14,7 @@ var PROJECT_GANTT_SORT_FIELDS = [
 
 function normalizeProjectGanttSortColumn(value) {
     var key = String(value || '').trim();
-    if (isCailyBranchUser() && (key === 'guis_nouki' || key === 'end_date')) {
+    if (isCailyBranchUser() && (key === 'guis_nouki' || key === 'end_date') && !canViewEndDateColumn()) {
         return '';
     }
     return PROJECT_GANTT_SORT_FIELDS.indexOf(key) >= 0 ? key : '';
@@ -40,6 +40,39 @@ function canViewProjectGanttDirectorColumns() {
         || p.project_director_stat == 1
         || p.project_director_view == 1
         || p.project_director_edit == 1;
+}
+
+/** CAILY branch: 期限日 only when department permission project_view_end_date is set. */
+function canViewEndDateColumn() {
+    if (!isCailyBranchUser()) return true;
+    if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+    if (typeof window.ganttApp === 'undefined' || !window.ganttApp.userPermissions) return false;
+    return window.ganttApp.userPermissions.project_view_end_date == 1;
+}
+
+function syncGanttEndDatePermissionUi() {
+    var allowed = canViewEndDateColumn();
+    var endWrap = document.getElementById('useEndDateWrap');
+    if (endWrap) {
+        endWrap.style.display = allowed ? '' : 'none';
+        if (!allowed) {
+            $('#useEndDate').prop('checked', false);
+        }
+    }
+    var guisWrap = document.getElementById('useGuisEndDateWrap');
+    if (guisWrap) {
+        guisWrap.style.display = allowed ? '' : 'none';
+        if (!allowed) {
+            $('#useGuisEndDate').prop('checked', false);
+        }
+    }
+    $('#projectGanttSortColumn option[data-end-date-perm="1"]').each(function() {
+        this.hidden = !allowed;
+        var val = $(this).attr('value');
+        if (!allowed && $('#projectGanttSortColumn').val() === val) {
+            $('#projectGanttSortColumn').val('');
+        }
+    });
 }
 
 function refreshProjectGanttSortFieldOptions() {
@@ -317,8 +350,8 @@ $(document).ready(function() {
         { key: 'showTaskText', labelKey: '案件名を表示', group: 'display', defaultValue: 0 },
         { key: 'showTaskTree', labelKey: '各納期を表示', group: 'display', defaultValue: 0 },
         { key: 'useCailyEndDate', labelKey: 'CAILY納期を表示', group: 'display', defaultValue: 0 },
-        { key: 'useGuisEndDate', labelKey: 'GUIS納期を表示', group: 'display', defaultValue: 0, hiddenOnCaily: true },
-        { key: 'useEndDate', labelKey: '期限日を表示', group: 'display', defaultValue: 0, hiddenOnCaily: true },
+        { key: 'useGuisEndDate', labelKey: 'GUIS納期を表示', group: 'display', defaultValue: 0, requiresEndDatePerm: true },
+        { key: 'useEndDate', labelKey: '期限日を表示', group: 'display', defaultValue: 0, requiresEndDatePerm: true },
         { key: 'useShowCailyStruct', labelKey: '構造データ送付 (CAILY)を表示', group: 'display', defaultValue: 0 },
         { key: 'useShowGuisStruct', labelKey: '構造データ送付 (GUIS)を表示', group: 'display', defaultValue: 0 },
         { key: 'useShowEquipmentNouki', labelKey: '設備 納期を表示', group: 'display', defaultValue: 0 }
@@ -342,6 +375,9 @@ $(document).ready(function() {
     function isProjectGanttFilterResetItemVisible(def) {
         if (!def) return false;
         if (def.hiddenOnCaily && isCailyBranchUser()) {
+            return false;
+        }
+        if (def.requiresEndDatePerm && !canViewEndDateColumn()) {
             return false;
         }
         return true;
@@ -466,8 +502,8 @@ $(document).ready(function() {
             showTaskText: $('#toggleTaskText').is(':checked') ? 1 : 0,
             showTaskTree: $('#toggleTaskTree').is(':checked') ? 1 : 0,
             useCailyEndDate: $('#useCailyEndDate').is(':checked') ? 1 : 0,
-            useGuisEndDate: isCailyBranchUser() ? 0 : ($('#useGuisEndDate').is(':checked') ? 1 : 0),
-            useEndDate: isCailyBranchUser() ? 0 : ($('#useEndDate').is(':checked') ? 1 : 0),
+            useGuisEndDate: canViewEndDateColumn() && $('#useGuisEndDate').is(':checked') ? 1 : 0,
+            useEndDate: canViewEndDateColumn() && $('#useEndDate').is(':checked') ? 1 : 0,
             useShowCailyStruct: $('#useShowCailyStruct').is(':checked') ? 1 : 0,
             useShowGuisStruct: $('#useShowGuisStruct').is(':checked') ? 1 : 0,
             useShowEquipmentNouki: $('#useShowEquipmentNouki').is(':checked') ? 1 : 0,
@@ -509,8 +545,8 @@ $(document).ready(function() {
         if (filters.showTaskText !== undefined) $('#toggleTaskText').prop('checked', filters.showTaskText == 1);
         if (filters.showTaskTree !== undefined) $('#toggleTaskTree').prop('checked', filters.showTaskTree == 1);
         if (filters.useCailyEndDate !== undefined) $('#useCailyEndDate').prop('checked', filters.useCailyEndDate == 1);
-        if (!isCailyBranchUser() && filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
-        if (!isCailyBranchUser() && filters.useEndDate !== undefined) $('#useEndDate').prop('checked', filters.useEndDate == 1);
+        if (canViewEndDateColumn() && filters.useGuisEndDate !== undefined) $('#useGuisEndDate').prop('checked', filters.useGuisEndDate == 1);
+        if (canViewEndDateColumn() && filters.useEndDate !== undefined) $('#useEndDate').prop('checked', filters.useEndDate == 1);
         if (filters.useShowCailyStruct !== undefined) $('#useShowCailyStruct').prop('checked', filters.useShowCailyStruct == 1);
         if (filters.useShowGuisStruct !== undefined) $('#useShowGuisStruct').prop('checked', filters.useShowGuisStruct == 1);
         if (filters.useShowEquipmentNouki !== undefined) $('#useShowEquipmentNouki').prop('checked', filters.useShowEquipmentNouki == 1);
@@ -1378,7 +1414,10 @@ $(document).ready(function() {
                     });
                     if (Object.keys(response).length > 0) {
                         this.userPermissions = response || {};
+                        syncGanttEndDatePermissionUi();
                         reapplyGanttSortFromStorage();
+                    } else if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
+                        syncGanttEndDatePermissionUi();
                     }
                 } catch (error) {
                     console.error('Error loading user permissions:', error);
@@ -1805,7 +1844,7 @@ $(document).ready(function() {
                         links.push({ id: linkId(SLOT_CAILY_NOUKI), source: project.id, target: subId(SLOT_CAILY_NOUKI), type: 0 });
                     }
                     // Milestone GUIS納期: tantou=GUIS thì hiển thị thêm team name
-                    const showGuisNouki = !isCailyBranchUser() && $('#useGuisEndDate').length && $('#useGuisEndDate').is(':checked');
+                    const showGuisNouki = canViewEndDateColumn() && $('#useGuisEndDate').length && $('#useGuisEndDate').is(':checked');
                     const guisEnd = parseNoukiToDate(project.guis_nouki);
                     if (showGuisNouki && guisEnd) {
                         const guisNoukiText = (project.tantou === 'GUIS' && teamName) ? 'GUIS納期:' + '[' + teamName + ']' : 'GUIS納期';
@@ -1822,7 +1861,7 @@ $(document).ready(function() {
                         links.push({ id: linkId(SLOT_GUIS_NOUKI), source: project.id, target: subId(SLOT_GUIS_NOUKI), type: 0 });
                     }
                     // Milestone 期限日 (project.end_date)
-                    const showEndDate = !isCailyBranchUser() && $('#useEndDate').length && $('#useEndDate').is(':checked');
+                    const showEndDate = canViewEndDateColumn() && $('#useEndDate').length && $('#useEndDate').is(':checked');
                     const endDateMilestone = parseNoukiToDate(project.end_date);
                     if (showEndDate && endDateMilestone) {
                         tasks.push({
@@ -2824,9 +2863,9 @@ $(document).ready(function() {
                         }
                     }
                     
-                    const cailyBranch = isCailyBranchUser();
-                    const deadlineLine = cailyBranch ? '' : `<p class="m-0"><strong>期限日:</strong> ${originalDeadline}</p>`;
-                    const guisNoukiLine = cailyBranch ? '' : `<p class="m-0"><strong>GUIS納期:</strong> ${formatDateStringWithVN(task.guis_nouki)}</p>`;
+                    const showDeadlineFields = canViewEndDateColumn();
+                    const deadlineLine = !showDeadlineFields ? '' : `<p class="m-0"><strong>期限日:</strong> ${originalDeadline}</p>`;
+                    const guisNoukiLine = !showDeadlineFields ? '' : `<p class="m-0"><strong>GUIS納期:</strong> ${formatDateStringWithVN(task.guis_nouki)}</p>`;
 
                     return `
                         <div class="gantt-tooltip">
@@ -3254,8 +3293,11 @@ $(document).ready(function() {
 });
 
 function getInitials(name) {
+    if (typeof getAvatarName === 'function') {
+        return getAvatarName(name);
+    }
     if (!name) return '?';
-    return name.split(' ').map(n => n.charAt(0)).join('').toUpperCase().substring(0, 2);
+    return String(name).split(' ').map(n => n.charAt(0)).join('').toUpperCase().substring(0, 2);
 }
 
 function decodeHtmlEntities(str) {

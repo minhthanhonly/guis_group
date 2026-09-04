@@ -243,6 +243,7 @@ const BUSINESS_ESTIMATE_STATUSES = [
     { value: '見積作成中', label: '見積作成中', color: 'primary' },
     { value: '発行済', label: '発行済', color: 'success' },
     { value: '発行済み', label: '発行済', color: 'success' },
+    { value: '無償', label: '無償', color: 'info' },
 ];
 
 const BUSINESS_INVOICE_STATUSES = [
@@ -250,6 +251,7 @@ const BUSINESS_INVOICE_STATUSES = [
     { value: '請求準備', label: '請求準備', color: 'warning' },
     { value: '発行済', label: '発行済', color: 'success' },
     { value: '発行済み', label: '発行済', color: 'success' },
+    { value: '無償', label: '無償', color: 'info' },
 ];
 
 const BUSINESS_PAYMENT_STATUSES = [
@@ -340,6 +342,18 @@ function handleProjectVersionConflict(responseData, onReload) {
         return false;
     }
     const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
+    if (typeof showParentProjectError === 'function') {
+        showParentProjectError(msg, responseData, {
+            onClose: function() {
+                if (typeof onReload === 'function') {
+                    onReload();
+                } else {
+                    window.location.reload();
+                }
+            }
+        });
+        return true;
+    }
     if (typeof hideHourglass === 'function') {
         hideHourglass();
     }
@@ -353,7 +367,11 @@ function handleProjectVersionConflict(responseData, onReload) {
             },
             buttonsStyling: false
         }).then(() => {
-            window.location.reload();
+            if (typeof onReload === 'function') {
+                onReload();
+            } else {
+                window.location.reload();
+            }
         });
     } else if (typeof showMessage === 'function') {
         showMessage(msg, true);
@@ -887,6 +905,21 @@ createApp({
         },
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+        },
+        /** CAILY: 期限日閲覧 unlocks 完了 status + deadline fields. */
+        canViewEndDate() {
+            if (!this.isCailyBranchUser) return true;
+            if (this.isAdmin) return true;
+            if (!this.permission || !this.permission.length) return false;
+            return this.permission.some(function(rule) {
+                return rule.project_view_end_date == 1 || rule.project_view_end_date === '1';
+            });
+        },
+        editableProjectStatuses() {
+            if (!this.isCailyBranchUser || this.canViewEndDate) {
+                return this.projectStatuses;
+            }
+            return this.projectStatuses.filter(function(s) { return s.value !== 'completed'; });
         },
         parentRequestTypes() {
             const raw = (this.parentProject && this.parentProject.requests) ? String(this.parentProject.requests) : '';
@@ -1635,8 +1668,16 @@ createApp({
             const s = this.projectStatuses.find(s => s.value === status);
             return `btn-${s?.color || 'secondary'}`;
         },
-        selectProjectStatus(status, isEdit = false) {
+        async selectProjectStatus(status, isEdit = false) {
+            if (this.isCailyBranchUser && status === 'completed' && !this.canViewEndDate) {
+                return;
+            }
             if (isEdit) {
+                const prev = this.editingChildProject && this.editingChildProject.status;
+                if (status === 'completed' && prev !== 'completed') {
+                    const ok = await this.confirmPaymentInfoBeforeComplete(this.editingChildProject);
+                    if (!ok) return;
+                }
                 this.editingChildProject.status = status;
                 // Close dropdown
                 const dropdownElement = document.querySelector('#editChildProjectStatusDropdown');
@@ -2543,11 +2584,11 @@ createApp({
                         this.loadParentProject();
                     });
                 } else {
-                    showMessage(response.data?.error || '更新に失敗しました。', true);
+                    showParentProjectError(response.data?.error || '更新に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error saving parent project:', error);
-                showMessage('更新に失敗しました。', true);
+                showParentProjectError('更新に失敗しました。', error);
             }
         },
         getParentProjectStatusButtonClass(status) {
@@ -2586,23 +2627,13 @@ createApp({
                         confirmButtonText: 'OK'
                     });
                 } else {
-                    Swal.fire({
-                        title: 'エラー',
-                        text: response.data?.error || 'ステータスの更新に失敗しました',
-                        icon: 'error',
-                        confirmButtonText: 'OK'
-                    });
+                    showParentProjectError(response.data?.error || 'ステータスの更新に失敗しました', response && response.data);
                     // Revert local change if API call failed
                     this.parentProject.status = this.originalParentProject.status;
                 }
             } catch (error) {
                 console.error('Error updating status:', error);
-                Swal.fire({
-                    title: 'エラー',
-                    text: 'ステータスの更新に失敗しました',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
+                showParentProjectError('ステータスの更新に失敗しました', error);
                 // Revert local change if API call failed
                 this.parentProject.status = this.originalParentProject.status;
             }
@@ -2651,12 +2682,12 @@ createApp({
                             window.location.href = 'index.php';
                         });
                     } else {
-                        showMessage(response.data?.error || '削除に失敗しました。', true);
+                        showParentProjectError(response.data?.error || '削除に失敗しました。', response && response.data);
                     }
                 }
             } catch (error) {
                 console.error('Error deleting parent project:', error);
-                showMessage('削除に失敗しました。', true);
+                showParentProjectError('削除に失敗しました。', error);
             }
         },
 
@@ -3244,12 +3275,16 @@ createApp({
 
         async loadDepartments() {
             try {
-                const response = await axios.get('/api/index.php?model=department&method=listByUser');
-                if (response.data) {
-                    this.departments = response.data;
-                    // Generate project number after departments are loaded
-                    this.generateChildProjectNumber();
-                }
+                // All project-capable departments (not limited to the current user's departments)
+                const response = await axios.get('/api/index.php?model=department&method=list_department');
+                const list = Array.isArray(response.data)
+                    ? response.data
+                    : ((response.data && response.data.data) || []);
+                this.departments = list.filter(function (d) {
+                    return d && (d.can_project == 1 || d.can_project === '1') && (d.is_active == 1 || d.is_active === '1' || d.is_active === undefined);
+                });
+                // Generate project number after departments are loaded
+                this.generateChildProjectNumber();
             } catch (error) {
                 console.error('Error loading departments:', error);
                 this.departments = [];
@@ -3779,6 +3814,7 @@ createApp({
             const parentGuisReceiver = String((this.parentProject && this.parentProject.guis_receiver) || '');
             const childGuisReceiver = String(project.guis_receiver || '');
             const useParentGuisReceiver = !childGuisReceiver || childGuisReceiver === parentGuisReceiver;
+            this._editChildOriginalStatus = project.status || '';
             this.editingChildProject = {
                 id: project.id,
                 name: project.name || '',
@@ -3801,6 +3837,8 @@ createApp({
                 tantou: project.tantou || '',
                 caily_nouki: project.caily_nouki || '',
                 guis_nouki: project.guis_nouki || '',
+                estimate_status: project.estimate_status || '未発行',
+                invoice_status: project.invoice_status || '未発行',
                 yotei: this.parseYoteiModel(project.yotei),
                 custom_fields: project.custom_fields != null ? project.custom_fields : '',
                 use_parent_customer: useParentCustomer,
@@ -3822,11 +3860,20 @@ createApp({
             modal.show();
 
             const onShown = async () => {
-                if (!(this.editingChildProject.teams || '').toString().trim() && this.editingChildProject.id) {
+                if (this.editingChildProject.id) {
                     try {
                         const res = await axios.get(`/api/index.php?model=project&method=getById&id=${this.editingChildProject.id}`);
-                        if (res.data && res.data.teams != null) {
-                            this.editingChildProject.teams = (res.data.teams || '').toString();
+                        const data = res.data && res.data.data ? res.data.data : res.data;
+                        if (data) {
+                            if (!(this.editingChildProject.teams || '').toString().trim() && data.teams != null) {
+                                this.editingChildProject.teams = (data.teams || '').toString();
+                            }
+                            if (data.estimate_status != null) {
+                                this.editingChildProject.estimate_status = data.estimate_status || '未発行';
+                            }
+                            if (data.invoice_status != null) {
+                                this.editingChildProject.invoice_status = data.invoice_status || '未発行';
+                            }
                         }
                     } catch (e) { /* ignore */ }
                 }
@@ -4527,17 +4574,12 @@ createApp({
                         // Reload quotations as cancelled projects might affect quotation status
                         await this.loadQuotations();
                     } else {
-                        throw new Error(response.data.error || response.data.message || 'キャンセルに失敗しました');
+                        showParentProjectError(response.data.error || response.data.message || 'キャンセルに失敗しました', response && response.data);
                     }
                 }
             } catch (error) {
                 console.error('Error cancelling child project:', error);
-                await Swal.fire({
-                    title: 'エラー',
-                    text: error.message || '案件依頼のキャンセル中にエラーが発生しました。',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
+                showParentProjectError(error.message || '案件依頼のキャンセル中にエラーが発生しました。', error);
             }
         },
 
@@ -4577,17 +4619,12 @@ createApp({
                         modal.hide();
                         await this.loadChildProjects();
                     } else {
-                        throw new Error(response.data.error || response.data.message || '復元に失敗しました');
+                        showParentProjectError(response.data.error || response.data.message || '復元に失敗しました', response && response.data);
                     }
                 }
             } catch (error) {
                 console.error('Error restoring child project:', error);
-                await Swal.fire({
-                    title: 'エラー',
-                    text: error.message || '案件依頼の復元に失敗しました。',
-                    icon: 'error',
-                    confirmButtonText: 'OK'
-                });
+                showParentProjectError(error.message || '案件依頼の復元に失敗しました。', error);
             } finally {
                 this.restoringChildProject = false;
             }
@@ -4674,6 +4711,12 @@ createApp({
             if (!this.validateEditChildProjectForm()) {
                 this.notifyChildProjectValidationError();
                 return;
+            }
+
+            const prevStatus = this._editChildOriginalStatus;
+            if (this.editingChildProject.status === 'completed' && prevStatus !== 'completed') {
+                const ok = await this.confirmPaymentInfoBeforeComplete(this.editingChildProject);
+                if (!ok) return;
             }
 
             // Sync Quill content with the form data
@@ -4767,11 +4810,11 @@ createApp({
                     if (handleProjectVersionConflict(response.data, () => this.loadChildProjects())) {
                         return;
                     }
-                    showMessage(response.data.message || '課題の更新に失敗しました。', true);
+                    showParentProjectError(response.data.message || '課題の更新に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error updating child project:', error);
-                showMessage('課題の更新に失敗しました。', true);
+                showParentProjectError('課題の更新に失敗しました。', error);
             } finally {
                 this.updatingChildProject = false;
             }
@@ -4872,7 +4915,7 @@ createApp({
             const caily = (project.caily_nouki || '').trim();
             const guis = (project.guis_nouki || '').trim();
             const end = (project.end_date || '').trim();
-            const showGuisFields = !this.isCailyBranchUser;
+            const showGuisFields = this.canViewEndDate;
             const endFilled = showGuisFields && this.hasChildProjectDateValue(end);
             const guisFilled = showGuisFields && this.hasChildProjectDateValue(guis);
 
@@ -5083,11 +5126,11 @@ createApp({
                         this.resetChildProjectForm();
                     });
                 } else {
-                    showMessage(response.data?.error || response.data?.message || '課題の作成に失敗しました。', true);
+                    showParentProjectError(response.data?.error || response.data?.message || '課題の作成に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error creating child project:', error);
-                showMessage('課題の作成に失敗しました。', true);
+                showParentProjectError('課題の作成に失敗しました。', error);
             } finally {
                 this.creatingChildProject = false;
             }
@@ -5749,7 +5792,7 @@ createApp({
                     if (response.data && response.data.errors) {
                         this.quotationValidationErrors = response.data.errors;
                     } else {
-                        showMessage(response.data?.message || 'エラーが発生しました', true);
+                        showParentProjectError(response.data?.message || 'エラーが発生しました', response && response.data);
                     }
                 }
             } catch (error) {
@@ -5757,7 +5800,7 @@ createApp({
                 if (error.response) {
                     console.error('Error response data:', error.response.data);
                 }
-                showMessage('エラーが発生しました', true);
+                showParentProjectError('エラーが発生しました', error);
             } finally {
                 this.creatingQuotation = false;
             }
@@ -5956,12 +5999,12 @@ createApp({
                     await this.loadQuotations();
                     showMessage('見積書を削除しました', false);
                 } else {
-                    showMessage(response.data?.message || 'エラーが発生しました', true);
+                    showParentProjectError(response.data?.message || 'エラーが発生しました', response && response.data);
                 }
                 }
             } catch (error) {
                 console.error('Error deleting quotation:', error);
-                showMessage('エラーが発生しました', true);
+                showParentProjectError('エラーが発生しました', error);
             }
         },
 
@@ -6117,6 +6160,42 @@ createApp({
                 return status === '発行済み' ? '発行済' : (fallback || '未発行');
             }
             return status;
+        },
+        normalizeBusinessDocumentStatusValue(status) {
+            if (status === '発行済み') return '発行済';
+            return status;
+        },
+        isBusinessDocumentReadyForCompletion(status) {
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            return normalized === '発行済' || normalized === '無償';
+        },
+        needsPaymentInfoBeforeComplete(project) {
+            const p = project || this.editingChildProject;
+            if (!p) return true;
+            return !this.isBusinessDocumentReadyForCompletion(p.estimate_status)
+                || !this.isBusinessDocumentReadyForCompletion(p.invoice_status);
+        },
+        getPaymentInfoBeforeCompleteMessage(project) {
+            const p = project || this.editingChildProject;
+            const missing = [];
+            if (!this.isBusinessDocumentReadyForCompletion(p && p.estimate_status)) {
+                missing.push(this.translateLabel('見積状況'));
+            }
+            if (!this.isBusinessDocumentReadyForCompletion(p && p.invoice_status)) {
+                missing.push(this.translateLabel('請求状況'));
+            }
+            const base = this.translateLabel('完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
+            return missing.length ? (base + '\n（' + missing.join(' / ') + '）') : base;
+        },
+        async confirmPaymentInfoBeforeComplete(project) {
+            if (!this.needsPaymentInfoBeforeComplete(project)) return true;
+            await Swal.fire({
+                icon: 'warning',
+                title: this.translateLabel('決済情報が未設定です'),
+                text: this.getPaymentInfoBeforeCompleteMessage(project),
+                confirmButtonText: this.translateLabel('OK')
+            });
+            return false;
         },
         findBusinessDocumentStatusOption(list, status) {
             const normalized = this.normalizeBusinessDocumentStatus(status, '');
@@ -6338,27 +6417,22 @@ createApp({
         hasBdNumber(value) {
             return !!String(value || '').trim();
         },
-        normalizeBusinessDocumentStatusValue(status) {
-            if (status === '発行済み') return '発行済';
-            return status;
-        },
         isBdEstimateDocumentFieldsComplete() {
             if (!this.businessDocumentProject) return false;
-            this.syncBdDatesFromPickers();
+            // Do not call syncBdDatesFromPickers() here — used in template during render;
+            // mutating reactive state would hang the page (RESULT_CODE_HUNG).
             return this.hasBdDate('estimate_date')
                 && this.hasBdAmount(this.businessDocumentProject.amount)
                 && this.hasBdNumber(this.businessDocumentProject.estimate_number);
         },
         isBdInvoiceDocumentFieldsComplete() {
             if (!this.businessDocumentProject) return false;
-            this.syncBdDatesFromPickers();
             return this.hasBdDate('invoice_date')
                 && this.hasBdAmount(this.businessDocumentProject.invoice_amount)
                 && this.hasBdNumber(this.businessDocumentProject.invoice_number);
         },
         getBdEstimateDocumentFieldsValidationError() {
             if (!this.businessDocumentProject) return '';
-            this.syncBdDatesFromPickers();
             const missing = [];
             if (!this.hasBdDate('estimate_date')) missing.push('見積日');
             if (!this.hasBdAmount(this.businessDocumentProject.amount)) missing.push('見積金額');
@@ -6368,7 +6442,6 @@ createApp({
         },
         getBdInvoiceDocumentFieldsValidationError() {
             if (!this.businessDocumentProject) return '';
-            this.syncBdDatesFromPickers();
             const missing = [];
             if (!this.hasBdDate('invoice_date')) missing.push('請求日');
             if (!this.hasBdAmount(this.businessDocumentProject.invoice_amount)) missing.push('請求金額');
@@ -6630,6 +6703,9 @@ createApp({
                 return;
             }
             this.businessDocumentProject.estimate_status = normalized;
+            if (normalized === '無償') {
+                this.businessDocumentProject.amount = 0;
+            }
             this.businessDocumentError = '';
             this.scheduleBdUpdate();
             this.hideBdStatusDropdown('#bdEstimateStatusDropdown');
@@ -6648,6 +6724,9 @@ createApp({
                 return;
             }
             this.businessDocumentProject.invoice_status = normalized;
+            if (normalized === '無償') {
+                this.businessDocumentProject.invoice_amount = 0;
+            }
             this.businessDocumentError = '';
             this.scheduleBdUpdate();
             this.hideBdStatusDropdown('#bdInvoiceStatusDropdown');
@@ -8609,11 +8688,11 @@ createApp({
                     // Close modal safely
                     this.safeCloseModal('editQuotationModal');
                 } else {
-                    showMessage(response.data?.message || '見積書の更新に失敗しました。', true);
+                    showParentProjectError(response.data?.message || '見積書の更新に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error updating quotation:', error);
-                showMessage('見積書の更新中にエラーが発生しました。', true);
+                showParentProjectError('見積書の更新中にエラーが発生しました。', error);
             } finally {
                 this.updatingQuotation = false;
             }
@@ -9271,11 +9350,11 @@ createApp({
                         this.initContactSelect2();
                     });
                 } else {
-                    showMessage(response.data.message_code || '顧客の保存に失敗しました。', true);
+                    showParentProjectError(response.data.message_code || '顧客の保存に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error saving customer:', error);
-                showMessage('顧客の保存に失敗しました。', true);
+                showParentProjectError('顧客の保存に失敗しました。', error);
             }
         },
 
@@ -9586,11 +9665,11 @@ createApp({
                     $('#customerInfoModal').modal('hide');
                     this.selectedCustomer = null;
                 } else {
-                    showMessage(response.data.message_code, true);
+                    showParentProjectError(response.data.message_code || '顧客情報の更新に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error updating customer:', error);
-                showMessage('顧客情報の更新に失敗しました。', true);
+                showParentProjectError('顧客情報の更新に失敗しました。', error);
             } finally {
                 this.updatingCustomer = false;
             }
@@ -9632,8 +9711,9 @@ createApp({
         getManagerInitials(managerString) {
             if (!managerString) return '?';
             const parts = managerString.split(':');
+            const userid = parts[0] || '';
             const name = parts[1] || parts[0] || '';
-            return this.getInitials(name);
+            return this.getInitials(name, userid);
         },
         getRemainingManagers(managerIdString) {
             if (!managerIdString) return '';
@@ -9645,11 +9725,11 @@ createApp({
             }).filter(name => name).join(', ');
             return remaining;
         },
-        getInitials(name) {
-            if (!name) return '?';
+        getInitials(name, userid) {
+            if (!name && !userid) return '?';
             // Use the same logic as getAvatarName from main.js
             if (typeof getAvatarName === 'function') {
-                return getAvatarName(name);
+                return getAvatarName(name || '', { userid: userid || '' });
             }
             // Fallback if getAvatarName is not available
             try {
@@ -9751,19 +9831,11 @@ createApp({
                     this.closeNoteModal();
                     await this.loadNotes();
                 } else {
-                    if (typeof showMessage === 'function') {
-                        showMessage(response.data?.error || 'メモの保存に失敗しました', true);
-                    } else {
-                        alert(response.data?.error || 'メモの保存に失敗しました');
-                    }
+                    showParentProjectError(response.data?.error || 'メモの保存に失敗しました', response && response.data);
                 }
             } catch (error) {
                 console.error('Error saving note:', error);
-                if (typeof showMessage === 'function') {
-                    showMessage('メモの保存に失敗しました', true);
-                } else {
-                    alert('メモの保存に失敗しました');
-                }
+                showParentProjectError('メモの保存に失敗しました', error);
             }
         },
         async deleteNote(noteId) {

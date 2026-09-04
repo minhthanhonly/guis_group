@@ -801,15 +801,11 @@ createApp({
                     this.destroyEditParentWidgets();
                     await this.loadParentProjects();
                 } else {
-                    if (typeof showMessage === 'function') {
-                        showMessage((response.data && (response.data.error || response.data.message)) || '更新に失敗しました。', true);
-                    }
+                    showParentProjectError('更新に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error saving parent project:', error);
-                if (typeof showMessage === 'function') {
-                    showMessage('更新に失敗しました。', true);
-                }
+                showParentProjectError('更新に失敗しました。', error);
             } finally {
                 this.editParentProjectSaving = false;
             }
@@ -914,11 +910,11 @@ createApp({
                     this.closeNoteModal();
                     this.loadParentProjects();
                 } else {
-                    showMessage(response.data?.error || 'メモの保存に失敗しました', true);
+                    showParentProjectError(response.data?.error || 'メモの保存に失敗しました', response && response.data);
                 }
             } catch (error) {
                 console.error('Error saving parent project note:', error);
-                showMessage('メモの保存に失敗しました', true);
+                showParentProjectError('メモの保存に失敗しました', error);
             }
         },
         async deleteNoteFromList(project, noteId) {
@@ -931,11 +927,11 @@ createApp({
                     showMessage('メモが削除されました');
                     this.loadParentProjects();
                 } else {
-                    showMessage(response.data?.error || 'メモの削除に失敗しました', true);
+                    showParentProjectError(response.data?.error || 'メモの削除に失敗しました', response && response.data);
                 }
             } catch (error) {
                 console.error('Error deleting parent project note:', error);
-                showMessage('メモの削除に失敗しました', true);
+                showParentProjectError('メモの削除に失敗しました', error);
             }
         },
         translateI18n() {
@@ -1096,11 +1092,11 @@ createApp({
                     // Update the project's favorite status (convert boolean to number for consistency)
                     project.is_favorite = response.data.is_favorite ? 1 : 0;
                 } else {
-                    showMessage(response.data?.message || '操作に失敗しました。', true);
+                    showParentProjectError(response.data?.message || '操作に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error toggling favorite:', error);
-                showMessage('操作に失敗しました。', true);
+                showParentProjectError('操作に失敗しました。', error);
             }
         },
         async clearAllFavorites() {
@@ -1126,12 +1122,12 @@ createApp({
                         // Reload the list to refresh favorite status
                         this.loadParentProjects();
                     } else {
-                        showMessage(response.data?.message || '削除に失敗しました。', true);
+                        showParentProjectError(response.data?.message || '削除に失敗しました。', response && response.data);
                     }
                 }
             } catch (error) {
                 console.error('Error clearing all favorites:', error);
-                showMessage('削除に失敗しました。', true);
+                showParentProjectError('削除に失敗しました。', error);
             }
         },
         changePage(page) {
@@ -1178,8 +1174,9 @@ createApp({
         getManagerInitials(managerString) {
             if (!managerString) return '?';
             const parts = managerString.split(':');
+            const userid = parts[0] || '';
             const name = parts[1] || parts[0] || '';
-            return this.getInitials(name);
+            return this.getInitials(name, userid);
         },
         getRemainingManagers(managerIdString) {
             if (!managerIdString) return '';
@@ -1191,10 +1188,10 @@ createApp({
             }).filter(name => name).join(', ');
             return remaining;
         },
-        getInitials(name) {
-            if (!name) return '?';
+        getInitials(name, userid) {
+            if (!name && !userid) return '?';
             if (typeof getAvatarName === 'function') {
-                return getAvatarName(name);
+                return getAvatarName(name || '', { userid: userid || '' });
             }
             try {
                 const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
@@ -1298,11 +1295,11 @@ createApp({
                 if (response.data && response.data.status === 'success') {
                     child.is_favorite = response.data.is_favorite ? 1 : 0;
                 } else {
-                    showMessage(response.data?.message || '操作に失敗しました。', true);
+                    showParentProjectError(response.data?.message || '操作に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error toggling child project favorite:', error);
-                showMessage('操作に失敗しました。', true);
+                showParentProjectError('操作に失敗しました。', error);
             }
         },
         async deleteParentProject(projectOrId) {
@@ -1381,11 +1378,11 @@ createApp({
                         });
                         this.loadParentProjects();
                     } else {
-                    showMessage(response.data?.error || response.data?.message || '削除に失敗しました。', true);
+                    showParentProjectError(response.data?.error || response.data?.message || '削除に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error deleting parent project:', error);
-                showMessage('削除に失敗しました。', true);
+                showParentProjectError('削除に失敗しました。', error);
             } finally {
                 this.deletingParentProjectId = null;
             }

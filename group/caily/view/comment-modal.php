@@ -22,9 +22,9 @@
                     </li>
                     <li v-for="manager in managers" :key="'manager-' + manager.user_id" class="chat-contact-list-item">
                       <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0 avatar avatar-online">
-                          <img v-if="manager.user_image" :src="getAvatarSrc(manager)" alt="Avatar" class="rounded-circle" />
-                          <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(manager.user_name) }}</span>
+                        <div class="flex-shrink-0 avatar avatar-sm avatar-online">
+                          <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(manager) }}</span>
+                          <img v-if="manager.user_image" :src="getAvatarSrc(manager)" alt="Avatar" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()" />
                         </div>
                         <div class="chat-contact-info flex-grow-1 ms-3">
                           <div class="chat-contact-name text-truncate m-0 fw-normal">{{ manager.user_name }}</div>
@@ -36,9 +36,9 @@
                     </li>
                     <li v-for="member in members" :key="'member-' + member.user_id" class="chat-contact-list-item">
                       <div class="d-flex align-items-center">
-                        <div class="flex-shrink-0 avatar">
-                          <img v-if="member.user_image" :src="getAvatarSrc(member)" alt="Avatar" class="rounded-circle" />
-                          <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member.user_name) }}</span>
+                        <div class="flex-shrink-0 avatar avatar-sm">
+                          <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
+                          <img v-if="member.user_image" :src="getAvatarSrc(member)" alt="Avatar" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()" />
                         </div>
                         <div class="chat-contact-info flex-grow-1 ms-3">
                           <div class="chat-contact-name text-truncate m-0 fw-normal">{{ member.user_name }}</div>
@@ -75,8 +75,8 @@
                           :class="{'flex-row-reverse': String(comment.user_id) === String(USER_ID)}">
                           <div class="user-avatar flex-shrink-0">
                             <div class="avatar avatar-sm">
-                              <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
-                              <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
+                              <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment) }}</span>
+                              <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(comment); $event.target.remove()">
                             </div>
                           </div>
                           <div class="chat-message-wrapper flex-grow-1">

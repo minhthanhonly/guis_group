@@ -57,10 +57,8 @@ createApp({
             if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
                 return true;
             }
-            if (!this.permission) return false;
-            if (this.permission.can_manage_project) return true;
+            if (!this.permission || !this.permission.rule) return false;
             const rule = this.permission.rule;
-            if (!rule) return false;
             return rule.project_director_stat == 1
                 || rule.project_director_view == 1
                 || rule.project_director_edit == 1

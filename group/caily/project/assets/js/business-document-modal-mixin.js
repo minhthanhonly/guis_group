@@ -9,6 +9,7 @@
     var VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
     var PROJECT_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
     var PROJECT_DATETIME_JA_DISPLAY_FORMAT = 'M月D日 HH:mm';
+    var PROJECT_DATETIME_SERVER_FORMAT = 'YYYY-MM-DD HH:mm:ss';
     var PROJECT_DATETIME_FLATPICKR_FORMAT = 'Y/m/d H:i';
     var PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT = 'Y年n月j日 H:i';
     var PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT = 'Y/M/D H:mm';
@@ -27,14 +28,16 @@
         { value: '未発行', label: '未発行', color: 'secondary' },
         { value: '見積作成中', label: '見積作成中', color: 'primary' },
         { value: '発行済', label: '発行済', color: 'success' },
-        { value: '発行済み', label: '発行済', color: 'success' }
+        { value: '発行済み', label: '発行済', color: 'success' },
+        { value: '無償', label: '無償', color: 'info' }
     ];
 
     var BUSINESS_INVOICE_STATUSES = [
         { value: '未発行', label: '未発行', color: 'secondary' },
         { value: '請求準備', label: '請求準備', color: 'warning' },
         { value: '発行済', label: '発行済', color: 'success' },
-        { value: '発行済み', label: '発行済', color: 'success' }
+        { value: '発行済み', label: '発行済', color: 'success' },
+        { value: '無償', label: '無償', color: 'info' }
     ];
 
     var BUSINESS_PAYMENT_STATUSES = [
@@ -83,9 +86,12 @@
     };
 
     function isVietnameseLocale() {
+        if (typeof getAppLanguage === 'function') {
+            return String(getAppLanguage() || '').toLowerCase().startsWith('vi');
+        }
         return typeof i18next !== 'undefined'
-            && i18next.isInitialized
-            && String(i18next.language || '').startsWith('vi');
+            && !!i18next.language
+            && String(i18next.language || '').toLowerCase().startsWith('vi');
     }
 
     function getProjectDisplayTimezone() {
@@ -145,12 +151,17 @@
     function fromProjectDateTimeInputValue(value) {
         var raw = String(value || '').trim();
         if (!raw) return '';
+        if (isProjectServerDateTimeFormat(raw)) {
+            var parsedServer = parseProjectDateMomentServer(raw);
+            if (!parsedServer || !parsedServer.isValid()) return raw;
+            return parsedServer.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_SERVER_FORMAT);
+        }
         var parsed = parseProjectDateTimeInDisplayTz(raw);
         if (!parsed) return raw;
         if (moment.tz) {
-            return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_MOMENT_FORMAT);
+            return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_SERVER_FORMAT);
         }
-        return parsed.format(PROJECT_DATETIME_MOMENT_FORMAT);
+        return parsed.format(PROJECT_DATETIME_SERVER_FORMAT);
     }
 
     function formatProjectDateTimeForDisplay(value) {
@@ -410,9 +421,7 @@
                         server[key] = '';
                         return;
                     }
-                    server[key] = isProjectServerDateTimeFormat(raw)
-                        ? raw
-                        : (fromProjectDateTimeInputValue(raw) || raw);
+                    server[key] = fromProjectDateTimeInputValue(raw) || raw;
                 });
                 this._bdServerDates = server;
             },
@@ -434,9 +443,7 @@
                     this._bdServerDates[key] = '';
                     return;
                 }
-                this._bdServerDates[key] = isProjectServerDateTimeFormat(raw)
-                    ? raw
-                    : (fromProjectDateTimeInputValue(raw) || raw);
+                this._bdServerDates[key] = fromProjectDateTimeInputValue(raw) || raw;
             },
             getBdPickerDisplayValue: function(el) {
                 if (!el) return '';
@@ -484,23 +491,72 @@
                 }
                 return status;
             },
+            isBdDocumentReadyForCompletion: function(status) {
+                var normalized = this.normalizeBusinessDocumentStatusValue(status);
+                return normalized === '発行済' || normalized === '無償';
+            },
+            needsPaymentInfoBeforeComplete: function(project) {
+                var p = project || this.businessDocumentProject;
+                if (!p) return true;
+                return !this.isBdDocumentReadyForCompletion(p.estimate_status)
+                    || !this.isBdDocumentReadyForCompletion(p.invoice_status);
+            },
+            getPaymentInfoBeforeCompleteMessage: function(project) {
+                var p = project || this.businessDocumentProject;
+                var t = function(key) {
+                    if (typeof i18next !== 'undefined' && i18next.isInitialized && typeof i18next.t === 'function') {
+                        return i18next.t(key) || key;
+                    }
+                    if (typeof translateText === 'function') return translateText(key);
+                    return key;
+                };
+                var missing = [];
+                if (!this.isBdDocumentReadyForCompletion(p && p.estimate_status)) {
+                    missing.push(t('見積状況'));
+                }
+                if (!this.isBdDocumentReadyForCompletion(p && p.invoice_status)) {
+                    missing.push(t('請求状況'));
+                }
+                var base = t('完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
+                return missing.length ? (base + '\n（' + missing.join(' / ') + '）') : base;
+            },
+            confirmPaymentInfoBeforeComplete: async function(project) {
+                if (!this.needsPaymentInfoBeforeComplete(project)) return true;
+                var t = function(key) {
+                    if (typeof i18next !== 'undefined' && i18next.isInitialized && typeof i18next.t === 'function') {
+                        return i18next.t(key) || key;
+                    }
+                    if (typeof translateText === 'function') return translateText(key);
+                    return key;
+                };
+                if (typeof Swal === 'undefined') {
+                    alert(this.getPaymentInfoBeforeCompleteMessage(project));
+                    return false;
+                }
+                await Swal.fire({
+                    icon: 'warning',
+                    title: t('決済情報が未設定です'),
+                    text: this.getPaymentInfoBeforeCompleteMessage(project),
+                    confirmButtonText: t('OK')
+                });
+                return false;
+            },
             isBdEstimateDocumentFieldsComplete: function() {
                 if (!this.businessDocumentProject) return false;
-                this.syncBdDatesFromPickers();
+                // Do not call syncBdDatesFromPickers() here — this is used in the template
+                // during render; mutating reactive state would hang the page (RESULT_CODE_HUNG).
                 return this.hasBdDate('estimate_date')
                     && this.hasBdAmount(this.businessDocumentProject.amount)
                     && this.hasBdNumber(this.businessDocumentProject.estimate_number);
             },
             isBdInvoiceDocumentFieldsComplete: function() {
                 if (!this.businessDocumentProject) return false;
-                this.syncBdDatesFromPickers();
                 return this.hasBdDate('invoice_date')
                     && this.hasBdAmount(this.businessDocumentProject.invoice_amount)
                     && this.hasBdNumber(this.businessDocumentProject.invoice_number);
             },
             getBdEstimateDocumentFieldsValidationError: function() {
                 if (!this.businessDocumentProject) return '';
-                this.syncBdDatesFromPickers();
                 var missing = [];
                 if (!this.hasBdDate('estimate_date')) missing.push('見積日');
                 if (!this.hasBdAmount(this.businessDocumentProject.amount)) missing.push('見積金額');
@@ -510,7 +566,6 @@
             },
             getBdInvoiceDocumentFieldsValidationError: function() {
                 if (!this.businessDocumentProject) return '';
-                this.syncBdDatesFromPickers();
                 var missing = [];
                 if (!this.hasBdDate('invoice_date')) missing.push('請求日');
                 if (!this.hasBdAmount(this.businessDocumentProject.invoice_amount)) missing.push('請求金額');
@@ -786,6 +841,9 @@
                     return;
                 }
                 this.businessDocumentProject.estimate_status = normalized;
+                if (normalized === '無償') {
+                    this.businessDocumentProject.amount = 0;
+                }
                 this.businessDocumentError = '';
                 this.scheduleBdUpdate();
                 this.hideBdStatusDropdown('#bdEstimateStatusDropdown');
@@ -804,6 +862,9 @@
                     return;
                 }
                 this.businessDocumentProject.invoice_status = normalized;
+                if (normalized === '無償') {
+                    this.businessDocumentProject.invoice_amount = 0;
+                }
                 this.businessDocumentError = '';
                 this.scheduleBdUpdate();
                 this.hideBdStatusDropdown('#bdInvoiceStatusDropdown');

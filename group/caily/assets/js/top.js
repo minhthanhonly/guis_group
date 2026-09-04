@@ -7,6 +7,41 @@ function applyTodayI18n() {
     });
 }
 
+/** Welcome name: use user_ruby for en/ja when available. */
+function applyWelcomeNameI18n() {
+    var lang = '';
+    if (typeof getAppLanguage === 'function') {
+        lang = String(getAppLanguage() || '');
+    } else if (typeof i18next !== 'undefined' && i18next.language) {
+        lang = String(i18next.language);
+    } else {
+        try {
+            if (typeof templateName !== 'undefined') {
+                lang = localStorage.getItem('templateCustomizer-' + templateName + '--Lang') || 'en';
+            }
+        } catch (e) { /* ignore */ }
+        if (!lang) lang = 'en';
+    }
+    lang = lang.toLowerCase();
+    var useRuby = lang === 'en' || lang === 'ja' || lang.indexOf('en-') === 0 || lang.indexOf('ja-') === 0;
+    // Group 7: always show firstname (data-welcome-name), never ruby
+    var isCailyUser = (typeof USER_GROUP !== 'undefined') && String(USER_GROUP) === '7';
+    document.querySelectorAll('[data-welcome-name]').forEach(function(el) {
+        var name = el.getAttribute('data-welcome-name') || '';
+        var ruby = (el.getAttribute('data-welcome-ruby') || '').trim();
+        if (!isCailyUser && !ruby && typeof window.CAILY_AVATAR_RUBY !== 'undefined' && window.CAILY_AVATAR_RUBY && typeof USER_ID !== 'undefined') {
+            ruby = (window.CAILY_AVATAR_RUBY.byUserId && window.CAILY_AVATAR_RUBY.byUserId[USER_ID]) || '';
+            if (!ruby && typeof USER_NAME !== 'undefined') {
+                ruby = (window.CAILY_AVATAR_RUBY.byRealname && window.CAILY_AVATAR_RUBY.byRealname[USER_NAME]) || '';
+            }
+        }
+        if (!isCailyUser && !ruby && typeof USER_RUBY !== 'undefined' && USER_RUBY) {
+            ruby = String(USER_RUBY).trim();
+        }
+        el.textContent = (!isCailyUser && useRuby && ruby) ? ruby : name;
+    });
+}
+
 function applyTimecardI18n() {
     var lang = (typeof i18next !== 'undefined' && i18next.language) ? i18next.language : 'ja';
     document.querySelectorAll('[data-i18n-timecard-time]').forEach(function(el) {
@@ -249,13 +284,15 @@ onTopPageReady(function() {
         if (i18next.isInitialized) {
             applyTimecardI18n();
             applyTodayI18n();
+            applyWelcomeNameI18n();
         } else {
-            i18next.on('initialized', function() { applyTimecardI18n(); applyTodayI18n(); });
+            i18next.on('initialized', function() { applyTimecardI18n(); applyTodayI18n(); applyWelcomeNameI18n(); });
         }
-        i18next.on('languageChanged', function() { applyTimecardI18n(); applyTodayI18n(); });
+        i18next.on('languageChanged', function() { applyTimecardI18n(); applyTodayI18n(); applyWelcomeNameI18n(); });
     } else {
         applyTimecardI18n();
         applyTodayI18n();
+        applyWelcomeNameI18n();
     }
 
     const checkin = document.getElementById('checkin');

@@ -15,6 +15,10 @@ var projectTable;
         };
     }
     var isInitializingTable = false;
+    /** Bumped by destroyProjectTable() to abort in-flight async inits (prevents tn/3 reinit). */
+    var projectTableInitId = 0;
+    /** If init was requested while another init was running, retry after it finishes. */
+    var projectTableInitPending = false;
     var autoRefreshTimer = null;
     var projectTableSilentDraw = false;
     var businessDocumentModalOpen = false;
@@ -1218,8 +1222,9 @@ var projectTable;
         (customColDefs || []).forEach(col => {
             visibility[col.key] = true;
         });
-        if (isCailyBranchUser()) {
+        if (isCailyBranchUser() && !canViewEndDateColumn()) {
             visibility.end_date = false;
+            visibility.guis_nouki = false;
         }
         return visibility;
     }
@@ -1789,7 +1794,8 @@ var projectTable;
             quickEditCompletedStatusOption = $sel.find('option[value="completed"]').first().detach();
         }
         $sel.find('option[value="completed"]').remove();
-        if (!isCailyBranchUser()) {
+        var canSelectCompleted = !isCailyBranchUser() || canViewEndDateColumn();
+        if (canSelectCompleted) {
             if (quickEditCompletedStatusOption && quickEditCompletedStatusOption.length) {
                 var $inProgress = $sel.find('option[value="in_progress"]');
                 if ($inProgress.length) {
@@ -1841,13 +1847,71 @@ var projectTable;
     var BUSINESS_ESTIMATE_STATUSES = [
         { value: '未発行', label: '未発行', color: 'secondary' },
         { value: '見積作成中', label: '見積作成中', color: 'primary' },
-        { value: '発行済', label: '発行済', color: 'success' }
+        { value: '発行済', label: '発行済', color: 'success' },
+        { value: '無償', label: '無償', color: 'info' }
     ];
     var BUSINESS_INVOICE_STATUSES = [
         { value: '未発行', label: '未発行', color: 'secondary' },
         { value: '請求準備', label: '請求準備', color: 'warning' },
-        { value: '発行済', label: '発行済', color: 'success' }
+        { value: '発行済', label: '発行済', color: 'success' },
+        { value: '無償', label: '無償', color: 'info' }
     ];
+
+    function normalizeBusinessDocumentStatusValue(status) {
+        if (status === '発行済み') return '発行済';
+        return status || '未発行';
+    }
+
+    function isBusinessDocumentReadyForCompletion(status) {
+        var normalized = normalizeBusinessDocumentStatusValue(status);
+        return normalized === '発行済' || normalized === '無償';
+    }
+
+    function needsPaymentInfoBeforeComplete(project) {
+        if (!project) return true;
+        return !isBusinessDocumentReadyForCompletion(project.estimate_status)
+            || !isBusinessDocumentReadyForCompletion(project.invoice_status);
+    }
+
+    function translatePaymentCompleteText(key) {
+        if (typeof i18next !== 'undefined' && i18next.isInitialized && typeof i18next.t === 'function') {
+            return i18next.t(key) || key;
+        }
+        if (typeof translateText === 'function') {
+            return translateText(key);
+        }
+        return key;
+    }
+
+    function getPaymentInfoBeforeCompleteMessage(project) {
+        var missing = [];
+        if (!isBusinessDocumentReadyForCompletion(project && project.estimate_status)) {
+            missing.push(translatePaymentCompleteText('見積状況'));
+        }
+        if (!isBusinessDocumentReadyForCompletion(project && project.invoice_status)) {
+            missing.push(translatePaymentCompleteText('請求状況'));
+        }
+        var base = translatePaymentCompleteText('完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
+        return missing.length ? (base + '\n（' + missing.join(' / ') + '）') : base;
+    }
+
+    function confirmPaymentInfoBeforeComplete(project) {
+        if (!needsPaymentInfoBeforeComplete(project)) {
+            return Promise.resolve(true);
+        }
+        if (typeof Swal === 'undefined') {
+            alert(getPaymentInfoBeforeCompleteMessage(project));
+            return Promise.resolve(false);
+        }
+        return Swal.fire({
+            icon: 'warning',
+            title: translatePaymentCompleteText('決済情報が未設定です'),
+            text: getPaymentInfoBeforeCompleteMessage(project),
+            confirmButtonText: translatePaymentCompleteText('OK')
+        }).then(function() {
+            return false;
+        });
+    }
 
     function normalizeBusinessDocumentStatusFilterValue(value) {
         if (!value || typeof value !== 'string') return '';
@@ -1855,7 +1919,9 @@ var projectTable;
             'estimate:未発行': '未見積',
             'estimate:発行済': '見積済',
             'invoice:未発行': '未請求',
-            'invoice:発行済': '請求済'
+            'invoice:発行済': '請求済',
+            '見積無償': '無償',
+            '請求無償': '無償'
         };
         return legacyMap[value] || value;
     }
@@ -1880,23 +1946,30 @@ var projectTable;
             || p.project_director_edit == 1;
     }
 
+    /** CAILY branch hides end_date unless department permission project_view_end_date is granted. */
+    function canViewEndDateColumn() {
+        if (!isCailyBranchUser()) return true;
+        if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+        if (typeof window === 'undefined' || !window.app || !window.app.userPermissions) return false;
+        return window.app.userPermissions.project_view_end_date == 1;
+    }
+
     function filterColumnKeysForProjectDirector(keys) {
         if (canViewProjectDirectorColumns()) return keys || [];
         return (keys || []).filter(function(k) { return !isProjectDirectorColumn(k); });
     }
 
     function isColumnHiddenForCailyBranch(columnKey) {
-        return isCailyBranchUser() && !!CAILY_HIDDEN_COLUMN_KEYS[columnKey];
+        if (!isCailyBranchUser()) return false;
+        if (columnKey === 'end_date' || columnKey === 'guis_nouki') {
+            return !canViewEndDateColumn();
+        }
+        return !!CAILY_HIDDEN_COLUMN_KEYS[columnKey];
     }
 
     function filterColumnKeysForCailyBranch(keys) {
         if (!isCailyBranchUser()) return keys;
-        return (keys || []).filter(function(k) { return !CAILY_HIDDEN_COLUMN_KEYS[k]; });
-    }
-
-    function normalizeBusinessDocumentStatusValue(status) {
-        if (status === '発行済み') return '発行済';
-        return status || '未発行';
+        return (keys || []).filter(function(k) { return !isColumnHiddenForCailyBranch(k); });
     }
 
     function renderBusinessDocumentStatusBadge(status, statusList) {
@@ -1970,6 +2043,9 @@ var projectTable;
 
     function normalizeProjectListSortColumn(value) {
         var key = String(value || '').trim();
+        if ((key === 'guis_nouki' || key === 'end_date') && !canViewEndDateColumn()) {
+            return '';
+        }
         return PROJECT_LIST_SORT_FIELDS.indexOf(key) >= 0 ? key : '';
     }
 
@@ -1992,6 +2068,18 @@ var projectTable;
         $sel.find('option[data-director-only="1"]').each(function() {
             var $opt = $(this);
             if (showDirector) {
+                $opt.prop('disabled', false).show();
+            } else {
+                if ($sel.val() === $opt.attr('value')) {
+                    $sel.val('');
+                }
+                $opt.prop('disabled', true).hide();
+            }
+        });
+        var showEndDate = canViewEndDateColumn();
+        $sel.find('option[value="guis_nouki"], option[value="end_date"]').each(function() {
+            var $opt = $(this);
+            if (showEndDate) {
                 $opt.prop('disabled', false).show();
             } else {
                 if ($sel.val() === $opt.attr('value')) {
@@ -2650,8 +2738,9 @@ var projectTable;
         (customColDefs || []).forEach(col => {
             visibility[col.key] = col.defaultVisible !== undefined ? col.defaultVisible : false;
         });
-        if (isCailyBranchUser()) {
+        if (isCailyBranchUser() && !canViewEndDateColumn()) {
             visibility.end_date = false;
+            visibility.guis_nouki = false;
         }
         return visibility;
     }
@@ -3682,6 +3771,9 @@ var projectTable;
 
     // Destroy DataTable khi đổi department để refresh đúng custom fields và dropdown 列の表示
     function destroyProjectTable() {
+        // Invalidate any in-flight initializeProjectTable() awaits
+        projectTableInitId++;
+        projectTableInitPending = false;
         // Reset drag state and clear _plResizeBound so handles are re-attached on re-init
         unbindProjectListColumnResize();
         projectListResizeDepartmentId = null;
@@ -3721,6 +3813,7 @@ var projectTable;
         if ($tbl.length) {
             $tbl.off('.dt');
         }
+        // Node may already be gone after destroy; always rebuild clean DOM
         resetProjectTableDom();
         customFieldColumnDefinitions = [];
         $('#projectListColumnResetMount').empty();
@@ -3733,6 +3826,10 @@ var projectTable;
         }
     }
 
+    function isProjectTableInitStillValid(initId) {
+        return initId === projectTableInitId;
+    }
+
     // Function to initialize DataTable
     async function initializeProjectTable() {
         // Check if DataTable is already initialized (đổi department thì gọi destroyProjectTable trước)
@@ -3743,7 +3840,7 @@ var projectTable;
         
         // Check if already initializing to avoid race condition
         if (isInitializingTable) {
-            console.log('DataTable initialization already in progress');
+            projectTableInitPending = true;
             return;
         }
         
@@ -3755,6 +3852,7 @@ var projectTable;
         }
         
         // Set flag to prevent multiple initializations
+        var initId = projectTableInitId;
         isInitializingTable = true;
         try {
         // Ensure DataTables processing indicator is centered in the window (not only inside table)
@@ -3778,6 +3876,7 @@ var projectTable;
 
         // Load team map (id -> name) for display in table (badge, tooltip, ...)
         await loadTeamMap();
+        if (!isProjectTableInitStillValid(initId)) return;
         
         // Khôi phục filter từ localStorage trước khi load projectTable
         loadFiltersFromLocalStorage();
@@ -3792,6 +3891,7 @@ var projectTable;
         var customColumnConfigs = [];
         try {
             var cfRes = await axios.get('/api/index.php?model=department&method=getCustomFields');
+            if (!isProjectTableInitStillValid(initId)) return;
             var sets = cfRes.data || [];
             var depId = app.selectedDepartment && app.selectedDepartment.id;
             var mergedFields = [];
@@ -4190,14 +4290,7 @@ var projectTable;
                         const maxAvatars = 1;
                         members.slice(0, maxAvatars).forEach(member => {
                             const [userId, realname, userImage] = member.split(':');
-                            html += `<div class="avatar me-1" data-bs-toggle="tooltip" title="${realname || userId}">
-                                <img src="/assets/upload/avatar/${userImage ?? 'no-image.png'}" alt="${realname || userId}" 
-                                    class="rounded-circle  pull-up" width="32" height="32" 
-                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
-                                <span class="avatar-initial rounded-circle bg-label-primary pull-up" style="display:none;">
-                                    ${getInitials(realname || userId)}
-                                </span>
-                            </div>`;
+                            html += renderListAvatarHtml(realname, userId, userImage);
                         });
 
                         if (members.length > maxAvatars) {
@@ -4249,14 +4342,7 @@ var projectTable;
                         const maxAvatars = 1;
                         members.slice(0, maxAvatars).forEach(member => {
                             const [userId, realname, userImage] = member.split(':');
-                            html += `<div class="avatar me-1" data-bs-toggle="tooltip" title="${realname || userId}">
-                                <img src="/assets/upload/avatar/${userImage ?? 'no-image.png'}" alt="${realname || userId}" 
-                                    class="rounded-circle pull-up" width="32" height="32" 
-                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
-                                <span class="avatar-initial rounded-circle bg-label-primary pull-up" style="display:none;">
-                                    ${getInitials(realname || userId)}
-                                </span>
-                            </div>`;
+                            html += renderListAvatarHtml(realname, userId, userImage);
                         });
 
                         if (members.length > maxAvatars) {
@@ -4736,18 +4822,50 @@ var projectTable;
                     data: 'name',
                     width: '100px',
                     render: function(data, type, row) {
-                        const company = String(row.effective_company_name || row.parent_company_name || '').trim();
-                        const branch = String(row.parent_branch_name || '').trim();
-                        const contact = String(row.effective_contact_name || row.customer_name || '').trim();
-                        const lines = [company, branch, contact].filter(Boolean);
-                        if (!lines.length) {
+                        var company = String(row.effective_company_name || '').trim();
+                        var branch = String(row.parent_branch_name || '').trim();
+                        var contact = String(row.effective_contact_name || '').trim();
+                        if (!contact && row.customer_name) {
+                            contact = String(row.customer_name).trim();
+                        }
+                        var customerId = parseInt(String(row.effective_customer_id || '').split(',')[0], 10) || 0;
+                        if (!customerId) {
+                            // Fall back only within the same source (own vs parent)
+                            var hasOwn = row.has_own_customer == 1 || row.has_own_customer === '1';
+                            if (hasOwn) {
+                                customerId = parseInt(String(row.customer_id || '').split(',')[0], 10) || 0;
+                            } else {
+                                customerId = parseInt(String(row.parent_customer_id || row.customer_id || '').split(',')[0], 10) || 0;
+                                if (!company) company = String(row.parent_company_name || '').trim();
+                                if (!contact) contact = String(row.parent_contact_name || '').trim();
+                                if (!branch) branch = String(row.parent_project_branch_name || '').trim();
+                            }
+                        }
+                        if (!company && !branch && !contact) {
                             return '<span class="text-muted">-</span>';
                         }
-                        return `<div class="d-flex align-items-start justify-content-start flex-column mt-1">` +
-                            lines.map(function(line) {
-                                return `<small class="text-muted d-block">${escapeHtmlForNote(line)}</small>`;
-                            }).join('') +
-                            `</div>`;
+                        var parts = [];
+                        if (company) {
+                            parts.push('<small class="text-muted d-block">' + escapeHtmlForNote(company) + '</small>');
+                        }
+                        if (branch) {
+                            parts.push('<small class="text-muted d-block">' + escapeHtmlForNote(branch) + '</small>');
+                        }
+                        if (contact) {
+                            if (customerId > 0) {
+                                parts.push(
+                                    '<button type="button" class="js-open-customer-info btn btn-link btn-sm p-0 align-baseline text-decoration-underline"'
+                                    + ' data-customer-id="' + customerId + '"'
+                                    + ' title="' + escapeHtmlForNote('顧客情報') + '"'
+                                    + ' onclick="return window.openProjectListCustomerInfo && window.openProjectListCustomerInfo(this, event);">'
+                                    + escapeHtmlForNote(contact)
+                                    + '</button>'
+                                );
+                            } else {
+                                parts.push('<small class="text-muted d-block">' + escapeHtmlForNote(contact) + '</small>');
+                            }
+                        }
+                        return '<div class="d-flex align-items-start justify-content-start flex-column mt-1">' + parts.join('') + '</div>';
                     },
                     title: '<span data-i18n="顧客情報">顧客情報</span>'
                 },
@@ -4768,7 +4886,7 @@ var projectTable;
         var tailForTable = tailColumnConfigs;
         if (isCailyBranchUser()) {
             tailForTable = tailColumnConfigs.filter(function(c) {
-                if (c.name === 'end_date') return true;
+                if (c.name === 'end_date' || c.name === 'guis_nouki') return true;
                 return !CAILY_HIDDEN_COLUMN_KEYS[c.name];
             });
         }
@@ -4789,7 +4907,9 @@ var projectTable;
             var col = projectColumnRegistry[k];
             if (!col) return null;
             var out;
-            if (isCailyBranchUser() && k === 'end_date') {
+            if (isCailyBranchUser()
+                && (k === 'end_date' || k === 'guis_nouki')
+                && !canViewEndDateColumn()) {
                 out = Object.assign({}, col, { visible: false });
             } else {
                 out = Object.assign({}, col);
@@ -4800,6 +4920,29 @@ var projectTable;
             return out;
         }).filter(Boolean);
         var defaultOrder = getProjectListDefaultOrder(mergedColumnKeys);
+
+        if (!isProjectTableInitStillValid(initId)) return;
+        // Safety: never call DataTable() on an already-initialised node (tn/3)
+        if (!document.getElementById('projectTable')) {
+            resetProjectTableDom();
+        }
+        if ($.fn.DataTable.isDataTable('#projectTable')) {
+            try {
+                var existingDt = $('#projectTable').DataTable();
+                var existingSettings = existingDt.settings();
+                if (existingSettings && existingSettings[0] && existingSettings[0].jqXHR
+                    && typeof existingSettings[0].jqXHR.abort === 'function') {
+                    try { existingSettings[0].jqXHR.abort(); } catch (eAbort) {}
+                }
+                existingDt.destroy();
+            } catch (eDestroy) { /* ignore */ }
+            resetProjectTableDom();
+            projectTable = null;
+        }
+        if (!isProjectTableInitStillValid(initId)) return;
+        if (!document.getElementById('projectTable')) {
+            resetProjectTableDom();
+        }
 
         projectTable = $('#projectTable').DataTable({
             serverSide: true,
@@ -5024,16 +5167,30 @@ var projectTable;
         
         } catch (error) {
             console.error('Error initializing project table:', error);
-            if (app) {
+            if (app && isProjectTableInitStillValid(initId)) {
                 app.loading = false;
             }
         } finally {
-            // Reset flag after initialization (cũng chạy trong finally nếu có lỗi)
-            isInitializingTable = false;
-            // Tắt loading khi table đã init xong
-            if (app) {
-                app.loading = false;
+            // Only the active generation may clear the flag (avoids racing a newer init)
+            if (isProjectTableInitStillValid(initId)) {
+                isInitializingTable = false;
+                if (app) {
+                    app.loading = false;
+                }
+                if (projectTableInitPending) {
+                    projectTableInitPending = false;
+                    if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+                        setTimeout(function() {
+                            initializeProjectTable();
+                        }, 0);
+                    }
+                }
             }
+        }
+
+        // Aborted / superseded init: do not bind handlers on a stale generation
+        if (!isProjectTableInitStillValid(initId) || !projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+            return;
         }
 
         // Popup tasks khi hover cột ID hoặc name (di chuyển theo chuột, load task qua API)
@@ -5227,9 +5384,9 @@ var projectTable;
                             html += '<span class="text-nowrap" title="' + escapeHtmlForNote((t.title || '').toString().trim()) + '">' + escapeHtmlForNote(title) + '</span>';
                             html += '<span class="ms-auto d-flex align-items-center gap-1 flex-nowrap">';
                             if (assigneeDisplay.firstInitials) {
-                                html += '<span class="avatar-initial rounded-circle bg-label-primary" style="padding: 0 2px;height:18px;font-size:9px;line-height:18px;display:inline-flex;align-items:center;justify-content:center;" title="' + escapeHtmlForNote(assigneeDisplay.firstTitle) + '">' + (assigneeDisplay.firstInitials) + '</span>';
+                                html += '<div class="avatar avatar-xs" data-bs-toggle="tooltip" title="' + escapeHtmlForNote(assigneeDisplay.firstTitle) + '"><span class="avatar-initial rounded-circle bg-label-primary">' + escapeHtmlForNote(assigneeDisplay.firstInitials) + '</span></div>';
                                 for (var r = 1; r <= assigneeDisplay.restCount; r++) {
-                                    html += '<span class="avatar-initial rounded-circle bg-label-secondary text-white" style="width:18px;height:18px;font-size:9px;line-height:18px;display:inline-flex;align-items:center;justify-content:center;" title="担当者' + r + '">+' + r + '</span>';
+                                    html += '<span class="avatar-initial rounded-circle bg-label-secondary text-white" title="担当者' + r + '">+' + r + '</span>';
                                 }
                             }
                             html += '<span class="text-muted text-nowrap" style="font-size:0.7rem;" title="' + escapeHtmlForNote(drawingLabel) + '">' + escapeHtmlForNote(drawingLabel) + ':' + escapeHtmlForNote(workloadDisplay) + '</span>';
@@ -5743,6 +5900,8 @@ var projectTable;
         let quickEditQuillInstance = null;
         let quickEditIsManagerOnly = false;
         let quickEditOriginalStatus = '';
+        let quickEditEstimateStatus = '未発行';
+        let quickEditInvoiceStatus = '未発行';
 
         function getQuickEditYoteiDraft() {
             return {
@@ -5907,6 +6066,8 @@ var projectTable;
                 $('#quickEditEndDate').val(toProjectDateTimeInputValue(p.end_date));
                 setQuickEditYoteiFromProject(p.yotei);
                 quickEditOriginalStatus = p.status || 'draft';
+                quickEditEstimateStatus = p.estimate_status || '未発行';
+                quickEditInvoiceStatus = p.invoice_status || '未発行';
                 syncQuickEditStatusOptions(quickEditOriginalStatus);
                 $('#quickEditStatus').val(quickEditOriginalStatus);
                 var orderTypeVal = typeof p.project_order_type === 'string'
@@ -6336,7 +6497,7 @@ var projectTable;
 
         $('#quickEditProjectSaveBtnHeader').off('click.quickedit').on('click.quickedit', function() { $('#quickEditProjectSaveBtn').trigger('click.quickedit'); });
 
-        $('#quickEditProjectSaveBtn').off('click.quickedit').on('click.quickedit', function() {
+        $('#quickEditProjectSaveBtn').off('click.quickedit').on('click.quickedit', async function() {
             const id = $('#quickEditProjectId').val();
             if (!id) {
                 if (typeof showMessage === 'function') showProjectListError(translateText('プロジェクトデータを読み込み中です。しばらくお待ちください。'));
@@ -6458,11 +6619,25 @@ var projectTable;
                 : null;
             formData.append('yotei', yoteiPayload ? JSON.stringify(yoteiPayload) : '');
             var quickEditStatus = $('#quickEditStatus').val() || 'draft';
-            if (isCailyBranchUser() && quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
+            if (isCailyBranchUser() && !canViewEndDateColumn()
+                && quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
                 if (typeof showMessage === 'function') {
                     showProjectListError(translateText('このステータスは選択できません。'));
                 }
+                $btn.prop('disabled', false);
+                $spinner.addClass('d-none');
                 return;
+            }
+            if (quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
+                var paymentOk = await confirmPaymentInfoBeforeComplete({
+                    estimate_status: quickEditEstimateStatus,
+                    invoice_status: quickEditInvoiceStatus
+                });
+                if (!paymentOk) {
+                    $btn.prop('disabled', false);
+                    $spinner.addClass('d-none');
+                    return;
+                }
             }
             formData.append('status', quickEditStatus);
             formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
@@ -6951,8 +7126,50 @@ var projectTable;
         
     }
     
+    // Open global customer modal from project list contact link (inline onclick + delegated)
+    window.openProjectListCustomerInfo = function(elOrId, evt) {
+        if (evt && typeof evt.preventDefault === 'function') {
+            evt.preventDefault();
+            evt.stopPropagation();
+        }
+        var customerId = 0;
+        if (elOrId && typeof elOrId === 'object' && elOrId.getAttribute) {
+            customerId = parseInt(String(elOrId.getAttribute('data-customer-id') || '').split(',')[0], 10) || 0;
+            } else {
+            customerId = parseInt(String(elOrId || '').split(',')[0], 10) || 0;
+        }
+        if (!customerId) {
+            if (typeof showMessage === 'function') {
+                showMessage('顧客情報が見つかりません。', true);
+            }
+            return false;
+        }
+        if (typeof window.openGlobalCustomerModal !== 'function') {
+            if (typeof showMessage === 'function') {
+                showMessage('顧客モーダルを開けません。ページを再読み込みしてください。', true);
+            }
+            return false;
+        }
+        Promise.resolve(window.openGlobalCustomerModal(customerId)).catch(function(err) {
+            console.error('openGlobalCustomerModal failed:', err);
+            if (typeof showMessage === 'function') {
+                showMessage('顧客情報の読み込みに失敗しました。', true);
+            }
+        });
+        return false;
+    };
+    
     // Setup auto-refresh timer once (independent of DataTable initialization)
     $(document).ready(function() {
+        // Backup: delegated click (DataTables scrollX may move rows outside #projectTable id)
+        $(document).off('click.projectListCustomerInfo').on(
+            'click.projectListCustomerInfo',
+            '#projectTableCard .js-open-customer-info, #projectTable_wrapper .js-open-customer-info, .js-open-customer-info',
+            function(e) {
+                return window.openProjectListCustomerInfo(this, e);
+            }
+        );
+
         initProjectFilterBoxCollapseState();
         syncQuickEditStatusOptions();
         var savedScrollOnLoad = getSavedProjectListScroll();
@@ -6993,6 +7210,31 @@ var projectTable;
     // Helper function to get initials from name
     function getInitials(name) {
         return getAvatarName(name);
+    }
+
+    /**
+     * Avatar HTML: unified via renderUserAvatarHtml (initials first).
+     */
+    function renderListAvatarHtml(realname, userId, userImage, opts) {
+        opts = opts || {};
+        if (typeof renderUserAvatarHtml === 'function') {
+            return renderUserAvatarHtml({
+                realname: realname,
+                userid: userId,
+                userImage: userImage,
+                size: opts.size != null ? opts.size : 'sm',
+                extraClass: opts.wrapClass ? String(opts.wrapClass).replace(/\bavatar\b/g, '').replace(/\bavata?r-(xs|sm|md|lg|xl)\b/g, '').trim() : (opts.extraClass || 'me-1'),
+                pullUp: opts.pullUp !== false,
+                tooltip: opts.tooltip !== false
+            });
+        }
+        // Fallback if main.js not loaded
+        var title = escapeHtmlForNote(realname || userId || '');
+        var initials = getInitials(realname || userId || '');
+        return '<div class="avatar avatar-sm me-1" data-bs-toggle="tooltip" title="' + title + '">'
+            + '<span class="avatar-initial rounded-circle bg-label-primary pull-up">'
+            + initials
+            + '</span></div>';
     }
 
     function decodeHtmlEntities(str) {
@@ -7255,9 +7497,20 @@ var projectTable;
             },
             visibleColumnOptions() {
                 if (!this.isCailyBranchUser) return this.availableColumns || [];
+                var self = this;
+                var canView = typeof canViewEndDateColumn === 'function'
+                    ? canViewEndDateColumn()
+                    : (self.userPermissions && self.userPermissions.project_view_end_date == 1);
                 return (this.availableColumns || []).filter(function(col) {
-                    return col.key !== 'guis_nouki' && col.key !== 'end_date';
+                    if (col.key === 'guis_nouki' || col.key === 'end_date') return canView;
+                    return true;
                 });
+            },
+            canViewEndDate() {
+                if (!this.isCailyBranchUser) return true;
+                if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+                if (typeof canViewEndDateColumn === 'function') return canViewEndDateColumn();
+                return !!(this.userPermissions && this.userPermissions.project_view_end_date == 1);
             },
             createUrl() {
                if(this.selectedDepartment) {
@@ -7268,7 +7521,12 @@ var projectTable;
             /** Options cho select 表示列: NOTE_DISPLAY_COLUMNS (giống detail) + custom fields, loại trùng tên khác suffix 状況 */
             noteDisplayColumnOptions() {
                 function normLabel(t) { return (t || '').replace(/状況$/, ''); }
-                const hiddenForCaily = this.isCailyBranchUser ? { guis_nouki: true, end_date: true } : {};
+                const canView = typeof canViewEndDateColumn === 'function'
+                    ? canViewEndDateColumn()
+                    : (this.userPermissions && this.userPermissions.project_view_end_date == 1);
+                const hiddenForCaily = this.isCailyBranchUser
+                    ? { guis_nouki: !canView, end_date: !canView }
+                    : {};
                 const hiddenForDirector = this.canViewProjectDirectorColumns()
                     ? {}
                     : (typeof PROJECT_DIRECTOR_COLUMN_KEYS !== 'undefined' ? PROJECT_DIRECTOR_COLUMN_KEYS : {});
@@ -8109,6 +8367,11 @@ var projectTable;
                 this.$nextTick(async () => {
                     try {
                         await this.getUserPermissions(department.id);
+                        refreshProjectListSortFieldOptions();
+                        if (typeof document !== 'undefined' && document.body) {
+                            document.body.classList.toggle('can-view-end-date', canViewEndDateColumn());
+                        }
+                        syncQuickEditStatusOptions();
                         await initializeProjectTable();
                         if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
                             reloadProjectTable(true);
@@ -8258,7 +8521,7 @@ var projectTable;
                 try {
                     // Ensure DataTable is initialized before reloading
                     if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
-                        initializeProjectTable();
+                        await initializeProjectTable();
                     } else {
                         reloadProjectTable(true);
                     }

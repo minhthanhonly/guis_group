@@ -1151,14 +1151,41 @@ function mountTodoApp() {
                 getUserAvatarSrc(user) {
                     if (!user || !user.user_image) return '';
                     const img = String(user.user_image).trim();
-                    if (!img || img === 'default.png') return '';
-                    return img.startsWith('http') || img.startsWith('/') ? img : `/upload/user/${img}`;
+                    if (!img || img === 'default.png' || img === 'no-image.png' || img === '1.png' || img === 'null' || img === 'undefined') {
+                        return '';
+                    }
+                    if (img.startsWith('http') || img.startsWith('/')) {
+                        return img;
+                    }
+                    return '/assets/upload/avatar/' + img;
                 },
 
-                getUserInitials(name) {
+                handleUserAvatarError(user) {
+                    if (!user) return;
+                    user.avatarError = true;
+                    user.avatarLoaded = false;
+                },
+
+                handleUserAvatarLoad(user) {
+                    if (!user) return;
+                    user.avatarLoaded = true;
+                },
+
+                showUserAvatarImage(user) {
+                    return !!(user && !user.avatarError && this.getUserAvatarSrc(user) && user.avatarLoaded);
+                },
+
+                showUserAvatarInitials(user) {
+                    return !user || user.avatarError || !this.getUserAvatarSrc(user) || !user.avatarLoaded;
+                },
+
+                getUserInitials(nameOrUser) {
                     if (typeof getAvatarName === 'function') {
-                        return getAvatarName(name);
+                        return getAvatarName(nameOrUser);
                     }
+                    const name = (nameOrUser && typeof nameOrUser === 'object')
+                        ? (nameOrUser.realname || nameOrUser.user_name || '')
+                        : nameOrUser;
                     if (!name) return '?';
                     const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
                     if (hasJapanese) {

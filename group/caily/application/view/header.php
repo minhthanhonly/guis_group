@@ -70,14 +70,28 @@
 
   <?php
 if(isset($_SESSION['userid'])) {
+    $avatarRubyMap = array('byUserId' => array(), 'byRealname' => array());
+    try {
+        if (!class_exists('ApplicationModel', false)) {
+            require_once DIR_MODEL.'applicationmodel.php';
+        }
+        $_avatarRubyModel = new ApplicationModel();
+        $avatarRubyMap = $_avatarRubyModel->getAvatarRubyMap();
+    } catch (Exception $e) {
+        $avatarRubyMap = array('byUserId' => array(), 'byRealname' => array());
+    } catch (Error $e) {
+        $avatarRubyMap = array('byUserId' => array(), 'byRealname' => array());
+    }
 ?>
 <script>
     const USER_AUTH_ID = '<?= isset($_SESSION['id']) ? $_SESSION['id'] : '' ?>';
     const USER_ID = '<?= isset($_SESSION['userid']) ? $_SESSION['userid'] : '' ?>';
-    const USER_NAME = '<?= isset($_SESSION['realname']) ? $_SESSION['realname'] : '' ?>';
+    const USER_NAME = <?= json_encode(isset($_SESSION['realname']) ? (string)$_SESSION['realname'] : '', JSON_UNESCAPED_UNICODE) ?>;
+    const USER_RUBY = <?= json_encode(isset($_SESSION['user_ruby']) ? (string)$_SESSION['user_ruby'] : '', JSON_UNESCAPED_UNICODE) ?>;
     const USER_IMAGE = '<?= isset($_SESSION['user_image']) ? $_SESSION['user_image'] : '' ?>';
     const USER_GROUP = '<?= isset($_SESSION['group']) ? $_SESSION['group'] : '' ?>';
     const USER_IS_SOUMU = <?= (!empty($_SESSION['is_soumu']) && (string)$_SESSION['is_soumu'] === '1') ? '1' : '0' ?>;
+    window.CAILY_AVATAR_RUBY = <?= json_encode($avatarRubyMap, JSON_UNESCAPED_UNICODE) ?>;
     <?php 
         echo 'const USER_ROLE = "'.$_SESSION['authority'].'";'; 
     ?>

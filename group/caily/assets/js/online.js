@@ -232,17 +232,43 @@ createApp({
             const full = (last + ' ' + first).trim();
             return full || m.userid || '-';
         },
+        avatarInitials(m) {
+            if (typeof getAvatarName === 'function') {
+                return getAvatarName({
+                    realname: this.displayName(m),
+                    userid: m && m.userid,
+                    user_ruby: m && m.user_ruby
+                });
+            }
+            const name = this.displayName(m);
+            return name ? String(name).substring(0, 2) : '?';
+        },
+        hasValidAvatar(m) {
+            if (typeof isValidAvatarFilename === 'function') {
+                return isValidAvatarFilename(m && m.user_image);
+            }
+            const img = m && m.user_image != null ? String(m.user_image).trim() : '';
+            return !!img && img !== '1.png' && img !== 'no-image.png' && img !== 'default.png';
+        },
         avatarUrl(m) {
+            if (typeof getAvatarSrcFromImage === 'function') {
+                return getAvatarSrcFromImage(m && m.user_image);
+            }
             const base = this.assetsBase();
             if (m && m.user_image) {
                 return base + 'upload/avatar/' + m.user_image;
             }
-            return base + 'img/avatars/1.png';
+            return '';
+        },
+        onAvatarLoad(e) {
+            if (!e || !e.target) return;
+            e.target.style.display = 'block';
+            const initials = e.target.previousElementSibling;
+            if (initials) initials.style.display = 'none';
         },
         onAvatarError(e) {
-            const fallback = this.assetsBase() + 'img/avatars/1.png';
-            if (e && e.target && e.target.src !== fallback) {
-                e.target.src = fallback;
+            if (e && e.target) {
+                e.target.remove();
             }
         },
         presenceOf(userid) {

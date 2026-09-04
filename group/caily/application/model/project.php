@@ -44,10 +44,10 @@ class Project extends ApplicationModel {
             'project_estimate_id' => array(), 
             'teams' => array(), 
             'amount' => array(), //edit, new, custom
-            'estimate_status' => array(), //未発行, 発行済み, 承認済み, 却下, 調整
+            'estimate_status' => array(), //未発行, 見積作成中, 発行済, 発行済み, 承認済み, 却下, 調整, 無償
             'estimate_date' => array(),
             'estimate_number' => array(),
-            'invoice_status' => array(), //未発行, 発行済み, 承認済み, 却下, 調整
+            'invoice_status' => array(), //未発行, 請求準備, 発行済, 発行済み, 承認済み, 却下, 調整, 無償
             'invoice_date' => array(),
             'invoice_amount' => array(),
             'invoice_number' => array(),
@@ -83,22 +83,41 @@ class Project extends ApplicationModel {
         return "LEFT JOIN " . DB_PREFIX . "user gu ON gu.userid = COALESCE(NULLIF(TRIM(p.guis_receiver), ''), NULLIF(TRIM(pp.guis_receiver), ''))";
     }
 
+    /**
+     * Prefer child project customer (pc) as a whole when p.customer_id resolves;
+     * otherwise fall back to parent customer (pp_c / denormalized pp fields).
+     * Avoids mixing child company with parent branch/contact.
+     */
     private function sqlEffectiveCompanyName() {
-        return "COALESCE(NULLIF(TRIM(pc.company_name), ''), NULLIF(TRIM(pp_c.company_name), ''), NULLIF(TRIM(pp.company_name), ''))";
+        return "CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.company_name), '')"
+            . " ELSE COALESCE(NULLIF(TRIM(pp_c.company_name), ''), NULLIF(TRIM(pp.company_name), '')) END";
     }
 
     private function sqlEffectiveBranchName() {
-        return "COALESCE(NULLIF(TRIM(pc.branch), ''), NULLIF(TRIM(pp_c.branch), ''), NULLIF(TRIM(pp.branch_name), ''))";
+        return "CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.branch), '')"
+            . " ELSE COALESCE(NULLIF(TRIM(pp_c.branch), ''), NULLIF(TRIM(pp.branch_name), '')) END";
     }
 
     private function sqlEffectiveContactName() {
-        return "COALESCE(NULLIF(TRIM(pc.name), ''), NULLIF(TRIM(pp_c.name), ''), NULLIF(TRIM(pp.contact_name), ''))";
+        return "CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.name), '')"
+            . " ELSE COALESCE(NULLIF(TRIM(pp_c.name), ''), NULLIF(TRIM(pp.contact_name), '')) END";
     }
 
     private function sqlEffectiveCustomerName() {
         $contact = $this->sqlEffectiveContactName();
-        $title = "COALESCE(NULLIF(TRIM(pc.title), ''), NULLIF(TRIM(pp_c.title), ''), '')";
-        return "TRIM(CONCAT({$contact}, ' ', {$title}))";
+        $title = "CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.title), '')"
+            . " ELSE NULLIF(TRIM(pp_c.title), '') END";
+        return "TRIM(CONCAT(COALESCE({$contact}, ''), ' ', COALESCE({$title}, '')))";
+    }
+
+    private function sqlEffectiveCustomerId() {
+        return "CASE WHEN pc.id IS NOT NULL THEN pc.id ELSE pp_c.id END";
+    }
+
+    /** 1 when child has its own customer_id different from parent. */
+    private function sqlHasOwnCustomer() {
+        return "CASE WHEN pc.id IS NOT NULL"
+            . " AND (pp_c.id IS NULL OR pc.id <> pp_c.id) THEN 1 ELSE 0 END";
     }
 
     private function appendTeamFilterWhere(array &$whereArr, $filterTeamRaw) {
@@ -469,6 +488,9 @@ class Project extends ApplicationModel {
                         $whereArr[] = "p.invoice_status = '請求準備'";
                     } elseif ($bdFilter === '請求済') {
                         $whereArr[] = "p.invoice_status IN ('発行済', '発行済み')";
+                    } elseif ($bdFilter === '無償' || $bdFilter === '見積無償' || $bdFilter === '請求無償') {
+                        // 見積 or 請求 is free-of-charge (legacy filter keys still accepted)
+                        $whereArr[] = "(p.estimate_status = '無償' OR p.invoice_status = '無償')";
                     }
                 }
             }
@@ -689,10 +711,13 @@ class Project extends ApplicationModel {
             %s as effective_company_name,
             %s as effective_contact_name,
             %s as parent_branch_name,
+            %s as effective_customer_id,
+            %s as has_own_customer,
+            pp.customer_id as parent_customer_id,
             pp.branch_name as parent_project_branch_name,
             NULLIF(TRIM(pc.branch), '') as project_branch_name,
             %s as customer_name,
-            COALESCE(pc.category_id, pp_c.category_id) as category_id,
+            CASE WHEN pc.id IS NOT NULL THEN pc.category_id ELSE pp_c.category_id END as category_id,
             pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number,
             pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2,
             gu.realname as parent_guis_receiver
@@ -706,6 +731,8 @@ class Project extends ApplicationModel {
             $this->sqlEffectiveCompanyName(),
             $this->sqlEffectiveContactName(),
             $this->sqlEffectiveBranchName(),
+            $this->sqlEffectiveCustomerId(),
+            $this->sqlHasOwnCustomer(),
             $this->sqlEffectiveCustomerName(),
             $where,
             $orderBy,
@@ -2895,7 +2922,7 @@ class Project extends ApplicationModel {
         }
         
         $query = sprintf(
-            "SELECT pm.*, u.realname as user_name, user_image, u.userid
+            "SELECT pm.*, u.realname as user_name, user_image, u.userid, u.user_ruby
             FROM " . DB_PREFIX . "project_members pm 
             LEFT JOIN " . DB_PREFIX . "user u ON pm.user_id = u.id 
             WHERE pm.project_id = %d %s 
@@ -3488,7 +3515,7 @@ class Project extends ApplicationModel {
         // If thread_id is null or 0, get all comments (for backward compatibility and search)
         
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name, u.user_image
+            "SELECT c.*, u.realname as user_name, u.user_image, u.userid, u.user_ruby
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE %s
@@ -3735,7 +3762,7 @@ class Project extends ApplicationModel {
         $offset = ($page - 1) * $per_page;
         
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name, u.user_image
+            "SELECT c.*, u.realname as user_name, u.user_image, u.userid, u.user_ruby
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid 
             WHERE c.thread_id = %d 
@@ -3773,7 +3800,7 @@ class Project extends ApplicationModel {
         
         // Search in both original and encoded formats
         $query = sprintf(
-            "SELECT c.*, u.realname as user_name, u.user_image, t.title as thread_title, t.id as thread_id
+            "SELECT c.*, u.realname as user_name, u.user_image, u.userid, u.user_ruby, t.title as thread_title, t.id as thread_id
             FROM " . DB_PREFIX . "comments c 
             LEFT JOIN " . DB_PREFIX . "user u ON c.user_id = u.userid
             LEFT JOIN " . DB_PREFIX . "comment_threads t ON c.thread_id = t.id
@@ -4187,7 +4214,7 @@ class Project extends ApplicationModel {
     }
 
     /**
-     * Business document view: project_director_stat / view / edit, or department manager.
+     * Business document view: 業務担当 統計/閲覧/編集 only (not project_manager).
      */
     public function canUserViewBusinessDocuments($project_id) {
         $project_id = intval($project_id);
@@ -4207,7 +4234,7 @@ class Project extends ApplicationModel {
             return false;
         }
         $row = $this->fetchOne(sprintf(
-            "SELECT project_manager, project_director, project_director_stat, project_director_view, project_director_edit
+            "SELECT project_director, project_director_stat, project_director_view, project_director_edit
             FROM %suser_department
             WHERE department_id = %d AND userid = '%s'",
             DB_PREFIX,
@@ -4217,9 +4244,6 @@ class Project extends ApplicationModel {
         if (!$row) {
             return false;
         }
-        if ((int)($row['project_manager'] ?? 0) === 1) {
-            return true;
-        }
         return (int)($row['project_director_stat'] ?? 0) === 1
             || (int)($row['project_director_view'] ?? 0) === 1
             || (int)($row['project_director_edit'] ?? 0) === 1
@@ -4227,7 +4251,7 @@ class Project extends ApplicationModel {
     }
 
     /**
-     * Business document edit: project_director_edit or department manager.
+     * Business document edit: 業務担当 編集 only (not project_manager).
      */
     public function canUserEditBusinessDocuments($project_id) {
         $project_id = intval($project_id);
@@ -4247,7 +4271,7 @@ class Project extends ApplicationModel {
             return false;
         }
         $row = $this->fetchOne(sprintf(
-            "SELECT project_manager, project_director_edit
+            "SELECT project_director_edit
             FROM %suser_department
             WHERE department_id = %d AND userid = '%s'",
             DB_PREFIX,
@@ -4256,9 +4280,6 @@ class Project extends ApplicationModel {
         ));
         if (!$row) {
             return false;
-        }
-        if ((int)($row['project_manager'] ?? 0) === 1) {
-            return true;
         }
         return (int)($row['project_director_edit'] ?? 0) === 1;
     }
@@ -5249,6 +5270,19 @@ class Project extends ApplicationModel {
         }
         if (isset($_POST['invoice_number'])) {
             $data['invoice_number'] = $_POST['invoice_number'];
+        }
+        // 無償: force clear related amounts (見積金額 / 請求金額)
+        $estimateStatus = isset($data['estimate_status'])
+            ? $data['estimate_status']
+            : (isset($old['estimate_status']) ? $old['estimate_status'] : '');
+        $invoiceStatus = isset($data['invoice_status'])
+            ? $data['invoice_status']
+            : (isset($old['invoice_status']) ? $old['invoice_status'] : '');
+        if ($estimateStatus === '無償') {
+            $data['amount'] = 0;
+        }
+        if ($invoiceStatus === '無償') {
+            $data['invoice_amount'] = 0;
         }
         if (isset($_POST['payment_status'])) {
             $data['payment_status'] = $_POST['payment_status'];

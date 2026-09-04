@@ -88,9 +88,9 @@ $view->heading('個人設定');
 									</div>
 								</div>
 								<div class="col-md-6 form-control-validation fv-plugins-icon-container">
-									<label for="user_ruby" class="form-label"><span data-i18n="かな">かな</span></label>
+									<label for="user_ruby" class="form-label"><span data-i18n="カタカナ">カタカナ</span></label>
 									<input class="form-control" type="text" name="user_ruby" id="user_ruby"
-										value="<?=$hash['data']['user_ruby']?>">
+										value="<?=isset($hash['data']['user_ruby']) ? htmlspecialchars($hash['data']['user_ruby'], ENT_QUOTES, 'UTF-8') : ''?>" placeholder="ヤマダ タロウ">
 									<div
 										class="fv-plugins-message-container fv-plugins-message-container--enabled invalid-feedback">
 									</div>

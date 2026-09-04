@@ -641,11 +641,29 @@
                     href="javascript:void(0);"
                     data-bs-toggle="dropdown">
                     <div class="avatar" data-userid="<?=$_SESSION['userid']?>">
-                      <?php if($_SESSION['user_image'] != '') {
-                          echo '<img src="'.$root.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="rounded-circle" />';
-                        } else{
-                          echo '<img src="'.$root.'assets/img/avatars/1.png" alt class="rounded-circle" />';
-                       }?>
+                      <?php
+                        $navUserImage = trim((string)($_SESSION['user_image'] ?? ''));
+                        $navRealname = (string)($_SESSION['realname'] ?? '?');
+                        $navRuby = (string)($_SESSION['user_ruby'] ?? '');
+                        $navInitials = function_exists('mb_substr')
+                            ? mb_substr($navRealname, 0, 2, 'UTF-8')
+                            : substr($navRealname, 0, 2);
+                        $navInitialsEsc = htmlspecialchars($navInitials, ENT_QUOTES, 'UTF-8');
+                        $navHasImage = ($navUserImage !== '' && $navUserImage !== '1.png' && $navUserImage !== 'no-image.png' && $navUserImage !== 'default.png');
+                        $navNameAttr = htmlspecialchars($navRealname, ENT_QUOTES, 'UTF-8');
+                        $navRubyAttr = htmlspecialchars($navRuby, ENT_QUOTES, 'UTF-8');
+                        $navUserIdAttr = htmlspecialchars((string)($_SESSION['userid'] ?? ''), ENT_QUOTES, 'UTF-8');
+                      ?>
+                      <span class="avatar-initial rounded-circle bg-label-primary js-avatar-initial"
+                        data-avatar-name="<?=$navNameAttr?>"
+                        data-avatar-userid="<?=$navUserIdAttr?>"
+                        data-avatar-ruby="<?=$navRubyAttr?>"><?=$navInitialsEsc?></span>
+                      <?php if ($navHasImage) { ?>
+                      <img src="<?=$root?>assets/upload/avatar/<?=htmlspecialchars($navUserImage, ENT_QUOTES, 'UTF-8')?>" alt class="rounded-circle"
+                        style="display:none;"
+                        onload="this.style.display='block';var i=this.previousElementSibling;if(i)i.style.display='none';"
+                        onerror="this.remove();" />
+                      <?php } ?>
                     </div>
                   </a>
                   <ul class="dropdown-menu dropdown-menu-end">
@@ -654,12 +672,16 @@
                         <div class="d-flex align-items-center">
                           <div class="flex-shrink-0 me-2">
                             <div class="avatar" data-userid="<?=$_SESSION['userid']?>">
-                              <?php if($_SESSION['user_image'] != '') {
-                                echo '<img src="'.$root.'assets/upload/avatar/'.$_SESSION['user_image'].'" alt class="rounded-circle" />';
-                              } else{
-                                echo '<img src="'.$root.'assets/img/avatars/1.png" alt class="rounded-circle" />';
-                              }
-                              ?>
+                              <span class="avatar-initial rounded-circle bg-label-primary js-avatar-initial"
+                                data-avatar-name="<?=$navNameAttr?>"
+                                data-avatar-userid="<?=$navUserIdAttr?>"
+                                data-avatar-ruby="<?=$navRubyAttr?>"><?=$navInitialsEsc?></span>
+                              <?php if ($navHasImage) { ?>
+                              <img src="<?=$root?>assets/upload/avatar/<?=htmlspecialchars($navUserImage, ENT_QUOTES, 'UTF-8')?>" alt class="rounded-circle"
+                                style="display:none;"
+                                onload="this.style.display='block';var i=this.previousElementSibling;if(i)i.style.display='none';"
+                                onerror="this.remove();" />
+                              <?php } ?>
                             </div>
                           </div>
                           <div class="flex-grow-1">
@@ -822,9 +844,15 @@
                                         <td>
                                             <div class="d-flex align-items-center gap-1">
                                                 <template v-for="assignee in getTaskAssignees(task)" :key="'assignee-' + task.id + '-' + assignee.id">
-                                                    <span class="avatar" :title="assignee.realname">
-                                                        <img v-if="getUserAvatarSrc(assignee)" class="rounded-circle" :src="getUserAvatarSrc(assignee)" :alt="assignee.realname" width="24" height="24">
-                                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getUserInitials(assignee.realname) }}</span>
+                                                    <span class="avatar avatar-xs" :title="assignee.realname">
+                                                        <span v-if="showUserAvatarInitials(assignee)" class="avatar-initial rounded-circle bg-label-primary">{{ getUserInitials(assignee) }}</span>
+                                                        <img v-if="!assignee.avatarError && getUserAvatarSrc(assignee)"
+                                                            class="rounded-circle"
+                                                            :class="{ 'd-none': !assignee.avatarLoaded }"
+                                                            :src="getUserAvatarSrc(assignee)"
+                                                            :alt="assignee.realname"
+                                                            @load="handleUserAvatarLoad(assignee)"
+                                                            @error="handleUserAvatarError(assignee)">
                                                     </span>
                                                 </template>
                                                 <span v-if="getTaskAssignees(task).length === 0" class="text-muted small">—</span>
@@ -838,9 +866,15 @@
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center gap-1" v-if="getTaskCreator(task)">
-                                                <span class="avatar" :title="getTaskCreator(task).realname">
-                                                    <img v-if="getUserAvatarSrc(getTaskCreator(task))" class="rounded-circle" :src="getUserAvatarSrc(getTaskCreator(task))" :alt="getTaskCreator(task).realname" width="24" height="24">
-                                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getUserInitials(getTaskCreator(task).realname) }}</span>
+                                                <span class="avatar avatar-xs" :title="getTaskCreator(task).realname">
+                                                    <span v-if="showUserAvatarInitials(getTaskCreator(task))" class="avatar-initial rounded-circle bg-label-primary">{{ getUserInitials(getTaskCreator(task)) }}</span>
+                                                    <img v-if="!getTaskCreator(task).avatarError && getUserAvatarSrc(getTaskCreator(task))"
+                                                        class="rounded-circle"
+                                                        :class="{ 'd-none': !getTaskCreator(task).avatarLoaded }"
+                                                        :src="getUserAvatarSrc(getTaskCreator(task))"
+                                                        :alt="getTaskCreator(task).realname"
+                                                        @load="handleUserAvatarLoad(getTaskCreator(task))"
+                                                        @error="handleUserAvatarError(getTaskCreator(task))">
                                                 </span>
                                             </div>
                                             <span v-else class="text-muted small">—</span>
@@ -1222,15 +1256,6 @@
             .my-task-note {
               max-width: 7rem;
             }
-            .my-task-table .avatar-xs {
-              width: 24px;
-              height: 24px;
-            }
-            .my-task-table .avatar-xs .avatar-initial {
-              width: 24px;
-              height: 24px;
-              font-size: 0.65rem;
-            }
           </style>
 
           <span class="app-version" style="background-color: #ccc; padding: 5px; border-radius: 5px; position: fixed; bottom: 10px; left: 10px; font-size: 10px; color: #000; z-index: 2000;">v<?=APP_VERSION?></span>
@@ -1272,7 +1297,7 @@
                     <div class="btn-group btn-group-sm mb-2 command-palette-mode-group" role="group">
                       <button type="button" class="btn btn-outline-primary active" data-command-palette-mode="parent" data-i18n="建物を検索">建物を検索</button>
                       <button type="button" class="btn btn-outline-primary" data-command-palette-mode="project" data-i18n="案件を検索">案件を検索</button>
-                      <?php if (($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6'): ?>
+                      <?php if (!empty($_SESSION['show_project'])): ?>
                       <button type="button" class="btn btn-outline-primary" data-command-palette-mode="customer" data-i18n="顧客を検索">顧客を検索</button>
                       <?php endif; ?>
                     </div>
@@ -1289,7 +1314,7 @@
             </div>
           </div>
 
-          <?php if (($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6'): ?>
+          <?php if (!empty($_SESSION['show_project'])): ?>
           <?php require_once DIR_VIEW . 'customer-global-modal.php'; ?>
           <?php endif; ?>
 

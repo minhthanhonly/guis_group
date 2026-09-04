@@ -177,6 +177,9 @@ class ApplicationModel extends Model {
 		$_SESSION['lastname'] = $data['lastname'] ?? $_SESSION['lastname'];
 		$_SESSION['firstname'] = $data['firstname'] ?? $_SESSION['firstname'];
 		$_SESSION['realname'] = $data['realname'] ?? $_SESSION['realname'];
+		if (array_key_exists('user_ruby', $data)) {
+			$_SESSION['user_ruby'] = $data['user_ruby'];
+		}
 		if (array_key_exists('user_image', $data)) {
 			$_SESSION['user_image'] = $data['user_image'];
 		}
@@ -221,6 +224,7 @@ class ApplicationModel extends Model {
 			'project_edit',
 			'project_delete',
 			'project_comment',
+			'project_view_end_date',
 			'task_view',
 			'task_add',
 			'task_edit',
@@ -726,12 +730,43 @@ class ApplicationModel extends Model {
 		$this->connect();
 		$retrict_group = array(RETIRE_GROUP);
 		$query = sprintf(
-			"SELECT userid, realname, user_groupname, user_image, authority FROM %suser WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0') AND user_group NOT IN ('%s') ORDER BY id",
+			"SELECT userid, realname, user_groupname, user_image, authority, user_ruby FROM %suser WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0') AND user_group NOT IN ('%s') ORDER BY id",
 			DB_PREFIX,
 			implode("','", $retrict_group)
 		);
 		$data = $this->fetchAll($query);
 		return $data;
+	}
+
+	/**
+	 * Map userid/realname -> user_ruby for avatar initials (en/ja UI).
+	 */
+	function getAvatarRubyMap() {
+		$this->connect();
+		$query = sprintf(
+			"SELECT userid, realname, user_ruby FROM %suser
+			 WHERE user_ruby IS NOT NULL AND user_ruby != ''
+			   AND (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0')",
+			DB_PREFIX
+		);
+		$rows = $this->fetchAll($query);
+		$byUserId = array();
+		$byRealname = array();
+		if (is_array($rows)) {
+			foreach ($rows as $row) {
+				$ruby = isset($row['user_ruby']) ? trim((string)$row['user_ruby']) : '';
+				if ($ruby === '') {
+					continue;
+				}
+				if (!empty($row['userid'])) {
+					$byUserId[(string)$row['userid']] = $ruby;
+				}
+				if (!empty($row['realname'])) {
+					$byRealname[(string)$row['realname']] = $ruby;
+				}
+			}
+		}
+		return array('byUserId' => $byUserId, 'byRealname' => $byRealname);
 	}
 
 	function Log($data, $type = 'data') {

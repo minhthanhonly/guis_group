@@ -534,8 +534,41 @@ li.storageprevious {
 	z-index: 9999!important;
 }
 
-.avatar-initial{
+/* Unified user avatar (initials-first, size via theme classes) */
+.avatar {
+	flex-shrink: 0;
+	border-radius: 50%;
+}
+.avatar .avatar-initial,
+.avatar-initial {
 	font-size: 75% !important;
+	white-space: nowrap !important;
+	word-break: keep-all;
+	overflow: hidden;
+	text-overflow: clip;
+	line-height: 1;
+	text-transform: none;
+}
+.avatar .avatar-initial {
+	display: flex !important;
+	align-items: center;
+	justify-content: center;
+	padding: 0 2px;
+	box-sizing: border-box;
+	border-radius: 50%;
+}
+.avatar img.rounded-circle {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	border-radius: 50%;
+}
+/* Standalone +N / overflow badge (not inside .avatar wrapper) */
+span.avatar-initial:not(.avatar .avatar-initial) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 }
 .task-title{
 	box-sizing: border-box;

@@ -163,9 +163,9 @@ if($_SESSION['show_project'] == 0){
                                         <div class="d-flex align-items-center flex-wrap gap-1">
                                             <template v-if="task.assigned_to_ids && task.assigned_to_ids.length">
                                                 <template v-for="userId in task.assigned_to_ids.slice(0, 4)" :key="userId">
-                                                    <div class="avatar position-relative" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
-                                                        <img v-if="getAssigneeUser(userId) && !getAssigneeUser(userId).avatarError && getAvatarSrc(getAssigneeUser(userId))" class="rounded-circle" :src="getAvatarSrc(getAssigneeUser(userId))" :alt="getAssigneeUser(userId).realname" @error="handleAvatarError(getAssigneeUser(userId))" width="28" height="28">
-                                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getAssigneeUser(userId) ? getAssigneeUser(userId).realname : '') }}</span>
+                                                    <div class="avatar avatar-sm position-relative" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
+                                                        <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getAssigneeUser(userId) || '') }}</span>
+                                                        <img v-if="getAssigneeUser(userId) && !getAssigneeUser(userId).avatarError && getAvatarSrc(getAssigneeUser(userId))" class="rounded-circle" :src="getAvatarSrc(getAssigneeUser(userId))" :alt="getAssigneeUser(userId).realname" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(getAssigneeUser(userId)); $event.target.remove()">
                                                         <span v-if="isAcknowledged(task, userId)" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-check"></i></span>
                                                         <span v-else class="badge bg-secondary position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-clock"></i></span>
                                                     </div>
@@ -180,7 +180,7 @@ if($_SESSION['show_project'] == 0){
                                             <div class="d-flex align-items-center">
                                                 <!-- <div class="avatar me-1" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMember(task))">
                                                     <img v-if="shouldShowCreatorAvatar(getCreatorMember(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMember(task))" :alt="getCreatorTooltip(getCreatorMember(task))" @error="handleAvatarError(getCreatorMember(task))" width="28" height="28">
-                                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getCreatorMember(task).user_name) }}</span>
+                                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getCreatorMember(task)) }}</span>
                                                 </div> -->
                                                 <span class="small">{{ getCreatorMember(task).user_name || '—' }}</span>
                                             </div>

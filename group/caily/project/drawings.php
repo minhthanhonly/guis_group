@@ -2,8 +2,11 @@
 require_once('../application/loader.php');
 $view->heading('図面管理');
 
-// Get project ID from URL
+// Get project ID from URL (accept project_id or id)
 $project_id = isset($_GET['project_id']) ? intval($_GET['project_id']) : 0;
+if (!$project_id && isset($_GET['id'])) {
+    $project_id = intval($_GET['id']);
+}
 if (!$project_id) {
     header('Location: index.php');
     exit;
@@ -266,9 +269,9 @@ if (!$isAdministrator && !$projectModel->canUserViewBusinessDocuments($project_i
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <div class="avatar me-2" v-for="(userid, user_index) in (drawing.created_by || '').split(',')" :key="userid && userid.trim()" data-bs-toggle="tooltip" :title="getUserCreatedByFullNameText(drawing, user_index)">
-                                                    <img :src="getUserAvatar(userid.trim())" class="avatar-img rounded-circle" v-if="getUserAvatar(userid.trim()) && userid.trim()">
-                                                    <span class="avatar-initial rounded-circle bg-label-primary" v-else-if="userid.trim()!= ''">{{ getUserAvatarCreatedByText(drawing, user_index) }}</span>
+                                                <div class="avatar avatar-sm me-2" v-for="(userid, user_index) in (drawing.created_by || '').split(',')" :key="userid && userid.trim()" data-bs-toggle="tooltip" :title="getUserCreatedByFullNameText(drawing, user_index)">
+                                                    <span class="avatar-initial rounded-circle bg-label-primary" v-if="userid.trim()!= ''">{{ getUserAvatarCreatedByText(drawing, user_index) }}</span>
+                                                    <img :src="getUserAvatar(userid.trim())" class="rounded-circle" v-if="getUserAvatar(userid.trim()) && userid.trim()" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
                                                 </div>
                                             </div>
                                         </td>
@@ -413,9 +416,9 @@ if (!$isAdministrator && !$projectModel->canUserViewBusinessDocuments($project_i
                     <div class="modal-body">
                         <div class="d-flex flex-wrap">
                             <div v-for="member in projectMembers" :key="member.userid || member.user_id" class="m-2 text-center" style="cursor:pointer;">
-                                <div @click="toggleAssignee(member.userid || member.user_id)" :class="{'border border-primary': assigneeModal.selected.includes(member.userid || member.user_id)}" style="display:inline-block;border-radius:50%;padding:2px;">
-                                    <img v-if="!member.avatarError && getAvatarSrc(member)" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" width="40" height="40" @error="handleAvatarError(member)">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" style="width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(member.user_name) }}</span>
+                                <div @click="toggleAssignee(member.userid || member.user_id)" :class="{'border border-primary': assigneeModal.selected.includes(member.userid || member.user_id)}" class="avatar avatar-md" style="display:inline-block;padding:2px;">
+                                    <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
+                                    <img v-if="!member.avatarError && getAvatarSrc(member)" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(member); $event.target.remove()">
                                 </div>
                                 <div style="font-size:12px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ member.user_name }}</div>
                                 <input type="radio" class="form-check-input mt-1" name="assignee_radio" :checked="assigneeModal.selected.includes(member.userid || member.user_id)" @change="toggleAssignee(member.userid || member.user_id)">

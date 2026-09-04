@@ -169,7 +169,7 @@ if($_SESSION['show_project'] == 0){
                     :data-bs-original-title="member.user_name"
                     style="cursor:pointer;" @click="openMemberModal">
                     <img v-if="!member.avatarError && getAvatarSrc(member)" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" @error="handleAvatarError(member)" width="32" height="32">
-                    <span v-else class="avatar-initial rounded-circle bg-label-primary" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(member.user_name) }}</span>
+                    <span v-else class="avatar-initial rounded-circle bg-label-primary" style="width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(member) }}</span>
                 </div>
                 <button class="btn btn-sm btn-outline-secondary ms-2" @click="openMemberModal"><i class="bi bi-people"></i> 管理</button>
             </div>
@@ -314,9 +314,9 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap gap-2 py-2 pe-2 inline-assignee-picker">
                             <template v-if="getPrimaryAssigneeId(task)">
-                                <div class="avatar me-1" style="cursor: pointer;" data-bs-toggle="tooltip" :title="(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || getPrimaryAssigneeId(task))" @click="openAssigneeModal(task._inlineIndex)">
-                                    <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || '') }}</span>
+                                <div class="avatar avatar-sm me-1" style="cursor: pointer;" data-bs-toggle="tooltip" :title="(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || getPrimaryAssigneeId(task))" @click="openAssigneeModal(task._inlineIndex)">
+                                    <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) || task.assigned_to_name || '') }}</span>
+                                    <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))); $event.target.remove()">
                                 </div>
                             </template>
                             <template v-else>
@@ -333,9 +333,9 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-creator">
                         <div class="d-flex align-items-center flex-wrap py-2 pe-2">
                             <template v-if="getCreatorMemberForInlineTask(task)">
-                                <div class="avatar me-1" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">
-                                    <img v-if="shouldShowCreatorAvatar(getCreatorMemberForInlineTask(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMemberForInlineTask(task))" :alt="getCreatorTooltip(getCreatorMemberForInlineTask(task))" @error="handleAvatarError(getCreatorMemberForInlineTask(task))" width="28" height="28">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">{{ getInitials(getCreatorMemberForInlineTask(task).user_name) }}</span>
+                                <div class="avatar avatar-sm me-1" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">
+                                    <span class="avatar-initial rounded-circle bg-label-primary" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">{{ getInitials(getCreatorMemberForInlineTask(task)) }}</span>
+                                    <img v-if="shouldShowCreatorAvatar(getCreatorMemberForInlineTask(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMemberForInlineTask(task))" :alt="getCreatorTooltip(getCreatorMemberForInlineTask(task))" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(getCreatorMemberForInlineTask(task)); $event.target.remove()">
                                 </div>
                             </template>
                             <span v-else class="text-muted small">—</span>
@@ -455,9 +455,9 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap">
                             <template v-if="getPrimaryAssigneeId(task)">
-                                <div class="avatar me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.userid || task.assigned_to_userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, getPrimaryAssigneeId(task))">
-                                    <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" width="28" height="28">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, getPrimaryAssigneeId(task))">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || '') }}</span>
+                                <div class="avatar avatar-sm me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.userid || task.assigned_to_userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, getPrimaryAssigneeId(task))">
+                                    <span class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, getPrimaryAssigneeId(task))">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) || task.assigned_to_name || '') }}</span>
+                                    <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))); $event.target.remove()">
                                     <span v-if="isAcknowledged(task, getPrimaryAssigneeId(task))" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
                                         <i class="fa fa-check"></i>
                                     </span>
@@ -485,9 +485,9 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-creator">
                         <div class="d-flex align-items-center flex-wrap py-2 pe-2">
                             <template v-if="getCreatorMember(task)">
-                                <div class="avatar me-1" :data-userid="getCreatorMember(task).userid" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMember(task))">
-                                    <img v-if="shouldShowCreatorAvatar(getCreatorMember(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMember(task))" :alt="getCreatorTooltip(getCreatorMember(task))" @error="handleAvatarError(getCreatorMember(task))" width="28" height="28">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" :title="getCreatorTooltip(getCreatorMember(task))">{{ getInitials(getCreatorMember(task).user_name) }}</span>
+                                <div class="avatar avatar-sm me-1" :data-userid="getCreatorMember(task).userid" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMember(task))">
+                                    <span class="avatar-initial rounded-circle bg-label-primary" :title="getCreatorTooltip(getCreatorMember(task))">{{ getInitials(getCreatorMember(task)) }}</span>
+                                    <img v-if="shouldShowCreatorAvatar(getCreatorMember(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMember(task))" :alt="getCreatorTooltip(getCreatorMember(task))" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(getCreatorMember(task)); $event.target.remove()">
                                 </div>
                             </template>
                             <span v-else class="text-muted small">—</span>
@@ -646,9 +646,9 @@ if($_SESSION['show_project'] == 0){
                 <div class="modal-body">
                     <div class="d-flex flex-wrap">
                         <div v-for="member in projectMembers" :key="member.user_id" class="m-2 text-center" style="cursor:pointer;">
-                            <div @click="toggleAssignee(member.user_id)" :class="{'border border-primary': assigneeModal.selected.includes(member.user_id)}" style="display:inline-block;border-radius:50%;padding:2px;">
-                                <img v-if="!member.avatarError && getAvatarSrc(member)" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" width="40" height="40" @error="handleAvatarError(member)">
-                                <span v-else class="avatar-initial rounded-circle bg-label-primary" style="width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(member.user_name) }}</span>
+                            <div @click="toggleAssignee(member.user_id)" :class="{'border border-primary': assigneeModal.selected.includes(member.user_id)}" class="avatar avatar-md" style="display:inline-block;padding:2px;">
+                                <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
+                                <img v-if="!member.avatarError && getAvatarSrc(member)" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(member); $event.target.remove()">
                             </div>
                             <div style="font-size:12px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ member.user_name }}</div>
                             <input type="radio" class="form-check-input mt-1" name="task_assignee_radio" :checked="assigneeModal.selected.includes(member.user_id)" @change="toggleAssignee(member.user_id)">
@@ -866,14 +866,12 @@ if($_SESSION['show_project'] == 0){
                                                 <div class="d-flex">
                                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:160px;">
                                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                                            <span v-if="log.user_image">
-                                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
-                                                            </span>
-                                                            <span v-else>
-                                                                <span class="avatar-initial rounded-circle bg-label-primary d-inline-flex align-items-center justify-content-center" style="width:32px;height:32px;">
+                                                            <div class="avatar avatar-sm">
+                                                                <span class="avatar-initial rounded-circle bg-label-primary">
                                                                     {{ getInitials(log.username || log.realname) }}
                                                                 </span>
-                                                            </span>
+                                                                <img v-if="log.user_image" :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
+                                                            </div>
                                                         </div>
                                                         <div class="d-flex flex-column align-items-start justify-content-start ms-2">
                                                             <span class="fw-bold small">{{ log.username || log.realname }}</span>

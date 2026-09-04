@@ -33,6 +33,42 @@ class ParentProject extends ApplicationModel {
             'updated_at' => array('except' => array('search'))
         );
         $this->connect();
+        $this->ensureParentProjectsUtf8mb4();
+    }
+
+    /**
+     * Ensure parent_projects text columns accept 4-byte UTF-8 (rare kanji / emoji).
+     * Fixes: Incorrect string value ... for column 'project_name'
+     */
+    private function ensureParentProjectsUtf8mb4() {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        try {
+            $row = $this->fetchOne(sprintf(
+                "SELECT CHARACTER_SET_NAME AS cs, COLLATION_NAME AS cl
+                 FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                   AND TABLE_NAME = '%s'
+                   AND COLUMN_NAME = 'project_name'
+                 LIMIT 1",
+                $this->quote($this->table)
+            ));
+            if (!$row || empty($row['cs'])) {
+                return;
+            }
+            $cs = strtolower((string)$row['cs']);
+            if (strpos($cs, 'utf8mb4') === 0) {
+                return;
+            }
+            $this->query(
+                "ALTER TABLE `{$this->table}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            );
+        } catch (Exception $e) {
+            error_log('ensureParentProjectsUtf8mb4 failed: ' . $e->getMessage());
+        }
     }
 
     function list() {
@@ -306,37 +342,53 @@ class ParentProject extends ApplicationModel {
             ];
         }
 
-        // if (empty($data['desired_delivery_date'])) {
-        //     return [
-        //         'status' => 'error',
-        //         'message' => '希望納期は必須です'
-        //     ];
-        // }
+        try {
+            // Insert parent project data
+            $parent_project_id = $this->query_insert($data);
+            
+            if (!$parent_project_id) {
+                return [
+                    'status' => 'error',
+                    'error' => '建物の作成に失敗しました'
+                ];
+            }
+            
+            // Log the creation
+            $this->logParentProjectAction($parent_project_id, 'created', '建物作成', '', '');
 
-                // Insert parent project data
-        $parent_project_id = $this->query_insert($data);
-        
-        if (!$parent_project_id) {
+            return [
+                'status' => 'success',
+                'parent_project_id' => $parent_project_id,
+                'message' => '建物を作成しました'
+            ];
+        } catch (Exception $e) {
+            error_log('Parent project create error: ' . $e->getMessage());
+            $msg = $e->getMessage();
+            if (stripos($msg, 'Incorrect string value') !== false) {
+                // Retry once after forcing utf8mb4 (in case static cache skipped ALTER)
+                try {
+                    $this->query(
+                        "ALTER TABLE `{$this->table}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                    );
+                    $parent_project_id = $this->query_insert($data);
+                    if ($parent_project_id) {
+                        $this->logParentProjectAction($parent_project_id, 'created', '建物作成', '', '');
+                        return [
+                            'status' => 'success',
+                            'parent_project_id' => $parent_project_id,
+                            'message' => '建物を作成しました'
+                        ];
+                    }
+                } catch (Exception $e2) {
+                    error_log('Parent project create retry after utf8mb4 failed: ' . $e2->getMessage());
+                    $msg = $e2->getMessage();
+                }
+            }
             return [
                 'status' => 'error',
-                'message' => '建物の作成に失敗しました'
+                'error' => 'データベースエラー: ' . $msg
             ];
         }
-        
-        // Log the creation
-        $this->logParentProjectAction($parent_project_id, 'created', '建物作成', '', '');
-        
-        // Send notification to department managers if department is specified
-        // $department_id = isset($_POST['department_id']) ? intval($_POST['department_id']) : 0;
-        // if ($department_id > 0) {
-        //     $this->notifyParentProjectCreated($parent_project_id, $project_name, $department_id);
-        // }
-
-        return [
-            'status' => 'success',
-            'parent_project_id' => $parent_project_id,
-            'message' => '建物を作成しました'
-        ];
     }
 
     function update($params = null) {
@@ -399,7 +451,23 @@ class ParentProject extends ApplicationModel {
             }
         } catch (Exception $e) {
             error_log('Parent project update error: ' . $e->getMessage());
-            return ['status' => 'error', 'error' => 'データベースエラー: ' . $e->getMessage()];
+            $msg = $e->getMessage();
+            if (stripos($msg, 'Incorrect string value') !== false) {
+                try {
+                    $this->query(
+                        "ALTER TABLE `{$this->table}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+                    );
+                    $result = $this->query_update($data, ['id' => $id]);
+                    if ($result) {
+                        $this->logParentProjectAction($id, 'updated', '建物情報を変更');
+                        return ['status' => 'success', 'message' => '建物を更新しました'];
+                    }
+                } catch (Exception $e2) {
+                    error_log('Parent project update retry after utf8mb4 failed: ' . $e2->getMessage());
+                    $msg = $e2->getMessage();
+                }
+            }
+            return ['status' => 'error', 'error' => 'データベースエラー: ' . $msg];
         }
     }
 

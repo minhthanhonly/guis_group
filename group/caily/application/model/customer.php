@@ -467,6 +467,15 @@ class Customer extends ApplicationModel {
             'status' => 'error',
             'message_code' => 'error',
         );
+        try {
+            $appModel = new ApplicationModel();
+            if (!$appModel->findProjectManager()) {
+                throw new Exception('顧客情報を編集する権限がありません。');
+            }
+        } catch (Exception $e) {
+            $hash['message_code'] = $e->getMessage();
+            return $hash;
+        }
         $guis_department = '';
         if (isset($_POST['guis_department']) && is_array($_POST['guis_department'])) {
             $guis_department = implode(',', $_POST['guis_department']);
@@ -1107,9 +1116,6 @@ class Customer extends ApplicationModel {
      */
     function paletteSearch() {
         if (empty($_SESSION['show_project'])) {
-            return [];
-        }
-        if (isset($_SESSION['group']) && in_array($_SESSION['group'], ['6', '7'], true)) {
             return [];
         }
         $q = $this->getPaletteSearchQuery();

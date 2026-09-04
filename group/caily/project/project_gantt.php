@@ -221,10 +221,8 @@ if($_SESSION['show_project'] == 0){
                                     <option value="yotei" data-i18n="予定工程">予定工程</option>
                                     <option value="start_date" data-i18n="開始日">開始日</option>
                                     <option value="caily_nouki" data-i18n="CAILY納期">CAILY納期</option>
-                                    <?php if (!$isCailyBranchUser): ?>
-                                    <option value="guis_nouki" data-i18n="GUIS納期">GUIS納期</option>
-                                    <option value="end_date" data-i18n="期限日">期限日</option>
-                                    <?php endif; ?>
+                                    <option value="guis_nouki" data-end-date-perm="1" data-i18n="GUIS納期"<?php echo $isCailyBranchUser ? ' hidden' : ''; ?>>GUIS納期</option>
+                                    <option value="end_date" data-end-date-perm="1" data-i18n="期限日"<?php echo $isCailyBranchUser ? ' hidden' : ''; ?>>期限日</option>
                                     <option value="estimate_date" data-director-only="1" data-i18n="見積日">見積日</option>
                                     <option value="invoice_date" data-director-only="1" data-i18n="請求日">請求日</option>
                                 </select>
@@ -310,16 +308,14 @@ if($_SESSION['show_project'] == 0){
                       <input class="form-check-input" type="checkbox" id="useCailyEndDate" checked>
                       <label class="form-check-label small" for="useCailyEndDate">CAILY納期を表示</label>
                   </div>
-                  <?php if (!$isCailyBranchUser): ?>
-                  <div class="form-check ms-2">
+                  <div class="form-check ms-2" id="useGuisEndDateWrap" data-end-date-perm="1"<?php echo $isCailyBranchUser ? ' style="display:none"' : ''; ?>>
                       <input class="form-check-input" type="checkbox" id="useGuisEndDate" checked>
                       <label class="form-check-label small" for="useGuisEndDate">GUIS納期を表示</label>
                   </div>
-                  <div class="form-check ms-2">
+                  <div class="form-check ms-2" id="useEndDateWrap" data-end-date-perm="1"<?php echo $isCailyBranchUser ? ' style="display:none"' : ''; ?>>
                       <input class="form-check-input" type="checkbox" id="useEndDate" checked>
                       <label class="form-check-label small" for="useEndDate">期限日を表示</label>
                   </div>
-                  <?php endif; ?>
                   <div class="form-check ms-2">
                       <input class="form-check-input" type="checkbox" id="useShowCailyStruct" checked>
                       <label class="form-check-label small" for="useShowCailyStruct">構造データ送付 (CAILY)を表示</label>

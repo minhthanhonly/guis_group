@@ -507,22 +507,32 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                 var name = full['realname'];
                 var email = full['user_email'];
                 var image = full['user_image'];
-                var output;
-
-                if (image) {
-                // For Avatar image
-                output = '<img src="' + assetsPath + 'upload/avatar/' + image + '" alt="Avatar" class="rounded-circle">';
+                var userid = full['userid'] || '';
+                var avatarHtml;
+                if (typeof renderUserAvatarHtml === 'function') {
+                    avatarHtml = renderUserAvatarHtml({
+                        realname: name,
+                        userid: userid,
+                        userImage: image,
+                        user_ruby: full['user_ruby'] || '',
+                        size: 'sm',
+                        extraClass: 'me-4',
+                        pullUp: false,
+                        tooltip: false
+                    });
                 } else {
-                output = '<img src="' + assetsPath + 'img/avatars/1.png" alt="Avatar" class="rounded-circle">';
+                    var initials = (typeof getAvatarName === 'function') ? getAvatarName(name, { userid: userid, user_ruby: full['user_ruby'] || '' }) : (name || '?').substring(0, 2);
+                    avatarHtml =
+                        '<div class="avatar avatar-sm me-4" data-userid="' + String(userid).replace(/"/g, '&quot;') + '">' +
+                        '<span class="avatar-initial rounded-circle bg-label-primary">' + initials + '</span>' +
+                        '</div>';
                 }
 
                 // Creates full output for row
                 var row_output =
                 '<div class="d-flex justify-content-start align-items-center user-name">' +
                 '<div class="avatar-wrapper">' +
-                '<div class="avatar avatar-sm me-4">' +
-                output +
-                '</div>' +
+                avatarHtml +
                 '</div>' +
                 '<div class="d-flex flex-column">' +
                 '<a href="' +
@@ -808,6 +818,10 @@ document.addEventListener('DOMContentLoaded', async function (e) {
             const editLastnameAfterMarried = document.getElementById('edit-user-lastname-after-married');
             if (editLastnameAfterMarried) {
               editLastnameAfterMarried.value = userinfo.lastname_after_married != null ? userinfo.lastname_after_married : '';
+            }
+            const editUserRuby = document.getElementById('edit-user-ruby');
+            if (editUserRuby) {
+              editUserRuby.value = userinfo.user_ruby != null ? userinfo.user_ruby : '';
             }
             document.getElementById('edit-user-email').value = userinfo.user_email;
             document.getElementById('edit-user-contact').value = userinfo.user_phone;

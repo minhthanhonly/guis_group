@@ -90,7 +90,7 @@ class UserList {
     renderUsers(users) {
         this.userList.innerHTML = Object.values(users).map(user => `
             <div class="user-item">
-                <div class="user-avatar">${this.getInitials(user.realname)}</div>
+                <div class="user-avatar">${this.getInitials(user)}</div>
                 <div class="user-info">
                     <div class="user-name">${user.realname}</div>
                     <div class="user-status">
@@ -102,8 +102,15 @@ class UserList {
         `).join('');
     }
 
-    getInitials(name) {
-        return name
+    getInitials(nameOrUser) {
+        if (typeof getAvatarName === 'function') {
+            return getAvatarName(nameOrUser);
+        }
+        const name = (nameOrUser && typeof nameOrUser === 'object')
+            ? (nameOrUser.realname || nameOrUser.user_name || '')
+            : nameOrUser;
+        if (!name) return '?';
+        return String(name)
             .split(' ')
             .map(word => word[0])
             .join('')

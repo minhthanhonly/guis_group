@@ -52,6 +52,7 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
   window.ROOT = <?= json_encode($root) ?>;
   window.currentUserId = <?= json_encode($_SESSION['id'] ?? 0) ?>;
   window.currentUserName = <?= json_encode($_SESSION['userid'] ?? '') ?>;
+  window.IS_PROJECT_MANAGER = <?= !empty($_SESSION['isProjectManager']) ? 'true' : 'false' ?>;
   window.__APP_SHORTCUTS = {
     showProject: <?= json_encode(!empty($_SESSION['show_project'])) ?>,
     showExtended: <?= json_encode(($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6') ?>
@@ -69,7 +70,7 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <script src="<?=$root?>assets/js/task-timer.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/app-chat.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/command-palette.js?v=<?=$cv?>"></script>
-<?php if (!empty($_SESSION['show_project']) && ($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6'): ?>
+<?php if (!empty($_SESSION['show_project'])): ?>
 <script src="<?=$root?>assets/js/customer-global-modal.js?v=<?=$cv?>"></script>
 <?php endif; ?>
 <script src="<?=$root?>js/library/jquery-ui.min.js"></script>

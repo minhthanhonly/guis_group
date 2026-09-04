@@ -621,19 +621,19 @@ $view->heading('建物詳細');
                                         <div class="d-flex align-items-center" v-if="project.manager_id && project.manager_id.split('|').filter(m => m.trim() !== '').length > 0">
                                             <template v-for="(manager, index) in project.manager_id.split('|').filter(m => m.trim() !== '')" :key="manager">
                                                 <div v-if="index < 1" 
-                                                    class="avatar me-1"
+                                                    class="avatar avatar-sm me-1"
                                                     data-bs-toggle="tooltip"
                                                     :title="getManagerName(manager)">
-                                                    <img v-if="getManagerImage(manager)" 
-                                                        :src="'/assets/upload/avatar/' + getManagerImage(manager)" 
-                                                        alt="avatar" 
-                                                        class="rounded-circle pull-up" 
-                                                        width="24" 
-                                                        height="24"
-                                                        @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='inline-flex';">
                                                     <span class="avatar-initial rounded-circle bg-label-primary pull-up">
                                                         {{ getManagerInitials(manager) }}
                                                     </span>
+                                                    <img v-if="getManagerImage(manager)" 
+                                                        :src="'/assets/upload/avatar/' + getManagerImage(manager)" 
+                                                        alt="avatar" 
+                                                        class="rounded-circle pull-up"
+                                                        style="display:none;"
+                                                        @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';"
+                                                        @error="$event.target.remove()">
                                                 </div>
                                             </template>
                                             <span v-if="project.manager_id.split('|').filter(m => m.trim() !== '').length > 1" 
@@ -962,13 +962,11 @@ $view->heading('建物詳細');
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <span v-if="log.user_image">
-                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
-                                            </span>
-                                            <div class="avatar avatar-sm" v-else>
+                                            <div class="avatar avatar-sm">
                                                 <span class="avatar-initial rounded-circle bg-label-primary">
                                                     {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                                 </span>
+                                                <img v-if="log.user_image" :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
                                             </div>
                                         </div>
                                         <div class="d-flex flex-column align-items-start justify-content-center ms-2">
@@ -1077,13 +1075,11 @@ $view->heading('建物詳細');
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <span v-if="log.user_image">
-                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
-                                            </span>
-                                            <div class="avatar avatar-sm" v-else>
+                                            <div class="avatar avatar-sm">
                                                 <span class="avatar-initial rounded-circle bg-label-primary">
                                                     {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                                 </span>
+                                                <img v-if="log.user_image" :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
                                             </div>
                                         </div>
                                         <div class="d-flex flex-column align-items-start justify-content-center ms-2">
@@ -1285,13 +1281,11 @@ $view->heading('建物詳細');
                             <div class="d-flex">
                                 <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                     <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                        <span v-if="log.user_image">
-                                            <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
-                                        </span>
-                                        <div class="avatar avatar-sm" v-else>
+                                        <div class="avatar avatar-sm">
                                             <span class="avatar-initial rounded-circle bg-label-primary">
                                                 {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                             </span>
+                                            <img v-if="log.user_image" :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
                                         </div>
                                     </div>
                                     <div class="d-flex flex-column align-items-start justify-content-center ms-2">
@@ -1338,13 +1332,11 @@ $view->heading('建物詳細');
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <span v-if="log.user_image">
-                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
-                                            </span>
-                                            <div class="avatar avatar-sm" v-else>
+                                            <div class="avatar avatar-sm">
                                                 <span class="avatar-initial rounded-circle bg-label-primary">
                                                     {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                                 </span>
+                                                <img v-if="log.user_image" :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
                                             </div>
                                         </div>
                                         <div class="d-flex flex-column align-items-start justify-content-center ms-2">
@@ -1526,7 +1518,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4" v-if="!isCailyBranchUser">
+                            <div class="col-md-4" v-if="canViewEndDate">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span v-if="(newChildProject.guis_nouki || '').trim()" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.end_date"
@@ -1549,7 +1541,7 @@ $view->heading('建物詳細');
                                             {{ newChildProject.status ? getProjectStatusLabel(newChildProject.status) : '選択してください' }}
                                         </button>
                                         <ul class="dropdown-menu" style="width: 100%;">
-                                            <li v-for="status in projectStatuses" :key="status.value">
+                                            <li v-for="status in editableProjectStatuses" :key="status.value">
                                                 <a class="dropdown-item waves-effect" href="javascript:void(0);" 
                                                 @click="selectProjectStatus(status.value, false)">
                                                     {{ status.label }}
@@ -1609,7 +1601,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4" v-if="!isCailyBranchUser">
+                            <div class="col-md-4" v-if="canViewEndDate">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">GUIS納期 <span v-if="newChildProject.end_date && newChildProject.tantou === 'GUIS'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="newChildProject.guis_nouki" 
@@ -1872,7 +1864,7 @@ $view->heading('建物詳細');
                                             {{ getProjectStatusLabel(editingChildProject.status) }}
                                         </button>
                                         <ul class="dropdown-menu" style="width: 100%;">
-                                            <li v-for="status in projectStatuses" :key="status.value">
+                                            <li v-for="status in editableProjectStatuses" :key="status.value">
                                                 <a class="dropdown-item waves-effect" href="javascript:void(0);" 
                                                 @click="selectProjectStatus(status.value, true)">
                                                     {{ status.label }}
@@ -4218,15 +4210,7 @@ $view->footing();
         font-size: 0.7rem;
         padding: 0.15rem 0.35rem;
     }
-    #childProjectsTable .avatar img {
-        width: 24px;
-        height: 24px;
-    }
-    #childProjectsTable .avatar .avatar-initial {
-        width: 24px;
-        height: 24px;
-        font-size: 0.65rem;
-    }
+  
     #childProjectsTable .fa-star {
         font-size: 0.95rem;
     }
@@ -4400,4 +4384,5 @@ $view->footing();
 <script src="../assets/vendor/libs/quill/quill.js"></script>
 <script src="../assets/vendor/libs/apex-charts/apexcharts.js"></script>
 <script src="/project/assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

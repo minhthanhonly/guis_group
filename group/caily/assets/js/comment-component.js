@@ -210,9 +210,9 @@ window.CommentComponent = {
                     <div class="d-flex justify-content-between align-items-start">
                         <div class="d-flex flex-grow-1 position-relative" style="position: relative; padding-right: 50px;">
                             <div class="flex-shrink-0 me-3">
-                                <div class="avatar">
-                                    <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
+                                <div class="avatar avatar-sm">
+                                    <span v-if="comment.avatarError || !getAvatarSrc(comment)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment) }}</span>
+                                    <img v-if="!comment.avatarError && getAvatarSrc(comment)" class="rounded-circle" :class="{ 'd-none': comment.avatarError }" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)" @load="comment.avatarLoaded = true; $event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" style="display:none;">
                                 </div>
                             </div>
                             <div class="flex-grow-1">
@@ -273,8 +273,8 @@ window.CommentComponent = {
                 <div class="d-flex">
                     <div class="flex-shrink-0 me-3">
                         <div class="avatar avatar-sm">
-                            <img v-if="currentUser.user_image" :src="'/assets/upload/avatar/' + currentUser.user_image" :alt="currentUser.realname" class="rounded-circle">
-                            <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(currentUser.realname || 'User') }}</span>
+                            <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(currentUser) }}</span>
+                            <img v-if="currentUser.user_image" :src="'/assets/upload/avatar/' + currentUser.user_image" :alt="currentUser.realname" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
                         </div>
                     </div>
                     <div class="flex-grow-1">
@@ -347,9 +347,9 @@ window.CommentComponent = {
                         <div class="d-flex justify-content-between align-items-start">
                             <div class="d-flex flex-grow-1 position-relative" style="position: relative; padding-right: 50px;">
                                 <div class="flex-shrink-0 me-3">
-                                    <div class="avatar">
-                                        <img v-if="!comment.avatarError" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" @error="handleAvatarError(comment)">
-                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment.user_name) }}</span>
+                                    <div class="avatar avatar-sm">
+                                        <span v-if="comment.avatarError || !getAvatarSrc(comment)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(comment) }}</span>
+                                        <img v-if="!comment.avatarError && getAvatarSrc(comment)" class="rounded-circle" :src="getAvatarSrc(comment)" :alt="comment.user_name" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(comment); $event.target.remove()">
                                     </div>
                                 </div>
                                 <div class="flex-grow-1">
@@ -408,8 +408,8 @@ window.CommentComponent = {
                     <div class="d-flex">
                         <div class="flex-shrink-0 me-3">
                             <div class="avatar avatar-sm">
-                                <img v-if="currentUser.user_image" :src="'/assets/upload/avatar/' + currentUser.user_image" :alt="currentUser.realname" class="rounded-circle">
-                                <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(currentUser.realname || 'User') }}</span>
+                                <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(currentUser) }}</span>
+                                <img v-if="currentUser.user_image" :src="'/assets/upload/avatar/' + currentUser.user_image" :alt="currentUser.realname" class="rounded-circle" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
                             </div>
                         </div>
                         <div class="flex-grow-1">
@@ -1114,8 +1114,8 @@ window.CommentComponent = {
             user.avatarError = true;
         },
         
-        getInitials(name) {
-            return getAvatarName(name);
+        getInitials(nameOrUser) {
+            return getAvatarName(nameOrUser);
         },
         
         formatDateTime(datetime) {

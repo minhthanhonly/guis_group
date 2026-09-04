@@ -569,44 +569,47 @@ createApp({
         },
 
         getUserAvatar(userid) {
+            if (!userid) return '';
             const appChatContacts = document.getElementById('app-chat-contacts');
+            if (!appChatContacts) return '';
             const user = appChatContacts.querySelector(`[data-userid="${userid}"]`);
-            let avatar = '';
-            if (user) {
-                avatar = user.querySelector('img').src;
-                if(avatar.includes('/1.png')) {
-                    avatar = '';
-                }
+            if (!user) return '';
+            const img = user.querySelector('img');
+            if (!img || !img.src) return '';
+            let avatar = img.src;
+            if (avatar.includes('/1.png')) {
+                avatar = '';
             }
             return avatar;
         },
 
+        getNameFromCsv(csv, index) {
+            if (csv == null || csv === '') return '';
+            const parts = String(csv).split(',');
+            const name = parts[index];
+            return name != null ? String(name).trim() : '';
+        },
+
         getUserAvatarCreatedByText(drawing, index) {
-            const name = drawing.created_by_names.split(',')[index];
-            return this.getInitials(name);
+            return this.getInitials(this.getNameFromCsv(drawing?.created_by_names, index));
         },
         getUserCreatedByFullNameText(drawing, index) {
-            const name = drawing.created_by_names.split(',')[index];
-            return name;
+            return this.getNameFromCsv(drawing?.created_by_names, index);
         },
 
 
         getUserCheckerAvatarText(drawing, index) {
-            const name = drawing.checked_by_name.split(',')[index];
-            return this.getInitials(name);
+            return this.getInitials(this.getNameFromCsv(drawing?.checked_by_name, index));
         },
         getUserCheckerFullNameText(drawing, index) {
-            const name = drawing.checked_by_name.split(',')[index];
-            return name;
+            return this.getNameFromCsv(drawing?.checked_by_name, index);
         },
 
         getUserReviseByAvatarText(drawing, index) {
-            const name = drawing.revise_by_name.split(',')[index];
-            return this.getInitials(name);
+            return this.getInitials(this.getNameFromCsv(drawing?.revise_by_name, index));
         },
         getUserReviseByFullNameText(drawing, index) {
-            const name = drawing.revise_by_name.split(',')[index];
-            return name;
+            return this.getNameFromCsv(drawing?.revise_by_name, index);
         },
         
         // Drag and Drop handlers for modal
@@ -1545,8 +1548,16 @@ createApp({
             }
         },
         
-        getInitials(name) {
-            return getAvatarName(name);
+        getInitials(nameOrUser) {
+            if (typeof getAvatarName === 'function') {
+                return getAvatarName(nameOrUser) || '';
+            }
+            if (nameOrUser && typeof nameOrUser === 'object') {
+                const name = nameOrUser.realname || nameOrUser.user_name || nameOrUser.name || '';
+                return String(name).trim().charAt(0).toUpperCase();
+            }
+            const name = String(nameOrUser || '').trim();
+            return name ? name.charAt(0).toUpperCase() : '';
         },
 
         // Copy text to clipboard

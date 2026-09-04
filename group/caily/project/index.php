@@ -83,6 +83,7 @@ if($_SESSION['show_project'] == 0){
                         <option value="未請求" data-i18n="未請求">未請求</option>
                         <option value="請求準備" data-i18n="請求準備">請求準備</option>
                         <option value="請求済" data-i18n="請求済">請求済</option>
+                        <option value="無償" data-i18n="無償">無償</option>
                     </select>
                     </div>
                     <div class="col-md-3 col-6">
@@ -113,8 +114,8 @@ if($_SESSION['show_project'] == 0){
                         <option value="" data-i18n="すべて">すべて</option>
                         <option value="start_today" data-i18n="開始日=本日">開始日=本日</option>
                         <option value="caily_today" data-i18n="CAILY納期=本日">CAILY納期=本日</option>
-                        <option v-if="!isCailyBranchUser" value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
-                        <option v-if="!isCailyBranchUser" value="end_today" data-i18n="期限日=本日">期限日=本日</option>
+                        <option v-if="canViewEndDate" value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
+                        <option v-if="canViewEndDate" value="end_today" data-i18n="期限日=本日">期限日=本日</option>
                     </select>
                     </div>
                     
@@ -218,7 +219,7 @@ if($_SESSION['show_project'] == 0){
                             data-bs-toggle="offcanvas" data-bs-target="#offcanvasProjectFilterResetPrefs"
                             aria-controls="offcanvasProjectFilterResetPrefs" title="フィルター設定">
                         <i class="fa fa-sliders-h me-1"></i><span data-i18n="フィルター設定">フィルター設定</span>
-                    </button>
+                        </button>
                     <span id="projectFilterKeepOnResetTourTarget"></span>
                     <button type="button" class="btn btn-sm btn-success" id="projectExportExcelBtn" :disabled="!selectedDepartment || loading" @click="exportProjectListExcel" title="Excel出力">
                         <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
@@ -235,9 +236,9 @@ if($_SESSION['show_project'] == 0){
                         <i class="fa fa-trash me-1"></i><span data-i18n="お気に入りをすべて削除">お気に入りをすべて削除</span>
                     </button>
                 </div>
+                </div>
             </div>
         </div>
-    </div>
     </div>
     <div class="card" id="projectTableCard">
         <div class="card-body position-relative">
@@ -255,7 +256,7 @@ if($_SESSION['show_project'] == 0){
             <div id="activeFilters" class="mb-2"></div>
             <p class="small text-muted mb-2" id="projectTableScrollHint">
                 <span id="projectTableTourHintSpaceScroll">
-                    <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
+                <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
                 </span>
                 <span id="projectTableTourHintReorder" class="ms-4 d-inline-block">
                     <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="列見出しをドラッグして表示順を変更できます。">列見出しをドラッグして表示順を変更できます。</span>
@@ -435,7 +436,7 @@ if($_SESSION['show_project'] == 0){
                         <h5 class="modal-title mb-0" id="businessDocumentModalLabel">
                             <span data-i18n="決済情報">決済情報</span>
                             <span class="text-muted small ms-2">#{{ businessDocumentProjectId }} {{ businessDocumentProject.name }}</span>
-                        </h5>
+                    </h5>
                         <span v-if="businessDocumentSaveStatus === 'loading'" class="text-muted" title="保存中">
                             <i class="fa fa-spinner fa-spin"></i>
                         </span>
@@ -467,19 +468,19 @@ if($_SESSION['show_project'] == 0){
                             <label class="form-label">見積金額(税抜き) <span class="text-danger">*</span></label>
                             <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.amount"
                                    @input="scheduleBdUpdate" min="0" step="1">
-                        </div>
+                    </div>
                         <div class="col-md-6">
                             <label class="form-label text-muted">消費税（10%）</label>
                             <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(businessDocumentProject.amount)">
-                        </div>
+                            </div>
                         <div class="col-md-6">
                             <label class="form-label text-muted">税込合計</label>
                             <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(businessDocumentProject.amount)">
-                        </div>
+                            </div>
                         <div class="col-md-6">
                             <label class="form-label">見積番号 <span class="text-danger">*</span></label>
                             <input type="text" autocomplete="off" class="form-control" v-model="businessDocumentProject.estimate_number" @change="scheduleBdUpdate">
-                        </div>
+                            </div>
                         <div class="col-md-6">
                             <label class="form-label">見積状況</label>
                             <div class="btn-group d-block">
@@ -502,8 +503,8 @@ if($_SESSION['show_project'] == 0){
                             <div v-if="!isBdEstimateDocumentFieldsComplete()" class="form-text text-muted">
                                 発行済にするには見積日・見積金額・見積番号が必要です
                             </div>
-                        </div>
-                    </div>
+                                </div>
+                            </div>
 
                     <hr class="my-3">
 
@@ -514,31 +515,31 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label mb-0">請求日 <span class="text-danger">*</span></label>
                                 <button v-if="!hasBdDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
                                         @click="setBdDateToday('invoice_date')">今日</button>
-                            </div>
+                                    </div>
                             <input type="text" class="form-control" v-model="businessDocumentProject.invoice_date"
                                    id="bd_modal_invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                        </div>
+                                    </div>
                         <div class="col-md-6">
                             <div class="d-flex justify-content-between align-items-center mb-1">
                                 <label class="form-label mb-0">請求金額(税抜き) <span class="text-danger">*</span></label>
                                 <button v-if="!hasBdAmount(businessDocumentProject.invoice_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
                                         @click="copyBdEstimateAmountToInvoice">見積と同額</button>
-                            </div>
+                                </div>
                             <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.invoice_amount"
                                    @input="scheduleBdUpdate" min="0" step="1">
-                        </div>
+                            </div>
                         <div class="col-md-6">
                             <label class="form-label text-muted">消費税（10%）</label>
                             <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(businessDocumentProject.invoice_amount)">
-                        </div>
+                                    </div>
                         <div class="col-md-6">
                             <label class="form-label text-muted">税込合計</label>
                             <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(businessDocumentProject.invoice_amount)">
-                        </div>
+                                </div>
                         <div class="col-md-6">
                             <label class="form-label">請求番号 <span class="text-danger">*</span></label>
                             <input type="text" autocomplete="off" class="form-control" v-model="businessDocumentProject.invoice_number" @change="scheduleBdUpdate">
-                        </div>
+                            </div>
                         <div class="col-md-6">
                             <label class="form-label">請求状況</label>
                             <div class="btn-group d-block">
@@ -557,28 +558,28 @@ if($_SESSION['show_project'] == 0){
                                         </a>
                                     </li>
                                 </ul>
-                            </div>
+                                    </div>
                             <div v-if="!isBdInvoiceDocumentFieldsComplete()" class="form-text text-muted">
                                 発行済にするには請求日・請求金額・請求番号が必要です
+                                </div>
                             </div>
-                        </div>
-                    </div>
+                            </div>
 
                     <hr class="my-3">
 
                     <div class="mb-0">
                         <label class="form-label" data-i18n="決済備考">決済備考</label>
                         <textarea class="form-control" rows="3" v-model="businessDocumentProject.payment_note" @change="scheduleBdUpdate"></textarea>
-                    </div>
+                                </div>
 
                     <div v-if="businessDocumentError" class="alert alert-danger mt-3 mb-0">{{ businessDocumentError }}</div>
-                </div>
+                            </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" @click="closeBusinessDocumentModal">閉じる</button>
-                </div>
-            </div>
-        </div>
-    </div>
+                                </div>
+                            </div>
+                                </div>
+                            </div>
 
     <!-- Business Document History Modal -->
     <div class="modal fade" tabindex="-1" :class="{show: showBusinessDocumentLogModal}" style="display: block;" v-if="showBusinessDocumentLogModal">
@@ -587,26 +588,28 @@ if($_SESSION['show_project'] == 0){
                 <div class="modal-header">
                     <h5 class="modal-title">決済情報 履歴</h5>
                     <button type="button" class="btn-close" @click="closeBusinessDocumentLogModal"></button>
-                </div>
+                            </div>
                 <div class="modal-body p-0">
                     <ul class="list-group list-group-flush">
                         <li v-for="log in sortedBusinessDocumentLogs" :key="log.id" class="list-group-item">
                             <div class="d-flex">
                                 <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                     <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                        <span v-if="log.user_image">
-                                            <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
-                                        </span>
-                                        <div class="avatar avatar-sm" v-else>
+                                        <div class="avatar avatar-sm">
                                             <span class="avatar-initial rounded-circle bg-label-primary">
                                                 {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                             </span>
+                                            <img v-if="log.user_image"
+                                                :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle"
+                                                style="display:none;"
+                                                @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';"
+                                                @error="$event.target.remove()">
                                         </div>
                                     </div>
                                     <div class="d-flex flex-column align-items-start justify-content-center ms-2">
                                         <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>
                                         <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
-                                    </div>
+                        </div>
                                 </div>
                                 <div class="flex-grow-1 d-flex align-items-center">
                                     <span>
@@ -763,7 +766,7 @@ if($_SESSION['show_project'] == 0){
                             <h6 class="mb-1 text-truncate" :title="project.name">{{ project.name }}</h6>
                             <div class="small text-muted">
                                 <span class="me-2" :title="project.department_name">{{ project.department_name }}</span>
-                                <span v-if="!isCailyBranchUser && project.end_date" class="me-2" :title="'期限: ' + formatDate(project.end_date)">
+                                <span v-if="canViewEndDate && project.end_date" class="me-2" :title="'期限: ' + formatDate(project.end_date)">
                                     <i class="fa fa-calendar me-1"></i>{{ formatDate(project.end_date) }}
                                 </span>
                             </div>
@@ -970,6 +973,10 @@ if($_SESSION['show_project'] == 0){
 </div>
 
 <?php
+// Ensure customer modal markup exists before footer scripts (require_once is safe if layout already included it)
+if (!empty($_SESSION['show_project'])) {
+    require_once DIR_VIEW . 'customer-global-modal.php';
+}
 $view->footing();
 ?>
 
@@ -1493,7 +1500,7 @@ body.is-caily-branch-user #quickEditProjectForm #quickEditTantouWrap {
 body.is-caily-branch-user #quickEditProjectForm #quickEditTantouDisplayText {
     display: block !important;
 }
-body.is-caily-branch-user #quickEditStatus option[value="completed"] {
+body.is-caily-branch-user:not(.can-view-end-date) #quickEditStatus option[value="completed"] {
     display: none;
 }
 
@@ -1573,6 +1580,9 @@ if (window.IS_CAILY_BRANCH_USER) {
     document.body.classList.add('is-caily-branch-user');
 }
 </script>
+<?php if (!empty($_SESSION['show_project'])): ?>
+<script src="<?=ROOT?>assets/js/customer-global-modal.js?v=<?=CACHE_VERSION?>"></script>
+<?php endif; ?>
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/business-document-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

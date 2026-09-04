@@ -28,14 +28,17 @@
           <div class="col-md-12 d-flex align-items-center">
             <strong class="me-2">申請者:</strong>
             <span class="me-2">
-              <div class="avatar">
+              <div class="avatar avatar-sm">
+                <span class="avatar-initial rounded-circle bg-label-primary">
+                  {{ getAvatarName(request.realname) }}
+                </span>
                 <img v-if="request.user_image"
                      :src="'/assets/upload/avatar/' + request.user_image"
                      alt="avatar"
-                     class="rounded-circle">
-                <span v-else class="avatar-initial rounded-circle bg-label-primary">
-                  {{ getAvatarName(request.realname) }}
-                </span>
+                     class="rounded-circle"
+                     style="display:none;"
+                     @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';"
+                     @error="$event.target.remove()">
               </div>
             </span>
             <span class="fw-bold">{{ request.realname || request.user_id }}</span>
@@ -119,13 +122,16 @@
                 <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:160px;">
                   <div class="d-flex flex-column align-items-center justify-content-start" style="width:44px;">
                     <div class="avatar avatar-sm">
+                      <span class="avatar-initial rounded-circle bg-label-primary">
+                        {{ getAvatarName(c.realname || c.user_id) }}
+                      </span>
                       <img v-if="c.user_image"
                            :src="'/assets/upload/avatar/' + c.user_image"
                            alt="avatar"
-                           class="rounded-circle">
-                      <span v-else class="avatar-initial rounded-circle bg-label-primary">
-                        {{ getAvatarName(c.realname || c.user_id) }}
-                      </span>
+                           class="rounded-circle"
+                           style="display:none;"
+                           @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';"
+                           @error="$event.target.remove()">
                     </div>
                   </div>
                   <div class="d-flex flex-column align-items-start justify-content-center ms-2">
@@ -164,13 +170,16 @@
                   <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:160px;">
                     <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
                       <div class="avatar avatar-sm">
+                        <span class="avatar-initial rounded-circle bg-label-primary">
+                          {{ getAvatarName(h.realname || h.user) }}
+                        </span>
                         <img v-if="h.user_image"
                              :src="'/assets/upload/avatar/' + h.user_image"
                              alt="avatar"
-                             class="rounded-circle">
-                        <span v-else class="avatar-initial rounded-circle bg-label-primary">
-                          {{ getAvatarName(h.realname || h.user) }}
-                        </span>
+                             class="rounded-circle"
+                             style="display:none;"
+                             @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';"
+                             @error="$event.target.remove()">
                       </div>
                     </div>
                     <div class="d-flex flex-column align-items-start justify-content-center ms-2">
@@ -491,6 +500,9 @@ const app = createApp({
   },
   methods: {
     getAvatarName(name) {
+      if (typeof window.getAvatarName === 'function') {
+        return window.getAvatarName(name);
+      }
       if (!name) return '?';
       const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
       if (hasJapanese) return name.substring(0, 2);

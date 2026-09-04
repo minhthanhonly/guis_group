@@ -740,10 +740,13 @@ createApp({
         handleAvatarError(user) {
             if (user) user.avatarError = true;
         },
-        getInitials(name) {
-            if (typeof getAvatarName === 'function') return getAvatarName(name || '');
-            if (!name || !String(name).trim()) return '?';
-            return String(name).trim().split(/\s+/).map(s => s[0]).join('').toUpperCase().slice(0, 2);
+        getInitials(nameOrUser) {
+            if (typeof getAvatarName === 'function') return getAvatarName(nameOrUser || '');
+            const name = (nameOrUser && typeof nameOrUser === 'object')
+                ? (nameOrUser.realname || nameOrUser.user_name || '')
+                : (nameOrUser || '');
+            if (!name) return '?';
+            return String(name).substring(0, 2);
         },
         isAcknowledged(task, userId) {
             if (!task || !task.acknowledgements || userId == null || userId === '') return false;

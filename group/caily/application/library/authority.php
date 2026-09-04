@@ -139,7 +139,7 @@ class Authority
 				if ($postuserid != '' && count($error) <= 0) {
 					$connection = new Connection;
 					$query = sprintf(
-						"SELECT id,userid,password,firstname,lastname,realname,user_group,user_groupname,authority,user_image,show_project,is_soumu,updated FROM %suser WHERE userid = '%s'",
+						"SELECT id,userid,password,firstname,lastname,realname,user_ruby,user_group,user_groupname,authority,user_image,show_project,is_soumu,updated FROM %suser WHERE userid = '%s'",
 						DB_PREFIX,
 						$connection->quote($postuserid)
 					);
@@ -231,7 +231,7 @@ class Authority
 		$token = $_COOKIE['remember_me'];
 		$connection = new Connection;
 		$query = sprintf(
-			"SELECT id,userid,firstname,lastname,realname,user_group,user_groupname,authority,user_image,show_project,is_soumu,updated FROM %suser WHERE remember_token = '%s' LIMIT 1",
+			"SELECT id,userid,firstname,lastname,realname,user_ruby,user_group,user_groupname,authority,user_image,show_project,is_soumu,updated FROM %suser WHERE remember_token = '%s' LIMIT 1",
 			DB_PREFIX,
 			$connection->quote($token)
 		);
@@ -303,6 +303,7 @@ class Authority
 		$_SESSION['lastname'] = $data['lastname'];
 		$_SESSION['firstname'] = $data['firstname'];
 		$_SESSION['realname'] = $data['realname'];
+		$_SESSION['user_ruby'] = isset($data['user_ruby']) ? $data['user_ruby'] : '';
 		$_SESSION['group'] = $data['user_group'];
 		$_SESSION['authority'] = $data['authority'];
 		$_SESSION['user_image'] = $data['user_image'];

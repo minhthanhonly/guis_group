@@ -580,17 +580,32 @@ class MentionManager {
     }
     
     getUserAvatar(user) {
-        if (user.avatar && !user.avatarError) {
-            return `<img class="rounded-circle" src="${user.avatar}" alt="${user.user_name}" width="24" height="24">`;
-        } else {
-            const initials = this.getInitials(user.user_name);
-            return `<span class="avatar-initial rounded-circle bg-label-primary" style="width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;">${initials}</span>`;
+        if (typeof renderUserAvatarHtml === 'function') {
+            return renderUserAvatarHtml({
+                realname: user.user_name || user.realname || '',
+                userid: user.userid || user.user_id || '',
+                userImage: (user.avatar && !user.avatarError) ? user.avatar.replace(/^.*\/avatar\//, '') : (user.user_image || ''),
+                size: 'xs',
+                pullUp: false,
+                tooltip: false
+            });
         }
+        const initials = this.getInitials(user);
+        if (user.avatar && !user.avatarError) {
+            return `<div class="avatar avatar-xs"><span class="avatar-initial rounded-circle bg-label-primary">${initials}</span><img class="rounded-circle" src="${user.avatar}" alt="${user.user_name || ''}" style="display:none;" onload="this.style.display='block';var i=this.previousElementSibling;if(i)i.style.display='none';" onerror="this.remove();"></div>`;
+        }
+        return `<div class="avatar avatar-xs"><span class="avatar-initial rounded-circle bg-label-primary">${initials}</span></div>`;
     }
     
-    getInitials(name) {
+    getInitials(nameOrUser) {
+        if (typeof getAvatarName === 'function') {
+            return getAvatarName(nameOrUser);
+        }
+        const name = (nameOrUser && typeof nameOrUser === 'object')
+            ? (nameOrUser.user_name || nameOrUser.realname || '')
+            : nameOrUser;
         if (!name) return '?';
-        return name.split(' ').map(n => n.charAt(0)).join('').toUpperCase().substring(0, 2);
+        return String(name).split(' ').map(n => n.charAt(0)).join('').toUpperCase().substring(0, 2);
     }
     
     getRoleLabel(role) {

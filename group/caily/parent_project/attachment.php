@@ -777,4 +777,5 @@ const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js?v=<?=CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-attachment.js?v=<?=PROJECT_CACHE_VERSION?>"></script> 

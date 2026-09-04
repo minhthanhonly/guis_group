@@ -389,19 +389,19 @@ $view->heading('建物一覧');
                                             <div class="d-flex align-items-center" v-if="child.manager_id && child.manager_id.split('|').filter(m => m.trim() !== '').length > 0">
                                                 <template v-for="(manager, index) in child.manager_id.split('|').filter(m => m.trim() !== '')" :key="manager">
                                                     <div v-if="index < 1" 
-                                                        class="avatar me-1"
+                                                        class="avatar avatar-sm me-1"
                                                         data-bs-toggle="tooltip"
                                                         :title="getManagerName(manager)">
-                                                        <img v-if="getManagerImage(manager)" 
-                                                            :src="'/assets/upload/avatar/' + getManagerImage(manager)" 
-                                                            alt="avatar" 
-                                                            class="rounded-circle pull-up" 
-                                                            width="32" 
-                                                            height="32"
-                                                            @error="$event.target.style.display='none'; $event.target.nextElementSibling.style.display='inline-flex';">
                                                         <span class="avatar-initial rounded-circle bg-label-primary pull-up">
                                                             {{ getManagerInitials(manager) }}
                                                         </span>
+                                                        <img v-if="getManagerImage(manager)" 
+                                                            :src="'/assets/upload/avatar/' + getManagerImage(manager)" 
+                                                            alt="avatar" 
+                                                            class="rounded-circle pull-up"
+                                                            style="display:none;"
+                                                            @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';"
+                                                            @error="$event.target.remove()">
                                                     </div>
                                                 </template>
                                                 <span v-if="child.manager_id.split('|').filter(m => m.trim() !== '').length > 1" 
@@ -939,4 +939,5 @@ function showMessage(message, isError = false) {
 const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_SESSION['isProjectManager'] ? 'true' : 'false'; ?>;
 const IS_ADMIN = <?php echo json_encode(($_SESSION['authority'] ?? '') === 'administrator'); ?>;
 </script>
+<script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-index.js?v=<?=PROJECT_CACHE_VERSION?>"></script> 

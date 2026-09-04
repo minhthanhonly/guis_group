@@ -925,18 +925,176 @@ function appParse($level, $type, $data, $element) {
   $selected.innerHTML = $string;
 }
 
-function getAvatarName(name) {
+function getAppLanguage() {
+  try {
+    if (typeof i18next !== 'undefined' && i18next.language) {
+      return String(i18next.language);
+    }
+  } catch (e) { /* ignore */ }
+  try {
+    if (typeof templateName !== 'undefined') {
+      return localStorage.getItem('templateCustomizer-' + templateName + '--Lang') || 'en';
+    }
+  } catch (e) { /* ignore */ }
+  return 'en';
+}
+
+/** Avatar text uses カタカナ (user_ruby) when UI language is en or ja. */
+function shouldUseAvatarRuby() {
+  const lang = String(getAppLanguage() || '').toLowerCase();
+  return lang === 'en' || lang === 'ja' || lang.indexOf('en-') === 0 || lang.indexOf('ja-') === 0;
+}
+
+function formatAvatarInitials(name) {
   if (!name) return '?';
-  // Check if name contains Japanese characters
-  const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(name);
+  const text = String(name).trim();
+  if (!text) return '?';
+  const hasJapanese = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(text);
   if (hasJapanese) {
-      // For Japanese names, take first 2 characters
-      return name.substring(0, 2);
+    return text.substring(0, 2);
+  }
+  const words = text.split(/\s+/);
+  return words[words.length - 1] || text.charAt(0) || '?';
+}
+
+function resolveAvatarRuby(name, rubyOrMeta) {
+  let ruby = '';
+  let userid = '';
+  if (typeof rubyOrMeta === 'string') {
+    ruby = rubyOrMeta;
+  } else if (rubyOrMeta && typeof rubyOrMeta === 'object') {
+    ruby = rubyOrMeta.user_ruby || rubyOrMeta.ruby || '';
+    userid = rubyOrMeta.userid || rubyOrMeta.user_id || rubyOrMeta.userId || '';
+  }
+  if (ruby && String(ruby).trim()) {
+    return String(ruby).trim();
+  }
+  const map = (typeof window !== 'undefined') ? window.CAILY_AVATAR_RUBY : null;
+  if (!map) return '';
+  if (userid && map.byUserId && map.byUserId[userid]) {
+    return map.byUserId[userid];
+  }
+  if (name && map.byRealname && map.byRealname[name]) {
+    return map.byRealname[name];
+  }
+  return '';
+}
+
+/**
+ * Avatar initials. When UI lang is en/ja and user_ruby exists, use ruby text.
+ * @param {string|object} nameOrUser - display name, or user object with realname/user_name/user_ruby
+ * @param {string|object} [rubyOrMeta] - ruby string or { user_ruby, userid }
+ */
+function getAvatarName(nameOrUser, rubyOrMeta) {
+  let name = '';
+  let meta = rubyOrMeta;
+  if (nameOrUser && typeof nameOrUser === 'object') {
+    name = nameOrUser.realname || nameOrUser.user_name || nameOrUser.name || '';
+    meta = Object.assign({}, nameOrUser, (rubyOrMeta && typeof rubyOrMeta === 'object') ? rubyOrMeta : (typeof rubyOrMeta === 'string' ? { user_ruby: rubyOrMeta } : {}));
   } else {
-      // For English names, take the last word
-      const words = name.trim().split(' ');
-      const lastWord = words[words.length - 1];
-      return lastWord;
+    name = nameOrUser || '';
+  }
+
+  if (shouldUseAvatarRuby()) {
+    const ruby = resolveAvatarRuby(name, meta);
+    if (ruby) {
+      // Full カタカナ text — do not truncate
+      return ruby;
+    }
+  }
+  return formatAvatarInitials(name);
+}
+
+/** Valid avatar filename only (skip empty / placeholders that 404). */
+function isValidAvatarFilename(userImage) {
+  if (userImage == null) return false;
+  var img = String(userImage).trim();
+  if (!img) return false;
+  if (img === 'null' || img === 'undefined' || img === 'no-image.png' || img === '1.png' || img === 'default.png') {
+    return false;
+  }
+  return true;
+}
+
+/** Build /assets/upload/avatar/... src, or '' if invalid. */
+function getAvatarSrcFromImage(userImage) {
+  if (!isValidAvatarFilename(userImage)) return '';
+  var img = String(userImage).trim();
+  if (img.indexOf('http') === 0 || img.indexOf('/') === 0) return img;
+  return '/assets/upload/avatar/' + img;
+}
+
+/**
+ * Unified user avatar HTML (initials first; reveal image on load).
+ * @param {object} opts
+ * @param {string} [opts.realname]
+ * @param {string} [opts.userid]
+ * @param {string} [opts.userImage]
+ * @param {string} [opts.user_ruby]
+ * @param {string} [opts.size] - '' | 'xs' | 'sm' | 'md' | 'lg' (default 'sm')
+ * @param {string} [opts.extraClass]
+ * @param {boolean} [opts.pullUp]
+ * @param {boolean} [opts.tooltip]
+ */
+function renderUserAvatarHtml(opts) {
+  opts = opts || {};
+  var realname = opts.realname || '';
+  var userid = opts.userid || opts.userId || opts.user_id || '';
+  var userImage = opts.userImage || opts.user_image || '';
+  var title = realname || userid || '';
+  var initials = getAvatarName(realname || userid || '', {
+    userid: userid,
+    user_ruby: opts.user_ruby || opts.ruby || ''
+  });
+  var size = (opts.size !== undefined && opts.size !== null) ? String(opts.size) : 'sm';
+  var sizeClass = size ? (' avatar-' + size) : '';
+  var wrapClass = 'avatar' + sizeClass;
+  if (opts.extraClass) wrapClass += ' ' + String(opts.extraClass).trim();
+  var pullUp = opts.pullUp ? ' pull-up' : '';
+  var esc = function (s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  };
+  var titleAttr = esc(title);
+  var useridAttr = esc(userid);
+  var tooltipAttrs = opts.tooltip === false
+    ? ''
+    : ' data-bs-toggle="tooltip" title="' + titleAttr + '"';
+  var initialClass = 'avatar-initial rounded-circle bg-label-primary' + pullUp;
+  var html = '<div class="' + wrapClass + '"' + tooltipAttrs
+    + (userid ? ' data-userid="' + useridAttr + '"' : '')
+    + '>'
+    + '<span class="' + initialClass + '">' + esc(initials) + '</span>';
+  var src = getAvatarSrcFromImage(userImage);
+  if (src) {
+    html += '<img src="' + esc(src) + '" alt="' + titleAttr + '" class="rounded-circle' + pullUp + '"'
+      + ' style="display:none;"'
+      + ' onload="this.style.display=\'block\';var i=this.previousElementSibling;if(i)i.style.display=\'none\';"'
+      + ' onerror="this.remove();">';
+  }
+  html += '</div>';
+  return html;
+}
+
+/** Update server-rendered avatar initials that expose data-avatar-* attrs. */
+function refreshDomAvatarInitials() {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll('.js-avatar-initial').forEach(function (el) {
+    const name = el.getAttribute('data-avatar-name') || '';
+    const userid = el.getAttribute('data-avatar-userid') || '';
+    const ruby = el.getAttribute('data-avatar-ruby') || '';
+    el.textContent = getAvatarName(name, { userid: userid, user_ruby: ruby });
+  });
+}
+
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', refreshDomAvatarInitials);
+  } else {
+    refreshDomAvatarInitials();
   }
 }
 

@@ -24,7 +24,9 @@ class Connection {
 
         if ($this->handler) {
             if (defined('DB_CHARSET') && DB_CHARSET) {
-                if (!mysqli_set_charset($this->handler, DB_CHARSET)) {
+                // utf8 (3-byte) rejects rare CJK / emoji; prefer utf8mb4 when legacy config still says utf8
+                $charset = (DB_CHARSET === 'utf8') ? 'utf8mb4' : DB_CHARSET;
+                if (!mysqli_set_charset($this->handler, $charset)) {
                     $this->fail('Failed to set character set: ' . mysqli_error($this->handler));
                 }
             }

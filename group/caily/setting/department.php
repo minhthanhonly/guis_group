@@ -147,6 +147,10 @@ $view->heading('部署設定');
                                                         <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_comment">
                                                         コメント</label>
                                                     </div>
+                                                    <div class="form-check form-check-inline">
+                                                        <label class="form-check-label"><input class="form-check-input" type="checkbox" v-model="member.project_view_end_date">
+                                                        期限日閲覧</label>
+                                                    </div>
                                                 </td>
                                                 <td>
                                                     <div class="form-check form-check-inline">
@@ -228,6 +232,7 @@ $view->heading('部署設定');
                                             <span v-if="member.project_edit == 1" class="badge bg-label-warning me-1">編集</span>
                                             <span v-if="member.project_delete == 1" class="badge bg-label-danger me-1">削除</span>
                                             <span v-if="member.project_comment == 1" class="badge bg-label-secondary me-1">コメント</span>
+                                            <span v-if="member.project_view_end_date == 1" class="badge bg-label-info me-1">期限日閲覧</span>
                                         </td>
                                         <td>
                                             <span v-if="member.project_director_stat == 1 || member.project_director == 1" class="badge bg-label-info me-1">統計</span>
@@ -285,6 +290,7 @@ $view->footing();
                         project_edit: {},
                         project_delete: {},
                         project_comment: {},
+                        project_view_end_date: {},
                         task_view: {},
                         task_add: {},
                         task_edit: {},
@@ -330,6 +336,7 @@ $view->footing();
                             project_edit: {},
                             project_delete: {},
                             project_comment: {},
+                            project_view_end_date: {},
                             task_view: {},
                             task_add: {},
                             task_edit: {},
@@ -348,6 +355,7 @@ $view->footing();
                                 project_edit: member.project_edit === '1',
                                 project_delete: member.project_delete === '1',
                                 project_comment: member.project_comment === '1',
+                                project_view_end_date: member.project_view_end_date === '1',
                                 task_view: member.task_view === '1',
                                 task_add: member.task_add === '1',
                                 task_edit: member.task_edit === '1',
@@ -402,6 +410,7 @@ $view->footing();
                         project_edit: false,
                         project_delete: false,
                         project_comment: true,
+                        project_view_end_date: false,
                         task_view: true,
                         task_add: true,
                         task_edit: true,
@@ -432,6 +441,7 @@ $view->footing();
                             departmentData[`project_edit[${member.id}]`] = member.project_edit ? 'true' : 'false';
                             departmentData[`project_delete[${member.id}]`] = member.project_delete ? 'true' : 'false';
                             departmentData[`project_comment[${member.id}]`] = member.project_comment ? 'true' : 'false';
+                            departmentData[`project_view_end_date[${member.id}]`] = member.project_view_end_date ? 'true' : 'false';
                             departmentData[`task_view[${member.id}]`] = member.task_view ? 'true' : 'false';
                             departmentData[`task_add[${member.id}]`] = member.task_add ? 'true' : 'false';
                             departmentData[`task_edit[${member.id}]`] = member.task_edit ? 'true' : 'false';
@@ -479,6 +489,7 @@ $view->footing();
                         project_edit: {},
                         project_delete: {},
                         project_comment: {},
+                        project_view_end_date: {},
                         task_view: {},
                         task_add: {},
                         task_edit: {},

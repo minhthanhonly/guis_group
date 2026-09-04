@@ -251,11 +251,11 @@ createApp({
                         }
                     });
                 } else {
-                    showMessage('建物の登録に失敗しました。', true);
+                    showParentProjectError('建物の登録に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error creating parent project:', error);
-                showMessage('建物の作成に失敗しました。', true);
+                showParentProjectError('建物の作成に失敗しました。', error);
             }
         },
         initSelect2() {
@@ -1013,11 +1013,11 @@ createApp({
                     $('#customerInfoModal').modal('hide');
                     this.selectedCustomer = null;
                 } else {
-                    showMessage(response.data.message_code || '顧客情報の更新に失敗しました。', true);
+                    showParentProjectError(response.data.message_code || '顧客情報の更新に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error updating customer:', error);
-                showMessage('顧客情報の更新に失敗しました。', true);
+                showParentProjectError('顧客情報の更新に失敗しました。', error);
             } finally {
                 this.updatingCustomer = false;
             }
@@ -1232,11 +1232,11 @@ createApp({
                         console.error('Error in Promise.all:', error);
                     });
                 } else {
-                    showMessage(response.data.message_code, true);
+                    showParentProjectError(response.data.message_code || '顧客の保存に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error saving customer:', error);
-                showMessage('顧客の保存に失敗しました。', true);
+                showParentProjectError('顧客の保存に失敗しました。', error);
             }
         },
 

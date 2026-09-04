@@ -100,6 +100,10 @@ $view->heading('メンバー一覧');
               <label class="form-label" for="add-user-lastname-after-married">結婚後の姓</label>
               <input type="text" class="form-control" id="add-user-lastname-after-married" placeholder="" name="lastname_after_married"/>
             </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="add-user-ruby"><span data-i18n="カタカナ">カタカナ</span></label>
+              <input type="text" class="form-control" id="add-user-ruby" placeholder="ヤマダ タロウ" name="user_ruby"/>
+            </div>
           </div>
           <div class="form-group row">
             <div class="col-md-6 mb-4 form-control-validation">
@@ -222,6 +226,10 @@ $view->heading('メンバー一覧');
             <div class="col-md-6 mb-4 form-control-validation">
               <label class="form-label" for="edit-user-lastname-after-married">結婚後の姓</label>
               <input type="text" class="form-control" id="edit-user-lastname-after-married" placeholder="" name="lastname_after_married"/>
+            </div>
+            <div class="col-md-6 mb-4 form-control-validation">
+              <label class="form-label" for="edit-user-ruby"><span data-i18n="カタカナ">カタカナ</span></label>
+              <input type="text" class="form-control" id="edit-user-ruby" placeholder="ヤマダ タロウ" name="user_ruby"/>
             </div>
           </div>
           <div class="form-group row">

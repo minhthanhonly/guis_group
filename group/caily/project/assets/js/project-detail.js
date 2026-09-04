@@ -31,9 +31,12 @@ const PROJECT_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
 const PROJECT_DATETIME_JA_DISPLAY_FORMAT = 'YYYY年M月D日 HH:mm';
 const PROJECT_DATETIME_JA_DATE_FORMAT = 'YYYY年M月D日';
 const PROJECT_DATETIME_VI_DATE_FORMAT = 'YYYY/M/D';
-const PROJECT_DATETIME_FLATPICKR_FORMAT = 'Y/m/d H:i';
+// Always persist/API wall clock as dashed JST (never slash UI format — avoids +2h re-parse loops)
+const PROJECT_DATETIME_SERVER_FORMAT = 'YYYY-MM-DD HH:mm:ss';
+// Flatpickr: n/j = month/day unpadded — must match Moment YYYY/M/D (avoid 4/6 ↔ 04/06 flicker)
+const PROJECT_DATETIME_FLATPICKR_FORMAT = 'Y/n/j H:i';
 const PROJECT_DATETIME_FLATPICKR_JA_ALT_FORMAT = 'Y年n月j日 H:i';
-const PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT = 'Y/M/D H:mm';
+const PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
 const PROJECT_DATETIME_PARSE_FORMATS = [
     'YYYY-MM-DD HH:mm:ss',
     'YYYY-MM-DD HH:mm',
@@ -42,7 +45,8 @@ const PROJECT_DATETIME_PARSE_FORMATS = [
     'YYYY/M/D H:mm',
     'YYYY/MM/DD H:mm',
     'Y/M/D H:mm',
-    'Y/n/j H:i'
+    'Y/n/j H:i',
+    'Y/m/d H:i'
 ];
 
 const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
@@ -147,9 +151,28 @@ window.appendPaymentVersionToFormData = appendPaymentVersionToFormData;
 window.applyPaymentVersionFromResponse = applyPaymentVersionFromResponse;
 
 function isProjectDetailVietnameseLocale() {
-    return typeof i18next !== 'undefined'
-        && i18next.isInitialized
-        && String(i18next.language || '').startsWith('vi');
+    // Prefer getAppLanguage (i18n + localStorage fallback) so VN TZ works
+    // even when pickers init before i18next.isInitialized.
+    if (typeof getAppLanguage === 'function') {
+        return String(getAppLanguage() || '').toLowerCase().startsWith('vi');
+    }
+    if (typeof i18next !== 'undefined' && i18next.language) {
+        return String(i18next.language || '').toLowerCase().startsWith('vi');
+    }
+    try {
+        const tn = (typeof templateName !== 'undefined' && templateName)
+            ? templateName
+            : (window.templateName || '');
+        const fromCustomizer = window.templateCustomizer
+            && window.templateCustomizer.settings
+            && window.templateCustomizer.settings.lang;
+        const fromStorage = tn
+            ? localStorage.getItem('templateCustomizer-' + tn + '--Lang')
+            : '';
+        return String(fromCustomizer || fromStorage || '').toLowerCase().startsWith('vi');
+    } catch (e) {
+        return false;
+    }
 }
 
 function getProjectDetailDisplayTimezone() {
@@ -158,13 +181,27 @@ function getProjectDetailDisplayTimezone() {
 
 function isProjectServerDateTimeFormat(value) {
     const s = String(value || '').trim();
+    // DB / API wall clock (JST): dashes, optional seconds
     return /^\d{4}-\d{1,2}-\d{1,2}(?:\s+\d{1,2}:\d{2}(?::\d{2})?)?$/.test(s);
+}
+
+/** Flatpickr / UI wall clock (may already be VN or JA display) — uses "/" or 年 */
+function isProjectDisplayDateTimeFormat(value) {
+    const s = String(value || '').trim();
+    if (!s) return false;
+    if (s.indexOf('年') !== -1) return true;
+    if (s.indexOf('/') !== -1) return true;
+    return false;
 }
 
 function parseProjectDateMomentServer(value) {
     if (value === undefined || value === null) return null;
     const s = String(value).trim();
     if (!s || s === '-') return null;
+    // Do not treat display strings (YYYY/M/D...) as Tokyo — that causes double VN/JA shifts
+    if (isProjectDisplayDateTimeFormat(s) && !isProjectServerDateTimeFormat(s)) {
+        return null;
+    }
     const normalized = s.replace(/\//g, '-');
     if (typeof moment !== 'undefined') {
         const formats = ['YYYY-MM-DD HH:mm:ss', 'YYYY-MM-DD HH:mm', 'YYYY-M-D HH:mm', 'YYYY-MM-DD', 'YYYY-M-D'];
@@ -203,6 +240,16 @@ function parseProjectDateTimeInDisplayTz(value) {
 }
 
 function toProjectDateTimeInputValue(date) {
+    if (date === undefined || date === null) return '';
+    const s = String(date).trim();
+    if (!s || s === '-') return '';
+    // Already UI wall-clock: reformat only (no timezone shift)
+    if (isProjectDisplayDateTimeFormat(s) && !isProjectServerDateTimeFormat(s)) {
+        const asDisplay = parseProjectDateTimeInDisplayTz(s);
+        return asDisplay && asDisplay.isValid()
+            ? asDisplay.format(PROJECT_DATETIME_FLATPICKR_MOMENT_FORMAT)
+            : '';
+    }
     const parsed = parseProjectDateMomentServer(date);
     if (!parsed || !parsed.isValid()) return '';
     const localized = moment.tz
@@ -214,25 +261,45 @@ function toProjectDateTimeInputValue(date) {
 function fromProjectDateTimeInputValue(value) {
     const raw = String(value || '').trim();
     if (!raw) return '';
+    // Already server/API format: normalize only (no timezone shift)
+    if (isProjectServerDateTimeFormat(raw)) {
+        const parsed = parseProjectDateMomentServer(raw);
+        if (!parsed || !parsed.isValid()) return raw;
+        return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_SERVER_FORMAT);
+    }
     const parsed = parseProjectDateTimeInDisplayTz(raw);
     if (!parsed) return raw;
     if (moment.tz) {
-        return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_MOMENT_FORMAT);
+        return parsed.clone().tz(SERVER_TASK_TIMEZONE).format(PROJECT_DATETIME_SERVER_FORMAT);
     }
-    return parsed.format(PROJECT_DATETIME_MOMENT_FORMAT);
+    return parsed.format(PROJECT_DATETIME_SERVER_FORMAT);
 }
 
 function formatProjectDateTimeForDisplay(value) {
+    if (value === undefined || value === null) return '-';
+    const s = String(value).trim();
+    if (!s || s === '-') return '-';
+    const displayFmt = isProjectDetailVietnameseLocale()
+        ? PROJECT_DATETIME_MOMENT_FORMAT
+        : PROJECT_DATETIME_JA_DISPLAY_FORMAT;
+    // Already UI wall-clock: format only (no timezone shift)
+    if (isProjectDisplayDateTimeFormat(s) && !isProjectServerDateTimeFormat(s)) {
+        const asDisplay = parseProjectDateTimeInDisplayTz(s);
+        return asDisplay && asDisplay.isValid() ? asDisplay.format(displayFmt) : s;
+    }
     const parsed = parseProjectDateMomentServer(value);
     if (!parsed) return '-';
     const localized = moment.tz
         ? parsed.clone().tz(getProjectDetailDisplayTimezone())
         : parsed;
-    return localized.format(
-        isProjectDetailVietnameseLocale()
-            ? PROJECT_DATETIME_MOMENT_FORMAT
-            : PROJECT_DATETIME_JA_DISPLAY_FORMAT
-    );
+    return localized.format(displayFmt);
+}
+
+/** Normalize UI datetime to one string (YYYY/M/D HH:mm) — stops 4/6 ↔ 04/06 flicker */
+function canonicalizeProjectDateTimeInputDisplay(value) {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    return toProjectDateTimeInputValue(raw) || raw;
 }
 
 function getProjectDetailFlatpickrLocale() {
@@ -371,11 +438,13 @@ const vueApp = createApp({
                 { value: '未発行', label: '未発行', color: 'secondary' },
                 { value: '見積作成中', label: '見積作成中', color: 'primary' },
                 { value: '発行済', label: '発行済', color: 'success' },
+                { value: '無償', label: '無償', color: 'info' },
             ],
             businessInvoiceStatuses: [
                 { value: '未発行', label: '未発行', color: 'secondary' },
                 { value: '請求準備', label: '請求準備', color: 'warning' },
                 { value: '発行済', label: '発行済', color: 'success' },
+                { value: '無償', label: '無償', color: 'info' },
             ],
             paymentStatuses: [
                 { value: '未入金', label: '未入金', color: 'secondary' },
@@ -508,8 +577,31 @@ const vueApp = createApp({
             const raw = (this.project && this.project.parent_requests) ? String(this.project.parent_requests) : '';
             return raw.split(',').map(r => r.trim()).filter(Boolean);
         },
+        /** Child projects of the same parent that belong to other departments. */
+        otherDepartmentSiblingProjects() {
+            if (!this.project || !this.project.parent_project_id) {
+                return [];
+            }
+            if (!Array.isArray(this.parentSiblingProjects) || !this.parentSiblingProjects.length) {
+                return [];
+            }
+            const currentId = String(this.project.id || '');
+            const currentDept = String(this.project.department_id || '');
+            return this.parentSiblingProjects.filter((p) => {
+                if (!p) return false;
+                if (String(p.id) === currentId) return false;
+                if (String(p.status || '').toLowerCase() === 'deleted') return false;
+                if (currentDept && String(p.department_id || '') === currentDept) return false;
+                return true;
+            }).sort((a, b) => {
+                const da = String(a.department_name || '');
+                const db = String(b.department_name || '');
+                if (da !== db) return da.localeCompare(db, 'ja');
+                return (Number(a.id) || 0) - (Number(b.id) || 0);
+            });
+        },
         editableStatuses() {
-            if (!this.isCailyBranchUser) {
+            if (!this.isCailyBranchUser || this.canViewEndDate) {
                 return this.statuses;
             }
             return this.statuses.filter(function(s) { return s.value !== 'completed'; });
@@ -535,7 +627,9 @@ const vueApp = createApp({
         /** Options cho select "表示列" (display_column): cột danh sách project + custom fields. Loại trùng tên khác suffix 状況 */
         noteDisplayColumnOptions() {
             function normLabel(t) { return (t || '').replace(/状況$/, ''); }
-            const hiddenForCaily = this.isCailyBranchUser ? { guis_nouki: true, end_date: true } : {};
+            const hiddenForCaily = this.isCailyBranchUser
+                ? { guis_nouki: !this.canViewEndDate, end_date: !this.canViewEndDate }
+                : {};
             const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : [])
                 .filter(function(c) { return !hiddenForCaily[c.key]; })
                 .map(function(c) {
@@ -639,15 +733,20 @@ const vueApp = createApp({
         canCommentProject() {
             return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_comment == 1);
         },
+        /** Non-CAILY always; CAILY when project_view_end_date (view-only). */
+        canViewEndDate() {
+            if (!this.isCailyBranchUser) return true;
+            if (this.isAdministrator()) return true;
+            const rule = this.permission && this.permission.rule;
+            return !!(rule && (rule.project_view_end_date == 1 || rule.project_view_end_date === '1'));
+        },
         canDocumentProject() {
             return this.canViewBusinessDocuments;
         },
         canViewBusinessDocuments() {
             if (this.isAdministrator()) return true;
-            if (!this.permission) return false;
-            if (this.permission.can_manage_project) return true;
+            if (!this.permission || !this.permission.rule) return false;
             const rule = this.permission.rule;
-            if (!rule) return false;
             return rule.project_director_stat == 1
                 || rule.project_director_view == 1
                 || rule.project_director_edit == 1
@@ -658,11 +757,8 @@ const vueApp = createApp({
         },
         canEditBusinessDocuments() {
             if (this.isAdministrator()) return true;
-            if (!this.permission) return false;
-            if (this.permission.can_manage_project) return true;
-            const rule = this.permission.rule;
-            if (!rule) return false;
-            return rule.project_director_edit == 1;
+            if (!this.permission || !this.permission.rule) return false;
+            return this.permission.rule.project_director_edit == 1;
         },
         sortedGeneralLogs() {
             if (!this.logs) return [];
@@ -1302,6 +1398,46 @@ const vueApp = createApp({
                 }
             }
         },
+        /** Remaining time for a sibling project's deadline (uses sibling status, not current project). */
+        getSiblingDeadlineRemaining(sibling, dateStr) {
+            if (!sibling || !dateStr) return null;
+            if (['draft', 'paused', 'cancelled', 'completed', 'deleted'].includes(String(sibling.status || '').toLowerCase())) {
+                return null;
+            }
+            const now = moment.tz('Asia/Tokyo');
+            const endDate = moment.tz(dateStr, 'Asia/Tokyo');
+            if (!endDate.isValid()) return null;
+            const isVietnamese = typeof i18next !== 'undefined' && i18next.isInitialized && i18next.language === 'vi';
+            const dayLabel = this.translateLabel('日');
+            const hourLabel = this.translateLabel('時間');
+            const minuteLabel = this.translateLabel('分');
+            const overdueLabel = this.translateLabel('超過');
+            const remainingLabel = this.translateLabel('残り');
+            const formatUnit = (value, label) => isVietnamese ? `${value} ${label}` : `${value}${label}`;
+            const formatTimeText = (parts) => isVietnamese ? parts.filter(p => p).join(' ') : parts.filter(p => p).join('');
+            if (endDate.isBefore(now)) {
+                const diff = now.diff(endDate);
+                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                if (days > 0) {
+                    return { text: formatTimeText([formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
+                } else if (hours > 0) {
+                    return { text: formatTimeText([formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
+                }
+                return { text: formatTimeText([formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
+            }
+            const diff = endDate.diff(now);
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            if (days > 0) {
+                return { text: formatTimeText([remainingLabel, formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel)]), class: 'bg-label-info', isOverdue: false };
+            } else if (hours > 0) {
+                return { text: formatTimeText([remainingLabel, formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel)]), class: hours <= 24 ? 'bg-label-warning' : 'bg-label-info', isOverdue: false };
+            }
+            return { text: formatTimeText([remainingLabel, formatUnit(minutes, minuteLabel)]), class: 'bg-label-warning', isOverdue: false };
+        },
         formatDateForInput(date) {
             return toProjectDateTimeInputValue(date);
         },
@@ -1381,6 +1517,9 @@ const vueApp = createApp({
                 default:
                     return 'bg-info';
             }
+        },
+        isNoukiDelivered(status) {
+            return String(status || '').indexOf('納品済み') !== -1;
         },
         getRequestBadgeClass(request) {
             const map = {
@@ -1463,9 +1602,14 @@ const vueApp = createApp({
                 showMessage('ステータスの更新に失敗しました。', true);
             }
         },
-        selectStatus(status) {
-            if (this.isCailyBranchUser && status === 'completed') {
+        async selectStatus(status) {
+            if (this.isCailyBranchUser && status === 'completed' && !this.canViewEndDate) {
                 return;
+            }
+            const prev = this.project.status;
+            if (status === 'completed' && prev !== 'completed') {
+                const ok = await this.confirmPaymentInfoBeforeComplete(this.project);
+                if (!ok) return;
             }
             this.project.status = status;
             this.updateStatus();
@@ -1516,14 +1660,33 @@ const vueApp = createApp({
             }
         },
         getAvatarSrc(member) {
-            // Trả về đường dẫn ảnh từ user_image, fallback nếu không có
-            return '/assets/upload/avatar/' + member.user_image || '';
+            if (!member) return '';
+            var img = member.user_image != null ? String(member.user_image).trim() : '';
+            if (!img || img === 'null' || img === 'undefined' || img === 'no-image.png' || img === '1.png' || img === 'default.png') {
+                return '';
+            }
+            if (img.indexOf('http') === 0 || img.indexOf('/') === 0) {
+                return img;
+            }
+            return '/assets/upload/avatar/' + img;
         },
         handleAvatarError(member) {
+            if (!member) return;
             member.avatarError = true;
+            member.avatarLoaded = false;
         },
-        getInitials(name) {
-            return getAvatarName(name);
+        handleAvatarLoad(member) {
+            if (!member) return;
+            member.avatarLoaded = true;
+        },
+        showAvatarImage(member) {
+            return !!(member && !member.avatarError && this.getAvatarSrc(member) && member.avatarLoaded);
+        },
+        showAvatarInitials(member) {
+            return !member || member.avatarError || !this.getAvatarSrc(member) || !member.avatarLoaded;
+        },
+        getInitials(nameOrUser) {
+            return getAvatarName(nameOrUser);
         },
         initTooltips() {
             if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
@@ -1633,7 +1796,9 @@ const vueApp = createApp({
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBusinessDocumentDateForApi(key);
                         this.setBusinessDocumentServerDate(key, apiVal || '');
-                        this.project[key] = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                        this.project[key] = apiVal
+                            ? canonicalizeProjectDateTimeInputDisplay(toProjectDateTimeInputValue(apiVal))
+                            : '';
                         const pickerIds = {
                             estimate_date: 'estimate_date_picker',
                             invoice_date: 'invoice_date_picker',
@@ -1642,7 +1807,7 @@ const vueApp = createApp({
                         const el = document.getElementById(pickerIds[key]);
                         if (el && el._flatpickr) {
                             if (apiVal) {
-                                el._flatpickr.setDate(toProjectDateTimeInputValue(apiVal), false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+                                el._flatpickr.setDate(this.project[key], false, PROJECT_DATETIME_FLATPICKR_FORMAT);
                             } else {
                                 el._flatpickr.clear();
                             }
@@ -1711,9 +1876,8 @@ const vueApp = createApp({
                     server[key] = '';
                     return;
                 }
-                server[key] = isProjectServerDateTimeFormat(raw)
-                    ? raw
-                    : (fromProjectDateTimeInputValue(raw) || raw);
+                // Keep dashed JST only (fromProject is no-op shift for dash server strings)
+                server[key] = fromProjectDateTimeInputValue(raw) || raw;
             });
             this._serverBusinessDocumentDates = server;
         },
@@ -1737,16 +1901,18 @@ const vueApp = createApp({
                 this._serverBusinessDocumentDates[key] = '';
                 return;
             }
-            this._serverBusinessDocumentDates[key] = isProjectServerDateTimeFormat(raw)
-                ? raw
-                : (fromProjectDateTimeInputValue(raw) || raw);
+            // Always store dashed JST wall-clock so re-init never re-parses UI "/" as VN again
+            this._serverBusinessDocumentDates[key] = fromProjectDateTimeInputValue(raw) || raw;
         },
         getBusinessDocumentPickerDisplayValue(el) {
             if (!el) return '';
             const fp = el._flatpickr;
             if (fp) {
-                const visibleInput = fp.altInput || fp._input;
-                return String((visibleInput && visibleInput.value) || '').trim();
+                // Always use dateFormat (not altInput 年月日) so v-model stays stable
+                if (fp.selectedDates && fp.selectedDates.length > 0) {
+                    return fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT);
+                }
+                return String((fp._input && fp._input.value) || el.value || '').trim();
             }
             return String(el.value || '').trim();
         },
@@ -1790,6 +1956,46 @@ const vueApp = createApp({
         isBusinessDocumentIssuedStatus(status) {
             const normalized = this.normalizeBusinessDocumentStatusValue(status);
             return normalized === '発行済';
+        },
+        isBusinessDocumentFreeStatus(status) {
+            return this.normalizeBusinessDocumentStatusValue(status) === '無償';
+        },
+        /** 完了にできる決済状態: 発行済 or 無償 */
+        isBusinessDocumentReadyForCompletion(status) {
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            return normalized === '発行済' || normalized === '無償';
+        },
+        needsPaymentInfoBeforeComplete(project) {
+            const p = project || this.project;
+            if (!p) return true;
+            return !this.isBusinessDocumentReadyForCompletion(p.estimate_status)
+                || !this.isBusinessDocumentReadyForCompletion(p.invoice_status);
+        },
+        getPaymentInfoBeforeCompleteMessage(project) {
+            const p = project || this.project;
+            const missing = [];
+            if (!this.isBusinessDocumentReadyForCompletion(p && p.estimate_status)) {
+                missing.push(this.translateLabel('見積状況'));
+            }
+            if (!this.isBusinessDocumentReadyForCompletion(p && p.invoice_status)) {
+                missing.push(this.translateLabel('請求状況'));
+            }
+            const base = this.translateLabel('完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
+            return missing.length ? (base + '\n（' + missing.join(' / ') + '）') : base;
+        },
+        async confirmPaymentInfoBeforeComplete(project) {
+            if (!this.needsPaymentInfoBeforeComplete(project)) return true;
+            if (typeof Swal === 'undefined') {
+                alert(this.getPaymentInfoBeforeCompleteMessage(project));
+                return false;
+            }
+            await Swal.fire({
+                icon: 'warning',
+                title: this.translateLabel('決済情報が未設定です'),
+                text: this.getPaymentInfoBeforeCompleteMessage(project),
+                confirmButtonText: this.translateLabel('OK')
+            });
+            return false;
         },
         isEstimateDocumentFieldsComplete() {
             if (!this.project) return false;
@@ -1882,7 +2088,7 @@ const vueApp = createApp({
                 payment_date: 'payment_date_picker',
             };
             const serverNow = moment.tz(SERVER_TASK_TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
-            const dateStr = toProjectDateTimeInputValue(serverNow);
+            const dateStr = canonicalizeProjectDateTimeInputDisplay(toProjectDateTimeInputValue(serverNow));
             this.project[field] = dateStr || '';
             this.setBusinessDocumentServerDate(field, serverNow);
             const el = document.getElementById(pickerIds[field]);
@@ -1912,9 +2118,10 @@ const vueApp = createApp({
                 const el = document.getElementById(fieldIds[key]);
                 if (!el) return;
                 const displayVal = this.getBusinessDocumentPickerDisplayValue(el);
-                if (String(this.project[key] || '').trim() !== String(displayVal || '').trim()) {
-                    this.project[key] = displayVal;
-                    this.setBusinessDocumentServerDate(key, displayVal);
+                const canonical = canonicalizeProjectDateTimeInputDisplay(displayVal);
+                if (String(this.project[key] || '').trim() !== String(canonical || '').trim()) {
+                    this.project[key] = canonical;
+                    this.setBusinessDocumentServerDate(key, canonical);
                 }
             });
         },
@@ -1925,10 +2132,14 @@ const vueApp = createApp({
             const serverValue = this.getBusinessDocumentServerDate(key);
             const inputVal = toProjectDateTimeInputValue(serverValue);
             if (!force && el._flatpickr) {
-                const fpVal = String(
-                    (el._flatpickr._input && el._flatpickr._input.value) || el.value || ''
-                ).trim();
-                const displayVal = String(this.project[key] || '').trim();
+                const fpVal = canonicalizeProjectDateTimeInputDisplay(
+                    String(
+                        (el._flatpickr._input && el._flatpickr._input.value) || el.value || ''
+                    ).trim()
+                );
+                const displayVal = canonicalizeProjectDateTimeInputDisplay(
+                    String(this.project[key] || '').trim()
+                );
                 if (fpVal && (fpVal === inputVal || fpVal === displayVal)) {
                     return;
                 }
@@ -1937,8 +2148,9 @@ const vueApp = createApp({
             initProjectDetailFlatpickr(el, {
                 onChange: (selectedDates, dateStr) => {
                     if (this._bdSuppressAutoSave) return;
-                    this.project[key] = dateStr || '';
-                    this.setBusinessDocumentServerDate(key, dateStr || '');
+                    const canonical = canonicalizeProjectDateTimeInputDisplay(dateStr);
+                    this.project[key] = canonical;
+                    this.setBusinessDocumentServerDate(key, canonical);
                     this.scheduleBusinessDocumentUpdate();
                 },
                 onClose: () => {
@@ -1954,8 +2166,13 @@ const vueApp = createApp({
                     }
                 }
             }, serverValue);
-            if (inputVal && this.project[key] !== inputVal) {
-                this.project[key] = inputVal;
+            const canonical = canonicalizeProjectDateTimeInputDisplay(
+                this.getBusinessDocumentPickerDisplayValue(el) || inputVal
+            );
+            if (canonical && this.project[key] !== canonical) {
+                this.project[key] = canonical;
+            } else if (!canonical && !serverValue) {
+                this.project[key] = '';
             }
             if (serverValue) {
                 this.setBusinessDocumentServerDate(key, serverValue);
@@ -1977,10 +2194,12 @@ const vueApp = createApp({
                     el._flatpickr.destroy();
                 }
             });
+            // Rebuild display from stored server dates only (never re-convert display→display)
             BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                 const serverVal = this.getBusinessDocumentServerDate(key);
-                if (!serverVal || !String(serverVal).trim()) return;
-                this.project[key] = toProjectDateTimeInputValue(serverVal);
+                this.project[key] = serverVal
+                    ? canonicalizeProjectDateTimeInputDisplay(toProjectDateTimeInputValue(serverVal))
+                    : '';
             });
             this.initBusinessDocumentDatePickers(true);
         },
@@ -2316,13 +2535,17 @@ const vueApp = createApp({
                 defaultMinute: extra.defaultMinute,
                 onChange: (selectedDates, dateStr) => {
                     this.project[key] = dateStr;
+                    if (this._serverProjectDates) {
+                        this._serverProjectDates[key] = dateStr
+                            ? fromProjectDateTimeInputValue(dateStr)
+                            : '';
+                    }
                 }
             }, serverValue);
-            if (inputVal && this.project[key] !== inputVal) {
-                this.project[key] = inputVal;
-            }
-            if (this._serverProjectDates) {
-                delete this._serverProjectDates[key];
+            // Keep project[key] as server value until user edits / sync-from-picker.
+            // Writing display TZ into project caused repeated VN/JA shifts on re-init.
+            if (this._serverProjectDates && this._serverProjectDates[key] == null && serverValue != null) {
+                this._serverProjectDates[key] = serverValue;
             }
         },
         initDatePickers() {
@@ -2333,6 +2556,43 @@ const vueApp = createApp({
             this.initProjectDatePicker('guis_nouki_picker', 'guis_nouki', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
             this.initProjectDatePicker('actual_end_date_picker', 'actual_end_date', { defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 });
             this.initCustomFieldDatePickers();
+        },
+        reinitProjectDatePickersOnLocaleChange() {
+            if (!this.isEditMode || !this.project) return;
+            const pickerIds = [
+                'start_date_picker',
+                'end_date_picker',
+                'caily_nouki_picker',
+                'guis_nouki_picker',
+                'actual_end_date_picker'
+            ];
+            pickerIds.forEach((elId) => {
+                const el = document.getElementById(elId);
+                if (el && el._flatpickr) {
+                    el._flatpickr.destroy();
+                }
+            });
+            if (this.customFields) {
+                this.customFields.forEach((field, idx) => {
+                    if (field.type !== 'datetime') return;
+                    const el = document.getElementById('custom_datetime_' + idx);
+                    if (el && el._flatpickr) {
+                        el._flatpickr.destroy();
+                    }
+                    // Restore server wall-clock so re-init converts once for new locale
+                    if (field._serverDatetime != null) {
+                        field.value = field._serverDatetime;
+                    }
+                });
+            }
+            if (this._serverProjectDates) {
+                ['start_date', 'end_date', 'caily_nouki', 'guis_nouki', 'actual_end_date'].forEach((key) => {
+                    if (this._serverProjectDates[key] != null) {
+                        this.project[key] = this._serverProjectDates[key];
+                    }
+                });
+            }
+            this.initDatePickers();
         },
         initCustomFieldDatePickers() {
             if (!this.isEditMode || !this.customFields) {
@@ -2359,18 +2619,14 @@ const vueApp = createApp({
                         defaultMinute: 0,
                         onChange: (selectedDates, dateStr) => {
                             this.customFields[idx].value = dateStr;
-                            delete this.customFields[idx]._serverDatetime;
+                            this.customFields[idx]._serverDatetime = dateStr
+                                ? fromProjectDateTimeInputValue(dateStr)
+                                : '';
                         }
                     }, serverValue);
-                    if (inputVal && field.value !== inputVal) {
-                        this._syncingCustomFieldDatetime = true;
-                        this.customFields[idx].value = inputVal;
-                        this.$nextTick(() => {
-                            this._syncingCustomFieldDatetime = false;
-                            delete this.customFields[idx]._serverDatetime;
-                        });
-                    } else {
-                        delete this.customFields[idx]._serverDatetime;
+                    // Keep field.value as server until user edits — avoid double TZ convert on re-init
+                    if (field._serverDatetime == null && serverValue) {
+                        this.customFields[idx]._serverDatetime = serverValue;
                     }
                 });
             });
@@ -2608,6 +2864,11 @@ const vueApp = createApp({
                 if (typeof showMessage === 'function') showMessage(msg, true);
                 else if (typeof this.showNotification === 'function') this.showNotification(msg, 'error');
                 return;
+            }
+            const prevStatus = this.originalProject && this.originalProject.status;
+            if (this.project.status === 'completed' && prevStatus !== 'completed') {
+                const ok = await this.confirmPaymentInfoBeforeComplete(this.project);
+                if (!ok) return;
             }
             // Use the stored quill content instead of syncing from editor
             if (this.quillContent !== undefined) {
@@ -3076,6 +3337,9 @@ const vueApp = createApp({
                 return;
             }
             this.project.estimate_status = normalized;
+            if (normalized === '無償') {
+                this.project.amount = 0;
+            }
             this.businessDocumentError = '';
             this.scheduleBusinessDocumentUpdate();
             this.hideBusinessDocumentStatusDropdown('#estimateStatusDropdown');
@@ -3137,6 +3401,9 @@ const vueApp = createApp({
                 return;
             }
             this.project.invoice_status = normalized;
+            if (normalized === '無償') {
+                this.project.invoice_amount = 0;
+            }
             this.businessDocumentError = '';
             this.scheduleBusinessDocumentUpdate();
             this.hideBusinessDocumentStatusDropdown('#invoiceStatusDropdown');
@@ -3847,6 +4114,11 @@ const vueApp = createApp({
                 } else {
                     field.value = String(el.value || '').trim();
                 }
+                if (field.value) {
+                    field._serverDatetime = fromProjectDateTimeInputValue(field.value);
+                } else {
+                    field._serverDatetime = '';
+                }
             });
         },
 
@@ -3868,6 +4140,11 @@ const vueApp = createApp({
                     this.project[key] = String(fp._input.value || '').trim();
                 } else {
                     this.project[key] = String(el.value || '').trim();
+                }
+                if (this._serverProjectDates) {
+                    this._serverProjectDates[key] = this.project[key]
+                        ? fromProjectDateTimeInputValue(this.project[key])
+                        : '';
                 }
             });
             this.syncCustomFieldDatePickers();
@@ -4458,24 +4735,38 @@ const vueApp = createApp({
             }
         });
 
+        this._refreshDatePickersForLocale = () => {
+            this.reinitBusinessDocumentDatePickersOnLocaleChange();
+            this.reinitProjectDatePickersOnLocaleChange();
+            if (this.isEditMode) {
+                this.destroyYoteiMonthPickers();
+                this.initYoteiMonthPickers();
+            }
+            this.initVietnamTimeTooltips();
+            if (typeof window.applyDataI18n === 'function') {
+                const appEl = document.getElementById('app');
+                if (appEl) window.applyDataI18n(appEl);
+            }
+        };
         this._onI18nLanguageChanged = () => {
             this.yoteiPartOptionsTick++;
             this.$forceUpdate();
-            this.$nextTick(() => {
-                this.reinitBusinessDocumentDatePickersOnLocaleChange();
-                if (this.isEditMode) {
-                    this.destroyYoteiMonthPickers();
-                    this.initYoteiMonthPickers();
-                }
-                this.initVietnamTimeTooltips();
-                if (typeof window.applyDataI18n === 'function') {
-                    const appEl = document.getElementById('app');
-                    if (appEl) window.applyDataI18n(appEl);
-                }
-            });
+            this.$nextTick(() => this._refreshDatePickersForLocale());
         };
         if (typeof i18next !== 'undefined' && i18next.on) {
             i18next.on('languageChanged', this._onI18nLanguageChanged);
+            // One rebuild after i18n is ready (avoid stacking reinits that re-parse dates)
+            if (i18next.isInitialized) {
+                this.$nextTick(() => this._refreshDatePickersForLocale());
+            } else {
+                const onInit = () => {
+                    i18next.off('initialized', onInit);
+                    this.$nextTick(() => this._refreshDatePickersForLocale());
+                };
+                i18next.on('initialized', onInit);
+            }
+        } else {
+            this.$nextTick(() => this._refreshDatePickersForLocale());
         }
 
         // Initialize mention manager
@@ -4627,6 +4918,7 @@ const vueApp = createApp({
     beforeUnmount() {
         if (typeof i18next !== 'undefined' && i18next.off && this._onI18nLanguageChanged) {
             i18next.off('languageChanged', this._onI18nLanguageChanged);
+            i18next.off('initialized', this._onI18nLanguageChanged);
         }
         // Clean up timers
         if (this.timeRemainingTimer) {

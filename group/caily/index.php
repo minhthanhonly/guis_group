@@ -10,15 +10,28 @@ $week = array('日', '月', '火', '水', '木', '金', '土');
 $today = $hash['year'].'年'.$hash['month'].'月'.$hash['day'].'日('.$week[$hash['weekday']].')';
 
 $current_hour = date('H');
-if(strlen($_SESSION['firstname']) == 0) {
+$is_caily_user = ((string)($_SESSION['group'] ?? '') === '7');
+if ($is_caily_user) {
+  // Group 7: greet by firstname (no ruby)
+  $welcome_name = $_SESSION['firstname'] !== '' ? $_SESSION['firstname'] : ($_SESSION['lastname'] !== '' ? $_SESSION['lastname'] : $_SESSION['realname']);
+  if (str_contains((string)$_SESSION['firstname'], '社長') || str_contains((string)$_SESSION['lastname'], '社長')) {
+    $welcome_suffix = '社長、';
+  } else {
+    $welcome_suffix = 'さん、';
+  }
+  $welcome_ruby = '';
+} else if(strlen($_SESSION['firstname']) == 0) {
   $welcome_name = $_SESSION['realname'];
   $welcome_suffix = 'さん、';
+  $welcome_ruby = isset($_SESSION['user_ruby']) ? trim((string)$_SESSION['user_ruby']) : '';
 } else if(str_contains($_SESSION['firstname'], '社長') || str_contains($_SESSION['lastname'], '社長')) {
   $welcome_name = $_SESSION['lastname'];
   $welcome_suffix = '社長、';
+  $welcome_ruby = isset($_SESSION['user_ruby']) ? trim((string)$_SESSION['user_ruby']) : '';
 } else {
   $welcome_name = $_SESSION['lastname'];
   $welcome_suffix = 'さん、';
+  $welcome_ruby = isset($_SESSION['user_ruby']) ? trim((string)$_SESSION['user_ruby']) : '';
 }
 $today_message = '今日は'.$today.'です。';
 $welcome_greeting = '';
@@ -63,10 +76,11 @@ if (!empty($_SESSION['userid'])) {
           <div class="col-7">
             <div class="card-body text-nowrap">
               <h5 class="card-title mb-0">
-                <?=$welcome_name?><span data-i18n="<?=$welcome_suffix?>"><?=$welcome_suffix?></span><?php if($welcome_greeting): ?><span data-i18n="<?=$welcome_greeting?>"><?=$welcome_greeting?></span><?php endif; ?>
+                <span data-welcome-name="<?=htmlspecialchars($welcome_name, ENT_QUOTES, 'UTF-8')?>"
+                  data-welcome-ruby="<?=htmlspecialchars($welcome_ruby, ENT_QUOTES, 'UTF-8')?>"><?=htmlspecialchars($welcome_name, ENT_QUOTES, 'UTF-8')?></span><span data-i18n="<?=$welcome_suffix?>"><?=$welcome_suffix?></span><?php if($welcome_greeting): ?><span data-i18n="<?=$welcome_greeting?>"><?=$welcome_greeting?></span><?php endif; ?>
               </h5>
               <p class="mb-4" data-i18n-today data-date="<?=$today?>" data-ja="今日は{date}です。" data-vi="Hôm nay là {date}."><?=$today_message?></p>
-              <?php if($_SESSION['group'] != '6'){ ?>
+              <?php if($_SESSION['group'] != '6' && $_SESSION['group'] != '7'){ ?>
               <button <?php if(isset($hash['timecard']['timecard_open']) && $hash['timecard']['timecard_open']!= ''){ echo 'disabled'; }?> class="me-2 btn btn-primary waves-effect waves-light" id="checkin" data-i18n="出社">出社</button>
               <button <?php if(isset($hash['timecard']['timecard_close']) && $hash['timecard']['timecard_close'] != '') { echo 'disabled'; }?> class="btn btn-warning waves-effect waves-light" id="checkout" data-id="<?=$hash['timecard']['id']?>" data-open="<?=$hash['timecard']['timecard_open']?>" data-i18n="退社">退社</button>
               <div id="timecard-result" class="mt-3">

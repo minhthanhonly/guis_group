@@ -296,7 +296,7 @@ class User extends ApplicationModel {
 			$department_id = $_GET['department_id'];
 			// If no department_id provided, return all active users
 			if (!$department_id) {
-				$query = "SELECT DISTINCT u.id, u.userid, u.realname as user_name, u.user_image
+				$query = "SELECT DISTINCT u.id, u.userid, u.realname as user_name, u.user_image, u.user_ruby
 						  FROM ".$this->table." u
 						  WHERE (`is_suspend` = '' OR`is_suspend` IS NULL OR is_suspend = '0')
 						  ORDER BY u.id";
@@ -304,7 +304,7 @@ class User extends ApplicationModel {
 			}
 			
 			// Get department members and administrators
-			$query = "SELECT DISTINCT u.id, u.userid, u.realname as user_name, u.user_image
+			$query = "SELECT DISTINCT u.id, u.userid, u.realname as user_name, u.user_image, u.user_ruby
 					  FROM ".$this->table." u
 					  LEFT JOIN ".DB_PREFIX."user_department ud ON ud.userid = u.userid
 					  WHERE (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0')

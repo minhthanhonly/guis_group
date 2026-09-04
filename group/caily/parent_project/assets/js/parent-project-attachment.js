@@ -230,11 +230,11 @@ createApp({
                     await this.loadFiles();
                     this.showMessage('フォルダが作成されました。', 'success');
                 } else {
-                    this.showMessage(response.data?.message || 'フォルダの作成に失敗しました。', 'error');
+                    showParentProjectError(response.data?.message || 'フォルダの作成に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error creating folder:', error);
-                this.showMessage('フォルダの作成中にエラーが発生しました。', 'error');
+                showParentProjectError('フォルダの作成中にエラーが発生しました。', error);
             }
         },
 
@@ -252,11 +252,11 @@ createApp({
                     await this.loadFiles();
                     this.showMessage('フォルダが削除されました。', 'success');
                 } else {
-                    this.showMessage(response.data?.message || 'フォルダの削除に失敗しました。', 'error');
+                    showParentProjectError(response.data?.message || 'フォルダの削除に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error deleting folder:', error);
-                this.showMessage('フォルダの削除中にエラーが発生しました。', 'error');
+                showParentProjectError('フォルダの削除中にエラーが発生しました。', error);
             }
         },
 
@@ -274,11 +274,11 @@ createApp({
                     await this.loadFiles();
                     this.showMessage('ファイルが削除されました。', 'success');
                 } else {
-                    this.showMessage(response.data?.message || 'ファイルの削除に失敗しました。', 'error');
+                    showParentProjectError(response.data?.message || 'ファイルの削除に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error deleting file:', error);
-                this.showMessage('ファイルの削除中にエラーが発生しました。', 'error');
+                showParentProjectError('ファイルの削除中にエラーが発生しました。', error);
             }
         },
 
@@ -299,11 +299,11 @@ createApp({
                     await this.loadFiles();
                     this.showMessage('選択されたファイルが削除されました。', 'success');
                 } else {
-                    this.showMessage(response.data?.message || 'ファイルの削除に失敗しました。', 'error');
+                    showParentProjectError(response.data?.message || 'ファイルの削除に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error deleting files:', error);
-                this.showMessage('ファイルの削除中にエラーが発生しました。', 'error');
+                showParentProjectError('ファイルの削除中にエラーが発生しました。', error);
             }
         },
 
@@ -354,7 +354,7 @@ createApp({
             } catch (error) {
                 console.error('Error uploading files:', error);
                 console.error('Error details:', error.message);
-                this.showMessage(`ファイルのアップロード中にエラーが発生しました: ${error.message}`, 'error');
+                showParentProjectError('ファイルのアップロード中にエラーが発生しました。', error);
             } finally {
                 this.uploading = false;
                 this.uploadProgress = [];
@@ -551,11 +551,11 @@ createApp({
                     await this.loadFiles();
                     this.showMessage('フォルダ名が更新されました。', 'success');
                 } else {
-                    this.showMessage(response.data?.message || 'フォルダ名の更新に失敗しました。', 'error');
+                    showParentProjectError(response.data?.message || 'フォルダ名の更新に失敗しました。', response && response.data);
                 }
             } catch (error) {
                 console.error('Error updating folder:', error);
-                this.showMessage('フォルダ名の更新中にエラーが発生しました。', 'error');
+                showParentProjectError('フォルダ名の更新中にエラーが発生しました。', error);
             }
         },
 

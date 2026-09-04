@@ -13,6 +13,31 @@ class Department extends ApplicationModel {
             'is_active' => array()
         );
         $this->connect();
+        $this->ensureProjectViewEndDateColumn();
+    }
+
+    /**
+     * プロジェクト権限: 期限日閲覧 (project_view_end_date)
+     */
+    private function ensureProjectViewEndDateColumn() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = DB_PREFIX . 'user_department';
+        $row = $this->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+            . "AND COLUMN_NAME = 'project_view_end_date'"
+        );
+        if (!empty($row['cnt'])) {
+            return;
+        }
+        $this->query(
+            "ALTER TABLE `{$table}` ADD COLUMN `project_view_end_date` tinyint(1) NOT NULL DEFAULT 0 "
+            . "COMMENT 'プロジェクト権限: 期限日閲覧' AFTER `project_comment`"
+        );
     }
 
     function list() {
@@ -109,6 +134,7 @@ class Department extends ApplicationModel {
             'project_edit',
             'project_delete',
             'project_comment',
+            'project_view_end_date',
             'task_view',
             'task_add',
             'task_edit',
@@ -185,21 +211,12 @@ class Department extends ApplicationModel {
         // Add department members
         if (isset($_POST['members']) && is_array($_POST['members'])) {
             foreach ($_POST['members'] as $user_id) {
-                $member_data = array(
-                    'department_id' => $department_id,
-                    'userid' => $user_id,
-                    'project_manager' => isset($_POST['project_manager'][$user_id]) && $_POST['project_manager'][$user_id] == 'true' ? 1 : 0,
-                    'project_director_stat' => isset($_POST['project_director_stat'][$user_id]) && $_POST['project_director_stat'][$user_id] == 'true' ? 1 : 0,
-                    'project_director_view' => isset($_POST['project_director_view'][$user_id]) && $_POST['project_director_view'][$user_id] == 'true' ? 1 : 0,
-                    'project_director_edit' => isset($_POST['project_director_edit'][$user_id]) && $_POST['project_director_edit'][$user_id] == 'true' ? 1 : 0,
-                    'project_add' => isset($_POST['project_add'][$user_id]) && $_POST['project_add'][$user_id] == 'true' ? 1 : 0,
-                    'project_edit' => isset($_POST['project_edit'][$user_id]) && $_POST['project_edit'][$user_id] == 'true' ? 1 : 0,
-                    'project_delete' => isset($_POST['project_delete'][$user_id]) && $_POST['project_delete'][$user_id] == 'true' ? 1 : 0,
-                    'project_comment' => isset($_POST['project_comment'][$user_id]) && $_POST['project_comment'][$user_id] == 'true' ? 1 : 0,
-                    'task_view' => isset($_POST['task_view'][$user_id]) && $_POST['task_view'][$user_id] == 'true' ? 1 : 0,
-                    'task_add' => isset($_POST['task_add'][$user_id]) && $_POST['task_add'][$user_id] == 'true' ? 1 : 0,
-                    'task_edit' => isset($_POST['task_edit'][$user_id]) && $_POST['task_edit'][$user_id] == 'true' ? 1 : 0,
-                    'task_delete' => isset($_POST['task_delete'][$user_id]) && $_POST['task_delete'][$user_id] == 'true' ? 1 : 0
+                $member_data = array_merge(
+                    [
+                        'department_id' => $department_id,
+                        'userid' => $user_id,
+                    ],
+                    $this->buildDepartmentPermissionFromPost($user_id)
                 );
                 $this->query_insert($member_data, DB_PREFIX . 'user_department');
             }
@@ -230,21 +247,12 @@ class Department extends ApplicationModel {
         $this->query("DELETE FROM " . DB_PREFIX . "user_department WHERE department_id = " . intval($id));
         if (isset($_POST['members']) && is_array($_POST['members'])) {
             foreach ($_POST['members'] as $user_id) {
-                $member_data = array(
-                    'department_id' => $id,
-                    'userid' => $user_id,
-                    'project_manager' => isset($_POST['project_manager'][$user_id]) && $_POST['project_manager'][$user_id] == 'true' ? 1 : 0,
-                    'project_director_stat' => isset($_POST['project_director_stat'][$user_id]) && $_POST['project_director_stat'][$user_id] == 'true' ? 1 : 0,
-                    'project_director_view' => isset($_POST['project_director_view'][$user_id]) && $_POST['project_director_view'][$user_id] == 'true' ? 1 : 0,
-                    'project_director_edit' => isset($_POST['project_director_edit'][$user_id]) && $_POST['project_director_edit'][$user_id] == 'true' ? 1 : 0,
-                    'project_add' => isset($_POST['project_add'][$user_id]) && $_POST['project_add'][$user_id] == 'true' ? 1 : 0,
-                    'project_edit' => isset($_POST['project_edit'][$user_id]) && $_POST['project_edit'][$user_id] == 'true' ? 1 : 0,
-                    'project_delete' => isset($_POST['project_delete'][$user_id]) && $_POST['project_delete'][$user_id] == 'true' ? 1 : 0,
-                    'project_comment' => isset($_POST['project_comment'][$user_id]) && $_POST['project_comment'][$user_id] == 'true' ? 1 : 0,
-                    'task_view' => isset($_POST['task_view'][$user_id]) && $_POST['task_view'][$user_id] == 'true' ? 1 : 0,
-                    'task_add' => isset($_POST['task_add'][$user_id]) && $_POST['task_add'][$user_id] == 'true' ? 1 : 0,
-                    'task_edit' => isset($_POST['task_edit'][$user_id]) && $_POST['task_edit'][$user_id] == 'true' ? 1 : 0,
-                    'task_delete' => isset($_POST['task_delete'][$user_id]) && $_POST['task_delete'][$user_id] == 'true' ? 1 : 0
+                $member_data = array_merge(
+                    [
+                        'department_id' => $id,
+                        'userid' => $user_id,
+                    ],
+                    $this->buildDepartmentPermissionFromPost($user_id)
                 );
                 $this->query_insert($member_data, DB_PREFIX . 'user_department');
             }
@@ -293,7 +301,7 @@ class Department extends ApplicationModel {
             $query = sprintf(
                 "SELECT ud.userid, u.realname as user_name,
                 ud.project_manager, ud.project_director, ud.project_director_stat, ud.project_director_view, ud.project_director_edit,
-                ud.project_add, ud.project_edit, ud.project_delete, ud.project_comment,
+                ud.project_add, ud.project_edit, ud.project_delete, ud.project_comment, ud.project_view_end_date,
                 ud.task_view, ud.task_add, ud.task_edit, ud.task_delete
                 FROM " . DB_PREFIX . "user_department ud
                 LEFT JOIN " . DB_PREFIX . "user u ON u.userid = ud.userid
@@ -332,6 +340,7 @@ class Department extends ApplicationModel {
                 'project_edit' => 1,
                 'project_delete' => 1,
                 'project_comment' => 1,
+                'project_view_end_date' => 1,
                 'department_id' => 0,
             ]];
         }

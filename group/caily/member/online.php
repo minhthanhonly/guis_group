@@ -89,10 +89,18 @@ $view->heading('オンライン状況');
                         <tr v-for="m in filteredMembers" :key="m.userid"
                             :class="{ 'table-warning': isAdministrator && hasUnlockRequest(m.userid) }">
                             <td>
-                                <div class="avatar"
+                                <div class="avatar avatar-sm"
                                      :class="avatarClass(m.userid)"
-                                     :data-userid="m.userid">
-                                    <img :src="avatarUrl(m)" alt class="rounded-circle" @error="onAvatarError" />
+                                     :data-userid="m.userid"
+                                     :title="displayName(m)">
+                                    <span class="avatar-initial rounded-circle bg-label-primary">{{ avatarInitials(m) }}</span>
+                                    <img v-if="hasValidAvatar(m)"
+                                         :src="avatarUrl(m)"
+                                         alt=""
+                                         class="rounded-circle"
+                                         style="display:none;"
+                                         @load="onAvatarLoad"
+                                         @error="onAvatarError" />
                                 </div>
                             </td>
                             <td>

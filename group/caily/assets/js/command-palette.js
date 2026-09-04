@@ -247,7 +247,8 @@
     }
 
     function canShowCustomerSearch() {
-        return canShowProject() && canShowExtended();
+        // Allow CAILY groups (6/7) as long as they can access projects
+        return canShowProject();
     }
 
     function setSearchMode(mode) {

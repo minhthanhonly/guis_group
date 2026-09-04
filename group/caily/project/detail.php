@@ -372,15 +372,21 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div class="d-flex align-items-center flex-wrap gap-2" v-else-if="managers && managers.length > 0">
                                     <div v-for="member in managers" :key="member.userid"
-                                        class="avatar"
+                                        class="avatar avatar-sm"
                                         :data-userid="member.userid"
                                         data-bs-toggle="tooltip"
                                         data-popup="tooltip-custom"
                                         data-bs-placement="top"
                                         :aria-label="member.user_name"
                                         :data-bs-original-title="member.user_name">
-                                        <img v-if="!member.avatarError" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" @error="handleAvatarError(member)">
-                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member.user_name) }}</span>
+                                        <span v-if="showAvatarInitials(member)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
+                                        <img v-if="!member.avatarError && getAvatarSrc(member)"
+                                            class="rounded-circle"
+                                            :class="{ 'd-none': !member.avatarLoaded }"
+                                            :src="getAvatarSrc(member)"
+                                            :alt="member.user_name"
+                                            @load="handleAvatarLoad(member)"
+                                            @error="handleAvatarError(member)">
                                     </div>
                                 </div>
                                 <div v-else class="text-muted">
@@ -395,15 +401,21 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div class="d-flex flex-wrap gap-2 align-items-center" v-else-if="members.length > 0">
                                     <div v-for="member in members" :key="member.userid"
-                                        class="avatar"
+                                        class="avatar avatar-sm"
                                         data-bs-toggle="tooltip"
                                         :data-userid="member.userid"
                                         data-popup="tooltip-custom"
                                         data-bs-placement="top"
                                         :aria-label="member.user_name"
                                         :data-bs-original-title="member.user_name">
-                                        <img v-if="!member.avatarError" class="rounded-circle" :src="getAvatarSrc(member)" :alt="member.user_name" @error="handleAvatarError(member)">
-                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member.user_name) }}</span>
+                                        <span v-if="showAvatarInitials(member)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
+                                        <img v-if="!member.avatarError && getAvatarSrc(member)"
+                                            class="rounded-circle"
+                                            :class="{ 'd-none': !member.avatarLoaded }"
+                                            :src="getAvatarSrc(member)"
+                                            :alt="member.user_name"
+                                            @load="handleAvatarLoad(member)"
+                                            @error="handleAvatarError(member)">
                                     </div>
                                 </div>
                                 <div v-else class="text-muted">
@@ -475,7 +487,7 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" :data-time="project.start_date || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ''" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)" readonly>
                             </div>
-                            <div class="col-md-4" v-if="!isCailyBranchUser">
+                            <div class="col-md-4" v-if="canViewEndDate">
                                 <label class="form-label">
                                     <span data-i18n="期限日(実納期)">期限日(実納期)</span>
                                     <span v-if="getTimeRemaining()" :class="'badge ms-2 ' + getTimeRemaining().class" 
@@ -483,7 +495,7 @@ if($_SESSION['show_project'] == 0){
                                         {{ getTimeRemaining().text }}
                                     </span>
                                 </label>
-                                <template v-if="isEditMode">
+                                <template v-if="isEditMode && !isCailyBranchUser">
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                             :class="{ 'is-invalid': validationErrors.end_date }">
@@ -561,15 +573,15 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4" v-if="!isCailyBranchUser">
+                            <div class="col-md-4" v-if="canViewEndDate">
                                 <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span>
-                                    <span v-if="isEditMode && project.end_date && project.tantou === 'GUIS'" class="text-danger">*</span>
+                                    <span v-if="isEditMode && !isCailyBranchUser && project.end_date && project.tantou === 'GUIS'" class="text-danger">*</span>
                                     <span v-if="getTimeRemainingForDate(project.guis_nouki) && project.guis_nouki_status !== '納品済み'" :class="'badge ms-2 ' + getTimeRemainingForDate(project.guis_nouki).class"
                                           :title="getTimeRemainingForDate(project.guis_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ getTimeRemainingForDate(project.guis_nouki).text }}
                                     </span>
                                 </label>
-                                <div v-if="isEditMode">
+                                <div v-if="isEditMode && !isCailyBranchUser">
                                     <div class="input-group mb-1">
                                         <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                             :class="{ 'is-invalid': validationErrors.guis_nouki }">
@@ -585,7 +597,7 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div v-else class="d-flex flex-column">
                                     <input type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" :data-time="project.guis_nouki || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' GUIS納期'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)" readonly>
-                                    <div class="form-check mt-1" v-if="canEditProject">
+                                    <div class="form-check mt-1" v-if="canEditProject && !isCailyBranchUser">
                                         <input class="form-check-input" type="checkbox" id="guis_nouki_status_view" v-model="project.guis_nouki_status" true-value="納品済み" false-value="" @change="quickUpdateNoukiStatus('guis')">
                                         <label class="form-check-label" for="guis_nouki_status_view"><span data-i18n="納品済み">納品済み</span></label>
                                     </div>
@@ -920,6 +932,99 @@ if($_SESSION['show_project'] == 0){
                     </div>
                 </div>
 
+                <!-- Other departments' sibling project deadlines -->
+                <div class="card mb-4" v-if="otherDepartmentSiblingProjects.length">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fa fa-calendar-alt me-1"></i>
+                            <span data-i18n="他部署の納期">他部署の納期</span>
+                        </h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="list-group list-group-flush">
+                            <div v-for="sibling in otherDepartmentSiblingProjects" :key="sibling.id"
+                                 class="list-group-item px-3 py-2">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
+                                    <div class="min-w-0">
+                                        <span class="badge border border-info bg-transparent text-info me-1">
+                                            {{ sibling.department_name || '-' }}
+                                        </span>
+                                        <a :href="'detail.php?id=' + sibling.id" class="text-decoration-none fw-semibold">
+                                            <span class="badge bg-primary me-1">#{{ sibling.id }}</span>
+                                        </a>
+                                        <span v-if="sibling.project_order_type"
+                                              class="d-inline-flex flex-wrap align-items-center gap-1 ms-1">
+                                            <span v-for="item in sibling.project_order_type.split(',')"
+                                                  :key="'ot-' + sibling.id + '-' + item.trim()"
+                                                  class="badge me-0"
+                                                  :class="getOrderTypeBadgeClass(item.trim())"
+                                                  v-show="item.trim()">{{ item.trim() }}</span>
+                                        </span>
+                                    </div>
+                                    <span class="badge flex-shrink-0" :class="getStatusBadgeClass(sibling.status)">
+                                        {{ getStatusLabel(sibling.status) }}
+                                    </span>
+                                </div>
+                                <div class="small">
+                                    <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                        <span class="text-muted" data-i18n="CAILY納期">CAILY納期</span>
+                                        <span v-if="sibling.caily_nouki"
+                                              :data-time="sibling.caily_nouki"
+                                              data-bs-toggle="tooltip"
+                                              :data-bs-title="getVietnamTimeTooltip(sibling.caily_nouki)">
+                                            {{ formatDateTime(sibling.caily_nouki) }}
+                                        </span>
+                                        <span v-else class="text-muted">-</span>
+                                        <span v-if="isNoukiDelivered(sibling.caily_nouki_status)"
+                                              class="badge bg-success"
+                                              data-i18n="納品済み">納品済み</span>
+                                        <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki)"
+                                              class="badge"
+                                              :class="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki).class">
+                                            {{ getSiblingDeadlineRemaining(sibling, sibling.caily_nouki).text }}
+                                        </span>
+                                    </div>
+                                    <template v-if="canViewEndDate">
+                                        <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                            <span class="text-muted" data-i18n="GUIS納期">GUIS納期</span>
+                                            <span v-if="sibling.guis_nouki"
+                                                  :data-time="sibling.guis_nouki"
+                                                  data-bs-toggle="tooltip"
+                                                  :data-bs-title="getVietnamTimeTooltip(sibling.guis_nouki)">
+                                                {{ formatDateTime(sibling.guis_nouki) }}
+                                            </span>
+                                            <span v-else class="text-muted">-</span>
+                                            <span v-if="isNoukiDelivered(sibling.guis_nouki_status)"
+                                                  class="badge bg-success"
+                                                  data-i18n="納品済み">納品済み</span>
+                                            <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki)"
+                                                  class="badge"
+                                                  :class="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki).class">
+                                                {{ getSiblingDeadlineRemaining(sibling, sibling.guis_nouki).text }}
+                                            </span>
+                                        </div>
+                                        <div class="d-flex flex-wrap align-items-center gap-1">
+                                            <span class="text-muted" data-i18n="期限日(実納期)">期限日(実納期)</span>
+                                            <span v-if="sibling.end_date"
+                                                  :data-time="sibling.end_date"
+                                                  data-bs-toggle="tooltip"
+                                                  :data-bs-title="getVietnamTimeTooltip(sibling.end_date)">
+                                                {{ formatDateTime(sibling.end_date) }}
+                                            </span>
+                                            <span v-else class="text-muted">-</span>
+                                            <span v-if="getSiblingDeadlineRemaining(sibling, sibling.end_date)"
+                                                  class="badge"
+                                                  :class="getSiblingDeadlineRemaining(sibling, sibling.end_date).class">
+                                                {{ getSiblingDeadlineRemaining(sibling, sibling.end_date).text }}
+                                            </span>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Quick Notes Section -->
                 <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
@@ -974,13 +1079,17 @@ if($_SESSION['show_project'] == 0){
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <span v-if="log.user_image">
-                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
-                                            </span>
-                                            <div class="avatar avatar-sm" v-else>
-                                                <span class="avatar-initial rounded-circle bg-label-primary">
+                                            <div class="avatar avatar-sm">
+                                                <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
                                                     {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                                 </span>
+                                                <img v-if="!log.avatarError && getAvatarSrc(log)"
+                                                    :src="getAvatarSrc(log)"
+                                                    alt="avatar"
+                                                    class="rounded-circle"
+                                                    :class="{ 'd-none': !log.avatarLoaded }"
+                                                    @load="handleAvatarLoad(log)"
+                                                    @error="handleAvatarError(log)">
                                             </div>
                                         </div>
                                         <div class="d-flex flex-column align-items-start justify-content-center ms-2">
@@ -1096,9 +1205,15 @@ if($_SESSION['show_project'] == 0){
                     <div class="modal-body">
                         <div class="d-flex flex-wrap">
                             <div v-for="user in allUsers" :key="user.userid" class="m-2 text-center" style="cursor:pointer;">
-                                <div @click="toggleMemberSelect(user.userid)" :class="{'border border-primary': memberSelected.includes(user.userid)}" style="display:inline-block;border-radius:50%;padding:2px;">
-                                    <img v-if="!user.avatarError && getAvatarSrc(user)" class="rounded-circle" :src="getAvatarSrc(user)" :alt="user.user_name" width="40" height="40" @error="handleAvatarError(user)">
-                                    <span v-else class="avatar-initial rounded-circle bg-label-primary" style="width:40px;height:40px;display:inline-flex;align-items:center;justify-content:center;">{{ getInitials(user.user_name) }}</span>
+                                <div @click="toggleMemberSelect(user.userid)" :class="{'border border-primary': memberSelected.includes(user.userid)}" class="avatar avatar-md" style="display:inline-block;padding:2px;">
+                                    <span v-if="showAvatarInitials(user)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(user) }}</span>
+                                    <img v-if="!user.avatarError && getAvatarSrc(user)"
+                                        class="rounded-circle"
+                                        :class="{ 'd-none': !user.avatarLoaded }"
+                                        :src="getAvatarSrc(user)"
+                                        :alt="user.user_name"
+                                        @load="handleAvatarLoad(user)"
+                                        @error="handleAvatarError(user)">
                                 </div>
                                 <div style="font-size:12px;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ user.user_name }}</div>
                                 <input type="checkbox" class="form-check-input mt-1" :checked="memberSelected.includes(user.userid)" @change="toggleMemberSelect(user.userid)">
@@ -1127,13 +1242,17 @@ if($_SESSION['show_project'] == 0){
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <span v-if="log.user_image">
-                                                <img :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle" width="32" height="32">
-                                            </span>
-                                            <div class="avatar avatar-sm" v-else>
-                                                <span class="avatar-initial rounded-circle bg-label-primary">
+                                            <div class="avatar avatar-sm">
+                                                <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
                                                     {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                                 </span>
+                                                <img v-if="!log.avatarError && getAvatarSrc(log)"
+                                                    :src="getAvatarSrc(log)"
+                                                    alt="avatar"
+                                                    class="rounded-circle"
+                                                    :class="{ 'd-none': !log.avatarLoaded }"
+                                                    @load="handleAvatarLoad(log)"
+                                                    @error="handleAvatarError(log)">
                                             </div>
                                         </div>
                                         <div class="d-flex flex-column align-items-start justify-content-center ms-2">
