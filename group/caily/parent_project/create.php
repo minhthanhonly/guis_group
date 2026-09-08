@@ -137,15 +137,15 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                 </div>
                             </div>
                         </div>
-                        <!-- <div class="col-md-6">
+                        <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
+                                <label class="form-label"><span data-i18n="工事支店">工事支店</span> <small class="text-muted">(都道府県)</small></label>
                                 <div class="d-flex align-items-center gap-2">
                                     <input type="text" class="form-control tagify" v-model="parentProject.construction_branch" id="construction_branch_tags" name="construction_branch_tags">
                                     <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('construction_branch')" title="すべて削除"><i class="fa fa-times"></i></button>
                                 </div>
                             </div>
-                        </div> -->
+                        </div>
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span class="text-danger">*</span></label>
@@ -159,6 +159,12 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
                                 <input type="text" class="form-control tagify" v-model="parentProject.scale" id="scale_tags" name="scale_tags">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="建築地（市区町村）">建築地（市区町村）</span></label>
+                                <input type="text" class="form-control" v-model="parentProject.construction_city" placeholder="例: 高槻市、神戸市">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -310,6 +316,45 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                             <label class="form-check-label" for="materials_other">
                                                 その他
                                             </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded p-3 mb-3">
+                                <div class="fw-semibold mb-2" data-i18n="特記仕様設定">特記仕様設定</div>
+                                <div class="mb-3">
+                                    <label class="form-label mb-1"><span data-i18n="建物構造">建物構造</span></label>
+                                    <div class="d-flex flex-wrap gap-3">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="structure_type_create" id="c_structure_w"
+                                                value="W" v-model="parentProject.structure_type">
+                                            <label class="form-check-label" for="c_structure_w">W（木造）</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="structure_type_create" id="c_structure_src"
+                                                value="S_RC" v-model="parentProject.structure_type">
+                                            <label class="form-check-label" for="c_structure_src">S・RC</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="structure_type_create" id="c_structure_none"
+                                                value="" v-model="parentProject.structure_type">
+                                            <label class="form-check-label" for="c_structure_none" data-i18n="未設定">未設定</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="form-label mb-1"><span data-i18n="機能特記">機能特記</span></label>
+                                    <div class="row g-2">
+                                        <div class="col-md-6 col-lg-3" v-for="feat in specFeatureOptions" :key="feat.key">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                    :id="'c_spec_feat_' + feat.key"
+                                                    :value="feat.key"
+                                                    v-model="specFeatureChecked">
+                                                <label class="form-check-label" :for="'c_spec_feat_' + feat.key">{{ feat.label }}</label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

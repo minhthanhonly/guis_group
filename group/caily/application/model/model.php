@@ -353,7 +353,10 @@ class Model extends Connection {
 		if (is_array($data)) {
 			return array_map(array($this, 'sanitize'), $data);
 		} else {
-			return htmlspecialchars($data, ENT_QUOTES, 'UTF-8');
+			if ($data === null) {
+				return '';
+			}
+			return htmlspecialchars((string)$data, ENT_QUOTES, 'UTF-8');
 		}
 		
 	}

@@ -453,6 +453,21 @@ createApp({
             type1Tagify: null,
             type2Tagify: null,
             constructionBranchTagify: null,
+            branchSpecLoading: false,
+            branchSpecMatched: [],
+            branchSpecManual: [],
+            branchSpecByDept: [],
+            branchSpecActiveDept: '',
+            branchSpecScope: '',
+            branchSpecUserDeptKeys: [],
+            branchSpecDeptLabels: {},
+            specFeatureOptions: [
+                { key: 'mb_water_heater', label: 'MB内に給湯器設置' },
+                { key: 'fire_water_tank', label: '消火用補給水槽' },
+                { key: 'steel_stairs', label: '鉄骨階段' },
+                { key: 'gh_l_type', label: 'GH・L型' }
+            ],
+            specFeatureChecked: [],
             childProjectOrderTypeTagify: null,
             createChildProjectManagerTagify: null,
             createChildProjectTeamTagify: null,
@@ -891,6 +906,26 @@ createApp({
         }
     },
     computed: {
+        branchSpecDeptTabs() {
+            return window.BranchSpecPanel && window.BranchSpecPanel.computed
+                ? window.BranchSpecPanel.computed.branchSpecDeptTabs.call(this)
+                : [];
+        },
+        filteredBranchSpecs() {
+            return window.BranchSpecPanel && window.BranchSpecPanel.computed
+                ? window.BranchSpecPanel.computed.filteredBranchSpecs.call(this)
+                : [];
+        },
+        filteredBranchSpecManual() {
+            return window.BranchSpecPanel && window.BranchSpecPanel.computed
+                ? window.BranchSpecPanel.computed.filteredBranchSpecManual.call(this)
+                : [];
+        },
+        selectedSpecFeatureLabels() {
+            const map = {};
+            (this.specFeatureOptions || []).forEach(f => { map[f.key] = f.label; });
+            return (this.specFeatureChecked || []).map(k => map[k] || k);
+        },
         yoteiPartOptions() {
             this.yoteiPartOptionsTick;
             if (typeof window.YoteiField !== 'undefined' && window.YoteiField.getPartOptions) {
@@ -1169,6 +1204,8 @@ createApp({
 
                     // Load display info (会社名・支店名・担当様) from customer table if possible
                     await this.loadCustomerDisplayInfo();
+                    this.syncSpecFeaturesFromParent();
+                    await this.loadBranchSpecs();
                 } else {
                     showMessage('親プロジェクトが見つかりません。', true);
                     window.location.href = 'index.php';
@@ -1178,6 +1215,35 @@ createApp({
                 showMessage('親プロジェクトの読み込みに失敗しました。', true);
                 window.location.href = 'index.php';
             }
+        },
+        async loadBranchSpecs() {
+            if (!PARENT_PROJECT_ID || !window.BranchSpecPanel) return;
+            await window.BranchSpecPanel.load(this, {
+                parentProjectId: PARENT_PROJECT_ID,
+                context: this.parentProject ? {
+                    company_name: this.parentProject.company_name || '',
+                    branch_name: this.parentProject.branch_name || '',
+                    construction_branch: this.parentProject.construction_branch || '',
+                    construction_city: this.parentProject.construction_city || '',
+                    structure_type: this.parentProject.structure_type || '',
+                    spec_features: this.parentProject.spec_features || '',
+                    scale: this.parentProject.scale || '',
+                    type1: this.parentProject.type1 || '',
+                    type2: this.parentProject.type2 || ''
+                } : {}
+            });
+        },
+        syncSpecFeaturesFromParent() {
+            const raw = (this.parentProject && this.parentProject.spec_features) ? String(this.parentProject.spec_features) : '';
+            this.specFeatureChecked = raw.split(',').map(s => s.trim()).filter(Boolean);
+            if (this.parentProject && this.parentProject.structure_type == null) {
+                this.parentProject.structure_type = '';
+            }
+        },
+        onSpecFeaturesChange() {
+            if (!this.parentProject) return;
+            this.parentProject.spec_features = (this.specFeatureChecked || []).join(',');
+            this.loadBranchSpecs();
         },
         async loadChildProjects() {
             try {
@@ -2371,6 +2437,7 @@ createApp({
                     });
                     const updateType1 = () => {
                         this.parentProject.type1 = this.type1Tagify.value.map(tag => tag.value).join(',');
+                        if (typeof this.loadBranchSpecs === 'function') this.loadBranchSpecs();
                     };
                     this.type1Tagify.on('add', updateType1);
                     this.type1Tagify.on('remove', updateType1);
@@ -2404,6 +2471,7 @@ createApp({
                     });
                     const updateType2 = () => {
                         this.parentProject.type2 = this.type2Tagify.value.map(tag => tag.value).join(',');
+                        if (typeof this.loadBranchSpecs === 'function') this.loadBranchSpecs();
                     };
                     this.type2Tagify.on('add', updateType2);
                     this.type2Tagify.on('remove', updateType2);
@@ -2443,6 +2511,7 @@ createApp({
                     });
                     const updateConstructionBranch = () => {
                         this.parentProject.construction_branch = this.constructionBranchTagify.value.map(tag => tag.value).join(',');
+                        if (typeof this.loadBranchSpecs === 'function') this.loadBranchSpecs();
                     };
                     this.constructionBranchTagify.on('add', updateConstructionBranch);
                     this.constructionBranchTagify.on('remove', updateConstructionBranch);
@@ -2576,6 +2645,9 @@ createApp({
                 formData.append('project_number', this.parentProject.project_number || '');
                 formData.append('project_name', this.parentProject.project_name || '');
                 formData.append('construction_branch', this.parentProject.construction_branch || '');
+                formData.append('construction_city', this.parentProject.construction_city || '');
+                formData.append('structure_type', this.parentProject.structure_type || '');
+                formData.append('spec_features', (this.specFeatureChecked || []).join(','));
                 formData.append('scale', this.parentProject.scale || '');
                 formData.append('type1', this.parentProject.type1 || '');
                 formData.append('type2', this.parentProject.type2 || '');

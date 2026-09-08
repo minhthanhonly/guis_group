@@ -171,10 +171,29 @@ if($_SESSION['show_project'] == 0){
                                                         <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
                                                     </div>
                                                     <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="建築地（市区町村）">建築地（市区町村）</span></label>
+                                                        <input type="text" class="form-control" :value="project.construction_city || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="建物構造">建物構造</span></label>
+                                                        <div>
+                                                            <span v-if="project.structure_type === 'W'" class="badge bg-primary">W（木造）</span>
+                                                            <span v-else-if="project.structure_type === 'S_RC'" class="badge bg-primary">S・RC</span>
+                                                            <span v-else class="text-muted">-</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-8 mb-3">
+                                                        <label class="form-label"><span data-i18n="機能特記">機能特記</span></label>
+                                                        <div class="d-flex flex-wrap gap-1" v-if="projectSpecFeatureLabels.length">
+                                                            <span v-for="lab in projectSpecFeatureLabels" :key="lab" class="badge bg-info">{{ lab }}</span>
+                                                        </div>
+                                                        <span v-else class="text-muted">-</span>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
                                                         <label class="form-label"><span data-i18n="GUIS 受付者">GUIS 受付者</span></label>
                                                         <input type="text" class="form-control" :value="project.guis_receiver_display_name || project.guis_receiver || '-'" readonly>
                                                     </div>
-                                                    <!--<div class="col-md-4 mb-3">
+                                                    <div class="col-md-4 mb-3">
                                                         <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
                                                         <div style="min-height:38px;">
                                                             <span v-if="project.building_branch && project.building_branch.split(',').length > 0">
@@ -182,7 +201,7 @@ if($_SESSION['show_project'] == 0){
                                                             </span>
                                                             <span v-else>-</span>
                                                         </div>
-                                                    </div>-->
+                                                    </div>
                                                     <div class="col-md-4 mb-3">
                                                         <label class="form-label"><span data-i18n="種類1">種類1</span></label>
                                                         <div style="min-height:38px;">
@@ -252,6 +271,13 @@ if($_SESSION['show_project'] == 0){
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+
+                            <div v-if="project.parent_project_id" class="col-12 mb-3">
+                                <?php
+                                $branchSpecCompact = true;
+                                require __DIR__ . '/../application/view/partials/branch-spec-card.php';
+                                ?>
                             </div>
 
                             <div v-if="project.parent_project_id && (project.show_child_customer_info || project.show_child_guis_receiver)" class="col-12 mt-3">
@@ -1640,6 +1666,7 @@ window.__chatPageContext = { project_id: PROJECT_ID };
 <script src="/assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../assets/js/branch-spec-panel.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 

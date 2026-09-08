@@ -15,6 +15,9 @@ class ParentProject extends ApplicationModel {
             'project_number' => array(),
             'project_name' => array('notnull'),
             'construction_branch' => array(),
+            'construction_city' => array(),
+            'structure_type' => array(),
+            'spec_features' => array(),
             'scale' => array(),
             'type1' => array(),
             'type2' => array(),
@@ -34,6 +37,29 @@ class ParentProject extends ApplicationModel {
         );
         $this->connect();
         $this->ensureParentProjectsUtf8mb4();
+        $this->ensureSpecFeatureColumns();
+    }
+
+    private function ensureSpecFeatureColumns() {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        try {
+            foreach (array(
+                'construction_city' => "ADD COLUMN `construction_city` varchar(255) DEFAULT NULL COMMENT '建築地（市区町村）'",
+                'structure_type' => "ADD COLUMN `structure_type` varchar(20) DEFAULT NULL COMMENT 'W|S_RC'",
+                'spec_features' => "ADD COLUMN `spec_features` varchar(500) DEFAULT NULL COMMENT 'CSV feature keys'",
+            ) as $col => $ddl) {
+                $exists = $this->fetchOne("SHOW COLUMNS FROM `{$this->table}` LIKE '{$col}'");
+                if (!$exists) {
+                    $this->query("ALTER TABLE `{$this->table}` {$ddl}");
+                }
+            }
+        } catch (Exception $e) {
+            error_log('ParentProject ensureSpecFeatureColumns: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -322,6 +348,9 @@ class ParentProject extends ApplicationModel {
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : '',
             'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : '',
+            'construction_city' => isset($_POST['construction_city']) ? $_POST['construction_city'] : '',
+            'structure_type' => isset($_POST['structure_type']) ? $_POST['structure_type'] : '',
+            'spec_features' => isset($_POST['spec_features']) ? $_POST['spec_features'] : '',
          //   'department_id' => isset($_POST['department_id']) ? intval($_POST['department_id']) : null,
             'created_by' => $_SESSION['userid'],
             'created_at' => date('Y-m-d H:i:s')
@@ -430,6 +459,9 @@ class ParentProject extends ApplicationModel {
             'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : (isset($old['structural_office']) ? $old['structural_office'] : ''),
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : (isset($old['project_number']) ? $old['project_number'] : ''),
             'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : (isset($old['construction_branch']) ? $old['construction_branch'] : ''),
+            'construction_city' => isset($_POST['construction_city']) ? $_POST['construction_city'] : (isset($old['construction_city']) ? $old['construction_city'] : ''),
+            'structure_type' => isset($_POST['structure_type']) ? $_POST['structure_type'] : (isset($old['structure_type']) ? $old['structure_type'] : ''),
+            'spec_features' => isset($_POST['spec_features']) ? $_POST['spec_features'] : (isset($old['spec_features']) ? $old['spec_features'] : ''),
             'notes' => $notes,
             'status' => isset($_POST['status']) ? $_POST['status'] : (isset($old['status']) ? $old['status'] : 'draft'),
             'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : '',

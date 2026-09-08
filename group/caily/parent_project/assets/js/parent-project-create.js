@@ -14,6 +14,9 @@ createApp({
                 project_number: '',
                 project_name: '',
                 construction_branch: '',
+                construction_city: '',
+                structure_type: '',
+                spec_features: '',
                 scale: '',
                 type1: '',
                 type2: '',
@@ -33,6 +36,13 @@ createApp({
                 notes: '',
                 status: 'draft'
             },
+            specFeatureOptions: [
+                { key: 'mb_water_heater', label: 'MB内に給湯器設置' },
+                { key: 'fire_water_tank', label: '消火用補給水槽' },
+                { key: 'steel_stairs', label: '鉄骨階段' },
+                { key: 'gh_l_type', label: 'GH・L型' }
+            ],
+            specFeatureChecked: [],
             statuses: [
                 { value: 'draft', label: '下書き', color: 'secondary' },
                 { value: 'under_contract', label: '契約中', color: 'info' },
@@ -208,6 +218,9 @@ createApp({
                 formData.append('project_number', this.parentProject.project_number || '');
                 formData.append('project_name', this.parentProject.project_name || '');
                 formData.append('construction_branch', this.parentProject.construction_branch || '');
+                formData.append('construction_city', this.parentProject.construction_city || '');
+                formData.append('structure_type', this.parentProject.structure_type || '');
+                formData.append('spec_features', (this.specFeatureChecked || []).join(','));
                 formData.append('scale', this.parentProject.scale || '');
                 formData.append('type1', this.parentProject.type1 || '');
                 formData.append('type2', this.parentProject.type2 || '');
@@ -1419,6 +1432,9 @@ createApp({
             project_number: '',
             project_name: '',
             construction_branch: '',
+            construction_city: '',
+            structure_type: '',
+            spec_features: '',
             scale: '',
             type1: '',
             type2: '',
@@ -1429,6 +1445,7 @@ createApp({
             notes: '',
             status: 'draft'
         };
+        this.specFeatureChecked = [];
         
         // Auto-generate project number on page load
         await this.generateProjectNumber();

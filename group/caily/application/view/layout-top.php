@@ -67,6 +67,11 @@
                       <div data-i18n="カスタムフィールド">カスタムフィールド</div>
                     </a>
                   </li>
+                  <li class="menu-item <?php if($directory == 'parent_project' && $page == 'branch_specs') echo 'active'; ?>">
+                    <a href="<?=$root?>parent_project/branch_specs.php" class="menu-link">
+                      <div data-i18n="支店・地域仕様管理">支店・地域仕様管理</div>
+                    </a>
+                  </li>
                   <!-- <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
                     <a href="<?=$root?>price_list" class="menu-link">
                       <div data-i18n="価格表管理">価格表管理</div>

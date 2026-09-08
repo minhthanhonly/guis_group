@@ -387,6 +387,14 @@ const vueApp = createApp({
             projectId: typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : this.getProjectIdFromUrl(),
             project: null,
             parentSiblingProjects: [],
+            branchSpecLoading: false,
+            branchSpecMatched: [],
+            branchSpecManual: [],
+            branchSpecByDept: [],
+            branchSpecActiveDept: '',
+            branchSpecScope: '',
+            branchSpecUserDeptKeys: [],
+            branchSpecDeptLabels: { isho: '意匠設計', setsubi: '設備設計' },
             savingEnergyDrawingShare: false,
             department: null,
             managers: [],
@@ -550,6 +558,25 @@ const vueApp = createApp({
         }
     },
     computed: {
+        branchSpecDeptTabs() {
+            return window.BranchSpecPanel.computed.branchSpecDeptTabs.call(this);
+        },
+        filteredBranchSpecs() {
+            return window.BranchSpecPanel.computed.filteredBranchSpecs.call(this);
+        },
+        filteredBranchSpecManual() {
+            return window.BranchSpecPanel.computed.filteredBranchSpecManual.call(this);
+        },
+        projectSpecFeatureLabels() {
+            const labels = {
+                mb_water_heater: 'MB内に給湯器設置',
+                fire_water_tank: '消火用補給水槽',
+                steel_stairs: '鉄骨階段',
+                gh_l_type: 'GH・L型'
+            };
+            const raw = (this.project && this.project.spec_features) ? String(this.project.spec_features) : '';
+            return raw.split(',').map(s => s.trim()).filter(Boolean).map(k => labels[k] || k);
+        },
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
         },
@@ -1006,6 +1033,9 @@ const vueApp = createApp({
                 this.project.building_size = parentProject.scale;
                 this.project.building_type = parentProject.type1;
                 this.project.building_branch = parentProject.construction_branch;
+                this.project.construction_city = parentProject.construction_city || '';
+                this.project.structure_type = parentProject.structure_type || '';
+                this.project.spec_features = parentProject.spec_features || '';
                 this.project.type1 = parentProject.type1;
                 this.project.type2 = parentProject.type2;
                 
@@ -1039,10 +1069,39 @@ const vueApp = createApp({
                 if (this.project.guis_receiver) {
                     await this.loadGuisReceiverDisplayName();
                 }
+
+                await this.loadBranchSpecs();
                 
             } catch (error) {
                 console.error('Error loading parent project info:', error);
             }
+        },
+        async loadBranchSpecs() {
+            if (!this.project || !this.project.parent_project_id || !window.BranchSpecPanel) {
+                this.branchSpecMatched = [];
+                this.branchSpecManual = [];
+                return;
+            }
+            const prefer = window.BranchSpecPanel.deptKeyFromName(this.project.department_name);
+            // Reset active dept when prefer matches project department so tab follows 案件 department
+            if (prefer) {
+                this.branchSpecActiveDept = prefer;
+            }
+            await window.BranchSpecPanel.load(this, {
+                parentProjectId: this.project.parent_project_id,
+                preferDeptKey: prefer,
+                context: {
+                    company_name: this.project.company_name || '',
+                    branch_name: this.project.branch_name || '',
+                    construction_branch: this.project.building_branch || '',
+                    construction_city: this.project.construction_city || '',
+                    structure_type: this.project.structure_type || '',
+                    spec_features: this.project.spec_features || '',
+                    scale: this.project.building_size || '',
+                    type1: this.project.type1 || '',
+                    type2: this.project.type2 || ''
+                }
+            });
         },
         
         async loadGuisReceiverDisplayName() {

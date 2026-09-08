@@ -245,11 +245,47 @@ $view->heading('建物詳細');
                                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="parentProject.scale"
-                                        placeholder="規模を入力">
+                                        placeholder="規模を入力" @change="loadBranchSpecs">
                                 </template>
                                 <template v-else>
                                     <input type="text" class="form-control" :value="parentProject.scale || '-'"
                                         readonly>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="建築地（市区町村）">建築地（市区町村）</span></label>
+                                <template v-if="isEditMode">
+                                    <input type="text" class="form-control" v-model="parentProject.construction_city"
+                                        placeholder="例: 高槻市、神戸市" @change="loadBranchSpecs">
+                                </template>
+                                <template v-else>
+                                    <input type="text" class="form-control" :value="parentProject.construction_city || '-'"
+                                        readonly>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="工事支店">工事支店</span> <small class="text-muted">(都道府県)</small></label>
+                                <template v-if="isEditMode">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control tagify" v-model="parentProject.construction_branch"
+                                            id="construction_branch_tags" name="construction_branch_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                            @click="clearTagifyTags('construction_branch'); loadBranchSpecs()" title="すべて削除"><i
+                                                class="fa fa-times"></i></button>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div style="min-height:38px;">
+                                        <span v-if="parentProject.construction_branch && parentProject.construction_branch.split(',').length > 0">
+                                            <span v-for="item in parentProject.construction_branch.split(',')" :key="item.trim()"
+                                                class="badge bg-primary me-1">{{ item.trim() }}</span>
+                                        </span>
+                                        <span v-else>-</span>
+                                    </div>
                                 </template>
                             </div>
                         </div>
@@ -462,6 +498,63 @@ $view->heading('建物詳細');
                                 </template>
                             </div>
                         </div>
+                        <div class="col-12">
+                            <div class="border rounded p-3 mb-3 bg-label-secondary bg-opacity-10">
+                                <div class="fw-semibold mb-2" data-i18n="特記仕様設定">特記仕様設定</div>
+                                <div class="mb-3">
+                                    <label class="form-label mb-1"><span data-i18n="建物構造">建物構造</span> <small class="text-muted">(W / S・RC)</small></label>
+                                    <template v-if="isEditMode">
+                                        <div class="d-flex flex-wrap gap-3">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="structure_type" id="structure_type_w"
+                                                    value="W" v-model="parentProject.structure_type" @change="loadBranchSpecs">
+                                                <label class="form-check-label" for="structure_type_w">W（木造）</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="structure_type" id="structure_type_src"
+                                                    value="S_RC" v-model="parentProject.structure_type" @change="loadBranchSpecs">
+                                                <label class="form-check-label" for="structure_type_src">S・RC</label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="structure_type" id="structure_type_none"
+                                                    value="" v-model="parentProject.structure_type" @change="loadBranchSpecs">
+                                                <label class="form-check-label" for="structure_type_none" data-i18n="未設定">未設定</label>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <template v-else>
+                                        <div>
+                                            <span v-if="parentProject.structure_type === 'W'" class="badge bg-primary">W（木造）</span>
+                                            <span v-else-if="parentProject.structure_type === 'S_RC'" class="badge bg-primary">S・RC</span>
+                                            <span v-else class="text-muted">-</span>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div>
+                                    <label class="form-label mb-1"><span data-i18n="機能特記">機能特記</span></label>
+                                    <template v-if="isEditMode">
+                                        <div class="row g-2">
+                                            <div class="col-md-6 col-lg-3" v-for="feat in specFeatureOptions" :key="feat.key">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox"
+                                                        :id="'spec_feat_' + feat.key"
+                                                        :value="feat.key"
+                                                        v-model="specFeatureChecked"
+                                                        @change="onSpecFeaturesChange">
+                                                    <label class="form-check-label" :for="'spec_feat_' + feat.key">{{ feat.label }}</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                    <template v-else>
+                                        <div class="d-flex flex-wrap gap-1" v-if="specFeatureChecked.length">
+                                            <span v-for="feat in selectedSpecFeatureLabels" :key="feat" class="badge bg-info">{{ feat }}</span>
+                                        </div>
+                                        <span v-else class="text-muted">-</span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
                         <!-- <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="備考">備考</span></label>
@@ -484,8 +577,13 @@ $view->heading('建物詳細');
                 </div>
             </div>
 
+            <!-- 支店・地域仕様 - above メモ -->
+            <div class="mb-4 mt-4" v-if="parentProject">
+                <?php require __DIR__ . '/../application/view/partials/branch-spec-card.php'; ?>
+            </div>
+
             <!-- メモ (Notes) - below 備考 -->
-            <div class="card mb-4 mt-4">
+            <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0"><span data-i18n="メモ">メモ</span></h5>
                     <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
@@ -4392,4 +4490,5 @@ $view->footing();
 <script src="/project/assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../assets/js/branch-spec-panel.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
