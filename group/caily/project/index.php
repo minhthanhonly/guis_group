@@ -1586,5 +1586,6 @@ if (window.IS_CAILY_BRANCH_USER) {
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/business-document-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list-tour.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

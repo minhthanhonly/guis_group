@@ -1738,6 +1738,25 @@ createApp({
             };
             return map[name] || '';
         },
+        resolveChildDepartmentName(departmentId) {
+            const id = parseInt(departmentId, 10);
+            if (!id) return '';
+            const found = (this.departments || []).find(d => parseInt(d.id, 10) === id);
+            return found ? (found.name || '') : '';
+        },
+        getEnergyDrawingShareLabel(project) {
+            return window.EnergyDrawingShare
+                ? window.EnergyDrawingShare.formatEnergyDrawingShareLabel(project)
+                : '';
+        },
+        getEnergyDrawingShareBadgeClass(project) {
+            return window.EnergyDrawingShare
+                ? window.EnergyDrawingShare.formatEnergyDrawingShareBadgeClass(project)
+                : '';
+        },
+        shouldShowEnergyDrawingShareBadge(project) {
+            return !!(project && project.energy_drawing_share_status);
+        },
         isParentRequestFulfilled(requestType) {
             const type = String(requestType || '').trim();
             if (!type || !Array.isArray(this.childProjects)) return false;
@@ -3819,6 +3838,7 @@ createApp({
                 id: project.id,
                 name: project.name || '',
                 department_id: project.department_id || '',
+                department_name: project.department_name || '',
                 project_number: project.project_number || '',
                 description: project.description || '',
                 start_date: project.start_date || '',
@@ -3839,6 +3859,9 @@ createApp({
                 guis_nouki: project.guis_nouki || '',
                 estimate_status: project.estimate_status || '未発行',
                 invoice_status: project.invoice_status || '未発行',
+                energy_drawing_share_status: project.energy_drawing_share_status || '',
+                energy_drawing_share_reason: project.energy_drawing_share_reason || '',
+                energy_drawing_share_note: project.energy_drawing_share_note || '',
                 yotei: this.parseYoteiModel(project.yotei),
                 custom_fields: project.custom_fields != null ? project.custom_fields : '',
                 use_parent_customer: useParentCustomer,
@@ -3873,6 +3896,14 @@ createApp({
                             }
                             if (data.invoice_status != null) {
                                 this.editingChildProject.invoice_status = data.invoice_status || '未発行';
+                            }
+                            if (data.department_name) {
+                                this.editingChildProject.department_name = data.department_name;
+                            }
+                            if (data.energy_drawing_share_status != null) {
+                                this.editingChildProject.energy_drawing_share_status = data.energy_drawing_share_status || '';
+                                this.editingChildProject.energy_drawing_share_reason = data.energy_drawing_share_reason || '';
+                                this.editingChildProject.energy_drawing_share_note = data.energy_drawing_share_note || '';
                             }
                         }
                     } catch (e) { /* ignore */ }
@@ -4719,6 +4750,23 @@ createApp({
                 if (!ok) return;
             }
 
+            let shareAnswer = null;
+            if (this.editingChildProject.status === 'completed' && prevStatus !== 'completed' && window.EnergyDrawingShare) {
+                const deptName = this.editingChildProject.department_name
+                    || this.resolveChildDepartmentName(this.editingChildProject.department_id)
+                    || '';
+                const siblings = this.childProjects || this.projects || [];
+                const answer = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(
+                    this.editingChildProject,
+                    {
+                        departmentName: deptName,
+                        siblings: siblings
+                    }
+                );
+                if (answer === false) return;
+                shareAnswer = answer;
+            }
+
             // Sync Quill content with the form data
             if (this.editChildProjectQuillInstance) {
                 this.editChildProjectQuillContent = this.editChildProjectQuillInstance.getSemanticHTML();
@@ -4764,6 +4812,9 @@ createApp({
                 if (editCustomFields.length) formData.append('custom_fields', JSON.stringify(editCustomFields));
 
                 appendProjectVersionToFormData(formData, this.editingChildProject);
+                if (window.EnergyDrawingShare) {
+                    window.EnergyDrawingShare.appendEnergyDrawingShareToFormData(formData, shareAnswer);
+                }
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
 
                 if (response.data.status === 'success') {

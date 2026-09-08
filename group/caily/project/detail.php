@@ -940,87 +940,159 @@ if($_SESSION['show_project'] == 0){
                             <span data-i18n="他部署の納期">他部署の納期</span>
                         </h5>
                     </div>
-                    <div class="card-body p-0">
-                        <div class="list-group list-group-flush">
-                            <div v-for="sibling in otherDepartmentSiblingProjects" :key="sibling.id"
-                                 class="list-group-item px-3 py-2">
-                                <div class="d-flex justify-content-between align-items-start gap-2 mb-1">
-                                    <div class="min-w-0">
-                                        <span class="badge border border-info bg-transparent text-info me-1">
-                                            {{ sibling.department_name || '-' }}
-                                        </span>
-                                        <a :href="'detail.php?id=' + sibling.id" class="text-decoration-none fw-semibold">
-                                            <span class="badge bg-primary me-1">#{{ sibling.id }}</span>
-                                        </a>
-                                        <span v-if="sibling.project_order_type"
-                                              class="d-inline-flex flex-wrap align-items-center gap-1 ms-1">
-                                            <span v-for="item in sibling.project_order_type.split(',')"
-                                                  :key="'ot-' + sibling.id + '-' + item.trim()"
-                                                  class="badge me-0"
-                                                  :class="getOrderTypeBadgeClass(item.trim())"
-                                                  v-show="item.trim()">{{ item.trim() }}</span>
-                                        </span>
-                                    </div>
-                                    <span class="badge flex-shrink-0" :class="getStatusBadgeClass(sibling.status)">
-                                        {{ getStatusLabel(sibling.status) }}
+                    <div class="card-body other-dept-nouki-body">
+                        <div v-for="sibling in otherDepartmentSiblingProjects" :key="sibling.id"
+                             class="other-dept-nouki-item">
+                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                <div class="min-w-0">
+                                    <span class="badge border border-info bg-transparent text-info me-1">
+                                        {{ sibling.department_name || '-' }}
+                                    </span>
+                                    <a :href="'detail.php?id=' + sibling.id" class="text-decoration-none fw-semibold">
+                                        <span class="badge bg-primary me-1">#{{ sibling.id }}</span>
+                                    </a>
+                                    <span v-if="sibling.project_order_type"
+                                          class="d-inline-flex flex-wrap align-items-center gap-1 ms-1">
+                                        <span v-for="item in sibling.project_order_type.split(',')"
+                                              :key="'ot-' + sibling.id + '-' + item.trim()"
+                                              class="badge me-0"
+                                              :class="getOrderTypeBadgeClass(item.trim())"
+                                              v-show="item.trim()">{{ item.trim() }}</span>
                                     </span>
                                 </div>
-                                <div class="small">
+                                <span class="badge flex-shrink-0" :class="getStatusBadgeClass(sibling.status)">
+                                    {{ getStatusLabel(sibling.status) }}
+                                </span>
+                            </div>
+                            <div class="small">
+                                <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                    <span class="text-muted" data-i18n="CAILY納期">CAILY納期</span>
+                                    <span v-if="sibling.caily_nouki"
+                                          :data-time="sibling.caily_nouki"
+                                          data-bs-toggle="tooltip"
+                                          :data-bs-title="getVietnamTimeTooltip(sibling.caily_nouki)">
+                                        {{ formatDateTime(sibling.caily_nouki) }}
+                                    </span>
+                                    <span v-else class="text-muted">-</span>
+                                    <span v-if="isNoukiDelivered(sibling.caily_nouki_status)"
+                                          class="badge bg-success"
+                                          data-i18n="納品済み">納品済み</span>
+                                    <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki)"
+                                          class="badge"
+                                          :class="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki).class">
+                                        {{ getSiblingDeadlineRemaining(sibling, sibling.caily_nouki).text }}
+                                    </span>
+                                </div>
+                                <template v-if="canViewEndDate">
                                     <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
-                                        <span class="text-muted" data-i18n="CAILY納期">CAILY納期</span>
-                                        <span v-if="sibling.caily_nouki"
-                                              :data-time="sibling.caily_nouki"
+                                        <span class="text-muted" data-i18n="GUIS納期">GUIS納期</span>
+                                        <span v-if="sibling.guis_nouki"
+                                              :data-time="sibling.guis_nouki"
                                               data-bs-toggle="tooltip"
-                                              :data-bs-title="getVietnamTimeTooltip(sibling.caily_nouki)">
-                                            {{ formatDateTime(sibling.caily_nouki) }}
+                                              :data-bs-title="getVietnamTimeTooltip(sibling.guis_nouki)">
+                                            {{ formatDateTime(sibling.guis_nouki) }}
                                         </span>
                                         <span v-else class="text-muted">-</span>
-                                        <span v-if="isNoukiDelivered(sibling.caily_nouki_status)"
+                                        <span v-if="isNoukiDelivered(sibling.guis_nouki_status)"
                                               class="badge bg-success"
                                               data-i18n="納品済み">納品済み</span>
-                                        <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki)"
+                                        <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki)"
                                               class="badge"
-                                              :class="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki).class">
-                                            {{ getSiblingDeadlineRemaining(sibling, sibling.caily_nouki).text }}
+                                              :class="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki).class">
+                                            {{ getSiblingDeadlineRemaining(sibling, sibling.guis_nouki).text }}
                                         </span>
                                     </div>
-                                    <template v-if="canViewEndDate">
-                                        <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
-                                            <span class="text-muted" data-i18n="GUIS納期">GUIS納期</span>
-                                            <span v-if="sibling.guis_nouki"
-                                                  :data-time="sibling.guis_nouki"
-                                                  data-bs-toggle="tooltip"
-                                                  :data-bs-title="getVietnamTimeTooltip(sibling.guis_nouki)">
-                                                {{ formatDateTime(sibling.guis_nouki) }}
-                                            </span>
-                                            <span v-else class="text-muted">-</span>
-                                            <span v-if="isNoukiDelivered(sibling.guis_nouki_status)"
-                                                  class="badge bg-success"
-                                                  data-i18n="納品済み">納品済み</span>
-                                            <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki)"
-                                                  class="badge"
-                                                  :class="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki).class">
-                                                {{ getSiblingDeadlineRemaining(sibling, sibling.guis_nouki).text }}
-                                            </span>
-                                        </div>
-                                        <div class="d-flex flex-wrap align-items-center gap-1">
-                                            <span class="text-muted" data-i18n="期限日(実納期)">期限日(実納期)</span>
-                                            <span v-if="sibling.end_date"
-                                                  :data-time="sibling.end_date"
-                                                  data-bs-toggle="tooltip"
-                                                  :data-bs-title="getVietnamTimeTooltip(sibling.end_date)">
-                                                {{ formatDateTime(sibling.end_date) }}
-                                            </span>
-                                            <span v-else class="text-muted">-</span>
-                                            <span v-if="getSiblingDeadlineRemaining(sibling, sibling.end_date)"
-                                                  class="badge"
-                                                  :class="getSiblingDeadlineRemaining(sibling, sibling.end_date).class">
-                                                {{ getSiblingDeadlineRemaining(sibling, sibling.end_date).text }}
-                                            </span>
-                                        </div>
-                                    </template>
-                                </div>
+                                    <div class="d-flex flex-wrap align-items-center gap-1">
+                                        <span class="text-muted" data-i18n="期限日(実納期)">期限日(実納期)</span>
+                                        <span v-if="sibling.end_date"
+                                              :data-time="sibling.end_date"
+                                              data-bs-toggle="tooltip"
+                                              :data-bs-title="getVietnamTimeTooltip(sibling.end_date)">
+                                            {{ formatDateTime(sibling.end_date) }}
+                                        </span>
+                                        <span v-else class="text-muted">-</span>
+                                        <span v-if="getSiblingDeadlineRemaining(sibling, sibling.end_date)"
+                                              class="badge"
+                                              :class="getSiblingDeadlineRemaining(sibling, sibling.end_date).class">
+                                            {{ getSiblingDeadlineRemaining(sibling, sibling.end_date).text }}
+                                        </span>
+                                    </div>
+                                </template>
                             </div>
+                            <div v-if="isEnergyDepartmentProject && isEnergyDrawingShareSourceDept(sibling.department_name)"
+                                 class="d-flex flex-wrap align-items-center gap-2 small mt-2 pt-2 border-top">
+                                <span class="text-muted" data-i18n="共有状況">共有状況</span>
+                                <span v-if="sibling.energy_drawing_share_status"
+                                      class="badge"
+                                      :class="getEnergyDrawingShareBadgeClass(sibling)">
+                                    {{ getEnergyDrawingShareLabel(sibling) }}
+                                </span>
+                                <span v-else class="badge bg-secondary" data-i18n="未回答">未回答</span>
+                                <span v-if="sibling.energy_drawing_share_at" class="text-muted">
+                                    {{ formatDateTime(sibling.energy_drawing_share_at) }}
+                                    <template v-if="sibling.energy_drawing_share_by">
+                                        — {{ sibling.energy_drawing_share_by }}
+                                    </template>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 省エネ図面共有: editable for 意匠/設備 (not for 省エネ itself) -->
+                <div class="card mb-4" v-if="showEnergyDrawingShareEditBox">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fa fa-share-alt me-1"></i>
+                            <span data-i18n="省エネへの図面共有">省エネへの図面共有</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label" data-i18n="共有状況">共有状況</label>
+                                <select class="form-select"
+                                        v-model="project.energy_drawing_share_status"
+                                        :disabled="!canEditProject || savingEnergyDrawingShare"
+                                        @change="onEnergyDrawingShareStatusChange">
+                                    <option value="" data-i18n="未回答">未回答</option>
+                                    <option value="shared" data-i18n="共有する">共有する</option>
+                                    <option value="not_shared" data-i18n="共有しない">共有しない</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4" v-if="project.energy_drawing_share_status === 'not_shared'">
+                                <label class="form-label" data-i18n="共有しない理由">共有しない理由</label>
+                                <select class="form-select"
+                                        v-model="project.energy_drawing_share_reason"
+                                        :disabled="!canEditProject || savingEnergyDrawingShare"
+                                        @change="onEnergyDrawingShareReasonChange">
+                                    <option v-for="opt in energyDrawingShareReasonOptions"
+                                            :key="opt.value"
+                                            :value="opt.value">{{ getEnergyDrawingShareReasonLabel(opt.value) }}</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4" v-if="canEditProject">
+                                <button type="button"
+                                        class="btn btn-primary"
+                                        :disabled="savingEnergyDrawingShare || !project.energy_drawing_share_status"
+                                        @click="saveEnergyDrawingShare">
+                                    <span v-if="savingEnergyDrawingShare" class="spinner-border spinner-border-sm me-1" role="status"></span>
+                                    <span data-i18n="保存">保存</span>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="mt-3" v-if="project.energy_drawing_share_status === 'not_shared' && project.energy_drawing_share_reason === 'other'">
+                            <label class="form-label" data-i18n="理由を入力してください">理由を入力してください</label>
+                            <textarea class="form-control" rows="3"
+                                      v-model="project.energy_drawing_share_note"
+                                      :readonly="!canEditProject"
+                                      :disabled="savingEnergyDrawingShare"></textarea>
+                        </div>
+                        <div class="mt-2 small text-muted" v-if="project.energy_drawing_share_at">
+                            {{ formatDateTime(project.energy_drawing_share_at) }}
+                            <template v-if="project.energy_drawing_share_by">
+                                — {{ project.energy_drawing_share_by }}
+                            </template>
                         </div>
                     </div>
                 </div>
@@ -1398,6 +1470,24 @@ $view->footing();
     border-bottom: none;
 }
 
+.other-dept-nouki-body {
+    display: flex;
+    flex-direction: column;
+    background: #f8f9fa;
+}
+
+.other-dept-nouki-item {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    background: #fff;
+    padding: 0.85rem 1rem;
+    margin-top: 0.75rem;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.other-dept-nouki-item:hover {
+    border-color: #adb5bd;
+}
 
 /* Note content styling (now show full content in list) */
 .list-group-item .ql-editor {
@@ -1550,5 +1640,6 @@ window.__chatPageContext = { project_id: PROJECT_ID };
 <script src="/assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 

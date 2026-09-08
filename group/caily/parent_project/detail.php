@@ -595,6 +595,12 @@ $view->heading('建物詳細');
                                                 {{ mapDepartmentNameToRequestType(project.department_name) }}
                                             </span>
                                         </div>
+                                        <div v-if="shouldShowEnergyDrawingShareBadge(project)" class="mt-1">
+                                            <span class="badge" :class="getEnergyDrawingShareBadgeClass(project)"
+                                                  :title="getEnergyDrawingShareLabel(project)">
+                                                <span data-i18n="省エネ図面">省エネ図面</span>: {{ getEnergyDrawingShareLabel(project) }}
+                                            </span>
+                                        </div>
                                     </td>
                                     <td style="min-width: 150px; max-width: 250px;">
                                         <span :class="{ 'text-muted': !project.description }"
@@ -4385,4 +4391,5 @@ $view->footing();
 <script src="../assets/vendor/libs/apex-charts/apexcharts.js"></script>
 <script src="/project/assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../project/assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

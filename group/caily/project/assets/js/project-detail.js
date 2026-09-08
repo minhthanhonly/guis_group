@@ -387,6 +387,7 @@ const vueApp = createApp({
             projectId: typeof PROJECT_ID !== 'undefined' ? PROJECT_ID : this.getProjectIdFromUrl(),
             project: null,
             parentSiblingProjects: [],
+            savingEnergyDrawingShare: false,
             department: null,
             managers: [],
             members: [],
@@ -599,6 +600,42 @@ const vueApp = createApp({
                 if (da !== db) return da.localeCompare(db, 'ja');
                 return (Number(a.id) || 0) - (Number(b.id) || 0);
             });
+        },
+        /** Current project belongs to 省エネ計算 */
+        isEnergyDepartmentProject() {
+            const energyName = (window.EnergyDrawingShare && window.EnergyDrawingShare.ENERGY_DEPT_NAME) || '省エネ計算';
+            return String(this.project && this.project.department_name || '').trim() === energyName;
+        },
+        /** Same-parent has active 省エネ計算 sibling (or flag from API). */
+        hasEnergyDrawingShareContext() {
+            if (!this.project) return false;
+            if (this.isEnergyDepartmentProject) return true;
+            if (this.project.has_energy_sibling === 1
+                || this.project.has_energy_sibling === true
+                || this.project.has_energy_sibling === '1') {
+                return true;
+            }
+            const energyName = (window.EnergyDrawingShare && window.EnergyDrawingShare.ENERGY_DEPT_NAME) || '省エネ計算';
+            const siblings = Array.isArray(this.parentSiblingProjects) ? this.parentSiblingProjects : [];
+            return siblings.some((p) => p
+                && String(p.department_name || '').trim() === energyName
+                && String(p.status || '') !== 'cancelled'
+                && String(p.status || '').toLowerCase() !== 'deleted');
+        },
+        /** 意匠/設備/技術課設備: show editable 省エネ図面共有 box (not for 省エネ itself). */
+        showEnergyDrawingShareEditBox() {
+            if (!this.project || this.isEnergyDepartmentProject) return false;
+            if (!this.hasEnergyDrawingShareContext) return false;
+            if (window.EnergyDrawingShare && window.EnergyDrawingShare.isShareSourceDepartment) {
+                return window.EnergyDrawingShare.isShareSourceDepartment(this.project.department_name);
+            }
+            const dept = String(this.project.department_name || '').trim();
+            return dept === '意匠設計' || dept === '設備設計' || dept === '技術課設備';
+        },
+        energyDrawingShareReasonOptions() {
+            return (window.EnergyDrawingShare && window.EnergyDrawingShare.REASON_OPTIONS)
+                ? window.EnergyDrawingShare.REASON_OPTIONS
+                : [];
         },
         editableStatuses() {
             if (!this.isCailyBranchUser || this.canViewEndDate) {
@@ -990,6 +1027,12 @@ const vueApp = createApp({
                 } catch (childrenErr) {
                     console.error('Error loading sibling projects for request fulfillment:', childrenErr);
                     this.parentSiblingProjects = [];
+                }
+                if (window.EnergyDrawingShare) {
+                    this.project.has_energy_sibling = window.EnergyDrawingShare.hasEnergySavingSibling(
+                        this.parentSiblingProjects,
+                        this.project.id
+                    );
                 }
                 
                 // Load GUIS receiver display name if exists
@@ -1532,6 +1575,120 @@ const vueApp = createApp({
             };
             return map[String(request || '').trim()] || 'bg-secondary';
         },
+        getEnergyDrawingShareLabel(project) {
+            return window.EnergyDrawingShare
+                ? window.EnergyDrawingShare.formatEnergyDrawingShareLabel(project || this.project)
+                : '';
+        },
+        getEnergyDrawingShareBadgeClass(project) {
+            return window.EnergyDrawingShare
+                ? window.EnergyDrawingShare.formatEnergyDrawingShareBadgeClass(project || this.project)
+                : '';
+        },
+        isEnergyDrawingShareSourceDept(departmentName) {
+            if (window.EnergyDrawingShare && window.EnergyDrawingShare.isShareSourceDepartment) {
+                return window.EnergyDrawingShare.isShareSourceDepartment(departmentName);
+            }
+            const name = String(departmentName || '').trim();
+            return name === '意匠設計' || name === '設備設計' || name === '技術課設備';
+        },
+        getEnergyDrawingShareReasonLabel(code) {
+            return window.EnergyDrawingShare
+                ? window.EnergyDrawingShare.reasonLabel(code)
+                : (code || '');
+        },
+        onEnergyDrawingShareStatusChange() {
+            if (!this.project) return;
+            if (this.project.energy_drawing_share_status !== 'not_shared') {
+                this.project.energy_drawing_share_reason = '';
+                this.project.energy_drawing_share_note = '';
+            } else if (!this.project.energy_drawing_share_reason) {
+                this.project.energy_drawing_share_reason = 'waiting_assignee';
+            }
+        },
+        onEnergyDrawingShareReasonChange() {
+            if (!this.project) return;
+            if (this.project.energy_drawing_share_reason !== 'other') {
+                this.project.energy_drawing_share_note = '';
+            }
+        },
+        async saveEnergyDrawingShare() {
+            if (!this.project || !this.project.id || !this.canEditProject) return;
+            if (!this.showEnergyDrawingShareEditBox) return;
+            const status = String(this.project.energy_drawing_share_status || '').trim();
+            if (status !== 'shared' && status !== 'not_shared') {
+                if (typeof showMessage === 'function') {
+                    showMessage('共有状況を選択してください。', true);
+                }
+                return;
+            }
+            let reason = '';
+            let note = '';
+            if (status === 'not_shared') {
+                reason = String(this.project.energy_drawing_share_reason || '').trim();
+                note = String(this.project.energy_drawing_share_note || '').trim();
+                if (!reason) {
+                    if (typeof showMessage === 'function') {
+                        showMessage('共有しない理由を選択してください。', true);
+                    }
+                    return;
+                }
+                if (reason === 'other' && !note) {
+                    if (typeof showMessage === 'function') {
+                        showMessage('理由を入力してください。', true);
+                    }
+                    return;
+                }
+            }
+            this.savingEnergyDrawingShare = true;
+            try {
+                const formData = new FormData();
+                formData.append('id', this.project.id);
+                formData.append('energy_drawing_share_status', status);
+                if (status === 'not_shared') {
+                    formData.append('energy_drawing_share_reason', reason);
+                    formData.append('energy_drawing_share_note', reason === 'other' ? note : '');
+                } else {
+                    formData.append('energy_drawing_share_reason', '');
+                    formData.append('energy_drawing_share_note', '');
+                }
+                appendProjectVersionToFormData(formData, this.project);
+                const response = await axios.post('/api/index.php?model=project&method=update', formData);
+                if (!response.data || response.data.status !== 'success') {
+                    if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                        return;
+                    }
+                    if (typeof showMessage === 'function') {
+                        showMessage((response.data && response.data.message) || '共有状況の更新に失敗しました。', true);
+                    }
+                    return;
+                }
+                applyProjectVersionFromResponse(this.project, response.data);
+                if (window.EnergyDrawingShare) {
+                    window.EnergyDrawingShare.applyEnergyDrawingShareToProject(this.project, {
+                        status: status,
+                        reason: reason,
+                        note: note
+                    });
+                }
+                if (this.originalProject) {
+                    this.originalProject.energy_drawing_share_status = this.project.energy_drawing_share_status;
+                    this.originalProject.energy_drawing_share_reason = this.project.energy_drawing_share_reason;
+                    this.originalProject.energy_drawing_share_note = this.project.energy_drawing_share_note;
+                    this.originalProject.energy_drawing_share_at = this.project.energy_drawing_share_at;
+                    this.originalProject.energy_drawing_share_by = this.project.energy_drawing_share_by;
+                }
+                if (typeof showMessage === 'function') {
+                    showMessage('共有状況を更新しました。');
+                }
+            } catch (e) {
+                if (typeof showMessage === 'function') {
+                    showMessage('共有状況の更新に失敗しました。', true);
+                }
+            } finally {
+                this.savingEnergyDrawingShare = false;
+            }
+        },
         mapDepartmentNameToRequestType(departmentName) {
             const map = {
                 '設備設計': '設備',
@@ -1573,7 +1730,7 @@ const vueApp = createApp({
             };
             return roleColors[role] || 'bg-secondary';
         },
-        async updateStatus() {
+        async updateStatus(shareAnswer) {
             // Close dropdown
             const dropdownElement = document.querySelector('#statusDropdown');
             if (dropdownElement) {
@@ -1591,8 +1748,14 @@ const vueApp = createApp({
                 formData.append('status', this.project.status);
                 formData.append('name', this.project.name);
                 formData.append('project_number', this.project.project_number);
+                if (window.EnergyDrawingShare) {
+                    window.EnergyDrawingShare.appendEnergyDrawingShareToFormData(formData, shareAnswer);
+                }
                 const response = await axios.post('/api/index.php?model=project&method=updateStatus', formData);
                 if (response.data && response.data.success !== false) {
+                    if (window.EnergyDrawingShare && shareAnswer) {
+                        window.EnergyDrawingShare.applyEnergyDrawingShareToProject(this.project, shareAnswer);
+                    }
                     showMessage('ステータスの更新に完了しました。');
                 } else {
                     showMessage('ステータスの更新に失敗しました。', true);
@@ -1611,8 +1774,19 @@ const vueApp = createApp({
                 const ok = await this.confirmPaymentInfoBeforeComplete(this.project);
                 if (!ok) return;
             }
+            let shareAnswer = null;
+            const needsShare = status === 'completed' && prev !== 'completed';
+            if (needsShare && window.EnergyDrawingShare) {
+                const answer = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(this.project, {
+                    departmentName: this.project.department_name,
+                    siblings: this.parentSiblingProjects,
+                    hasEnergySibling: this.project.has_energy_sibling
+                });
+                if (answer === false) return;
+                shareAnswer = answer;
+            }
             this.project.status = status;
-            this.updateStatus();
+            this.updateStatus(shareAnswer);
             // Close dropdown
             const dropdownElement = document.querySelector('#statusDropdown');
             if (dropdownElement) {
@@ -2814,8 +2988,26 @@ const vueApp = createApp({
         },
         async quickUpdateNoukiStatus(kind) {
             if (!this.project || !this.project.id) return;
-            const prevCaily = this.project.caily_nouki_status;
-            const prevGuis = this.project.guis_nouki_status;
+            const field = kind === 'caily' ? 'caily_nouki_status' : 'guis_nouki_status';
+            const newVal = this.project[field] || '';
+            // Checkbox already flipped via v-model; previous value is the opposite of 納品済み toggle
+            const oldVal = (this.originalProject && this.originalProject[field] != null)
+                ? (this.originalProject[field] || '')
+                : (newVal === '納品済み' ? '' : '納品済み');
+            const becameDelivered = newVal === '納品済み' && oldVal !== '納品済み';
+            let shareAnswer = null;
+            if (becameDelivered && window.EnergyDrawingShare) {
+                const answer = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(this.project, {
+                    departmentName: this.project.department_name,
+                    siblings: this.parentSiblingProjects,
+                    hasEnergySibling: this.project.has_energy_sibling
+                });
+                if (answer === false) {
+                    this.project[field] = oldVal;
+                    return;
+                }
+                shareAnswer = answer;
+            }
             try {
                 const formData = new FormData();
                 formData.append('id', this.project.id);
@@ -2824,25 +3016,37 @@ const vueApp = createApp({
                 } else if (kind === 'guis') {
                     formData.append('guis_nouki_status', this.project.guis_nouki_status || '');
                 }
+                if (window.EnergyDrawingShare) {
+                    window.EnergyDrawingShare.appendEnergyDrawingShareToFormData(formData, shareAnswer);
+                }
                 appendProjectVersionToFormData(formData, this.project);
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (!response.data || response.data.status !== 'success') {
                     if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
                         return;
                     }
-                    this.project.caily_nouki_status = prevCaily;
-                    this.project.guis_nouki_status = prevGuis;
+                    this.project[field] = oldVal;
                     if (typeof showMessage === 'function') {
                         showMessage('納期状況の更新に失敗しました。', true);
                     }
                 } else{
                     applyProjectVersionFromResponse(this.project, response.data);
+                    if (window.EnergyDrawingShare && shareAnswer) {
+                        window.EnergyDrawingShare.applyEnergyDrawingShareToProject(this.project, shareAnswer);
+                    }
+                    if (this.originalProject) {
+                        this.originalProject[field] = this.project[field];
+                        if (shareAnswer) {
+                            this.originalProject.energy_drawing_share_status = this.project.energy_drawing_share_status;
+                            this.originalProject.energy_drawing_share_reason = this.project.energy_drawing_share_reason;
+                            this.originalProject.energy_drawing_share_note = this.project.energy_drawing_share_note;
+                        }
+                    }
                     showMessage('納期状況を更新しました。');
                 }
 
             } catch (e) {
-                this.project.caily_nouki_status = prevCaily;
-                this.project.guis_nouki_status = prevGuis;
+                this.project[field] = oldVal;
                 if (typeof showMessage === 'function') {
                     showMessage('納期状況の更新に失敗しました。', true);
                 }
@@ -2869,6 +3073,22 @@ const vueApp = createApp({
             if (this.project.status === 'completed' && prevStatus !== 'completed') {
                 const ok = await this.confirmPaymentInfoBeforeComplete(this.project);
                 if (!ok) return;
+            }
+            const prevCaily = this.originalProject ? (this.originalProject.caily_nouki_status || '') : '';
+            const prevGuis = this.originalProject ? (this.originalProject.guis_nouki_status || '') : '';
+            const noukiBecameDelivered =
+                ((this.project.caily_nouki_status || '') === '納品済み' && prevCaily !== '納品済み')
+                || ((this.project.guis_nouki_status || '') === '納品済み' && prevGuis !== '納品済み');
+            const statusBecameCompleted = this.project.status === 'completed' && prevStatus !== 'completed';
+            let shareAnswer = null;
+            if ((statusBecameCompleted || noukiBecameDelivered) && window.EnergyDrawingShare) {
+                const answer = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(this.project, {
+                    departmentName: this.project.department_name,
+                    siblings: this.parentSiblingProjects,
+                    hasEnergySibling: this.project.has_energy_sibling
+                });
+                if (answer === false) return;
+                shareAnswer = answer;
             }
             // Use the stored quill content instead of syncing from editor
             if (this.quillContent !== undefined) {
@@ -2934,9 +3154,15 @@ const vueApp = createApp({
                 formData.append('custom_fields', this.project.custom_fields);
                 formData.append('description', this.project.description || '');
                 appendProjectVersionToFormData(formData, this.project);
+                if (window.EnergyDrawingShare) {
+                    window.EnergyDrawingShare.appendEnergyDrawingShareToFormData(formData, shareAnswer);
+                }
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (response.data && response.data.status == 'success') {
                     applyProjectVersionFromResponse(this.project, response.data);
+                    if (window.EnergyDrawingShare && shareAnswer) {
+                        window.EnergyDrawingShare.applyEnergyDrawingShareToProject(this.project, shareAnswer);
+                    }
                     this.isEditMode = false;
                     this.originalProject = null;
                     this._serverProjectDates = null;

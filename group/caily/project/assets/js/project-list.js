@@ -5900,6 +5900,9 @@ var projectTable;
         let quickEditQuillInstance = null;
         let quickEditIsManagerOnly = false;
         let quickEditOriginalStatus = '';
+        let quickEditOriginalCailyNoukiStatus = '';
+        let quickEditOriginalGuisNoukiStatus = '';
+        let quickEditShareContext = null;
         let quickEditEstimateStatus = '未発行';
         let quickEditInvoiceStatus = '未発行';
 
@@ -6066,6 +6069,13 @@ var projectTable;
                 $('#quickEditEndDate').val(toProjectDateTimeInputValue(p.end_date));
                 setQuickEditYoteiFromProject(p.yotei);
                 quickEditOriginalStatus = p.status || 'draft';
+                quickEditOriginalCailyNoukiStatus = p.caily_nouki_status || '';
+                quickEditOriginalGuisNoukiStatus = p.guis_nouki_status || '';
+                quickEditShareContext = {
+                    energy_drawing_share_status: p.energy_drawing_share_status || '',
+                    has_energy_sibling: !!(p.has_energy_sibling === 1 || p.has_energy_sibling === '1' || p.has_energy_sibling === true),
+                    department_name: p.department_name || ''
+                };
                 quickEditEstimateStatus = p.estimate_status || '未発行';
                 quickEditInvoiceStatus = p.invoice_status || '未発行';
                 syncQuickEditStatusOptions(quickEditOriginalStatus);
@@ -6639,12 +6649,37 @@ var projectTable;
                     return;
                 }
             }
+            var newCailyNouki = $('#quickEditCailyNoukiStatus').is(':checked') ? '納品済み' : '';
+            var newGuisNouki = $('#quickEditGuisNoukiStatus').is(':checked') ? '納品済み' : '';
+            var statusBecameCompleted = quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed';
+            var noukiBecameDelivered =
+                (newCailyNouki === '納品済み' && String(quickEditOriginalCailyNoukiStatus || '').indexOf('納品済み') === -1)
+                || (newGuisNouki === '納品済み' && String(quickEditOriginalGuisNoukiStatus || '').indexOf('納品済み') === -1);
+            var shareAnswer = null;
+            if ((statusBecameCompleted || noukiBecameDelivered) && window.EnergyDrawingShare && quickEditShareContext) {
+                var shareProject = {
+                    id: $('#quickEditProjectId').val(),
+                    energy_drawing_share_status: quickEditShareContext.energy_drawing_share_status,
+                    department_name: quickEditShareContext.department_name,
+                    has_energy_sibling: quickEditShareContext.has_energy_sibling
+                };
+                var shareResult = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(shareProject, {
+                    departmentName: quickEditShareContext.department_name,
+                    hasEnergySibling: quickEditShareContext.has_energy_sibling
+                });
+                if (shareResult === false) {
+                    $btn.prop('disabled', false);
+                    $spinner.addClass('d-none');
+                    return;
+                }
+                shareAnswer = shareResult;
+            }
             formData.append('status', quickEditStatus);
             formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
             formData.append('caily_nouki', getQuickEditDateFieldValue('#quickEditCailyNouki'));
             formData.append('guis_nouki', getQuickEditDateFieldValue('#quickEditGuisNouki'));
-            formData.append('caily_nouki_status', $('#quickEditCailyNoukiStatus').is(':checked') ? '納品済み' : '');
-            formData.append('guis_nouki_status', $('#quickEditGuisNoukiStatus').is(':checked') ? '納品済み' : '');
+            formData.append('caily_nouki_status', newCailyNouki);
+            formData.append('guis_nouki_status', newGuisNouki);
             formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
             formData.append('project_order_type', getQuickEditOrderTypeValue());
             formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
@@ -6690,6 +6725,9 @@ var projectTable;
             });
             if (customFieldsData.length) formData.append('custom_fields', JSON.stringify(customFieldsData));
             appendProjectVersionToFormData(formData, $('#quickEditProjectVersion').val());
+            if (window.EnergyDrawingShare) {
+                window.EnergyDrawingShare.appendEnergyDrawingShareToFormData(formData, shareAnswer);
+            }
             axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function(res) {
                 var data = res && res.data ? res.data : {};
                 if (data.status === 'success') {

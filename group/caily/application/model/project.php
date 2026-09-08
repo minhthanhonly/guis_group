@@ -26,6 +26,11 @@ class Project extends ApplicationModel {
             'caily_nouki_status' => array(), //CAILY納期状況
             'guis_nouki' => array(), //GUIS納期
             'guis_nouki_status' => array(), //GUIS納期状況
+            'energy_drawing_share_status' => array(), // shared|not_shared
+            'energy_drawing_share_reason' => array(),
+            'energy_drawing_share_note' => array(),
+            'energy_drawing_share_at' => array(),
+            'energy_drawing_share_by' => array(),
             'created_by' => array(), //userid
             'updated_by' => array(), //userid
             'version' => array(),
@@ -720,6 +725,7 @@ class Project extends ApplicationModel {
             CASE WHEN pc.id IS NOT NULL THEN pc.category_id ELSE pp_c.category_id END as category_id,
             pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number,
             pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2,
+            pp.requests as parent_requests,
             gu.realname as parent_guis_receiver
             FROM {$this->table} p
             JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
@@ -2448,6 +2454,7 @@ class Project extends ApplicationModel {
         if (array_key_exists('guis_nouki_status', $_POST)) {
             $data['guis_nouki_status'] = trim((string)$_POST['guis_nouki_status']);
         }
+        $this->applyEnergyDrawingShareFromPost($data, $old);
         if (array_key_exists('actual_end_date', $_POST)) {
             $val = isset($_POST['actual_end_date']) ? trim($_POST['actual_end_date']) : '';
             if ($val !== '') {
@@ -2786,6 +2793,9 @@ class Project extends ApplicationModel {
             'actual_end_date' => '実終了日を変更',
             'caily_nouki_status' => 'CAILY納期状況を変更',
             'guis_nouki_status' => 'GUIS納期状況を変更',
+            'energy_drawing_share_status' => '省エネ図面共有を変更',
+            'energy_drawing_share_reason' => '省エネ図面共有理由を変更',
+            'energy_drawing_share_note' => '省エネ図面共有備考を変更',
             'yotei' => '予定工程を変更',
         ];
         $skipKeys = ['updated_at', 'updated_by'];
@@ -3196,7 +3206,8 @@ class Project extends ApplicationModel {
             "SELECT p.*, d.name as department_name,
             c.name as contact_name, c.company_name, c.branch as branch_name, c.category_id as category_id,
             pp.construction_number as parent_construction_number,
-            pp.project_name as parent_project_name
+            pp.project_name as parent_project_name,
+            pp.requests as parent_requests
             FROM {$this->table} p 
             LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
@@ -3213,6 +3224,7 @@ class Project extends ApplicationModel {
             $project['version'] = isset($project['version']) ? intval($project['version']) : 1;
             $project['payment_version'] = isset($project['payment_version']) ? intval($project['payment_version']) : 1;
             $project['yotei'] = $this->parseYoteiField(isset($project['yotei']) ? $project['yotei'] : null);
+            $project['has_energy_sibling'] = $this->hasEnergySavingSiblingProject($project) ? 1 : 0;
         }
         
         return $project;
@@ -3397,6 +3409,110 @@ class Project extends ApplicationModel {
         return $ok ? ['status' => 'success', 'message' => '受注形態を更新しました'] : ['status' => 'error', 'error' => 'Update failed'];
     }
 
+    /**
+     * Apply energy-drawing-share fields from POST (create or update).
+     */
+    private function applyEnergyDrawingShareFromPost(array &$data, $old = null) {
+        if (!array_key_exists('energy_drawing_share_status', $_POST)) {
+            return;
+        }
+        $status = trim((string)$_POST['energy_drawing_share_status']);
+        if ($status !== 'shared' && $status !== 'not_shared') {
+            return;
+        }
+        $oldStatus = ($old && isset($old['energy_drawing_share_status']))
+            ? trim((string)$old['energy_drawing_share_status'])
+            : '';
+        $oldReason = ($old && isset($old['energy_drawing_share_reason']))
+            ? trim((string)$old['energy_drawing_share_reason'])
+            : '';
+        $oldNote = ($old && isset($old['energy_drawing_share_note']))
+            ? trim((string)$old['energy_drawing_share_note'])
+            : '';
+
+        $reason = '';
+        $note = '';
+        if ($status === 'not_shared') {
+            $reason = isset($_POST['energy_drawing_share_reason'])
+                ? trim((string)$_POST['energy_drawing_share_reason'])
+                : '';
+            $allowed = array('waiting_assignee', 'additional_revision', 'other');
+            if (!in_array($reason, $allowed, true)) {
+                return;
+            }
+            $noteRaw = isset($_POST['energy_drawing_share_note'])
+                ? trim((string)$_POST['energy_drawing_share_note'])
+                : '';
+            $note = ($reason === 'other') ? $this->validateUTF8MB4($noteRaw) : '';
+            if ($reason === 'other' && $note === '') {
+                return;
+            }
+        }
+
+        // Skip write when unchanged
+        if ($status === $oldStatus
+            && ($status === 'shared' || ($reason === $oldReason && $note === $oldNote))) {
+            return;
+        }
+
+        $data['energy_drawing_share_status'] = $status;
+        $data['energy_drawing_share_at'] = date('Y-m-d H:i:s');
+        $data['energy_drawing_share_by'] = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
+        $data['energy_drawing_share_reason'] = $status === 'not_shared' ? $reason : '';
+        $data['energy_drawing_share_note'] = $status === 'not_shared' ? $note : '';
+    }
+
+    /**
+     * True when another active child under the same parent belongs to 省エネ計算.
+     */
+    private function hasEnergySavingSiblingProject($project) {
+        $parentId = isset($project['parent_project_id']) ? intval($project['parent_project_id']) : 0;
+        $id = isset($project['id']) ? intval($project['id']) : 0;
+        if ($parentId <= 0 || $id <= 0) {
+            return false;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT COUNT(*) AS cnt
+             FROM %sprojects p
+             INNER JOIN %sdepartments d ON d.id = p.department_id
+             WHERE p.parent_project_id = %d
+               AND p.id <> %d
+               AND d.name = '省エネ計算'
+               AND p.status NOT IN ('cancelled', 'deleted')",
+            DB_PREFIX,
+            DB_PREFIX,
+            $parentId,
+            $id
+        ));
+        return $row && intval($row['cnt']) > 0;
+    }
+
+    /**
+     * Whether UI should prompt for 省エネ drawing share confirmation.
+     * Requires: dept 意匠設計/設備設計/技術課設備 + sibling project in 省エネ計算.
+     * Asks again on each 完了/納品済み even if already answered.
+     */
+    public function needsEnergyDrawingShareConfirm($projectOrId) {
+        $project = is_array($projectOrId) ? $projectOrId : $this->getById(intval($projectOrId));
+        if (!$project || empty($project['id'])) {
+            return false;
+        }
+        $deptName = isset($project['department_name']) ? trim((string)$project['department_name']) : '';
+        if ($deptName === '' && !empty($project['department_id'])) {
+            $dept = $this->fetchOne(sprintf(
+                "SELECT name FROM %sdepartments WHERE id = %d LIMIT 1",
+                DB_PREFIX,
+                intval($project['department_id'])
+            ));
+            $deptName = $dept ? trim((string)$dept['name']) : '';
+        }
+        $shareDepts = array('意匠設計', '設備設計', '技術課設備');
+        if (!in_array($deptName, $shareDepts, true)) {
+            return false;
+        }
+        return $this->hasEnergySavingSiblingProject($project);
+    }
+
     function updateStatus($params = null) {
         // Get data directly from $_POST
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
@@ -3431,6 +3547,8 @@ class Project extends ApplicationModel {
         if ($status == 'completed') {
             $data['progress'] = 100;
         }
+
+        $this->applyEnergyDrawingShareFromPost($data, $old);
         
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
@@ -3438,6 +3556,19 @@ class Project extends ApplicationModel {
             if($old['status'] != $status) {
                 $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], array_column($projectMembers, 'userid'));
                 $this->logProjectAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
+            }
+            if (!empty($data['energy_drawing_share_status'])) {
+                $shareLabel = $data['energy_drawing_share_status'] === 'shared' ? '共有する' : '共有しない';
+                $reason = isset($data['energy_drawing_share_reason']) ? (string)$data['energy_drawing_share_reason'] : '';
+                $oldShare = isset($old['energy_drawing_share_status']) ? (string)$old['energy_drawing_share_status'] : '';
+                $oldShareLabel = $oldShare === 'shared' ? '共有する' : ($oldShare === 'not_shared' ? '共有しない' : '');
+                $this->logProjectAction(
+                    $id,
+                    'energy_drawing_share_updated',
+                    '省エネへの図面共有',
+                    $oldShareLabel,
+                    $shareLabel . ($reason !== '' ? (' / ' . $reason) : '')
+                );
             }
            
         }
