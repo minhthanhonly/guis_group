@@ -755,7 +755,15 @@ const vueApp = createApp({
             // User must be in the same department
             return this.permission && this.permission.is_in_department == 1;
         },
+        isProjectCreator() {
+            if (this.permission && this.permission.is_creator) return true;
+            if (this.project && this.project.created_by && typeof USER_ID !== 'undefined' && USER_ID) {
+                return String(this.project.created_by) === String(USER_ID);
+            }
+            return false;
+        },
         canEditProject() {
+            if (this.isProjectCreator) return true;
             return this.permission.can_manage_project || (this.permission.is_member && this.permission.rule && this.permission.rule.project_edit == 1);
         },
         canUpdateProgress() {

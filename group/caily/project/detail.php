@@ -372,7 +372,7 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div class="d-flex align-items-center flex-wrap gap-2" v-else-if="managers && managers.length > 0">
                                     <div v-for="member in managers" :key="member.userid"
-                                        class="avatar avatar-sm"
+                                        class="avatar"
                                         :data-userid="member.userid"
                                         data-bs-toggle="tooltip"
                                         data-popup="tooltip-custom"
@@ -401,7 +401,7 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div class="d-flex flex-wrap gap-2 align-items-center" v-else-if="members.length > 0">
                                     <div v-for="member in members" :key="member.userid"
-                                        class="avatar avatar-sm"
+                                        class="avatar"
                                         data-bs-toggle="tooltip"
                                         :data-userid="member.userid"
                                         data-popup="tooltip-custom"
@@ -1151,7 +1151,7 @@ if($_SESSION['show_project'] == 0){
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <div class="avatar avatar-sm">
+                                            <div class="avatar">
                                                 <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
                                                     {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                                 </span>
@@ -1314,7 +1314,7 @@ if($_SESSION['show_project'] == 0){
                                 <div class="d-flex">
                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <div class="avatar avatar-sm">
+                                            <div class="avatar">
                                                 <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
                                                     {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
                                                 </span>

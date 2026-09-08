@@ -515,7 +515,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                         userid: userid,
                         userImage: image,
                         user_ruby: full['user_ruby'] || '',
-                        size: 'sm',
+                        size: '',
                         extraClass: 'me-4',
                         pullUp: false,
                         tooltip: false
@@ -523,7 +523,7 @@ document.addEventListener('DOMContentLoaded', async function (e) {
                 } else {
                     var initials = (typeof getAvatarName === 'function') ? getAvatarName(name, { userid: userid, user_ruby: full['user_ruby'] || '' }) : (name || '?').substring(0, 2);
                     avatarHtml =
-                        '<div class="avatar avatar-sm me-4" data-userid="' + String(userid).replace(/"/g, '&quot;') + '">' +
+                        '<div class="avatar me-4" data-userid="' + String(userid).replace(/"/g, '&quot;') + '">' +
                         '<span class="avatar-initial rounded-circle bg-label-primary">' + initials + '</span>' +
                         '</div>';
                 }

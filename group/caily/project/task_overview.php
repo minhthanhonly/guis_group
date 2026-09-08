@@ -163,7 +163,7 @@ if($_SESSION['show_project'] == 0){
                                         <div class="d-flex align-items-center flex-wrap gap-1">
                                             <template v-if="task.assigned_to_ids && task.assigned_to_ids.length">
                                                 <template v-for="userId in task.assigned_to_ids.slice(0, 4)" :key="userId">
-                                                    <div class="avatar avatar-sm position-relative" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
+                                                    <div class="avatar position-relative" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
                                                         <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getAssigneeUser(userId) || '') }}</span>
                                                         <img v-if="getAssigneeUser(userId) && !getAssigneeUser(userId).avatarError && getAvatarSrc(getAssigneeUser(userId))" class="rounded-circle" :src="getAvatarSrc(getAssigneeUser(userId))" :alt="getAssigneeUser(userId).realname" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(getAssigneeUser(userId)); $event.target.remove()">
                                                         <span v-if="isAcknowledged(task, userId)" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-check"></i></span>

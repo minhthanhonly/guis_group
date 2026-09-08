@@ -89,7 +89,7 @@ $view->heading('オンライン状況');
                         <tr v-for="m in filteredMembers" :key="m.userid"
                             :class="{ 'table-warning': isAdministrator && hasUnlockRequest(m.userid) }">
                             <td>
-                                <div class="avatar avatar-sm"
+                                <div class="avatar"
                                      :class="avatarClass(m.userid)"
                                      :data-userid="m.userid"
                                      :title="displayName(m)">

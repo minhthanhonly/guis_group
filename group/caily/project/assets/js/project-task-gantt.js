@@ -85,7 +85,9 @@ $(document).ready(function() {
         },
         computed: {
             canEditProject() {
-                return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_edit == 1);
+                return this.permission.can_manage_project
+                    || this.permission.is_creator
+                    || (this.permission.rule && this.permission.rule.project_edit == 1);
             },
             canViewTaskList() {
                 return this.permission.can_manage_project || this.permission.is_member;

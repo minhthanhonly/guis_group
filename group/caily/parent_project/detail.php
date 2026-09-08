@@ -543,40 +543,40 @@ $view->heading('建物詳細');
                         <table class="table table-hover table-sm" id="childProjectsTable">
                             <thead>
                                 <tr>
-                                    <th class="text-center"><i class="fa fa-star text-muted" title="お気に入り"></i></th>
-                                    <th><span data-i18n="ID">ID</span></th>
-                                    <th><span data-i18n="受注形態">受注形態</span></th>
-                                    <th style="width: 120px;"><span data-i18n="案件名">案件名</span></th>
-                                    <th style="min-width: 150px;"><span data-i18n="説明">説明</span></th>
-                                    <th style="min-width: 100px;"><span data-i18n="顧客情報">顧客情報</span></th>
-                                    <th style="width: 60px;"><span data-i18n="GUIS受付者">GUIS受付者</span></th>
-                                    <th style="min-width: 80px;"><span data-i18n="部署">部署</span></th>
-                                    <th><span data-i18n="管理">管理</span></th>
-                                    <th><span>担当</span></th>
-                                    <th style="width: 90px;"><span data-i18n="予定工程">予定工程</span></th>
-                                    <th style="width: 60px;"><span data-i18n="開始日">開始日</span></th>
-                                    <th style="width: 60px;"><span>CAILY納期</span></th>
-                                    <th v-if="!isCailyBranchUser" style="width: 60px;"><span>GUIS納期</span></th>
-                                    <th v-if="!isCailyBranchUser"><span data-i18n="期限日">期限日</span></th>
-                                    <th style="width: 60px;"><span data-i18n="ステータス">ステータス</span></th>
-                                    <th style="width: 60px;"><span data-i18n="進捗">進捗</span></th>
-                                    <th v-if="canViewBusinessDocuments" style="width: 140px;"><span data-i18n="決済情報">決済情報</span></th>
-                                    <th><span data-i18n="操作">操作</span></th>
+                                    <th class="text-center col-fav"><i class="fa fa-star text-muted" title="お気に入り"></i></th>
+                                    <th class="col-id"><span data-i18n="ID">ID</span></th>
+                                    <th class="col-order-type"><span data-i18n="受注形態">受注形態</span></th>
+                                    <th class="col-name"><span data-i18n="案件名">案件名</span></th>
+                                    <th class="col-desc"><span data-i18n="説明">説明</span></th>
+                                    <th class="col-customer"><span data-i18n="顧客情報">顧客情報</span></th>
+                                    <th class="col-receiver"><span data-i18n="GUIS受付者">GUIS受付者</span></th>
+                                    <th class="col-dept"><span data-i18n="部署">部署</span></th>
+                                    <th class="col-manager"><span data-i18n="管理">管理</span></th>
+                                    <th class="col-tantou"><span>担当</span></th>
+                                    <th class="col-yotei"><span data-i18n="予定工程">予定工程</span></th>
+                                    <th class="col-date"><span data-i18n="開始日">開始日</span></th>
+                                    <th class="col-date"><span>CAILY納期</span></th>
+                                    <th v-if="!isCailyBranchUser" class="col-date"><span>GUIS納期</span></th>
+                                    <th v-if="!isCailyBranchUser" class="col-date"><span data-i18n="期限日">期限日</span></th>
+                                    <th class="col-status"><span data-i18n="ステータス">ステータス</span></th>
+                                    <th class="col-progress text-center"><span data-i18n="進捗">進捗</span></th>
+                                    <th v-if="canViewBusinessDocuments" class="col-payment"><span data-i18n="決済情報">決済情報</span></th>
+                                    <th class="col-actions text-center"><span data-i18n="操作">操作</span></th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr v-for="project in childProjects" :key="project.id"
                                     :class="{ 'table-active': selectedChildProjectIds.includes(project.id) }"
                                     @contextmenu.prevent="onChildProjectContextMenu($event, project)">
-                                    <td class="text-center">
+                                    <td class="text-center col-fav">
                                         <i class="fa fa-star" 
                                            :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
                                            style="cursor: pointer;"
                                            @click="toggleProjectFavorite(project)"
                                            :title="project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
                                     </td>
-                                    <td><a :href="'../project/detail.php?id=' + project.id" class="text-decoration-none"><span class="badge bg-primary border me-1">{{ project.id || '-' }}</span></a></td>
-                                    <td>
+                                    <td class="col-id"><a :href="'../project/detail.php?id=' + project.id" class="text-decoration-none"><span class="badge bg-primary border me-1">{{ project.id || '-' }}</span></a></td>
+                                    <td class="col-order-type">
                                         <span
                                             v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
                                             <span v-for="item in project.project_order_type.split(',')"
@@ -584,7 +584,7 @@ $view->heading('建物詳細');
                                         </span>
                                         <span v-else>-</span>
                                     </td>
-                                    <td style="min-width: 150px;">
+                                    <td class="col-name">
                                         <a :href="'../project/detail.php?id=' + project.id"
                                             class="text-decoration-none">
                                             {{ project.name }}
@@ -602,13 +602,13 @@ $view->heading('建物詳細');
                                             </span>
                                         </div>
                                     </td>
-                                    <td style="min-width: 150px; max-width: 250px;">
-                                        <span :class="{ 'text-muted': !project.description }"
-                                              :title="project.description ? getDescriptionPlainText(project.description) : ''">
+                                    <td class="col-desc"
+                                        :title="project.description ? getDescriptionPlainText(project.description) : ''">
+                                        <span :class="{ 'text-muted': !project.description }">
                                             {{ formatDescriptionPreview(project.description) }}
                                         </span>
                                     </td>
-                                    <td style="min-width: 160px; max-width: 220px;" :title="shouldShowChildProjectCustomer(project) ? formatChildProjectCustomerLabel(project) : ''">
+                                    <td class="col-customer" :title="shouldShowChildProjectCustomer(project) ? formatChildProjectCustomerLabel(project) : ''">
                                         <template v-if="shouldShowChildProjectCustomer(project)">
                                             <span class="d-block small">{{ getChildProjectCustomerDisplay(project).company_name }}</span>
                                             <span v-if="getChildProjectCustomerDisplay(project).branch_name !== '-'" class="d-block small text-muted">{{ getChildProjectCustomerDisplay(project).branch_name }}</span>
@@ -621,9 +621,9 @@ $view->heading('建物詳細');
                                         </template>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td style="min-width: 120px;">{{ getChildProjectGuisReceiverDisplay(project) }}</td>
-                                    <td style="min-width: 100px;">{{ project.department_name || '-' }}</td>
-                                    <td>
+                                    <td class="col-receiver">{{ getChildProjectGuisReceiverDisplay(project) }}</td>
+                                    <td class="col-dept">{{ project.department_name || '-' }}</td>
+                                    <td class="col-manager">
                                         <div class="d-flex align-items-center" v-if="project.manager_id && project.manager_id.split('|').filter(m => m.trim() !== '').length > 0">
                                             <template v-for="(manager, index) in project.manager_id.split('|').filter(m => m.trim() !== '')" :key="manager">
                                                 <div v-if="index < 1" 
@@ -652,26 +652,26 @@ $view->heading('建物詳細');
                                         </div>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td>{{ project.tantou || '-' }}</td>
-                                    <td>
+                                    <td class="col-tantou">{{ project.tantou || '-' }}</td>
+                                    <td class="col-yotei">
                                         <span v-if="formatYoteiDisplay(project.yotei)">{{ formatYoteiDisplay(project.yotei) }}</span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td>
+                                    <td class="col-date">
                                         <span v-if="project.start_date" :data-time="project.start_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)">
                                             <span class="d-block">{{ formatDateTimeDatePart(project.start_date) }}</span>
                                             <span class="d-block">{{ formatDateTimeTimePart(project.start_date) }}</span>
                                         </span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td>
+                                    <td class="col-date">
                                         <span v-if="project.caily_nouki" :data-time="project.caily_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)">
                                             <span class="d-block">{{ formatDateTimeDatePart(project.caily_nouki) }}</span>
                                             <span class="d-block">{{ formatDateTimeTimePart(project.caily_nouki) }}</span>
                                         </span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td v-if="!isCailyBranchUser">
+                                    <td v-if="!isCailyBranchUser" class="col-date">
                                         <span v-if="project.guis_nouki" :data-time="project.guis_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)">
                                             <span class="d-block">{{ formatDateTimeDatePart(project.guis_nouki) }}</span>
                                             <span class="d-block">{{ formatDateTimeTimePart(project.guis_nouki) }}</span>
@@ -679,22 +679,22 @@ $view->heading('建物詳細');
                                         <span v-else class="text-muted">-</span>
                                     </td>
                                    
-                                    <td v-if="!isCailyBranchUser">
+                                    <td v-if="!isCailyBranchUser" class="col-date">
                                         <span v-if="project.end_date" :data-time="project.end_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)">
                                             <span class="d-block">{{ formatDateTimeDatePart(project.end_date) }}</span>
                                             <span class="d-block">{{ formatDateTimeTimePart(project.end_date) }}</span>
                                         </span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td>
+                                    <td class="col-status">
                                         <span class="badge" :class="getProjectStatusBadgeClass(project.status)">
                                             {{ getProjectStatusLabel(project.status) }}
                                         </span>
                                     </td>
-                                    <td class="text-center">
+                                    <td class="col-progress text-center">
                                         <span class="fw-bold">{{ project.progress }}%</span>
                                     </td>
-                                    <td v-if="canViewBusinessDocuments" style="min-width: 200px;">
+                                    <td v-if="canViewBusinessDocuments" class="col-payment">
                                         <div v-for="line in getChildProjectPaymentLines(project)" :key="line.key"
                                              class="d-flex justify-content-between align-items-center gap-2 small mb-1">
                                             <span class="d-flex align-items-center gap-1 flex-wrap">
@@ -704,7 +704,7 @@ $view->heading('建物詳細');
                                             <span class="fw-semibold text-nowrap">{{ formatPrice(line.amount) }}</span>
                                         </div>
                                     </td>
-                                    <td class="text-center">
+                                    <td class="text-center col-actions">
                                         <div class="d-flex flex-column gap-1 align-items-center">
                                             <div class="d-flex gap-1">
                                                 <a :href="'../project/detail.php?id=' + project.id" class="btn btn-sm btn-outline-primary"
@@ -4201,13 +4201,52 @@ $view->footing();
     }
     #childProjectsTable {
         font-size: 0.8125rem;
+        table-layout: auto;
+        width: 100%;
+        min-width: 1280px;
     }
     #childProjectsTable td,
     #childProjectsTable th {
-        padding: 0.35rem 0.25rem;
+        padding: 0.35rem 0.4rem;
         vertical-align: middle;
         border: 1px solid #ccc;
+        white-space: nowrap;
     }
+    #childProjectsTable .col-fav { width: 36px; min-width: 36px; text-align: center; }
+    #childProjectsTable .col-id { width: 46px; min-width: 46px; }
+    #childProjectsTable .col-order-type { width: 60px; min-width: 60px; }
+    #childProjectsTable .col-name {
+        min-width: 160px;
+        max-width: 220px;
+        white-space: normal;
+        word-break: break-word;
+    }
+    #childProjectsTable .col-desc {
+        min-width: 120px;
+        max-width: 180px;
+        white-space: normal;
+        word-break: break-word;
+    }
+    #childProjectsTable .col-customer {
+        min-width: 130px;
+        max-width: 170px;
+        white-space: normal;
+        word-break: break-word;
+    }
+    #childProjectsTable .col-receiver { min-width: 90px; max-width: 110px; }
+    #childProjectsTable .col-dept { min-width: 88px; max-width: 120px; white-space: normal; }
+    #childProjectsTable .col-manager { width: 56px; min-width: 56px; }
+    #childProjectsTable .col-tantou { min-width: 64px; max-width: 90px; }
+    #childProjectsTable .col-yotei { min-width: 96px; max-width: 120px; white-space: normal; }
+    #childProjectsTable .col-date { width: 78px; min-width: 78px; }
+    #childProjectsTable .col-status { min-width: 88px; }
+    #childProjectsTable .col-progress { width: 52px; min-width: 52px; }
+    #childProjectsTable .col-payment {
+        min-width: 150px;
+        max-width: 190px;
+        white-space: normal;
+    }
+    #childProjectsTable .col-actions { width: 88px; min-width: 88px; }
     #childProjectsTable .badge {
         font-size: 0.7rem;
         padding: 0.25em 0.45em;

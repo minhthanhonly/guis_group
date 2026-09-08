@@ -269,7 +269,7 @@ if (!$isAdministrator && !$projectModel->canUserViewBusinessDocuments($project_i
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
-                                                <div class="avatar avatar-sm me-2" v-for="(userid, user_index) in (drawing.created_by || '').split(',')" :key="userid && userid.trim()" data-bs-toggle="tooltip" :title="getUserCreatedByFullNameText(drawing, user_index)">
+                                                <div class="avatar me-2" v-for="(userid, user_index) in (drawing.created_by || '').split(',')" :key="userid && userid.trim()" data-bs-toggle="tooltip" :title="getUserCreatedByFullNameText(drawing, user_index)">
                                                     <span class="avatar-initial rounded-circle bg-label-primary" v-if="userid.trim()!= ''">{{ getUserAvatarCreatedByText(drawing, user_index) }}</span>
                                                     <img :src="getUserAvatar(userid.trim())" class="rounded-circle" v-if="getUserAvatar(userid.trim()) && userid.trim()" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="$event.target.remove()">
                                                 </div>

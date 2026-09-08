@@ -1150,7 +1150,7 @@ class Project extends ApplicationModel {
         if ($project_id <= 0) {
             return false;
         }
-        $project = $this->fetchOne("SELECT id, department_id FROM " . $this->table . " WHERE id = " . $project_id);
+        $project = $this->fetchOne("SELECT id, department_id, created_by FROM " . $this->table . " WHERE id = " . $project_id);
         if (!$project || !isset($project['department_id'])) {
             return false;
         }
@@ -1160,6 +1160,11 @@ class Project extends ApplicationModel {
             return false;
         }
         if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        // Creator of the child project may edit/delete it
+        if (!empty($project['created_by']) && isset($_SESSION['userid'])
+            && strval($project['created_by']) === strval($_SESSION['userid'])) {
             return true;
         }
         $memberCheck = $this->fetchOne(

@@ -2781,8 +2781,8 @@ class Task extends ApplicationModel {
         }
 
         $isCreator = false;
-        if (!$isAdmin && isset($project['created_by'])) {
-            $isCreator = $project['created_by'] == $currentUserId;
+        if (!$isAdmin && isset($project['created_by']) && isset($_SESSION['userid'])) {
+            $isCreator = strval($project['created_by']) === strval($_SESSION['userid']);
         }
 
         $isInDepartment = false;

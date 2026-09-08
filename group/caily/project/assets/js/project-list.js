@@ -5689,6 +5689,13 @@ var projectTable;
             return !!(window.app && window.app.canEditBusinessDocuments);
         }
 
+        function isCurrentUserCreatorOfProject(rowData) {
+            if (typeof USER_ID === 'undefined' || !USER_ID || !rowData || rowData.created_by == null || rowData.created_by === '') {
+                return false;
+            }
+            return String(rowData.created_by) === String(USER_ID);
+        }
+
         function isCurrentUserManagerOfProject(rowData) {
             if (typeof USER_AUTH_ID === 'undefined' || !USER_AUTH_ID || !rowData || !rowData.manager_id) return false;
             const managerIdStr = String(rowData.manager_id).trim();
@@ -5723,7 +5730,8 @@ var projectTable;
             if (!rowData) return;
             var canFullEdit = window.app.canManageProject();
             var isManagerOfProject = isCurrentUserManagerOfProject(rowData);
-            var canShowEdit = canFullEdit || isManagerOfProject;
+            var isCreatorOfProject = isCurrentUserCreatorOfProject(rowData);
+            var canShowEdit = canFullEdit || isManagerOfProject || isCreatorOfProject;
             const $td = $(e.target).closest('td');
             contextMenuTodoEl = $td.find('[data-todo-title]')[0] || null;
             contextMenuRowData = rowData;
@@ -7260,7 +7268,8 @@ var projectTable;
                 realname: realname,
                 userid: userId,
                 userImage: userImage,
-                size: opts.size != null ? opts.size : 'sm',
+                // Do not add avatar-sm/xs/md — keep base .avatar size for project list
+                size: opts.size != null ? opts.size : '',
                 extraClass: opts.wrapClass ? String(opts.wrapClass).replace(/\bavatar\b/g, '').replace(/\bavata?r-(xs|sm|md|lg|xl)\b/g, '').trim() : (opts.extraClass || 'me-1'),
                 pullUp: opts.pullUp !== false,
                 tooltip: opts.tooltip !== false
@@ -7269,7 +7278,7 @@ var projectTable;
         // Fallback if main.js not loaded
         var title = escapeHtmlForNote(realname || userId || '');
         var initials = getInitials(realname || userId || '');
-        return '<div class="avatar avatar-sm me-1" data-bs-toggle="tooltip" title="' + title + '">'
+        return '<div class="avatar me-1" data-bs-toggle="tooltip" title="' + title + '">'
             + '<span class="avatar-initial rounded-circle bg-label-primary pull-up">'
             + initials
             + '</span></div>';

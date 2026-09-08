@@ -314,7 +314,7 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap gap-2 py-2 pe-2 inline-assignee-picker">
                             <template v-if="getPrimaryAssigneeId(task)">
-                                <div class="avatar avatar-sm me-1" style="cursor: pointer;" data-bs-toggle="tooltip" :title="(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || getPrimaryAssigneeId(task))" @click="openAssigneeModal(task._inlineIndex)">
+                                <div class="avatar me-1" style="cursor: pointer;" data-bs-toggle="tooltip" :title="(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name || getPrimaryAssigneeId(task))" @click="openAssigneeModal(task._inlineIndex)">
                                     <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) || task.assigned_to_name || '') }}</span>
                                     <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))); $event.target.remove()">
                                 </div>
@@ -333,7 +333,7 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-creator">
                         <div class="d-flex align-items-center flex-wrap py-2 pe-2">
                             <template v-if="getCreatorMemberForInlineTask(task)">
-                                <div class="avatar avatar-sm me-1" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">
+                                <div class="avatar me-1" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">
                                     <span class="avatar-initial rounded-circle bg-label-primary" :title="getCreatorTooltip(getCreatorMemberForInlineTask(task))">{{ getInitials(getCreatorMemberForInlineTask(task)) }}</span>
                                     <img v-if="shouldShowCreatorAvatar(getCreatorMemberForInlineTask(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMemberForInlineTask(task))" :alt="getCreatorTooltip(getCreatorMemberForInlineTask(task))" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(getCreatorMemberForInlineTask(task)); $event.target.remove()">
                                 </div>
@@ -455,7 +455,7 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-assignee">
                         <div class="d-flex align-items-center flex-wrap">
                             <template v-if="getPrimaryAssigneeId(task)">
-                                <div class="avatar avatar-sm me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.userid || task.assigned_to_userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, getPrimaryAssigneeId(task))">
+                                <div class="avatar me-1 position-relative" :data-userid="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.userid || task.assigned_to_userid" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, getPrimaryAssigneeId(task))">
                                     <span class="avatar-initial rounded-circle bg-label-primary" @click="removeAssignee(task, getPrimaryAssigneeId(task))">{{ getInitials(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) || task.assigned_to_name || '') }}</span>
                                     <img v-if="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)) && !projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)).avatarError && getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" class="rounded-circle" :src="getAvatarSrc(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task)))" :alt="projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))?.user_name || task.assigned_to_name" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(projectMembers.find(m => m.user_id == getPrimaryAssigneeId(task))); $event.target.remove()">
                                     <span v-if="isAcknowledged(task, getPrimaryAssigneeId(task))" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;">
@@ -485,7 +485,7 @@ if($_SESSION['show_project'] == 0){
                     <div class="task-col-creator">
                         <div class="d-flex align-items-center flex-wrap py-2 pe-2">
                             <template v-if="getCreatorMember(task)">
-                                <div class="avatar avatar-sm me-1" :data-userid="getCreatorMember(task).userid" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMember(task))">
+                                <div class="avatar me-1" :data-userid="getCreatorMember(task).userid" data-bs-toggle="tooltip" :title="getCreatorTooltip(getCreatorMember(task))">
                                     <span class="avatar-initial rounded-circle bg-label-primary" :title="getCreatorTooltip(getCreatorMember(task))">{{ getInitials(getCreatorMember(task)) }}</span>
                                     <img v-if="shouldShowCreatorAvatar(getCreatorMember(task))" class="rounded-circle" :src="getAvatarSrc(getCreatorMember(task))" :alt="getCreatorTooltip(getCreatorMember(task))" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(getCreatorMember(task)); $event.target.remove()">
                                 </div>
@@ -866,7 +866,7 @@ if($_SESSION['show_project'] == 0){
                                                 <div class="d-flex">
                                                     <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:160px;">
                                                         <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                                            <div class="avatar avatar-sm">
+                                                            <div class="avatar">
                                                                 <span class="avatar-initial rounded-circle bg-label-primary">
                                                                     {{ getInitials(log.username || log.realname) }}
                                                                 </span>

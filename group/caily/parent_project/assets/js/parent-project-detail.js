@@ -1119,10 +1119,16 @@ createApp({
         }
     },
     methods: {
+        isChildProjectCreator(project) {
+            if (!project || project.created_by == null || project.created_by === '') return false;
+            if (typeof CURRENT_USER_ID === 'undefined' || !CURRENT_USER_ID) return false;
+            return String(project.created_by) === String(CURRENT_USER_ID);
+        },
         canDeleteChildProject(project) {
-            if(this.isAdmin) return true;
+            if (this.isAdmin) return true;
+            if (this.isChildProjectCreator(project)) return true;
             let canDeleteChildProject = false;
-            if(this.permission && this.permission.length > 0) {
+            if (this.permission && this.permission.length > 0) {
                 for (const rule of this.permission) {
                     if (((rule.project_delete === "1" || rule.project_delete === 1) || (rule.project_manager === "1" || rule.project_manager === 1))
                         && project.department_id == rule.department_id) {
@@ -1131,13 +1137,13 @@ createApp({
                     }
                 }
             }
-            
             return canDeleteChildProject;
         },
         canEditChildProject(project) {
-            if(this.isAdmin) return true;
+            if (this.isAdmin) return true;
+            if (this.isChildProjectCreator(project)) return true;
             let canEditChildProject = false;
-            if(this.permission && this.permission.length > 0) {
+            if (this.permission && this.permission.length > 0) {
                 for (const rule of this.permission) {
                     if (((rule.project_edit === "1" || rule.project_edit === 1) || (rule.project_manager === "1" || rule.project_manager === 1))
                         && project.department_id == rule.department_id) {
