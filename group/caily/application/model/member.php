@@ -615,12 +615,56 @@ class Member extends ApplicationModel {
 		return $hash;
 	}
 
+	/**
+	 * Sync user ↔ department membership.
+	 * Keep existing permission flags (setting/department.php) for departments that remain;
+	 * only insert defaults for newly added departments; delete removed ones.
+	 */
 	function updateDepartment($user_id, $department_ids){
-		$query = sprintf("DELETE FROM groupware_user_department WHERE userid = '%s'", $user_id);
-		$this->query($query);
-		foreach($department_ids as $department_id){
-			$query = sprintf("INSERT INTO groupware_user_department (userid, department_id) VALUES ('%s', '%s')", $user_id, $department_id);
-			$this->query($query);
+		$user_id = $this->quote((string) $user_id);
+		$department_ids = array_values(array_unique(array_filter(array_map('intval', (array) $department_ids), function ($id) {
+			return $id > 0;
+		})));
+
+		$existingRows = $this->fetchAll(sprintf(
+			"SELECT department_id FROM %suser_department WHERE userid = '%s'",
+			DB_PREFIX,
+			$user_id
+		));
+		$existingSet = [];
+		if (is_array($existingRows)) {
+			foreach ($existingRows as $row) {
+				$existingSet[(int) $row['department_id']] = true;
+			}
+		}
+
+		$newSet = [];
+		foreach ($department_ids as $department_id) {
+			$newSet[$department_id] = true;
+		}
+
+		// Remove departments no longer assigned (permissions on those rows go away with the membership)
+		foreach (array_keys($existingSet) as $department_id) {
+			if (!isset($newSet[$department_id])) {
+				$this->query(sprintf(
+					"DELETE FROM %suser_department WHERE userid = '%s' AND department_id = %d",
+					DB_PREFIX,
+					$user_id,
+					$department_id
+				));
+			}
+		}
+
+		// Add newly assigned departments only — do not touch rows that already exist (preserves permissions)
+		foreach ($department_ids as $department_id) {
+			if (!isset($existingSet[$department_id])) {
+				$this->query(sprintf(
+					"INSERT INTO %suser_department (userid, department_id) VALUES ('%s', %d)",
+					DB_PREFIX,
+					$user_id,
+					$department_id
+				));
+			}
 		}
 	}
 

@@ -805,9 +805,9 @@ class Task extends ApplicationModel {
         
         $query = sprintf(
             "SELECT t.*, p.name as project_name,
-            u.realname as assigned_to_name, u.user_image as assigned_to_user_image, u.userid as assigned_to_userid,
+            u.realname as assigned_to_name, u.user_image as assigned_to_user_image, u.userid as assigned_to_userid, u.user_ruby as assigned_to_user_ruby,
             u_creator.realname as created_by_name, u_creator.user_image as created_by_user_image,
-            u_creator.userid as created_by_userid
+            u_creator.userid as created_by_userid, u_creator.user_ruby as created_by_user_ruby
             FROM {$this->table} t 
             LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id 
             LEFT JOIN " . DB_PREFIX . "user u ON t.assigned_to = u.id 

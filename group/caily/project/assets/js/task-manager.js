@@ -112,6 +112,8 @@ const TaskApp = createApp({
             },
             projectMembers: [],
             projectManagers: [],
+            /** Broken avatar keys (img:/uid:/id:) — survives transient member objects from getters */
+            avatarErrorMap: Object.create(null),
             showMemberModal: false,
             assigneeModal: {
                 show: false,
@@ -477,6 +479,11 @@ const TaskApp = createApp({
         if (typeof i18next !== 'undefined' && i18next.on) {
             i18next.on('languageChanged', this._onI18nLanguageChanged);
         }
+    },
+
+    beforeUpdate() {
+        // Bootstrap Tooltip must not hold nodes Vue is about to patch
+        this.disposeTooltips();
     },
 
     beforeUnmount() {
@@ -2345,14 +2352,42 @@ const TaskApp = createApp({
         },
         
         getAvatarSrc(member) {
-            if(member){
-                return  '/assets/upload/avatar/' + member.user_image || '';
+            if (!member || member.user_image == null || String(member.user_image).trim() === '') {
+                return '';
             }
-            return '';
+            return '/assets/upload/avatar/' + member.user_image;
         },
         
         handleAvatarError(member) {
-            member.avatarError = true;
+            if (!member || typeof member !== 'object') return;
+            try {
+                member.avatarError = true;
+            } catch (e) { /* ignore non-extensible */ }
+            const key = this.getAvatarErrorKey(member);
+            if (key) {
+                this.avatarErrorMap = Object.assign({}, this.avatarErrorMap, { [key]: true });
+            }
+        },
+
+        getAvatarErrorKey(member) {
+            if (!member || typeof member !== 'object') return '';
+            const img = member.user_image != null ? String(member.user_image).trim() : '';
+            if (img) return 'img:' + img;
+            if (member.userid) return 'uid:' + String(member.userid);
+            if (member.user_id != null && member.user_id !== '') return 'id:' + String(member.user_id);
+            return '';
+        },
+
+        hasAvatarError(member) {
+            if (!member || typeof member !== 'object') return true;
+            if (member.avatarError) return true;
+            const key = this.getAvatarErrorKey(member);
+            return !!(key && this.avatarErrorMap[key]);
+        },
+
+        /** Prefer this over mutating DOM — never remove() Vue-managed img nodes */
+        shouldShowMemberAvatar(member) {
+            return !!(member && !this.hasAvatarError(member) && this.getAvatarSrc(member));
         },
         
         getInitials(nameOrUser) {
@@ -2373,20 +2408,32 @@ const TaskApp = createApp({
             }
             const primaryId = this.getPrimaryAssigneeId(task);
             if (task && String(primaryId) === String(userId)
-                && (task.assigned_to_name != null || task.assigned_to_user_image != null)) {
+                && (task.assigned_to_name != null || task.assigned_to_user_image != null || task.assigned_to_user_ruby != null)) {
                 return {
                     userid: task.assigned_to_userid,
                     user_id: userId,
                     user_name: task.assigned_to_name || '',
-                    user_image: task.assigned_to_user_image || ''
+                    user_image: task.assigned_to_user_image || '',
+                    user_ruby: task.assigned_to_user_ruby || ''
                 };
             }
             return null;
         },
 
+        /** Full display name (user_ruby for ja/en when available). */
+        getMemberDisplayName(userOrName) {
+            if (typeof window.getUserDisplayName === 'function') {
+                return window.getUserDisplayName(userOrName || '');
+            }
+            if (userOrName && typeof userOrName === 'object') {
+                return userOrName.user_name || userOrName.realname || userOrName.name || '';
+            }
+            return userOrName || '';
+        },
+
         getAssigneeTooltip(task, userId) {
             const member = this.getAssigneeMember(task, userId);
-            const name = member?.user_name || userId;
+            const name = this.getMemberDisplayName(member || { user_name: userId });
             const isAck = this.isAcknowledged(task, userId);
             if (isAck) {
                 const ackAt = this.getAcknowledgedAt(task, userId);
@@ -2401,7 +2448,7 @@ const TaskApp = createApp({
         getCreatorNameByUserId(userId) {
             if (userId == null || userId === undefined || userId === '') return '';
             const member = this.projectMembers.find(m => String(m.user_id) === String(userId));
-            return member?.user_name || '';
+            return this.getMemberDisplayName(member || '');
         },
         /** Return creator info for avatar display (from task API or projectMembers) */
         getCreatorMember(task) {
@@ -2411,17 +2458,19 @@ const TaskApp = createApp({
                     userid: 'system',
                     user_id: 0,
                     user_name: 'System',
-                    user_image: ''
+                    user_image: '',
+                    user_ruby: ''
                 };
             }
             if (task.created_by == null || task.created_by === undefined) return null;
             // Prefer API data so creator avatar shows even when not a project member
-            if (task.created_by_name != null || task.created_by_user_image != null) {
+            if (task.created_by_name != null || task.created_by_user_image != null || task.created_by_user_ruby != null) {
                 return {
                     userid: task.created_by_userid,
                     user_id: task.created_by,
                     user_name: task.created_by_name || '',
-                    user_image: task.created_by_user_image || ''
+                    user_image: task.created_by_user_image || '',
+                    user_ruby: task.created_by_user_ruby || ''
                 };
             }
             return this.projectMembers.find(m => String(m.user_id) === String(task.created_by)) || null;
@@ -2438,27 +2487,29 @@ const TaskApp = createApp({
                     userid: 'system',
                     user_id: 0,
                     user_name: 'System',
-                    user_image: ''
+                    user_image: '',
+                    user_ruby: ''
                 };
             }
             if (task.created_by == null || task.created_by === undefined) return null;
-            if (task.created_by_name != null || task.created_by_user_image != null) {
+            if (task.created_by_name != null || task.created_by_user_image != null || task.created_by_user_ruby != null) {
                 return {
                     userid: task.created_by_userid,
                     user_id: task.created_by,
                     user_name: task.created_by_name || '',
-                    user_image: task.created_by_user_image || ''
+                    user_image: task.created_by_user_image || '',
+                    user_ruby: task.created_by_user_ruby || ''
                 };
             }
             return this.getCreatorMemberByUserId(task.created_by);
         },
         /** True if creator member has a valid avatar to show (has image and no load error). Else fallback to text/initials. */
         shouldShowCreatorAvatar(member) {
-            return member && (member.user_image && String(member.user_image).trim() !== '') && !member.avatarError;
+            return !!(member && member.user_image && String(member.user_image).trim() !== '' && !this.hasAvatarError(member));
         },
-        /** Tooltip text for creator (user name). */
+        /** Tooltip text for creator (user_ruby for ja/en when available). */
         getCreatorTooltip(member) {
-            return member ? (member.user_name || '') : '';
+            return member ? this.getMemberDisplayName(member) : '';
         },
         
         openMemberModal() {

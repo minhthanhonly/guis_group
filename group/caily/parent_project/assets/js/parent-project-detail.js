@@ -9758,7 +9758,13 @@ createApp({
         getManagerName(managerString) {
             if (!managerString) return '';
             const parts = managerString.split(':');
-            return parts[1] || parts[0] || '';
+            const name = parts[1] || parts[0] || '';
+            const userid = parts[3] || parts[0] || '';
+            const ruby = parts[4] || '';
+            if (typeof getUserDisplayName === 'function') {
+                return getUserDisplayName(name, { userid: userid, user_ruby: ruby }) || name;
+            }
+            return name;
         },
         getManagerImage(managerString) {
             if (!managerString) return '';
@@ -9768,25 +9774,26 @@ createApp({
         getManagerInitials(managerString) {
             if (!managerString) return '?';
             const parts = managerString.split(':');
-            const userid = parts[0] || '';
+            const authId = parts[0] || '';
             const name = parts[1] || parts[0] || '';
-            return this.getInitials(name, userid);
+            const userid = parts[3] || authId;
+            const ruby = parts[4] || '';
+            return this.getInitials(name, userid, ruby);
         },
         getRemainingManagers(managerIdString) {
             if (!managerIdString) return '';
             const managers = managerIdString.split('|').filter(m => m.trim() !== '');
             if (managers.length <= 1) return '';
             const remaining = managers.slice(1).map(manager => {
-                const parts = manager.split(':');
-                return parts[1] || parts[0] || '';
+                return this.getManagerName(manager);
             }).filter(name => name).join(', ');
             return remaining;
         },
-        getInitials(name, userid) {
+        getInitials(name, userid, ruby) {
             if (!name && !userid) return '?';
             // Use the same logic as getAvatarName from main.js
             if (typeof getAvatarName === 'function') {
-                return getAvatarName(name || '', { userid: userid || '' });
+                return getAvatarName(name || '', { userid: userid || '', user_ruby: ruby || '' });
             }
             // Fallback if getAvatarName is not available
             try {

@@ -4184,13 +4184,16 @@ class Project extends ApplicationModel {
                 
                 $sentUserIds[] = $mentionedUser['userid'];
 
+                $actorNameJa = $this->getNotificationActorNameJa(false);
+                $actorNameVi = $this->getNotificationActorNameVi();
+
                 $titleJa = '#'.$projectId.': 案件でメンションされました';
-                $messageJa = sprintf('%sさんが案件「%s」であなたをメンションしました', 
-                    $_SESSION['realname'], 
+                $messageJa = sprintf('%sさんが案件「%s」であなたをメンションしました',
+                    $actorNameJa,
                     $project['name']
                 );
                 $titleVi = '#'.$projectId.': Dự án có bình luận mới';
-                $messageVi = sprintf('%s đã nhắc đến bạn trong dự án「%s」', $_SESSION['realname'], $project['name']);
+                $messageVi = sprintf('%s đã nhắc đến bạn trong dự án「%s」', $actorNameVi, $project['name']);
                 $payload = [
                     'event' => 'project_mention',
                     'title' => $titleJa,
@@ -4201,7 +4204,9 @@ class Project extends ApplicationModel {
                         'comment_id' => $commentId,
                         'comment_content' => $content,
                         'commenter_id' => $commentUserId,
-                        'commenter_name' => $_SESSION['realname'],
+                        'commenter_name' => $actorNameJa,
+                        'commenter_name_ja' => $actorNameJa,
+                        'commenter_name_vi' => $actorNameVi,
                         'avatar' => $this->getUserImage(),
                         'url' => "/project/detail.php?id=$projectId#comment-$commentId",
                         'title_ja' => $titleJa,
@@ -5771,9 +5776,9 @@ class Project extends ApplicationModel {
         
         // Title / message đa ngôn ngữ
         $titleJa = '#'.$projectId.': 新しい案件が作成されました';
-        $messageJa = sprintf('%sが案件「%s」を作成しました', $this->getUserRealname(), $projectName);
+        $messageJa = sprintf('%sが案件「%s」を作成しました', $this->getNotificationActorNameJa(), $projectName);
         $titleVi = '#'.$projectId.': Dự án mới đã được tạo';
-        $messageVi = sprintf('%s đã tạo dự án「%s」', $this->getUserRealname(), $projectName);
+        $messageVi = sprintf('%s đã tạo dự án「%s」', $this->getNotificationActorNameVi(), $projectName);
         
         $params = [
             'event' => 'project_created',
@@ -5837,9 +5842,9 @@ class Project extends ApplicationModel {
     function notifyProjectCailyNouhinUpdated($projectId, $projectName, $updatedBy,  $cailyNoukiStatus, $recipientIds = []) {
         // Title / message đa ngôn ngữ
         $titleJa = '#'.$projectId.': 案件「'.$projectName.'」 CAILY納品済み';
-        $messageJa = sprintf('%sがCAILY納品状況を「%s」に更新しました', $updatedBy, $cailyNoukiStatus);
+        $messageJa = sprintf('%sがCAILY納品状況を「%s」に更新しました', $this->getNotificationActorNameJa(), $cailyNoukiStatus);
         $titleVi =  '#'.$projectId.': Dự án「'.$projectName.'」 CAILY Đã giao';
-        $messageVi = sprintf('%s đã cập nhật trạng thái giao hàng CAILY thành「%s」', $updatedBy, $cailyNoukiStatus);
+        $messageVi = sprintf('%s đã cập nhật trạng thái giao hàng CAILY thành「%s」', $this->getNotificationActorNameVi(), $cailyNoukiStatus);
         
         $params = [
             'event' => 'project_caily_nouki_updated',
@@ -5867,9 +5872,9 @@ class Project extends ApplicationModel {
     function notifyProjectGuisNoukiUpdated($projectId, $projectName, $updatedBy,  $guisNoukiStatus, $recipientIds = []) {
         // Title / message đa ngôn ngữ
         $titleJa = '#'.$projectId.': 案件「'.$projectName.'」 GUIS納品済み';
-        $messageJa = sprintf('%sがGUIS納品状況を「%s」に更新しました', $updatedBy, $guisNoukiStatus);
+        $messageJa = sprintf('%sがGUIS納品状況を「%s」に更新しました', $this->getNotificationActorNameJa(), $guisNoukiStatus);
         $titleVi =  '#'.$projectId.': Dự án「'.$projectName.'」 GUIS Đã giao';
-        $messageVi = sprintf('%s đã cập nhật trạng thái giao hàng GUIS thành「%s」', $updatedBy, $guisNoukiStatus);
+        $messageVi = sprintf('%s đã cập nhật trạng thái giao hàng GUIS thành「%s」', $this->getNotificationActorNameVi(), $guisNoukiStatus);
         
         $params = [
             'event' => 'project_guis_nouki_updated',
@@ -5947,9 +5952,9 @@ class Project extends ApplicationModel {
         $isImportant = in_array($newStatus, ['completed', 'cancelled', 'deleted', 'in_progress', 'paused']) ? 1 : 0;
         
         $titleJa = '#'.$projectId.': ステータスが変更されました';
-        $messageJa = sprintf('%sが案件「%s」のステータスを「%s」に変更しました', $this->getUserRealname(), $projectName, $newStatusLabelJa);
+        $messageJa = sprintf('%sが案件「%s」のステータスを「%s」に変更しました', $this->getNotificationActorNameJa(), $projectName, $newStatusLabelJa);
         $titleVi = '#'.$projectId.': Trạng thái đã được thay đổi';
-        $messageVi = sprintf('%s đã thay đổi trạng thái của dự án「%s」thành「%s」', $this->getUserRealname(), $projectName, $newStatusLabelVi);
+        $messageVi = sprintf('%s đã thay đổi trạng thái của dự án「%s」thành「%s」', $this->getNotificationActorNameVi(), $projectName, $newStatusLabelVi);
         
         $params = [
             'event' => 'project_status_changed',
@@ -5994,9 +5999,9 @@ class Project extends ApplicationModel {
         $roleLabelVi = $role === 'manager' ? 'Quản lý' : 'Thành viên';
         
         $titleJa = '#'.$projectId.': メンバーが追加されました';
-        $messageJa = sprintf('%sがあなたを案件「%s」に%sを追加しました', $this->getUserRealname(), $projectName, $roleLabelJa);
+        $messageJa = sprintf('%sがあなたを案件「%s」に%sを追加しました', $this->getNotificationActorNameJa(), $projectName, $roleLabelJa);
         $titleVi = '#'.$projectId.': Thành viên đã được thêm';
-        $messageVi = sprintf('%s đã thêm bạn làm %s trong dự án「%s」', $this->getUserRealname(), $roleLabelVi, $projectName);
+        $messageVi = sprintf('%s đã thêm bạn làm %s trong dự án「%s」', $this->getNotificationActorNameVi(), $roleLabelVi, $projectName);
         
         $params = [
             'event' => 'project_member_added',
@@ -6038,6 +6043,39 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * Actor display name for Japanese notification text.
+     * Prefer user_ruby when set; optionally append さん.
+     */
+    function getNotificationActorNameJa($withSan = true) {
+        $ruby = isset($_SESSION['user_ruby']) ? trim((string)$_SESSION['user_ruby']) : '';
+        if ($ruby !== '') {
+            return $withSan ? ($ruby . 'さん') : $ruby;
+        }
+        if ($withSan) {
+            return $this->getUserRealname();
+        }
+        if (!empty($_SESSION['lastname'])) {
+            return (string)$_SESSION['lastname'];
+        }
+        return isset($_SESSION['realname']) ? (string)$_SESSION['realname'] : '';
+    }
+
+    /**
+     * Actor display name for Vietnamese notification text.
+     * Prefer firstname when set.
+     */
+    function getNotificationActorNameVi() {
+        $firstname = isset($_SESSION['firstname']) ? trim((string)$_SESSION['firstname']) : '';
+        if ($firstname !== '') {
+            return $firstname;
+        }
+        if (!empty($_SESSION['lastname'])) {
+            return (string)$_SESSION['lastname'];
+        }
+        return isset($_SESSION['realname']) ? (string)$_SESSION['realname'] : '';
+    }
+
+    /**
      * Hàm tiện ích để gửi thông báo khi xóa thành viên khỏi dự án
      */
     function notifyMemberRemoved($projectNumber, $projectId, $projectName, $memberIds, $role = 'member') {
@@ -6046,9 +6084,9 @@ class Project extends ApplicationModel {
         $roleLabel = $role === 'manager' ? 'マネージャー' : 'メンバー';
         $roleLabelVi = $role === 'manager' ? 'Quản lý' : 'Thành viên';
         $titleJa = '#'.$projectId.': メンバーが削除されました';
-        $messageJa = sprintf('%sがあなたを案件「%s」から%sを削除しました', $this->getUserRealname(), $projectName, $roleLabel);
+        $messageJa = sprintf('%sがあなたを案件「%s」から%sを削除しました', $this->getNotificationActorNameJa(), $projectName, $roleLabel);
         $titleVi = '#'.$projectId.': Thành viên đã được xóa';
-        $messageVi = sprintf('%s đã xóa bạn khỏi %s của dự án「%s」', $this->getUserRealname(), $roleLabelVi, $projectName);
+        $messageVi = sprintf('%s đã xóa bạn khỏi %s của dự án「%s」', $this->getNotificationActorNameVi(), $roleLabelVi, $projectName);
         $params = [
             'event' => 'project_member_removed',
             'project_id' => $projectId,

@@ -399,7 +399,7 @@ class ApplicationModel extends Model {
 		$idsList = implode(',', $projectIds);
 		$membersByProject = [];
 		$memberRows = $this->fetchAll(sprintf(
-			"SELECT pm.project_id, pm.role, pm.user_id, u.realname, u.user_image
+			"SELECT pm.project_id, pm.role, pm.user_id, u.userid, u.realname, u.user_image, u.user_ruby
 			 FROM %sproject_members pm
 			 LEFT JOIN %suser u ON pm.user_id = u.id
 			 WHERE pm.project_id IN (%s) AND pm.role IN ('member', 'manager')
@@ -414,7 +414,12 @@ class ApplicationModel extends Model {
 			if (!isset($membersByProject[$pid])) {
 				$membersByProject[$pid] = ['member' => [], 'manager' => []];
 			}
-			$membersByProject[$pid][$role][] = $row['user_id'] . ':' . ($row['realname'] ?? '') . ':' . ($row['user_image'] ?? '');
+			// Format: authId:realname:user_image:userid:user_ruby (userid/ruby for en/ja avatars)
+			$membersByProject[$pid][$role][] = $row['user_id']
+				. ':' . ($row['realname'] ?? '')
+				. ':' . ($row['user_image'] ?? '')
+				. ':' . ($row['userid'] ?? '')
+				. ':' . ($row['user_ruby'] ?? '');
 		}
 		return $membersByProject;
 	}
@@ -744,7 +749,7 @@ class ApplicationModel extends Model {
 	function getAvatarRubyMap() {
 		$this->connect();
 		$query = sprintf(
-			"SELECT userid, realname, user_ruby FROM %suser
+			"SELECT id, userid, realname, user_ruby FROM %suser
 			 WHERE user_ruby IS NOT NULL AND user_ruby != ''
 			   AND (`is_suspend` = '' OR `is_suspend` IS NULL OR is_suspend = '0')",
 			DB_PREFIX
@@ -760,6 +765,10 @@ class ApplicationModel extends Model {
 				}
 				if (!empty($row['userid'])) {
 					$byUserId[(string)$row['userid']] = $ruby;
+				}
+				// Also key by numeric auth id (project_members.user_id / SESSION id)
+				if (isset($row['id']) && $row['id'] !== '' && $row['id'] !== null) {
+					$byUserId[(string)$row['id']] = $ruby;
 				}
 				if (!empty($row['realname'])) {
 					$byRealname[(string)$row['realname']] = $ruby;

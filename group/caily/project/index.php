@@ -597,7 +597,7 @@ if($_SESSION['show_project'] == 0){
                                     <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
                                         <div class="avatar">
                                             <span class="avatar-initial rounded-circle bg-label-primary">
-                                                {{ getInitials(log.username ? log.username : (log.realname ? log.realname : '?')) }}
+                                                {{ getInitials(log.username || log.realname || '?', log.userid || log.user_id || '', log.user_ruby || '') }}
                                             </span>
                                             <img v-if="log.user_image"
                                                 :src="'/assets/upload/avatar/' + log.user_image" alt="avatar" class="rounded-circle"
@@ -607,7 +607,7 @@ if($_SESSION['show_project'] == 0){
                                         </div>
                                     </div>
                                     <div class="d-flex flex-column align-items-start justify-content-center ms-2">
-                                        <span class="fw-bold small">{{ log.username || log.realname || log.user }}</span>
+                                        <span class="fw-bold small">{{ getBdLogDisplayName(log) }}</span>
                                         <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
                         </div>
                                 </div>

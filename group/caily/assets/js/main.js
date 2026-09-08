@@ -1005,6 +1005,26 @@ function getAvatarName(nameOrUser, rubyOrMeta) {
   return formatAvatarInitials(name);
 }
 
+/**
+ * Full display name for tooltips / labels.
+ * When UI lang is en/ja and user_ruby exists, prefer ruby; otherwise realname/user_name.
+ */
+function getUserDisplayName(nameOrUser, rubyOrMeta) {
+  let name = '';
+  let meta = rubyOrMeta;
+  if (nameOrUser && typeof nameOrUser === 'object') {
+    name = nameOrUser.realname || nameOrUser.user_name || nameOrUser.name || '';
+    meta = Object.assign({}, nameOrUser, (rubyOrMeta && typeof rubyOrMeta === 'object') ? rubyOrMeta : (typeof rubyOrMeta === 'string' ? { user_ruby: rubyOrMeta } : {}));
+  } else {
+    name = nameOrUser || '';
+  }
+  if (shouldUseAvatarRuby()) {
+    const ruby = resolveAvatarRuby(name, meta);
+    if (ruby) return ruby;
+  }
+  return String(name || '').trim();
+}
+
 /** Valid avatar filename only (skip empty / placeholders that 404). */
 function isValidAvatarFilename(userImage) {
   if (userImage == null) return false;
@@ -1041,11 +1061,15 @@ function renderUserAvatarHtml(opts) {
   var realname = opts.realname || '';
   var userid = opts.userid || opts.userId || opts.user_id || '';
   var userImage = opts.userImage || opts.user_image || '';
-  var title = realname || userid || '';
-  var initials = getAvatarName(realname || userid || '', {
+  var rubyMeta = {
     userid: userid,
     user_ruby: opts.user_ruby || opts.ruby || ''
-  });
+  };
+  // Tooltip always shows realname; initials may use user_ruby (en/ja)
+  var title = (opts.title != null && opts.title !== '')
+    ? String(opts.title)
+    : (realname || userid || '');
+  var initials = getAvatarName(realname || userid || '', rubyMeta);
   var size = (opts.size !== undefined && opts.size !== null) ? String(opts.size) : 'sm';
   var sizeClass = size ? (' avatar-' + size) : '';
   var wrapClass = 'avatar' + sizeClass;

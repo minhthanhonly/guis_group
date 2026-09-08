@@ -4289,14 +4289,15 @@ var projectTable;
                         let html = '<div class="d-flex align-items-center">';
                         const maxAvatars = 1;
                         members.slice(0, maxAvatars).forEach(member => {
-                            const [userId, realname, userImage] = member.split(':');
-                            html += renderListAvatarHtml(realname, userId, userImage);
+                            const parsed = parseListMemberToken(member);
+                            html += renderListAvatarHtml(parsed.realname, parsed.userid || parsed.authId, parsed.userImage, {
+                                user_ruby: parsed.user_ruby
+                            });
                         });
 
                         if (members.length > maxAvatars) {
                             const remaining = members.slice(maxAvatars).map(member => {
-                                const [, realname,] = member.split(':');
-                                return realname;
+                                return formatListMemberDisplayName(member);
                             }).join(', ');
                             html += `
                                 <span class="avatar-initial rounded-circle pull-up" 
@@ -4341,14 +4342,15 @@ var projectTable;
                         let html = '<div class="d-flex align-items-center">';
                         const maxAvatars = 1;
                         members.slice(0, maxAvatars).forEach(member => {
-                            const [userId, realname, userImage] = member.split(':');
-                            html += renderListAvatarHtml(realname, userId, userImage);
+                            const parsed = parseListMemberToken(member);
+                            html += renderListAvatarHtml(parsed.realname, parsed.userid || parsed.authId, parsed.userImage, {
+                                user_ruby: parsed.user_ruby
+                            });
                         });
 
                         if (members.length > maxAvatars) {
                             const remaining = members.slice(maxAvatars).map(member => {
-                                const [, realname,] = member.split(':');
-                                return realname;
+                                return formatListMemberDisplayName(member);
                             }).join(', ');
                             html += `
                                 <span class="avatar-initial rounded-circle pull-up" 
@@ -5327,24 +5329,41 @@ var projectTable;
                     var firstInitials = '';
                     var firstTitle = '';
                     var restCount = 0;
+                    function memberDisplay(m) {
+                        if (!m) return { initials: '', title: '' };
+                        var name = m.realname || m.user_name || '';
+                        var meta = {
+                            userid: m.userid || m.user_id || m.id || '',
+                            user_ruby: m.user_ruby || ''
+                        };
+                        return {
+                            initials: getInitials(name, meta),
+                            // Hover tooltip: realname (not ruby)
+                            title: name
+                        };
+                    }
                     if (ids.length === 0 && t.assigned_to_name) {
-                        firstInitials = getInitials(t.assigned_to_name);
+                        firstInitials = getInitials(t.assigned_to_name, { user_ruby: t.assigned_to_user_ruby || '' });
                         firstTitle = t.assigned_to_name;
                     } else if (members && members.length > 0) {
-                        var names = ids.map(function(uid) {
-                            var m = members.find(function(x) { return String(x.user_id) === String(uid) || String(x.id) === String(uid); });
-                            return m ? (m.realname || m.user_name || '') : '';
+                        var matched = ids.map(function(uid) {
+                            return members.find(function(x) {
+                                return String(x.user_id) === String(uid)
+                                    || String(x.id) === String(uid)
+                                    || String(x.userid) === String(uid);
+                            });
                         }).filter(Boolean);
-                        if (names.length > 0) {
-                            firstInitials = getInitials(names[0]);
-                            firstTitle = names[0];
-                            restCount = names.length - 1;
+                        if (matched.length > 0) {
+                            var first = memberDisplay(matched[0]);
+                            firstInitials = first.initials;
+                            firstTitle = first.title;
+                            restCount = matched.length - 1;
                         } else {
-                            firstInitials = t.assigned_to_name ? getInitials(t.assigned_to_name) : '';
+                            firstInitials = t.assigned_to_name ? getInitials(t.assigned_to_name, { user_ruby: t.assigned_to_user_ruby || '' }) : '';
                             firstTitle = t.assigned_to_name || '';
                         }
                     } else {
-                        firstInitials = t.assigned_to_name ? getInitials(t.assigned_to_name) : '';
+                        firstInitials = t.assigned_to_name ? getInitials(t.assigned_to_name, { user_ruby: t.assigned_to_user_ruby || '' }) : '';
                         firstTitle = t.assigned_to_name || '';
                     }
                     return { firstInitials: firstInitials, firstTitle: firstTitle, restCount: restCount };
@@ -7253,9 +7272,28 @@ var projectTable;
         handleProjectListRestoreOnShow(event);
     });
 
-    // Helper function to get initials from name
-    function getInitials(name) {
-        return getAvatarName(name);
+    // Helper: parse manager_id / assignment_id token
+    // Format: authId:realname:user_image[:userid[:user_ruby]]
+    function parseListMemberToken(token) {
+        var parts = String(token || '').split(':');
+        return {
+            authId: parts[0] || '',
+            realname: parts[1] || '',
+            userImage: parts[2] || '',
+            userid: parts[3] || parts[0] || '',
+            user_ruby: parts[4] || ''
+        };
+    }
+
+    function formatListMemberDisplayName(token) {
+        var p = parseListMemberToken(token);
+        // Hover / +N tooltip: always realname (not ruby)
+        return p.realname || p.userid || p.authId || '';
+    }
+
+    // Helper function to get initials from name (en/ja → user_ruby)
+    function getInitials(name, rubyOrMeta) {
+        return getAvatarName(name, rubyOrMeta);
     }
 
     /**
@@ -7268,6 +7306,7 @@ var projectTable;
                 realname: realname,
                 userid: userId,
                 userImage: userImage,
+                user_ruby: opts.user_ruby || opts.ruby || '',
                 // Do not add avatar-sm/xs/md — keep base .avatar size for project list
                 size: opts.size != null ? opts.size : '',
                 extraClass: opts.wrapClass ? String(opts.wrapClass).replace(/\bavatar\b/g, '').replace(/\bavata?r-(xs|sm|md|lg|xl)\b/g, '').trim() : (opts.extraClass || 'me-1'),
@@ -7277,7 +7316,7 @@ var projectTable;
         }
         // Fallback if main.js not loaded
         var title = escapeHtmlForNote(realname || userId || '');
-        var initials = getInitials(realname || userId || '');
+        var initials = getInitials(realname || userId || '', { userid: userId, user_ruby: opts.user_ruby || '' });
         return '<div class="avatar me-1" data-bs-toggle="tooltip" title="' + title + '">'
             + '<span class="avatar-initial rounded-circle bg-label-primary pull-up">'
             + initials

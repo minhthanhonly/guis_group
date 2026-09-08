@@ -1867,8 +1867,28 @@ const vueApp = createApp({
         showAvatarInitials(member) {
             return !member || member.avatarError || !this.getAvatarSrc(member) || !member.avatarLoaded;
         },
-        getInitials(nameOrUser) {
-            return getAvatarName(nameOrUser);
+        getInitials(nameOrUser, userid, ruby) {
+            if (typeof getAvatarName === 'function') {
+                if (nameOrUser && typeof nameOrUser === 'object') {
+                    return getAvatarName(nameOrUser);
+                }
+                return getAvatarName(nameOrUser || '', {
+                    userid: userid || '',
+                    user_ruby: ruby || ''
+                });
+            }
+            return nameOrUser ? String(nameOrUser).charAt(0) : '?';
+        },
+        getBdLogDisplayName(log) {
+            if (!log) return '';
+            const name = log.username || log.realname || log.user || '';
+            if (typeof getUserDisplayName === 'function') {
+                return getUserDisplayName(name, {
+                    userid: log.userid || log.user_id || '',
+                    user_ruby: log.user_ruby || ''
+                }) || name;
+            }
+            return name;
         },
         initTooltips() {
             if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;

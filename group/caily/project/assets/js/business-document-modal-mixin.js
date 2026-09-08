@@ -1010,13 +1010,31 @@
                 var integerAmount = Math.floor(parseFloat(amount));
                 return new Intl.NumberFormat('ja-JP').format(integerAmount);
             },
-            getInitials: function(name) {
+            getInitials: function(name, userid, ruby) {
+                if (!name && !userid) return '?';
+                if (typeof getAvatarName === 'function') {
+                    return getAvatarName(name || '', {
+                        userid: userid || '',
+                        user_ruby: ruby || ''
+                    });
+                }
                 if (!name) return '?';
                 var parts = String(name).trim().split(/\s+/);
                 if (parts.length >= 2) {
                     return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
                 }
                 return String(name).charAt(0).toUpperCase();
+            },
+            getBdLogDisplayName: function(log) {
+                if (!log) return '';
+                var name = log.username || log.realname || log.user || '';
+                if (typeof getUserDisplayName === 'function') {
+                    return getUserDisplayName(name, {
+                        userid: log.userid || log.user_id || '',
+                        user_ruby: log.user_ruby || ''
+                    }) || name;
+                }
+                return name;
             }
         }
     };
