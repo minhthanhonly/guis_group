@@ -1515,9 +1515,9 @@ class Task extends ApplicationModel {
     function notifyTaskDeleted($taskId, $taskTitle, $projectId, $assignedUserIds) {
         $taskTitle = strlen($taskTitle) > 15 ? substr($taskTitle, 0, 15) . '...' : $taskTitle;
         $titleJa = '#'.$projectId.': タスクが削除されました';
-        $messageJa = sprintf('%sがタスク#%s「%s」を削除しました', $this->getUserRealname(), $taskId, $taskTitle);
+        $messageJa = sprintf('%sがタスク#%s「%s」を削除しました', $this->getNotificationActorNameJa(), $taskId, $taskTitle);
         $titleVi = '#'.$projectId.': Task đã được xóa';
-        $messageVi = sprintf('%s đã xóa task #%s「%s」', $this->getUserRealname(), $taskId,  $taskTitle);
+        $messageVi = sprintf('%s đã xóa task #%s「%s」', $this->getNotificationActorNameVi(), $taskId, $taskTitle);
         $params = [
             'event' => 'task_deleted',
             'title' => $titleJa,
@@ -3414,22 +3414,47 @@ class Task extends ApplicationModel {
                 }
                 
                 $sentUserIds[] = $mentionedUser['userid'];
-                
+
+                $actorNameJa = $this->getNotificationActorNameJa(false);
+                $actorNameVi = $this->getNotificationActorNameVi();
+                $taskRow = $this->fetchOne(sprintf(
+                    "SELECT title FROM " . DB_PREFIX . "tasks WHERE id = %d",
+                    intval($taskId)
+                ));
+                $taskTitle = isset($taskRow['title']) ? $taskRow['title'] : '';
+                $taskTitleShort = strlen($taskTitle) > 15 ? substr($taskTitle, 0, 15) . '...' : $taskTitle;
+
+                $titleJa = '#'.$projectId.': タスクでメンションされました';
+                $messageJa = sprintf('%sさんがタスク「%s」であなたをメンションしました',
+                    $actorNameJa,
+                    $taskTitleShort !== '' ? $taskTitleShort : $project['name']
+                );
+                $titleVi = '#'.$projectId.': Bạn được nhắc đến trong task';
+                $messageVi = sprintf('%s đã nhắc đến bạn trong task「%s」',
+                    $actorNameVi,
+                    $taskTitleShort !== '' ? $taskTitleShort : $project['name']
+                );
                 $payload = [
                     'event' => 'task_mention',
-                    'title' => 'タスクでメンションされました',
-                    'message' => sprintf('%sさんがタスクでメンションしました', 
-                        $_SESSION['realname']
-                    ),
+                    'title' => $titleJa,
+                    'message' => $messageJa,
                     'data' => [
                         'project_id' => $projectId,
                         'project_name' => $project['name'],
+                        'task_id' => $taskId,
+                        'task_title' => $taskTitle,
                         'comment_id' => $commentId,
                         'comment_content' => $content,
                         'commenter_id' => $commentUserId,
-                        'commenter_name' => $_SESSION['realname'],
+                        'commenter_name' => $actorNameJa,
+                        'commenter_name_ja' => $actorNameJa,
+                        'commenter_name_vi' => $actorNameVi,
                         'avatar' => $this->getUserImage(),
-                        'url' => "/project/task.php?id=$projectId&task_id=$taskId#comment-$commentId"
+                        'url' => "/project/task.php?id=$projectId&task_id=$taskId#comment-$commentId",
+                        'title_ja' => $titleJa,
+                        'message_ja' => $messageJa,
+                        'title_vi' => $titleVi,
+                        'message_vi' => $messageVi,
                     ],
                     'project_id' => $projectId,
                     'user_ids' => [$mentionedUser['userid']]
@@ -3803,10 +3828,11 @@ class Task extends ApplicationModel {
             return false;
         }
 
+        $taskTitle = strlen($taskTitle) > 15 ? substr($taskTitle, 0, 15) . '...' : $taskTitle;
         $titleJa = '#'.$projectId.': タスクが作成されました';
-        $messageJa = sprintf('%sがあなたにタスク#%s「%s」を割り当てました', $this->getUserRealname(), $taskId, $taskTitle);
+        $messageJa = sprintf('%sがあなたにタスク#%s「%s」を割り当てました', $this->getNotificationActorNameJa(), $taskId, $taskTitle);
         $titleVi = '#'.$projectId.': Task đã được tạo';
-        $messageVi = sprintf('%s đã gán task #%s「%s」cho bạn', $this->getUserRealname(), $taskId, $taskTitle);
+        $messageVi = sprintf('%s đã gán task #%s「%s」cho bạn', $this->getNotificationActorNameVi(), $taskId, $taskTitle);
         $params = [
             'event' => 'task_created',
             'title' => $titleJa,
@@ -3861,10 +3887,10 @@ class Task extends ApplicationModel {
 
         $taskTitle = strlen($taskTitle) > 15 ? substr($taskTitle, 0, 15) . '...' : $taskTitle;
         $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
-        $titleJa = '#'.$projectNumber.': タスクが割り当てられました';
-        $messageJa = sprintf('%sがあなたにタスク#%s「%s」を割り当てました', $this->getUserRealname(), $taskId, $taskTitle);
-        $titleVi = '#'.$projectNumber.': Task đã được gán';
-        $messageVi = sprintf('%s đã gán task #%s「%s」cho bạn', $this->getUserRealname(), $taskId, $taskTitle);
+        $titleJa = '#'.$projectId.': タスクが割り当てられました';
+        $messageJa = sprintf('%sがあなたにタスク#%s「%s」を割り当てました', $this->getNotificationActorNameJa(), $taskId, $taskTitle);
+        $titleVi = '#'.$projectId.': Task đã được gán';
+        $messageVi = sprintf('%s đã gán task #%s「%s」cho bạn', $this->getNotificationActorNameVi(), $taskId, $taskTitle);
         $params = [
             'event' => 'task_assigned',
             'title' => $titleJa,
@@ -3901,9 +3927,9 @@ class Task extends ApplicationModel {
     function notifyTaskAssigneeRemoved($taskId, $taskTitle, $projectId, $projectNumber, $projectName, $removedAssignees) {
         $taskTitle = strlen($taskTitle) > 15 ? substr($taskTitle, 0, 15) . '...' : $taskTitle;
         $titleJa = '#'.$projectId.': タスクが割り当て解除されました';
-        $messageJa = sprintf('%sがあなたのタスク「%s」を割り当て解除しました', $this->getUserRealname(), $taskTitle);
+        $messageJa = sprintf('%sがあなたのタスク「%s」を割り当て解除しました', $this->getNotificationActorNameJa(), $taskTitle);
         $titleVi = '#'.$projectId.': Task đã hủy gán';
-        $messageVi = sprintf('%s đã hủy gán task「%s」', $this->getUserRealname(), $taskTitle);
+        $messageVi = sprintf('%s đã hủy gán task「%s」', $this->getNotificationActorNameVi(), $taskTitle);
         $params = [
             'event' => 'task_assignee_removed',
             'title' => $titleJa,

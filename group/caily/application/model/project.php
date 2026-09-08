@@ -6043,39 +6043,6 @@ class Project extends ApplicationModel {
     }
 
     /**
-     * Actor display name for Japanese notification text.
-     * Prefer user_ruby when set; optionally append さん.
-     */
-    function getNotificationActorNameJa($withSan = true) {
-        $ruby = isset($_SESSION['user_ruby']) ? trim((string)$_SESSION['user_ruby']) : '';
-        if ($ruby !== '') {
-            return $withSan ? ($ruby . 'さん') : $ruby;
-        }
-        if ($withSan) {
-            return $this->getUserRealname();
-        }
-        if (!empty($_SESSION['lastname'])) {
-            return (string)$_SESSION['lastname'];
-        }
-        return isset($_SESSION['realname']) ? (string)$_SESSION['realname'] : '';
-    }
-
-    /**
-     * Actor display name for Vietnamese notification text.
-     * Prefer firstname when set.
-     */
-    function getNotificationActorNameVi() {
-        $firstname = isset($_SESSION['firstname']) ? trim((string)$_SESSION['firstname']) : '';
-        if ($firstname !== '') {
-            return $firstname;
-        }
-        if (!empty($_SESSION['lastname'])) {
-            return (string)$_SESSION['lastname'];
-        }
-        return isset($_SESSION['realname']) ? (string)$_SESSION['realname'] : '';
-    }
-
-    /**
      * Hàm tiện ích để gửi thông báo khi xóa thành viên khỏi dự án
      */
     function notifyMemberRemoved($projectNumber, $projectId, $projectName, $memberIds, $role = 'member') {
