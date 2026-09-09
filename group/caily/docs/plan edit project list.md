@@ -32,7 +32,7 @@ Shell đang chặn trước API (moment ~748KB, `project-list.js` ~460KB, `core.
 | **6** | **Bỏ/defer `moment` + `moment-timezone-with-data`** (CDN ~808KB) — dùng dayjs hoặc format native | −0.7–1.5MB |
 | **7** | Defer head blocking: chat CSS, task-timer, Tagify trùng, Flatpickr nếu chưa mở filter ✅ | MCP: bỏ `app-chat.css`; Tagify ×1; Flatpickr **không** load khi filter đóng; task-timer non-blocking; DCL ~0.4s |
 | **8** | Code-split `project-list.js` (list core vs modal/Excel/tour/BD) ✅ | Excel + Quick Edit lazy; BD mixin async; core **~462→414KB**; tour already separate |
-| **9** | Self-host / subset font; bỏ Google Fonts trên critical path | −critical path |
+| **9** | Self-host / subset font; bỏ Google Fonts trên critical path ✅ | Bỏ Public Sans (Google Fonts); system JP stack; xóa `iconify-icons_bk.css` + `flag-icons`/flags (~6MB) không dùng |
 
 **Done khi:** DCL **&lt; 3–4s**, total transfer first load **&lt; ~3MB**.
 

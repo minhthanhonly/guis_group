@@ -3,6 +3,11 @@
 * File include item demo only specific css only
 ******************************************************************************/
 
+/* App body font: system stack (Google Font Public Sans removed — P1 #9) */
+:root {
+  --bs-font-sans-serif: "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Helvetica Neue", Arial, sans-serif;
+}
+
 .menu .app-brand.demo {
   height: 64px;
 }
