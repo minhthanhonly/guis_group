@@ -1,0 +1,37 @@
+# Nginx — gzip for static CSS/JS (kanri.guis.co.jp)
+# PHP output_compression.php only compresses HTML/JSON from PHP.
+# Static files (/assets/*.css, *.js) are served by nginx → enable gzip here.
+#
+# Put inside the server { } block (or http { } for global), then:
+#   nginx -t && systemctl reload nginx
+#
+# Expected after reload:
+#   curl -sI -H 'Accept-Encoding: gzip' https://kanri.guis.co.jp/assets/vendor/css/core.css
+#   → Content-Encoding: gzip
+
+gzip on;
+gzip_vary on;
+gzip_proxied any;
+gzip_comp_level 5;
+gzip_min_length 256;
+gzip_types
+    text/plain
+    text/css
+    text/xml
+    text/javascript
+    application/javascript
+    application/x-javascript
+    application/json
+    application/ld+json
+    application/xml
+    application/rss+xml
+    image/svg+xml
+    font/ttf
+    font/otf
+    font/woff
+    application/font-woff
+    application/vnd.ms-fontobject;
+
+# Optional: brotli (if ngx_brotli is installed)
+# brotli on;
+# brotli_types text/css application/javascript application/json image/svg+xml;

@@ -1,6 +1,6 @@
 <?php
-header('Content-Type: application/json');
 require_once('loader.php');
+header('Content-Type: application/json');
 
 try {
     $controller->initApi();

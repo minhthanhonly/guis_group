@@ -1,3 +1,10 @@
+# Deploy note (kanri.guis.co.jp):
+# - Front proxy is nginx → this Apache .htaccess may be ignored for PHP.
+# - HTML/JSON gzip relies on application/output_compression.php
+# - If the app vhost is Apache, copy/rename this file to `.htaccess` on that vhost only.
+# - Do NOT copy this file onto localhost DocumentRoot as-is (HTTPS redirect breaks HTTP).
+# ==============================================================================
+
 # Custom Error Pages
 ErrorDocument 404 /404.php
 ErrorDocument 500 /500.php
@@ -37,8 +44,8 @@ Options -Indexes
 
 # ------------------------------------------------------------------------------
 # 1. BẬT NÉN GZIP ĐỂ GIẢM KÍCH THƯỚC FILE
-# Giúp nén các file text (HTML, CSS, JS,...) trước khi gửi đến trình duyệt.
-# Yêu cầu module mod_deflate của Apache phải được bật.
+# Giúp nén các file text (HTML, CSS, JS, JSON,...) trước khi gửi đến trình duyệt.
+# Yêu cầu module mod_deflate (+ headers) của Apache phải được bật.
 # ------------------------------------------------------------------------------
 <IfModule mod_deflate.c>
   # Nén các loại file được chỉ định
@@ -52,16 +59,25 @@ Options -Indexes
   AddOutputFilterByType DEFLATE application/javascript
   AddOutputFilterByType DEFLATE application/x-javascript
   AddOutputFilterByType DEFLATE application/json
+  AddOutputFilterByType DEFLATE application/ld+json
   AddOutputFilterByType DEFLATE image/svg+xml
   AddOutputFilterByType DEFLATE application/vnd.ms-fontobject
   AddOutputFilterByType DEFLATE application/x-font-ttf
+  AddOutputFilterByType DEFLATE application/font-woff
+  AddOutputFilterByType DEFLATE application/font-woff2
+  AddOutputFilterByType DEFLATE font/ttf
+  AddOutputFilterByType DEFLATE font/otf
   AddOutputFilterByType DEFLATE font/opentype
+  AddOutputFilterByType DEFLATE font/woff
+  AddOutputFilterByType DEFLATE font/woff2
 
   # Xử lý một số trình duyệt cũ có lỗi
   BrowserMatch ^Mozilla/4 gzip-only-text/html
   BrowserMatch ^Mozilla/4\.0[678] no-gzip
   BrowserMatch \bMSIE !no-gzip !gzip-only-text/html
-  Header append Vary User-Agent env=!dont-vary
+  <IfModule mod_headers.c>
+    Header append Vary Accept-Encoding
+  </IfModule>
 </IfModule>
 
 # ------------------------------------------------------------------------------

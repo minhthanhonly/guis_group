@@ -22,6 +22,20 @@ var projectTable;
     var autoRefreshTimer = null;
     var projectTableSilentDraw = false;
     var businessDocumentModalOpen = false;
+    /** Skip filter→reload while restoring filters from localStorage (avoids extra list ajax). */
+    var suppressProjectListFilterReload = false;
+    var suppressProjectListFilterReloadToken = 0;
+
+    function armProjectListFilterReloadSuppress(ms) {
+        ms = typeof ms === 'number' ? ms : 600;
+        suppressProjectListFilterReload = true;
+        var token = ++suppressProjectListFilterReloadToken;
+        window.setTimeout(function() {
+            if (token === suppressProjectListFilterReloadToken) {
+                suppressProjectListFilterReload = false;
+            }
+        }, ms);
+    }
 
     function guardProjectTableNetworkReload(table) {
         if (!table || table._bdModalReloadGuard) return;
@@ -1660,7 +1674,8 @@ var projectTable;
             applyProjectListDefaultSort(table);
             reloadProjectTable(true);
         } else if (changed) {
-            table.columns.adjust().draw(false);
+            // Layout-only: avoid .draw() which re-fetches list on serverSide
+            table.columns.adjust();
             reapplyProjectListColumnWidthsAfterLayout(table, departmentId);
         }
         return changed;
@@ -2781,7 +2796,8 @@ var projectTable;
                 table.column(dtIndex).visible(isVisible, false);
             }
         });
-        table.columns.adjust().draw(false);
+        // columns.adjust() only — .draw() on serverSide re-fetches identical list data
+        table.columns.adjust();
         var reconciled = reconcileColumnVisibilityWithTable(table, visibility, customDefs);
         var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
         syncAvailableColumnsFromVisibility(customDefs, depId, reconciled);
@@ -3052,7 +3068,13 @@ var projectTable;
             }
         });
         bindFilterTeamSelect2Events($el);
-        syncFilterTeamSelect2Value($el, saved);
+        // Rebuilding options must not re-fetch project/list (select2 change → filter debounce)
+        suppressProjectListFilterReload = true;
+        try {
+            syncFilterTeamSelect2Value($el, saved);
+        } finally {
+            armProjectListFilterReloadSuppress(600);
+        }
     }
 
     var PROJECT_LIST_FILTER_RESET_GROUPS = [
@@ -3473,10 +3495,16 @@ var projectTable;
             localStorage.removeItem(FILTER_STORAGE_KEY);
             filters = {};
         }
-        applyProjectListFiltersToUi(filters);
-        if (filters.favorites_only === undefined) {
-            $('#filterFavoritesOnly').prop('checked', false);
-            if (app) app.showClearAllFavoritesBtn = false;
+        suppressProjectListFilterReload = true;
+        try {
+            applyProjectListFiltersToUi(filters);
+            if (filters.favorites_only === undefined) {
+                $('#filterFavoritesOnly').prop('checked', false);
+                if (app) app.showClearAllFavoritesBtn = false;
+            }
+        } finally {
+            // Cover select2 change + 500ms filter debounce handlers
+            armProjectListFilterReloadSuppress(600);
         }
     }
 
@@ -3874,10 +3902,6 @@ var projectTable;
             document.head.appendChild(processingStyleEl);
         }
 
-        // Load team map (id -> name) for display in table (badge, tooltip, ...)
-        await loadTeamMap();
-        if (!isProjectTableInitStillValid(initId)) return;
-        
         // Khôi phục filter từ localStorage trước khi load projectTable
         loadFiltersFromLocalStorage();
         if (app && Array.isArray(app.teams)) {
@@ -3885,14 +3909,28 @@ var projectTable;
         }
         projectData = [];
 
-        // Fetch custom field sets for current department and build custom columns (at end of table, default hidden)
+        // team map + custom fields in parallel (was sequential await)
         customFieldColumnDefinitions = [];
         customFieldStatusMap = {};
         var customColumnConfigs = [];
+        var cfRes = { data: [] };
         try {
-            var cfRes = await axios.get('/api/index.php?model=department&method=getCustomFields');
+            var prefetch = await Promise.all([
+                loadTeamMap(),
+                axios.get('/api/index.php?model=department&method=getCustomFields').catch(function(err) {
+                    console.warn('Failed to load custom fields for list', err);
+                    return { data: [] };
+                })
+            ]);
             if (!isProjectTableInitStillValid(initId)) return;
-            var sets = cfRes.data || [];
+            cfRes = prefetch[1] || { data: [] };
+        } catch (e) {
+            console.warn('Failed to prefetch team map / custom fields for list', e);
+            if (!isProjectTableInitStillValid(initId)) return;
+        }
+
+        try {
+            var sets = (cfRes && cfRes.data) || [];
             var depId = app.selectedDepartment && app.selectedDepartment.id;
             var mergedFields = [];
             var statusSuffix = '状況';
@@ -3981,7 +4019,7 @@ var projectTable;
                 });
             }
         } catch (e) {
-            console.warn('Failed to load custom fields for list', e);
+            console.warn('Failed to build custom fields for list', e);
         }
 
         // Migrate legacy column visibility (flat JSON / string booleans / stale keys)
@@ -4906,6 +4944,9 @@ var projectTable;
         var depIdForColumnOrder = app.selectedDepartment && app.selectedDepartment.id;
         var mergedColumnKeys = mergeColumnKeyOrder(loadProjectColumnOrder(depIdForColumnOrder), defaultColumnKeys);
         var savedColumnWidths = loadProjectColumnWidths(depIdForColumnOrder);
+        // Bake saved visibility into column defs so first serverSide ajax matches UI (no post-init draw)
+        var columnVisibilityForInit = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions);
+        var defaultVisibilityForInit = getDefaultColumnVisibility(customFieldColumnDefinitions);
         var projectColumnRegistry = {};
         fixedColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
         customColumnConfigs.forEach(function(c) { projectColumnRegistry[c.name] = c; });
@@ -4913,14 +4954,16 @@ var projectTable;
         var orderedColumns = mergedColumnKeys.map(function(k) {
             var col = projectColumnRegistry[k];
             if (!col) return null;
-            var out;
+            var defaultVis = defaultVisibilityForInit[k] !== undefined
+                ? defaultVisibilityForInit[k]
+                : (col.visible !== false);
+            var isVisible = normalizeColumnVisibilityBool(columnVisibilityForInit[k], defaultVis);
             if (isCailyBranchUser()
                 && (k === 'end_date' || k === 'guis_nouki')
                 && !canViewEndDateColumn()) {
-                out = Object.assign({}, col, { visible: false });
-            } else {
-                out = Object.assign({}, col);
+                isVisible = false;
             }
+            var out = Object.assign({}, col, { visible: isVisible });
             if (savedColumnWidths[k]) {
                 out.width = savedColumnWidths[k] + 'px';
             }
@@ -5622,24 +5665,29 @@ var projectTable;
         // Khi thay đổi filter thì lưu lại
         let timer2= null;
         $('#projectFilterForm select, #projectFilterForm input').on('change keyup', function() {
+            if (suppressProjectListFilterReload) return;
             clearTimeout(timer2);
             timer2 = setTimeout(function() {
+                if (suppressProjectListFilterReload) return;
                 saveFiltersToLocalStorage();
                 renderActiveFilters();
                 if (projectTable) reloadProjectTable(true);
             }, 500);
         });
         $('#showInactiveSwitch').on('change', function() {
+            if (suppressProjectListFilterReload) return;
             saveFiltersToLocalStorage();
             renderActiveFilters();
             if (projectTable) reloadProjectTable(true);
         });
         $('#sortByStatusSwitch').on('change', function() {
+            if (suppressProjectListFilterReload) return;
             saveFiltersToLocalStorage();
             renderActiveFilters();
             if (projectTable) reloadProjectTable(true);
         });
         $('#projectListSortColumn, #projectListSortDir').on('change', function() {
+            if (suppressProjectListFilterReload) return;
             refreshProjectListSortFieldOptions();
             saveFiltersToLocalStorage();
             renderActiveFilters();
@@ -8472,26 +8520,7 @@ var projectTable;
                 // Destroy bảng cũ để refresh đúng custom fields và 列の表示 của department mới
                 destroyProjectTable();
                 
-                // Đợi Vue cập nhật DOM rồi init lại DataTable, xong mới reload (tránh init chưa xong đã gọi loadProjects)
-                this.$nextTick(async () => {
-                    try {
-                        await this.getUserPermissions(department.id);
-                        refreshProjectListSortFieldOptions();
-                        if (typeof document !== 'undefined' && document.body) {
-                            document.body.classList.toggle('can-view-end-date', canViewEndDateColumn());
-                        }
-                        syncQuickEditStatusOptions();
-                        await initializeProjectTable();
-                        if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                            reloadProjectTable(true);
-                        }
-                    } finally {
-                        this.loading = false;
-                    }
-                });
-
-                
-                // Reset teams and members when department changes
+                // Reset teams/members UI for new department (before async loads)
                 if (this.teamTagifyInstance) {
                     this.teamTagifyInstance.removeAllTags();
                 }
@@ -8499,9 +8528,28 @@ var projectTable;
                     this.membersTagifyInstance.removeAllTags();
                 }
                 this.newProject.members = [];
-                
-                // Reload teams for new department
-                this.loadTeams().then(() => {
+
+                // Overlap permission + teams + users while Vue flushes DOM
+                var teamsPromise = this.loadTeams();
+                var usersPromise = this.loadUsers();
+                var permissionsPromise = this.getUserPermissions(department.id);
+
+                this.$nextTick(async () => {
+                    try {
+                        await permissionsPromise;
+                        refreshProjectListSortFieldOptions();
+                        if (typeof document !== 'undefined' && document.body) {
+                            document.body.classList.toggle('can-view-end-date', canViewEndDateColumn());
+                        }
+                        syncQuickEditStatusOptions();
+                        // DataTable serverSide already ajax-loads on init — do not reload here
+                        await initializeProjectTable();
+                    } finally {
+                        this.loading = false;
+                    }
+                });
+
+                teamsPromise.then(() => {
                     if (this.teamTagifyInstance) {
                         this.teamTagifyInstance.whitelist = this.teams.map(team => ({
                             id: team.id,
@@ -8511,7 +8559,7 @@ var projectTable;
                     }
                     refreshFilterTeamSelect(this.teams);
                 });
-                this.loadUsers().then(() => {
+                usersPromise.then(() => {
                     if (this.membersTagifyInstance) {
                         this.membersTagifyInstance.whitelist = this.users.map(user => ({
                             id: user.id,
@@ -8527,9 +8575,6 @@ var projectTable;
                         }));
                     }
                 });
-                
-                // Reload kadai projects for the new department
-               // this.loadKadaiProjects();
             },
             isStatusFilterSelected(status) {
                 return this.selectedStatusKeys.indexOf(status.key) !== -1;
