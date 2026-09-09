@@ -47,10 +47,28 @@
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/bootstrap-select/bootstrap-select.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/spinkit/spinkit.css" />
     <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/notiflix/notiflix.css" />
-    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/flatpickr/flatpickr.css" />
-    <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/flatpickr/monthSelect.css" />
-    <link rel="stylesheet" href="<?=$root?>assets/css/task-timer.css?v=<?=CACHE_VERSION?>" />
-    <link rel="stylesheet" href="<?=$root?>assets/css/app-chat.css?v=<?=CACHE_VERSION?>" />
+<?php
+require_once DIR_VIEW . 'app-asset-config.php';
+$appAssets = isset($appAssets) && is_array($appAssets)
+    ? $appAssets
+    : app_resolve_asset_context($directory ?? '', $page ?? '');
+$deferTaskTimerCss = !empty($appAssets['defer_task_timer_css']);
+$deferFlatpickrCss = !empty($appAssets['defer_flatpickr_css']);
+$skipChatCss = empty($appAssets['needs_chat_css']);
+// Flatpickr CSS omitted on project list — loaded via ensureFlatpickr() when filter/modal needs it
+if (empty($deferFlatpickrCss)) {
+    app_print_stylesheet($root . 'assets/vendor/libs/flatpickr/flatpickr.css');
+    app_print_stylesheet($root . 'assets/vendor/libs/flatpickr/monthSelect.css');
+}
+app_print_stylesheet(
+    $root . 'assets/css/task-timer.css?v=' . CACHE_VERSION,
+    ['blocking' => !$deferTaskTimerCss]
+);
+app_print_stylesheet(
+    $root . 'assets/css/app-chat.css?v=' . CACHE_VERSION,
+    ['skip' => $skipChatCss]
+);
+?>
     <link rel="stylesheet" href="<?=ROOT?>assets/css/image-modal.css" />
     <!-- Page CSS -->
     <?=$style?>

@@ -30,7 +30,7 @@ Shell đang chặn trước API (moment ~748KB, `project-list.js` ~460KB, `core.
 |---|---|---|
 | **5** | **Page asset profile cho list**: không Quill / Shepherd-tour / Sortable / chat / customer-modal / Excel(jszip) đến khi cần ✅ | MCP local: script count **59→49**; Quill/Shepherd/Sortable/jszip/chat/customer/tour **không** load lúc đầu; DCL ~**0.7s** (mạng thường) |
 | **6** | **Bỏ/defer `moment` + `moment-timezone-with-data`** (CDN ~808KB) — dùng dayjs hoặc format native | −0.7–1.5MB |
-| **7** | Defer head blocking: chat CSS, task-timer, Tagify trùng, Flatpickr nếu chưa mở filter | First paint sớm hơn |
+| **7** | Defer head blocking: chat CSS, task-timer, Tagify trùng, Flatpickr nếu chưa mở filter ✅ | MCP: bỏ `app-chat.css`; Tagify ×1; Flatpickr **không** load khi filter đóng; task-timer non-blocking; DCL ~0.4s |
 | **8** | Code-split `project-list.js` (list core vs modal/Excel/tour/BD) | Parse −1–2s |
 | **9** | Self-host / subset font; bỏ Google Fonts trên critical path | −critical path |
 

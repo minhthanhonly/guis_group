@@ -2695,15 +2695,92 @@ var projectTable;
 
     function initQuickEditFlatpickr(target, extra) {
         var $el = (target && target.jquery) ? target : $(target);
-        if (!$el.length || typeof $().flatpickr !== 'function') return;
-        if ($el.data('flatpickr')) $el.data('flatpickr').destroy();
-        var currentVal = ($el.val() || '').trim();
-        $el.flatpickr(getProjectFlatpickrOptions(extra || {}));
-        if (currentVal) {
-            var fp = $el.data('flatpickr');
-            if (fp) {
-                fp.setDate(currentVal, false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+        if (!$el.length) return;
+        var run = function() {
+            if (typeof $().flatpickr !== 'function') return;
+            if ($el.data('flatpickr')) $el.data('flatpickr').destroy();
+            var currentVal = ($el.val() || '').trim();
+            $el.flatpickr(getProjectFlatpickrOptions(extra || {}));
+            if (currentVal) {
+                var fp = $el.data('flatpickr');
+                if (fp) {
+                    fp.setDate(currentVal, false, PROJECT_DATETIME_FLATPICKR_FORMAT);
+                }
             }
+        };
+        if (typeof window.ensureFlatpickr === 'function'
+            && (typeof window.flatpickr === 'undefined' || typeof $().flatpickr !== 'function')) {
+            window.ensureFlatpickr().then(run).catch(function(err) {
+                console.error('Failed to load Flatpickr for quick edit:', err);
+            });
+            return;
+        }
+        run();
+    }
+
+    function initProjectListFilterMonthPickers() {
+        if (window.__projectListFilterMonthPickersReady) {
+            return Promise.resolve();
+        }
+        if (window.__projectListFilterMonthPickersLoading) {
+            return window.__projectListFilterMonthPickersLoading;
+        }
+        var boot = (typeof window.ensureFlatpickr === 'function')
+            ? window.ensureFlatpickr()
+            : Promise.resolve();
+        window.__projectListFilterMonthPickersLoading = boot.then(function() {
+            if (window.__projectListFilterMonthPickersReady) return;
+            if (!window.flatpickr || typeof monthSelectPlugin === 'undefined') return;
+            var monthPickerLocale = getProjectFlatpickrLocale();
+            var monthAltFormat = isVietnameseLocale() ? 'm/Y' : 'Y年m月';
+            var monthOpts = function() {
+                return {
+                    locale: monthPickerLocale,
+                    plugins: [new monthSelectPlugin({
+                        shorthand: true,
+                        dateFormat: 'Y-m',
+                        altFormat: monthAltFormat,
+                    })],
+                    onChange: function() {
+                        saveFiltersToLocalStorage();
+                        renderActiveFilters();
+                    }
+                };
+            };
+            $('#filterStartMonth').flatpickr(monthOpts());
+            $('#filterEndMonth').flatpickr(monthOpts());
+            $('#filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth').flatpickr(monthOpts());
+            window.__projectListFilterMonthPickersReady = true;
+        }).catch(function(err) {
+            delete window.__projectListFilterMonthPickersLoading;
+            console.error('Failed to init project filter month pickers:', err);
+            throw err;
+        });
+        return window.__projectListFilterMonthPickersLoading;
+    }
+
+    function bindProjectListFilterFlatpickrLazy() {
+        var box = document.getElementById('projectFilterBox');
+        if (box && !box.__flatpickrLazyBound) {
+            box.__flatpickrLazyBound = true;
+            box.addEventListener('shown.bs.collapse', function() {
+                initProjectListFilterMonthPickers();
+            });
+            if (box.classList.contains('show')) {
+                initProjectListFilterMonthPickers();
+            }
+        }
+        $(document).off('focus.projectListFilterFp', '#filterStartMonth, #filterEndMonth, #filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth')
+            .on('focus.projectListFilterFp', '#filterStartMonth, #filterEndMonth, #filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth', function() {
+                initProjectListFilterMonthPickers();
+            });
+        // Offcanvas filter path
+        var offcanvas = document.getElementById('offcanvasProjectFilter');
+        if (offcanvas && !offcanvas.__flatpickrLazyBound) {
+            offcanvas.__flatpickrLazyBound = true;
+            offcanvas.addEventListener('shown.bs.offcanvas', function() {
+                initProjectListFilterMonthPickers();
+            });
         }
     }
 
@@ -6288,10 +6365,15 @@ var projectTable;
             var quillReady = ensureProjectListQuill().catch(function(err) {
                 console.error('Failed to load Quill for quick edit:', err);
             });
+            var flatpickrReady = (typeof window.ensureFlatpickr === 'function')
+                ? window.ensureFlatpickr().catch(function(err) {
+                    console.error('Failed to load Flatpickr for quick edit:', err);
+                })
+                : Promise.resolve();
 
             axios.get('/api/index.php?model=project&method=getById&id=' + projectId).then(function(res) {
                 const p = res.data && res.data.data ? res.data.data : (res.data || {});
-                return quillReady.then(function() { return p; });
+                return Promise.all([quillReady, flatpickrReady]).then(function() { return p; });
             }).then(function(p) {
                 const effectiveId = p.id || projectId;
                 $('#quickEditProjectId').val(effectiveId);
@@ -7100,52 +7182,17 @@ var projectTable;
             }
         });
 
+        // Legacy create-form date fields (may be absent on list page)
         if (typeof $().flatpickr === 'function') {
-            $('#start_date').flatpickr(getProjectFlatpickrOptions({ defaultHour: getStartDateDefaultHour(), defaultMinute: 0 }));
-            $('#end_date').flatpickr(getProjectFlatpickrOptions({ defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 }));
+            if ($('#start_date').length) {
+                $('#start_date').flatpickr(getProjectFlatpickrOptions({ defaultHour: getStartDateDefaultHour(), defaultMinute: 0 }));
+            }
+            if ($('#end_date').length) {
+                $('#end_date').flatpickr(getProjectFlatpickrOptions({ defaultHour: getDeadlineDefaultHour(), defaultMinute: 0 }));
+            }
         }
 
-        // Khởi tạo flatpickr dạng tháng (month picker) cho filterStartMonth và filterEndMonth
-        if (window.flatpickr) {
-            var monthPickerLocale = getProjectFlatpickrLocale();
-            var monthAltFormat = isVietnameseLocale() ? 'm/Y' : 'Y年m月';
-            $('#filterStartMonth').flatpickr({
-                locale: monthPickerLocale,
-                plugins: [new monthSelectPlugin({
-                    shorthand: true,
-                    dateFormat: 'Y-m',
-                    altFormat: monthAltFormat,
-                })],
-                onChange: function(date) {
-                    saveFiltersToLocalStorage();
-                    renderActiveFilters();
-                }
-            });
-            $('#filterEndMonth').flatpickr({
-                locale: monthPickerLocale,
-                plugins: [new monthSelectPlugin({
-                    shorthand: true,
-                    dateFormat: 'Y-m',
-                    altFormat: monthAltFormat,
-                })],
-                onChange: function(date) {
-                    saveFiltersToLocalStorage();
-                    renderActiveFilters();
-                }
-            });
-            $('#filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth').flatpickr({
-                locale: monthPickerLocale,
-                plugins: [new monthSelectPlugin({
-                    shorthand: true,
-                    dateFormat: 'Y-m',
-                    altFormat: monthAltFormat,
-                })],
-                onChange: function(date) {
-                    saveFiltersToLocalStorage();
-                    renderActiveFilters();
-                }
-            });
-        }
+        bindProjectListFilterFlatpickrLazy();
 
         var category_id = $('#category_id');
         var company_name = $('#company_name');

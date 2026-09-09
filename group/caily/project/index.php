@@ -1563,7 +1563,6 @@ body > .select2-container--default,
 </style>
 
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
 <script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/dataTables.colReorder.min.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.js"></script>
 <!-- Chat page context: AI can use current project list data -->

@@ -4,6 +4,43 @@ $appAssets = app_resolve_asset_context($directory ?? '', $page ?? '');
 $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 ?>
 <script src="<?=$root?>assets/js/app-loader.js?v=<?=$cv?>"></script>
+<script>
+(function (window) {
+  'use strict';
+  window.ensureFlatpickr = function ensureFlatpickr() {
+    if (typeof window.flatpickr !== 'undefined' && typeof window.monthSelectPlugin !== 'undefined') {
+      return Promise.resolve();
+    }
+    if (window.__flatpickrLoading) {
+      return window.__flatpickrLoading;
+    }
+    var loader = window.AppLoader;
+    if (!loader || typeof loader.loadScript !== 'function') {
+      return Promise.reject(new Error('AppLoader missing'));
+    }
+    var root = window.ROOT || '/';
+    var cv = (document.documentElement && document.documentElement.getAttribute('data-cache-version')) || '';
+    var q = function (path) {
+      return root + path + (cv ? ('?v=' + cv) : '');
+    };
+    window.__flatpickrLoading = Promise.all([
+      loader.loadStyle(q('assets/vendor/libs/flatpickr/flatpickr.css')),
+      loader.loadStyle(q('assets/vendor/libs/flatpickr/monthSelect.css'))
+    ]).then(function () {
+      return loader.loadScripts([
+        q('assets/vendor/libs/flatpickr/flatpickr.js'),
+        q('assets/vendor/libs/flatpickr/monthSelect.js'),
+        q('assets/vendor/libs/flatpickr/ja.js'),
+        q('assets/vendor/libs/flatpickr/vi.js')
+      ]);
+    }).catch(function (err) {
+      delete window.__flatpickrLoading;
+      throw err;
+    });
+    return window.__flatpickrLoading;
+  };
+})(window);
+</script>
 <script src="<?=$root?>assets/vendor/libs/jquery/jquery.js"></script>
 <script src="<?=$root?>assets/vendor/js/bootstrap.js"></script>
 <?php if ($appAssets['needs_full_shell']): ?>
@@ -70,7 +107,6 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <?php endif; ?>
 <script src="<?=$root?>assets/js/todo-modal.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/main.js?v=<?=$cv?>"></script>
-<link rel="stylesheet" href="<?=$root?>assets/css/task-timer.css?v=<?=$cv?>">
 <script src="<?=$root?>assets/js/task-timer.js?v=<?=$cv?>"></script>
 <?php if (!empty($appAssets['needs_chat'])): ?>
 <script src="<?=$root?>assets/js/app-chat.js?v=<?=$cv?>"></script>

@@ -1846,7 +1846,20 @@ if (typeof window !== 'undefined') {
     addToTodoModalEl = t
     addToTodoModal = window.bootstrap && window.bootstrap.Modal ? new window.bootstrap.Modal(t) : null
     var deadlineInput = document.getElementById('addToTodoContextDeadline')
-    if (deadlineInput && typeof flatpickr !== 'undefined') {
+    // Flatpickr deferred until openAddToTodoModal / deadline focus (project list asset profile)
+    if (deadlineInput && !deadlineInput.__fpFocusBound) {
+      deadlineInput.__fpFocusBound = true
+      deadlineInput.addEventListener('focus', function () {
+        ensureAddToTodoFlatpickr()
+      })
+    }
+    document.getElementById('addToTodoContextSubmit').addEventListener('click', submitAddToTodoFromContext)
+  }
+
+  function ensureAddToTodoFlatpickr() {
+    var deadlineInput = document.getElementById('addToTodoContextDeadline')
+    var initAddToTodoFlatpickr = function () {
+      if (!deadlineInput || typeof flatpickr === 'undefined' || addToTodoFlatpickr) return
       addToTodoFlatpickr = flatpickr(deadlineInput, {
         dateFormat: 'Y-m-d H:i',
         enableTime: true,
@@ -1854,7 +1867,13 @@ if (typeof window !== 'undefined') {
         locale: typeof window.moment !== 'undefined' && window.moment.locale() === 'vi' ? 'vi' : 'ja'
       })
     }
-    document.getElementById('addToTodoContextSubmit').addEventListener('click', submitAddToTodoFromContext)
+    if (typeof window.ensureFlatpickr === 'function' && typeof flatpickr === 'undefined') {
+      return window.ensureFlatpickr().then(initAddToTodoFlatpickr).catch(function (err) {
+        console.error('Failed to load Flatpickr for add-to-todo:', err)
+      })
+    }
+    initAddToTodoFlatpickr()
+    return Promise.resolve()
   }
 
   function dataTimeToApiTerm(dataTime) {
@@ -1876,7 +1895,10 @@ if (typeof window !== 'undefined') {
     document.getElementById('addToTodoContextPriority').value = '50'
     document.getElementById('addToTodoContextLink').value = link
     document.getElementById('addToTodoContextComment').value = ''
-    if (addToTodoFlatpickr) addToTodoFlatpickr.setDate(document.getElementById('addToTodoContextDeadline').value || null, false)
+    var deadlineVal = document.getElementById('addToTodoContextDeadline').value || null
+    ensureAddToTodoFlatpickr().then(function () {
+      if (addToTodoFlatpickr) addToTodoFlatpickr.setDate(deadlineVal, false)
+    })
     if (addToTodoModal) addToTodoModal.show()
     lastTodoTargetEl = null
   }

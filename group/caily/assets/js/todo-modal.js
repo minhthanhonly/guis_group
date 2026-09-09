@@ -129,9 +129,10 @@ function mountTodoApp() {
             mounted() {
                 Promise.all([this.loadTasks(), this.loadTodos()]).then(() => this.applyDefaultTab());
                 
-                // Initialize Flatpickr
+                // Flatpickr: load on first Todo open / date focus (deferred on project list)
                 const dateInput = document.getElementById('new-todo-date');
-                if (dateInput && typeof flatpickr !== 'undefined') {
+                const initNewTodoFlatpickr = () => {
+                    if (!dateInput || typeof flatpickr === 'undefined' || this.fp) return;
                     this.fp = flatpickr(dateInput, {
                         dateFormat: 'Y/m/d H:i',
                         enableTime: true,
@@ -142,12 +143,26 @@ function mountTodoApp() {
                             this.newTodo.deadline = dateStr;
                         }
                     });
+                };
+                const ensureTodoFlatpickr = () => {
+                    if (typeof window.ensureFlatpickr === 'function') {
+                        return window.ensureFlatpickr().then(initNewTodoFlatpickr).catch((err) => {
+                            console.error('Failed to load Flatpickr for Todo:', err);
+                        });
+                    }
+                    initNewTodoFlatpickr();
+                    return Promise.resolve();
+                };
+                if (dateInput && !dateInput.__todoFpFocusBound) {
+                    dateInput.__todoFpFocusBound = true;
+                    dateInput.addEventListener('focus', () => { ensureTodoFlatpickr(); });
                 }
                 
                 // Refresh on offcanvas open and set default tab by count
                 const offcanvasElement = document.getElementById('offcanvasTodo');
                 if (offcanvasElement) {
                     offcanvasElement.addEventListener('show.bs.offcanvas', () => {
+                        ensureTodoFlatpickr();
                         Promise.all([this.loadTasks(), this.loadTodos()]).then(() => {
                             this.applyDefaultTab();
                             this.$nextTick(() => this.initMyTaskStatusDropdowns());
@@ -506,20 +521,31 @@ function mountTodoApp() {
                 initFpEdit() {
                     const ref = this.$refs.editTodoDateInput;
                     const el = Array.isArray(ref) ? ref[0] : ref;
-                    if (!el || typeof flatpickr === 'undefined') return;
+                    if (!el) return;
                     const input = el.$el || el;
-                    this.fpEdit = flatpickr(input, {
-                        dateFormat: 'Y/m/d H:i',
-                        enableTime: true,
-                        time_24hr: true,
-                        locale: this.getFlatpickrLocaleName(),
-                        allowInput: false,
-                        defaultDate: this.editingTodoTerm || null,
-                        onChange: (selectedDates, dateStr) => {
-                            this.editingTodoTerm = dateStr || '';
-                        }
-                    });
-                    if (this.editingTodoTerm) this.fpEdit.setDate(this.editingTodoTerm, false);
+                    const run = () => {
+                        if (typeof flatpickr === 'undefined') return;
+                        this.destroyFpEdit();
+                        this.fpEdit = flatpickr(input, {
+                            dateFormat: 'Y/m/d H:i',
+                            enableTime: true,
+                            time_24hr: true,
+                            locale: this.getFlatpickrLocaleName(),
+                            allowInput: false,
+                            defaultDate: this.editingTodoTerm || null,
+                            onChange: (selectedDates, dateStr) => {
+                                this.editingTodoTerm = dateStr || '';
+                            }
+                        });
+                        if (this.editingTodoTerm) this.fpEdit.setDate(this.editingTodoTerm, false);
+                    };
+                    if (typeof window.ensureFlatpickr === 'function' && typeof flatpickr === 'undefined') {
+                        window.ensureFlatpickr().then(run).catch((err) => {
+                            console.error('Failed to load Flatpickr for Todo edit:', err);
+                        });
+                        return;
+                    }
+                    run();
                 },
                 todoTermToFlatpickrStr(term) {
                     if (!term || term === '0000-00-00 00:00:00' || term === '0000-00-00') return '';
