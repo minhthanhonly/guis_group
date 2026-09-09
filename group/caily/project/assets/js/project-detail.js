@@ -884,11 +884,7 @@ const vueApp = createApp({
                     window.__chatPageContext.page = 'project_detail';
                     window.__chatPageContext.page_project = this.project;
                 }
-                // Load parent project information if this is a child project
-                if (this.project.parent_project_id) {
-                    await this.loadParentProjectInfo();
-                }
-                
+
                 // Khởi tạo trạng thái CAILY納期状況 / GUIS納期状況 từ cột riêng trong DB
                 this.project.caily_nouki_status = this.project.caily_nouki_status || '';
                 this.project.guis_nouki_status = this.project.guis_nouki_status || '';
@@ -899,17 +895,24 @@ const vueApp = createApp({
                 } else {
                     this.normalizeBusinessDocumentFields();
                 }
-                
+
                 this.calculateStats();
-                this.loadTaskWorkloadStats();
-                
+
+                // D1: secondary loads in parallel after getById
+                const secondary = [
+                    this.loadTaskWorkloadStats(),
+                    this.loadMembers(),
+                ];
+                if (this.project.parent_project_id) {
+                    secondary.push(this.loadParentProjectInfo());
+                }
                 if (this.project.teams) {
-                    this.loadTeamListByIds(this.project.teams);
+                    secondary.push(this.loadTeamListByIds(this.project.teams));
                 } else {
                     this.project.team_list = [];
                 }
-               
-                this.loadMembers();
+                await Promise.all(secondary);
+
                 // Ensure Tagify is updated after loading project and team_list
                 this.$nextTick(() => { 
                     //this.initTagify(); 
@@ -962,9 +965,18 @@ const vueApp = createApp({
                     contact_name: this.project.contact_name || '',
                     guis_receiver: this.project.guis_receiver || ''
                 };
+                const parentId = this.project.parent_project_id;
 
-                const response = await axios.get(`/api/index.php?model=parentproject&method=getById&id=${this.project.parent_project_id}`);
-                const parentProject = response.data;
+                // D2: parent + siblings in one round (no searchMembers ×2)
+                const [parentRes, childrenRes] = await Promise.all([
+                    axios.get(`/api/index.php?model=parentproject&method=getById&id=${parentId}`),
+                    axios.get(`/api/index.php?model=parentproject&method=getChildProjects&parent_project_id=${parentId}`)
+                        .catch((childrenErr) => {
+                            console.error('Error loading sibling projects for request fulfillment:', childrenErr);
+                            return { data: [] };
+                        }),
+                ]);
+                const parentProject = parentRes.data || {};
 
                 const parentCustomerId = String(parentProject.customer_id || '').trim();
                 const childCustomerId = String(rawChildCustomer.customer_id || '').trim();
@@ -973,19 +985,6 @@ const vueApp = createApp({
                     this.project.child_customer_company = rawChildCustomer.company_name;
                     this.project.child_customer_branch = rawChildCustomer.branch_name;
                     this.project.child_customer_contact = rawChildCustomer.contact_name;
-                    if (childCustomerId) {
-                        try {
-                            const customerRes = await axios.get(`/api/index.php?model=customer&method=get&id=${childCustomerId}`);
-                            if (customerRes.data && customerRes.data.status === 'success' && customerRes.data.data) {
-                                const c = customerRes.data.data;
-                                this.project.child_customer_company = c.company_name || '';
-                                this.project.child_customer_branch = c.branch || '';
-                                this.project.child_customer_contact = c.name || '';
-                            }
-                        } catch (customerErr) {
-                            console.error('Error loading child project customer info:', customerErr);
-                        }
-                    }
                 } else {
                     this.project.child_customer_company = '';
                     this.project.child_customer_branch = '';
@@ -997,12 +996,11 @@ const vueApp = createApp({
                 this.project.show_child_guis_receiver = childGuisReceiver !== '' && childGuisReceiver !== parentGuisReceiver;
                 if (this.project.show_child_guis_receiver) {
                     this.project.child_guis_receiver_userid = childGuisReceiver;
-                    await this.loadChildGuisReceiverDisplayName();
                 } else {
                     this.project.child_guis_receiver_userid = '';
                     this.project.child_guis_receiver_display_name = '';
                 }
-                
+
                 // Copy parent project information to child project
                 this.project.parent_project_branch_name = parentProject.branch_name || '';
                 this.project.project_branch_name = rawChildCustomer.branch_name || '';
@@ -1016,52 +1014,82 @@ const vueApp = createApp({
                 this.project.building_branch = parentProject.construction_branch;
                 this.project.type1 = parentProject.type1;
                 this.project.type2 = parentProject.type2;
-                
+
                 // Additional fields from parent project
                 this.project.guis_receiver = parentProject.guis_receiver; // GUIS　受付者
                 this.project.structural_office = parentProject.structural_office; // 構造事務所
                 this.project.materials = parentProject.materials; // 資料
                 this.project.parent_requests = parentProject.requests || ''; // 依頼
 
-                // Sibling children for 依頼 fulfillment badges (未作成)
-                this.parentSiblingProjects = [];
-                try {
-                    const childrenRes = await axios.get(
-                        `/api/index.php?model=parentproject&method=getChildProjects&parent_project_id=${this.project.parent_project_id}`
-                    );
-                    if (Array.isArray(childrenRes.data)) {
-                        this.parentSiblingProjects = childrenRes.data;
-                    }
-                } catch (childrenErr) {
-                    console.error('Error loading sibling projects for request fulfillment:', childrenErr);
-                    this.parentSiblingProjects = [];
-                }
+                this.parentSiblingProjects = Array.isArray(childrenRes.data) ? childrenRes.data : [];
                 if (window.EnergyDrawingShare) {
                     this.project.has_energy_sibling = window.EnergyDrawingShare.hasEnergySavingSibling(
                         this.parentSiblingProjects,
                         this.project.id
                     );
                 }
-                
-                // Load GUIS receiver display name if exists
-                if (this.project.guis_receiver) {
-                    await this.loadGuisReceiverDisplayName();
+
+                const userids = [];
+                if (parentGuisReceiver) userids.push(parentGuisReceiver);
+                if (this.project.show_child_guis_receiver && childGuisReceiver) userids.push(childGuisReceiver);
+                const uniqueUserids = [...new Set(userids)];
+
+                const followUps = [];
+                if (uniqueUserids.length > 0) {
+                    followUps.push(
+                        axios.get(
+                            `/api/index.php?model=user&method=getByUserids&userids=${encodeURIComponent(uniqueUserids.join(','))}`
+                        )
+                    );
+                } else {
+                    followUps.push(Promise.resolve(null));
                 }
-                
+                if (this.project.show_child_customer_info && childCustomerId) {
+                    followUps.push(
+                        axios.get(`/api/index.php?model=customer&method=get&id=${childCustomerId}`)
+                    );
+                } else {
+                    followUps.push(Promise.resolve(null));
+                }
+
+                const [usersRes, customerRes] = await Promise.all(followUps);
+
+                const users = (usersRes && usersRes.data && usersRes.data.data) ? usersRes.data.data : [];
+                const byUserid = {};
+                users.forEach((u) => {
+                    if (u && u.userid) byUserid[u.userid] = u;
+                });
+                if (parentGuisReceiver && byUserid[parentGuisReceiver]) {
+                    this.project.guis_receiver_display_name = byUserid[parentGuisReceiver].realname;
+                }
+                if (this.project.show_child_guis_receiver && childGuisReceiver) {
+                    this.project.child_guis_receiver_display_name = byUserid[childGuisReceiver]
+                        ? byUserid[childGuisReceiver].realname
+                        : '';
+                }
+
+                if (customerRes && customerRes.data && customerRes.data.status === 'success' && customerRes.data.data) {
+                    const c = customerRes.data.data;
+                    this.project.child_customer_company = c.company_name || '';
+                    this.project.child_customer_branch = c.branch || '';
+                    this.project.child_customer_contact = c.name || '';
+                }
             } catch (error) {
                 console.error('Error loading parent project info:', error);
             }
         },
-        
+
         async loadGuisReceiverDisplayName() {
+            const userid = this.project && this.project.guis_receiver;
+            if (!userid) return;
             try {
-                const response = await axios.get('/api/index.php?model=user&method=searchMembers');
-                if (response.data && response.data.data) {
-                    const user = response.data.data.find(u => u.userid === this.project.guis_receiver);
-                    if (user) {
-                        // Set display name for view mode
-                        this.project.guis_receiver_display_name = user.realname;
-                    }
+                const response = await axios.get(
+                    `/api/index.php?model=user&method=getByUserids&userids=${encodeURIComponent(userid)}`
+                );
+                const users = (response.data && response.data.data) ? response.data.data : [];
+                const user = users.find((u) => u.userid === userid);
+                if (user) {
+                    this.project.guis_receiver_display_name = user.realname;
                 }
             } catch (error) {
                 console.error('Error loading GUIS receiver display name:', error);
@@ -1075,11 +1103,12 @@ const vueApp = createApp({
                 return;
             }
             try {
-                const response = await axios.get('/api/index.php?model=user&method=searchMembers');
-                if (response.data && response.data.data) {
-                    const user = response.data.data.find((u) => u.userid === userid);
-                    this.project.child_guis_receiver_display_name = user ? user.realname : '';
-                }
+                const response = await axios.get(
+                    `/api/index.php?model=user&method=getByUserids&userids=${encodeURIComponent(userid)}`
+                );
+                const users = (response.data && response.data.data) ? response.data.data : [];
+                const user = users.find((u) => u.userid === userid);
+                this.project.child_guis_receiver_display_name = user ? user.realname : '';
             } catch (error) {
                 console.error('Error loading child project GUIS receiver display name:', error);
             }
@@ -1163,23 +1192,24 @@ const vueApp = createApp({
         },
         async loadTaskWorkloadStats() {
             try {
-                const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}&include_subtasks=1`);
-                const tasks = response.data || [];
+                const response = await axios.get(
+                    `/api/index.php?model=task&method=workloadStats&project_id=${this.projectId}`
+                );
+                const data = response.data || {};
+                const byKind = Array.isArray(data.by_kind) ? data.by_kind : [];
                 const kindMap = {};
-                let totalWorkload = 0;
-                tasks.forEach((t) => {
-                    let kind = this.normalizeTaskKind(t.task_kind);
+                byKind.forEach((row) => {
+                    let kind = this.normalizeTaskKind(row.kind);
                     if (!kind) kind = '未設定';
-                    const n = parseFloat(t.estimated_hours);
-                    const hours = Number.isNaN(n) || n <= 0 ? 0 : n;
-                    totalWorkload += hours;
-                    if (!kindMap[kind]) {
-                        kindMap[kind] = { kind, hours: 0, count: 0 };
-                    }
-                    kindMap[kind].hours += hours;
-                    kindMap[kind].count += 1;
+                    const hours = parseFloat(row.hours);
+                    const count = parseInt(row.count, 10) || 0;
+                    kindMap[kind] = {
+                        kind,
+                        hours: Number.isNaN(hours) || hours <= 0 ? 0 : hours,
+                        count,
+                    };
                 });
-                this.stats.totalWorkload = totalWorkload;
+                this.stats.totalWorkload = parseFloat(data.total_workload) || 0;
                 const predefinedOrder = TASK_KINDS.map(k => k.value);
                 this.workloadByKind = Object.values(kindMap).sort((a, b) => {
                     const ai = predefinedOrder.indexOf(a.kind);
@@ -4979,20 +5009,17 @@ const vueApp = createApp({
         },
     },
     async mounted() {
-        await this.loadPermission();
-        // if(!this.permission.is_member){
-        //     this.showMessage('権限がありません。', true);
-        //     setTimeout(() => {
-        //         window.location.href = 'index.php';
-        //     }, 1000);
-        //     return;
-        // }
-        await this.loadProject();
-        this.loadCategories();
-        this.loadDepartmentCustomFieldSets();
-        this.loadNotes();
-        this.loadLogs();
+        // D1: permission ∥ getById(+secondary); notes/logs/categories ∥ critical path (projectId từ URL)
         this.loadCurrentUser();
+        await Promise.all([
+            this.loadPermission(),
+            this.loadProject(),
+            this.loadCategories(),
+            this.loadNotes(),
+            this.loadLogs(),
+        ]);
+        // Needs department_id from getById
+        await this.loadDepartmentCustomFieldSets();
         this.initTooltips();
 
         // Dịch [data-i18n] sau khi Vue đã vẽ DOM (tránh text không đúng ngôn ngữ khi load)

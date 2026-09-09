@@ -4541,4 +4541,57 @@ class Task extends ApplicationModel {
             'tasks' => array_values($tasksById)
         ];
     }
+
+    /**
+     * Light workload stats for project detail badges (task_kind + estimated_hours only).
+     * Avoids full task/list tree + aggregates.
+     */
+    function workloadStats($params = null) {
+        $project_id = 0;
+        if (is_array($params) && isset($params['project_id'])) {
+            $project_id = intval($params['project_id']);
+        } elseif (isset($_GET['project_id'])) {
+            $project_id = intval($_GET['project_id']);
+        }
+        if ($project_id <= 0) {
+            return array(
+                'status' => 'success',
+                'total_workload' => 0,
+                'by_kind' => [],
+            );
+        }
+
+        $rows = $this->fetchAll(sprintf(
+            "SELECT task_kind, estimated_hours
+             FROM {$this->table}
+             WHERE project_id = %d",
+            $project_id
+        ));
+
+        $kindMap = [];
+        $totalWorkload = 0.0;
+        foreach ($rows as $row) {
+            $kind = isset($row['task_kind']) ? trim((string)$row['task_kind']) : '';
+            if ($kind === '新規') {
+                $kind = '新規作成';
+            }
+            if ($kind === '') {
+                $kind = '未設定';
+            }
+            $n = isset($row['estimated_hours']) ? floatval($row['estimated_hours']) : 0.0;
+            $hours = ($n > 0) ? $n : 0.0;
+            $totalWorkload += $hours;
+            if (!isset($kindMap[$kind])) {
+                $kindMap[$kind] = array('kind' => $kind, 'hours' => 0.0, 'count' => 0);
+            }
+            $kindMap[$kind]['hours'] += $hours;
+            $kindMap[$kind]['count'] += 1;
+        }
+
+        return array(
+            'status' => 'success',
+            'total_workload' => $totalWorkload,
+            'by_kind' => array_values($kindMap),
+        );
+    }
 }

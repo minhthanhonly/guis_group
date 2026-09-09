@@ -3393,6 +3393,33 @@ class Project extends ApplicationModel {
         return $result;
     }
 
+    /**
+     * Explicit project columns for detail getById (avoid SELECT p.*).
+     * Schema typo buiding_number → DB building_number; extras not in schema.
+     */
+    private function getProjectDetailColumnSql() {
+        $parts = [];
+        $seen = [];
+        foreach (array_keys($this->schema) as $col) {
+            if ($col === 'buiding_number') {
+                $col = 'building_number';
+            }
+            if (isset($seen[$col])) {
+                continue;
+            }
+            $seen[$col] = true;
+            $parts[] = 'p.`' . str_replace('`', '', $col) . '`';
+        }
+        foreach (['customer_id', 'guis_receiver', 'custom_fields', 'department_custom_fields_set_id'] as $extra) {
+            if (isset($seen[$extra])) {
+                continue;
+            }
+            $seen[$extra] = true;
+            $parts[] = 'p.`' . $extra . '`';
+        }
+        return implode(",\n            ", $parts);
+    }
+
     function getById($params = null) {
         // Handle both direct ID parameter and params array from API
         if (is_array($params)) {
@@ -3405,7 +3432,8 @@ class Project extends ApplicationModel {
         
         $projectId = intval($id);
         $query = sprintf(
-            "SELECT p.*, d.name as department_name,
+            "SELECT %s,
+            d.name as department_name,
             c.name as contact_name, c.company_name, c.branch as branch_name, c.category_id as category_id,
             pp.construction_number as parent_construction_number,
             pp.project_name as parent_project_name,
@@ -3415,6 +3443,7 @@ class Project extends ApplicationModel {
             LEFT JOIN " . DB_PREFIX . "customer c ON c.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
             LEFT JOIN " . DB_PREFIX . "parent_projects pp ON pp.id = p.parent_project_id
             WHERE p.id = %d",
+            $this->getProjectDetailColumnSql(),
             $projectId
         );
         

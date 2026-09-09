@@ -291,6 +291,47 @@ class User extends ApplicationModel {
 		return $hash;
 	}
 
+	/**
+	 * Lightweight lookup by userid(s) — for display names (e.g. GUIS receiver).
+	 * GET userids=id1,id2
+	 */
+	function getByUserids() {
+		$raw = isset($_GET['userids']) ? $_GET['userids'] : '';
+		if (is_array($raw)) {
+			$parts = $raw;
+		} else {
+			$parts = preg_split('/\s*,\s*/', (string)$raw);
+		}
+		$userids = [];
+		foreach ($parts as $part) {
+			$part = trim((string)$part);
+			if ($part === '') {
+				continue;
+			}
+			// userid is alphanumeric / underscore / hyphen
+			if (!preg_match('/^[A-Za-z0-9_\-\.@]+$/', $part)) {
+				continue;
+			}
+			$userids[$part] = true;
+		}
+		$userids = array_keys($userids);
+		if (empty($userids)) {
+			return array('status' => 'success', 'data' => []);
+		}
+		$quoted = [];
+		foreach ($userids as $uid) {
+			$quoted[] = "'" . $this->quote($uid) . "'";
+		}
+		$query = "SELECT u.id, u.userid, u.realname
+				  FROM ".$this->table." u
+				  WHERE u.userid IN (" . implode(',', $quoted) . ")";
+		$rows = $this->fetchAll($query);
+		return array(
+			'status' => 'success',
+			'data' => $rows ? $rows : [],
+		);
+	}
+
 	function getMentionUsers() {
 		try {
 			$department_id = $_GET['department_id'];

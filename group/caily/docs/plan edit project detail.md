@@ -14,25 +14,17 @@ Tham chiếu kỹ thuật đã làm trên list: `docs/plan edit project list.md`
 | Vue CDN **lần 2** | `vue@3.2.31` **non-prod** ở cuối `detail.php` trong khi `header` đã có `vue.global.prod.js` |
 | Shell chung | moment ~748KB, core.css, Tagify trùng CSS, chat/sortable theo `app-asset-config` (detail = `page=detail` → **không** nhận profile list) |
 
-**Waterfall API lúc `mounted` (tuần tự + phụ thuộc):**
+**Waterfall API lúc `mounted` (sau P0 D1–D4):**
 
 ```
-1. await loadPermission()          → task/getPermission
-2. await loadProject()             → project/getById  (SELECT p.*)
-     └─ await loadParentProjectInfo()   → parentproject/getById
-          ├─ await customer/get         (nếu child customer khác parent)
-          ├─ await user/searchMembers   (child GUIS receiver)  ← full member list
-          ├─ await getChildProjects
-          └─ await user/searchMembers   (parent GUIS receiver) ← gọi LẠI cùng API
-     ├─ loadTaskWorkloadStats()    → task/list?include_subtasks=1  (fire-and-forget)
-     ├─ loadTeamListByIds()
-     └─ loadMembers()
-3. (song song sau loadProject, không Promise.all):
-   loadCategories · loadDepartmentCustomFieldSets · loadNotes · loadLogs · loadCurrentUser
+Promise.all([
+  task/getPermission,
+  project/getById  → Promise.all([ parent+children, getByUserids×1, customer?, workloadStats, members, teams ]),
+  notes, logs, categories
+])
+→ loadDepartmentCustomFieldSets (cần department_id)
 ```
-
-Comment component mount thêm request comment riêng.  
-→ Dễ **8–12+ XHR** trước khi UI “đủ”; parent chain có thể **+4 await tuần tự**.
+Không còn `searchMembers` ×2; không còn full `task/list` cho badge.
 
 ---
 
@@ -40,12 +32,12 @@ Comment component mount thêm request comment riêng.
 
 | # | Việc | Chỗ sửa | Kỳ vọng |
 |---|---|---|---|
-| **D1** | **`Promise.all` critical path**: `loadPermission` \|\| `getById` song song; sau `getById` gom parent/members/notes/logs/workload | `project-detail.js` `mounted` / `loadProject` | −300–800ms TTI data |
-| **D2** | **Gỡ waterfall parent**: 1 API bundle (parent + siblings + receiver names) hoặc `Promise.all([parent, children, searchMembers×1])` — **không** gọi `searchMembers` 2 lần | `loadParentProjectInfo` + API | −2–4 RTT |
-| **D3** | **Slim / hẹp `getById`**: bỏ `SELECT p.*` nếu có cột blob không cần overview; description giữ nếu UI cần; tách logs/notes nếu đang nhét nặng | `project.php` `getById` / `attachProjectDetailAggregates` | payload + TTFB list nhỏ hơn |
-| **D4** | **Workload nhẹ**: `task/list?include_subtasks=1` chỉ lấy field đếm (hoặc endpoint `stats`) — không full task tree cho badge | `loadTaskWorkloadStats` | −payload lớn |
+| **D1** | ✅ **`Promise.all` critical path**: `loadPermission` \|\| `getById` \|\| notes/logs/categories; sau `getById` gom parent/members/workload/teams | `project-detail.js` `mounted` / `loadProject` | −300–800ms TTI data |
+| **D2** | ✅ **Gỡ waterfall parent**: `Promise.all([parent, children])` rồi `Promise.all([getByUserids×1, customer])` — **không** `searchMembers` | `loadParentProjectInfo` + `user/getByUserids` | −2–4 RTT |
+| **D3** | ✅ **Slim / hẹp `getById`**: `getProjectDetailColumnSql()` thay `SELECT p.*` (schema + extras) | `project.php` `getById` | payload + TTFB nhỏ hơn |
+| **D4** | ✅ **Workload nhẹ**: `task/workloadStats` (chỉ `task_kind` + `estimated_hours`) | `task.php` + `loadTaskWorkloadStats` | −payload lớn |
 
-**Done khi:** Network lúc vào detail còn **≤ ~4–5** call tới lúc hiện overview; không còn `searchMembers` ×2.
+**Done khi:** Network lúc vào detail còn **≤ ~4–5** call tới lúc hiện overview; không còn `searchMembers` ×2. ✅ (P0)
 
 ---
 
