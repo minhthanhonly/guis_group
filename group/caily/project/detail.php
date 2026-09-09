@@ -758,8 +758,8 @@ if($_SESSION['show_project'] == 0){
                     </div>
                 </div>
 
-                <!-- Comments Section -->
-                <div class="card mt-4" v-if="canCommentProject">
+                <!-- Comments Section (D6: mount after idle / near-viewport) -->
+                <div class="card mt-4" v-if="canCommentProject" ref="commentsSection">
                     <div class="card-header">
                         <h5 class="card-title mb-0">
                             <i class="fa fa-comment me-2"></i><span data-i18n="コメント">コメント</span>
@@ -767,6 +767,7 @@ if($_SESSION['show_project'] == 0){
                     </div>
                     <div class="card-body">
                         <comment-component
+                             v-if="commentsMountReady"
                              :entity-type="'project'"
                              :entity-id="projectId"
                              :current-user="currentUser"
@@ -775,6 +776,9 @@ if($_SESSION['show_project'] == 0){
                              @message="onCommentMessage"
                              @error="onCommentError">
                         </comment-component>
+                        <div v-else class="text-center text-muted py-3">
+                            <i class="fa fa-spinner fa-spin me-1"></i>
+                        </div>
                     </div>
                 </div>
 
@@ -1628,24 +1632,16 @@ $view->footing();
 
 </style>
 
-<!-- Define PROJECT_ID and chat page context (for AI: default project_id) -->
+<!-- Define PROJECT_ID and chat page context (for AI: default project_id)
+     D5: Vue from header only. D6: Quill/mention/comment lazy via project-detail.js. D7: no task-manager.css. -->
 <script>
 const PROJECT_ID = <?php echo $project_id; ?>;
 window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; ?>;
 window.__chatPageContext = { project_id: PROJECT_ID };
+window.__PROJECT_CACHE_VERSION = <?= json_encode(PROJECT_CACHE_VERSION) ?>;
+window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 </script>
-<script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/css/mention.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/css/comment-component.css" />
-<link rel="stylesheet" href="assets/css/task-manager.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
-
-<script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/js/sw-manager.js?v=<?=CACHE_VERSION?>"></script>
-<script src="/assets/js/mention.js?v=<?=CACHE_VERSION?>"></script>
-<script src="/assets/js/comment-component.js?v=<?=CACHE_VERSION?>"></script>
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

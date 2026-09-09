@@ -1,5 +1,78 @@
 const { createApp } = Vue;
 
+/** Asset helpers — Quill / comment deferred off critical path (D6). */
+function projectDetailAssetRoot() {
+    return (typeof window.ROOT !== 'undefined' && window.ROOT) ? window.ROOT : '/';
+}
+function projectDetailCacheV() {
+    return window.__CACHE_VERSION
+        || (document.documentElement && document.documentElement.getAttribute('data-cache-version'))
+        || '';
+}
+function projectDetailProjectCacheV() {
+    return window.__PROJECT_CACHE_VERSION || projectDetailCacheV();
+}
+function withProjectDetailAppLoader() {
+    return window.AppLoader || null;
+}
+function ensureProjectDetailQuill() {
+    if (typeof window.Quill !== 'undefined') {
+        return Promise.resolve();
+    }
+    if (window.__projectDetailQuillLoading) {
+        return window.__projectDetailQuillLoading;
+    }
+    var loader = withProjectDetailAppLoader();
+    if (!loader) {
+        return Promise.reject(new Error('AppLoader missing'));
+    }
+    var root = projectDetailAssetRoot();
+    var cv = projectDetailCacheV();
+    var q = function (path) { return root + path + (cv ? ('?v=' + cv) : ''); };
+    window.__projectDetailQuillLoading = Promise.all([
+        loader.loadStyle(q('assets/vendor/libs/quill/typography.css')),
+        loader.loadStyle(q('assets/vendor/libs/quill/editor.css')),
+        // Quill image-upload placeholders (was task-manager.css on critical path)
+        loader.loadStyle(root + 'project/assets/css/task-manager.css' + (cv ? ('?v=' + cv) : ''))
+    ]).then(function () {
+        return loader.loadScript(q('assets/vendor/libs/quill/quill.js'));
+    }).catch(function (err) {
+        delete window.__projectDetailQuillLoading;
+        throw err;
+    });
+    return window.__projectDetailQuillLoading;
+}
+function ensureProjectDetailCommentAssets() {
+    if (window.CommentComponent && typeof MentionManager !== 'undefined') {
+        return ensureProjectDetailQuill();
+    }
+    if (window.__projectDetailCommentLoading) {
+        return window.__projectDetailCommentLoading;
+    }
+    var loader = withProjectDetailAppLoader();
+    if (!loader) {
+        return Promise.reject(new Error('AppLoader missing'));
+    }
+    var root = projectDetailAssetRoot();
+    var cv = projectDetailCacheV();
+    var q = function (path) { return root + path + (cv ? ('?v=' + cv) : ''); };
+    window.__projectDetailCommentLoading = ensureProjectDetailQuill().then(function () {
+        return Promise.all([
+            loader.loadStyle(q('assets/css/mention.css')),
+            loader.loadStyle(q('assets/css/comment-component.css'))
+        ]);
+    }).then(function () {
+        return loader.loadScripts([
+            q('assets/js/mention.js'),
+            q('assets/js/comment-component.js')
+        ]);
+    }).catch(function (err) {
+        delete window.__projectDetailCommentLoading;
+        throw err;
+    });
+    return window.__projectDetailCommentLoading;
+}
+
 // Cột danh sách project (trùng với COLUMN_DEFINITIONS trong project-list.js) + custom_fields bổ sung ở computed
 var NOTE_DISPLAY_COLUMNS = [
     { key: 'status', label: '案件状況' },
@@ -477,6 +550,7 @@ const vueApp = createApp({
             buildingBranchTagify: null,
             customFields: [],
             departmentCustomFieldSets: [],
+            commentsMountReady: false,
             _serverProjectDates: null,
             _serverBusinessDocumentDates: null,
             // Danh sách các tỉnh/thành phố của Nhật Bản
@@ -855,6 +929,34 @@ const vueApp = createApp({
             
             console.error('Could not determine project ID from URL');
             return null;
+        },
+
+        /** D6: mount comment-component after idle or when section nears viewport. */
+        armCommentsLazyMount() {
+            if (this.commentsMountReady || this._commentsArmed) return;
+            this._commentsArmed = true;
+            const mount = () => {
+                if (this.commentsMountReady) return;
+                this.commentsMountReady = true;
+            };
+            this.$nextTick(() => {
+                const el = this.$refs.commentsSection;
+                if (el && typeof IntersectionObserver !== 'undefined') {
+                    const io = new IntersectionObserver((entries) => {
+                        if (entries.some((e) => e.isIntersecting)) {
+                            io.disconnect();
+                            mount();
+                        }
+                    }, { rootMargin: '240px' });
+                    io.observe(el);
+                    this._commentsIo = io;
+                }
+                if (typeof requestIdleCallback === 'function') {
+                    requestIdleCallback(() => mount(), { timeout: 4000 });
+                } else {
+                    setTimeout(mount, 2000);
+                }
+            });
         },
         
         // Phương thức để dịch label động
@@ -3735,97 +3837,103 @@ const vueApp = createApp({
         },
         initQuillEditor() {
             if (this.quillInstance || !this.isEditMode) return;
-            
-            // Use a longer delay to ensure all other components are initialized first
-            setTimeout(() => {
-                const toolbarOptions = [
-                    [
-                        { font: [] },
-                        { size: [] }
-                    ],
-                    ['bold', 'italic', 'underline', 'strike'],
-                    [
-                        { color: [] },
-                        { background: [] }
-                    ],
-                    [
-                        { script: 'super' },
-                        { script: 'sub' }
-                    ],
-                    [
-                        { header: '1' },
-                        { header: '2' }, 'blockquote' ],
-                    [
-                        { list: 'ordered' },
-                        { indent: '-1' },
-                        { indent: '+1' }
-                    ],
-                    [{ direction: 'rtl' }, { align: [] }],
-                    ['link', 'image', 'video', 'formula'],
-                    ['clean']
-                ];
-                const el = document.getElementById('quill_description');
-                if (!el) return;
+
+            ensureProjectDetailQuill().then(() => {
+                if (this.quillInstance || !this.isEditMode) return;
+                // Use a longer delay to ensure all other components are initialized first
+                setTimeout(() => {
+                    if (this.quillInstance || !this.isEditMode) return;
+                    const toolbarOptions = [
+                        [
+                            { font: [] },
+                            { size: [] }
+                        ],
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [
+                            { color: [] },
+                            { background: [] }
+                        ],
+                        [
+                            { script: 'super' },
+                            { script: 'sub' }
+                        ],
+                        [
+                            { header: '1' },
+                            { header: '2' }, 'blockquote' ],
+                        [
+                            { list: 'ordered' },
+                            { indent: '-1' },
+                            { indent: '+1' }
+                        ],
+                        [{ direction: 'rtl' }, { align: [] }],
+                        ['link', 'image', 'video', 'formula'],
+                        ['clean']
+                    ];
+                    const el = document.getElementById('quill_description');
+                    if (!el || typeof Quill === 'undefined') return;
                 
-                // Destroy existing instance if any
-                if (this.quillInstance) {
-                    try {
-                        this.quillInstance = null;
-                    } catch (e) {
-                        console.log('Error destroying existing quill instance:', e);
-                    }
-                }
-                
-                this.quillInstance = new Quill(el, {
-                    bounds: el,
-                    placeholder: 'Type Something...',
-                    modules: {
-                        // syntax: true,
-                        toolbar: {
-                            container: toolbarOptions,
-                            handlers: {
-                                image: () => this.imageHandler()
-                            }
+                    // Destroy existing instance if any
+                    if (this.quillInstance) {
+                        try {
+                            this.quillInstance = null;
+                        } catch (e) {
+                            console.log('Error destroying existing quill instance:', e);
                         }
-                    },
-                    theme: 'snow'
-                });
+                    }
                 
-                // Set initial content
-                if (this.project.description) {
-                    const html = this.decodeHtmlEntities(this.project.description);
-                    this.quillInstance.root.innerHTML = html;
-                }
+                    this.quillInstance = new Quill(el, {
+                        bounds: el,
+                        placeholder: 'Type Something...',
+                        modules: {
+                            // syntax: true,
+                            toolbar: {
+                                container: toolbarOptions,
+                                handlers: {
+                                    image: () => this.imageHandler()
+                                }
+                            }
+                        },
+                        theme: 'snow'
+                    });
                 
-                // Store content in a separate variable, not in Vue data
-                this.quillContent = this.quillInstance.getSemanticHTML();
+                    // Set initial content
+                    if (this.project.description) {
+                        const html = this.decodeHtmlEntities(this.project.description);
+                        this.quillInstance.root.innerHTML = html;
+                    }
                 
-                // Simple text-change handler without debounce
-                this.quillInstance.on('text-change', () => {
+                    // Store content in a separate variable, not in Vue data
                     this.quillContent = this.quillInstance.getSemanticHTML();
-                    this.addZoomToDescriptionImages();
-                });
                 
-                // Prevent focus loss by stopping event propagation on toolbar clicks
-                const toolbar = this.quillInstance.getModule('toolbar');
-                if (toolbar && toolbar.container) {
-                    toolbar.container.addEventListener('mousedown', (e) => {
-                        e.stopPropagation();
+                    // Simple text-change handler without debounce
+                    this.quillInstance.on('text-change', () => {
+                        this.quillContent = this.quillInstance.getSemanticHTML();
+                        this.addZoomToDescriptionImages();
                     });
-                    toolbar.container.addEventListener('click', (e) => {
-                        e.stopPropagation();
-                    });
-                }
                 
-                // Focus the editor after initialization
-                // setTimeout(() => {
-                //     if (this.quillInstance) {
-                //         this.quillInstance.focus();
-                //     }
-                // }, 100);
+                    // Prevent focus loss by stopping event propagation on toolbar clicks
+                    const toolbar = this.quillInstance.getModule('toolbar');
+                    if (toolbar && toolbar.container) {
+                        toolbar.container.addEventListener('mousedown', (e) => {
+                            e.stopPropagation();
+                        });
+                        toolbar.container.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                        });
+                    }
                 
-            }, 400); // Increased delay to ensure other components are initialized first
-            this.addZoomToDescriptionImages();
+                    // Focus the editor after initialization
+                    // setTimeout(() => {
+                    //     if (this.quillInstance) {
+                    //         this.quillInstance.focus();
+                    //     }
+                    // }, 100);
+                
+                }, 400); // Increased delay to ensure other components are initialized first
+                this.addZoomToDescriptionImages();
+            }).catch((err) => {
+                console.error('Failed to load Quill for project description:', err);
+            });
         },
         destroyQuillEditor() {
             if (this.quillInstance) {
@@ -3857,40 +3965,46 @@ const vueApp = createApp({
         },
         initQuillNoteEditor() {
             if (this.quillNoteInstance || !this.isNoteEditMode || !this.showNoteModal) return;
-            setTimeout(() => {
-                const toolbarOptions = [
-                    ['bold', 'italic', 'underline', 'strike'],
-                    [{ color: [] }, { background: [] }],
-                    [{ list: 'ordered' }, { list: 'bullet' }],
-                    [{ header: '1' }, { header: '2' }, 'blockquote'],
-                    ['link', 'clean']
-                ];
-                const el = document.getElementById('quill_note_content_detail');
-                if (!el) return;
-                if (this.quillNoteInstance) {
-                    try {
-                        this.quillNoteInstance = null;
-                    } catch (e) {}
-                }
-                this.quillNoteInstance = new Quill(el, {
-                    bounds: el,
-                    placeholder: 'メモの詳細を入力してください...',
-                    modules: {
-                        toolbar: {
-                            container: toolbarOptions
-                        }
-                    },
-                    theme: 'snow'
-                });
-                if (this.editingNote.content) {
-                    const html = this.decodeHtmlEntities ? this.decodeHtmlEntities(this.editingNote.content) : this.editingNote.content;
-                    this.quillNoteInstance.root.innerHTML = html;
-                }
-                this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
-                this.quillNoteInstance.on('text-change', () => {
+            ensureProjectDetailQuill().then(() => {
+                if (this.quillNoteInstance || !this.isNoteEditMode || !this.showNoteModal) return;
+                setTimeout(() => {
+                    if (this.quillNoteInstance || !this.isNoteEditMode || !this.showNoteModal) return;
+                    const toolbarOptions = [
+                        ['bold', 'italic', 'underline', 'strike'],
+                        [{ color: [] }, { background: [] }],
+                        [{ list: 'ordered' }, { list: 'bullet' }],
+                        [{ header: '1' }, { header: '2' }, 'blockquote'],
+                        ['link', 'clean']
+                    ];
+                    const el = document.getElementById('quill_note_content_detail');
+                    if (!el || typeof Quill === 'undefined') return;
+                    if (this.quillNoteInstance) {
+                        try {
+                            this.quillNoteInstance = null;
+                        } catch (e) {}
+                    }
+                    this.quillNoteInstance = new Quill(el, {
+                        bounds: el,
+                        placeholder: 'メモの詳細を入力してください...',
+                        modules: {
+                            toolbar: {
+                                container: toolbarOptions
+                            }
+                        },
+                        theme: 'snow'
+                    });
+                    if (this.editingNote.content) {
+                        const html = this.decodeHtmlEntities ? this.decodeHtmlEntities(this.editingNote.content) : this.editingNote.content;
+                        this.quillNoteInstance.root.innerHTML = html;
+                    }
                     this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
-                });
-            }, 200);
+                    this.quillNoteInstance.on('text-change', () => {
+                        this.quillNoteContent = this.quillNoteInstance.getSemanticHTML();
+                    });
+                }, 200);
+            }).catch((err) => {
+                console.error('Failed to load Quill for note editor:', err);
+            });
         },
         destroyQuillNoteEditor() {
             if (this.quillNoteInstance) {
@@ -4538,6 +4652,11 @@ const vueApp = createApp({
         },
     },
     watch: {
+        canCommentProject(newVal) {
+            if (newVal) {
+                this.$nextTick(() => this.armCommentsLazyMount());
+            }
+        },
         canEditBusinessDocuments(newVal) {
             if (newVal) {
                 this.$nextTick(() => this.initBusinessDocumentDatePickers());
@@ -5064,23 +5183,23 @@ const vueApp = createApp({
             this.$nextTick(() => this._refreshDatePickersForLocale());
         }
 
-        // Initialize mention manager
+        // Initialize mention manager (lazy — mention.js loads with comment assets)
         this.$nextTick(() => {
-            if (window.mentionManager) {
-                // If MentionManager already exists, set department ID and rebind
-                if (this.project && this.project.department_id) {
-                    window.mentionManager.setDepartmentId(this.project.department_id);
+            if (typeof MentionManager !== 'undefined') {
+                if (window.mentionManager) {
+                    if (this.project && this.project.department_id) {
+                        window.mentionManager.setDepartmentId(this.project.department_id);
+                    }
+                    window.mentionManager.bindToInputs();
+                } else {
+                    window.mentionManager = new MentionManager({
+                        departmentId: this.project ? this.project.department_id : null
+                    });
                 }
-                // Force rebind to ensure it picks up the contenteditable element
-                window.mentionManager.bindToInputs();
-            } else {
-                // Create new MentionManager instance
-                window.mentionManager = new MentionManager({
-                    departmentId: this.project ? this.project.department_id : null
-                });
             }
             
             this.initProjectTagsTagify();
+            this.armCommentsLazyMount();
         });
         
         // Add beforeunload event listener
@@ -5225,11 +5344,35 @@ const vueApp = createApp({
         if (this.businessDocumentSaveHideTimer) {
             clearTimeout(this.businessDocumentSaveHideTimer);
         }
+        if (this._commentsIo) {
+            try { this._commentsIo.disconnect(); } catch (e) {}
+            this._commentsIo = null;
+        }
     }
 });
 
-// Register Comment Component
-vueApp.component('comment-component', window.CommentComponent);
+// Register Comment Component (async — Quill + mention + comment-component.js)
+vueApp.component(
+    'comment-component',
+    Vue.defineAsyncComponent({
+        loader: function () {
+            return ensureProjectDetailCommentAssets().then(function () {
+                if (!window.CommentComponent) {
+                    return Promise.reject(new Error('CommentComponent missing after load'));
+                }
+                return window.CommentComponent;
+            });
+        },
+        delay: 100,
+        timeout: 30000,
+        loadingComponent: {
+            template: '<div class="text-center text-muted py-3"><i class="fa fa-spinner fa-spin"></i></div>'
+        },
+        errorComponent: {
+            template: '<div class="text-danger small">コメントの読み込みに失敗しました。</div>'
+        }
+    })
+);
 
 // Mount the Vue app
 vueApp.mount('#app'); 

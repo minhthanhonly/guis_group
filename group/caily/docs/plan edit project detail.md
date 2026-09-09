@@ -45,13 +45,13 @@ Không còn `searchMembers` ×2; không còn full `task/list` cho badge.
 
 | # | Việc | Kỳ vọng |
 |---|---|---|
-| **D5** | **Bỏ Vue CDN trùng** ở `detail.php` (dùng Vue prod từ header) | −~100–500KB + tránh double Vue |
-| **D6** | **Page asset profile `project/detail`**: defer Quill (+CSS) đến khi edit note/description; defer `comment-component` + mention đến khi scroll/tab comment hoặc `requestIdleCallback`; Tagify CSS trùng; Sortable nếu không drag trên overview | DCL / parse −1–3s |
-| **D7** | Bỏ `task-manager.css` nếu detail không dùng task-manager UI | −CSS thừa |
+| **D5** | ✅ **Bỏ Vue CDN trùng** ở `detail.php` (dùng Vue prod từ header) | −~100–500KB + tránh double Vue |
+| **D6** | ✅ **Page asset profile `project/detail`**: `is_project_detail` → defer Quill/Sortable; Quill lazy khi edit; comment+mention via idle/IO + `defineAsyncComponent`; bỏ Tagify CSS trùng | DCL / parse −1–3s |
+| **D7** | ✅ **Bỏ `task-manager.css`** khỏi critical path (lazy kèm Quill khi edit) | −CSS thừa lúc first paint |
 | **D8** | Code-split `project-detail.js` (overview vs edit/Quill/BD/logs) | parse −0.5–1.5s |
 | **D9** | Moment: dùng chung hướng list (#6) — defer hoặc dayjs trên detail | −0.7–1.5MB khi làm shell |
 
-**Done khi:** First paint overview không chờ Quill+comment ~320KB; không load Vue 2 lần.
+**Done khi:** First paint overview không chờ Quill+comment ~320KB; không load Vue 2 lần. ✅ (D5–D7)
 
 ---
 
@@ -77,17 +77,20 @@ Sau mỗi bước: MCP reload cùng detail?id=, so sánh bảng dưới
 
 ---
 
-### Bảng đo lại (điền sau MCP)
+### Bảng đo lại (MCP kanri `detail.php?id=638`)
 
-| Checkpoint | Hiện tại (ước lượng) | Sau P0 | Mục tiêu |
+| Checkpoint | Trước upload (`v=1.4.17`) | Sau upload warm (`v=1.4.19`) | Mục tiêu |
 |---|---|---|---|
-| HTML TTFB | ? | ? | &lt; 400ms |
-| DCL | ? | ? | &lt; 3–4s |
-| XHR tới overview usable | **~8–12+** (waterfall) | **≤ 5** | **≤ 4** |
-| `searchMembers` | **×2** | **×0–1** | **×0** (lookup by id) |
-| Vue scripts | **×2** (prod + non-prod) | **×1** | **×1** |
-| Quill trên critical path | Có | Không (lazy) | Lazy |
-| `getById` size | `p.*` + aggregates | slim | &lt; ~80–120KB gzip |
+| HTML TTFB | 131 ms | 312 ms (biến động server; cold lần 1 ~1135 ms) | &lt; 400ms |
+| FCP | 356 ms | 524 ms | — |
+| LCP | **1304 ms** (render delay 1173) | **1256 ms** (render delay **944**) | — |
+| DCL | 732 ms | 846 ms | &lt; 3–4s |
+| CLS | 0.41 | **0.27** | thấp hơn |
+| `searchMembers` | có | **không** (`getByUserids`) | ×0 |
+| Workload API | `task/list&include_subtasks=1` | **`workloadStats`** | nhẹ |
+| Vue scripts | ×2 (prod + CDN) | **×1** (prod) | ×1 |
+| Quill / comment JS | eager (~350 ms) | **lazy** (~1720+ ms, sau LCP) | Lazy |
+| Sortable | eager | **không** trên detail | Lazy |
 
 ---
 
@@ -101,8 +104,7 @@ Sau mỗi bước: MCP reload cùng detail?id=, so sánh bảng dưới
 
 ### Ghi chú triển khai
 
-- `app-asset-config.php`: hiện chỉ tối ưu `is_project_list`; **detail** vẫn `needs_quill` / `needs_sortable` / chat full — cần flag `is_project_detail`.
-- Comment UI nằm trong DOM overview → lazy script phải stub component hoặc mount sau khi script load.
-- `loadGuisReceiverDisplayName` nên API `user/getByUserid` thay vì tải cả `searchMembers`.
-
-Nếu ok, bước code đầu nên là **D5 + D1 + D2**.
+- `app-asset-config.php`: `is_project_list` + **`is_project_detail`** → defer Quill/Sortable trên detail.
+- Comment: `commentsMountReady` (idle / IntersectionObserver) + `Vue.defineAsyncComponent` → load Quill/mention/comment-component.
+- `task-manager.css` lazy cùng Quill (upload placeholder khi edit).
+- Còn lại P1: **D8** split JS, **D9** moment.

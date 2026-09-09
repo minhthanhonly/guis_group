@@ -12,6 +12,10 @@ if (!function_exists('app_resolve_asset_context')) {
         $isLogin = ($directory === 'login');
         // /project/ list: defer Quill / Sortable / jszip / chat / customer-modal / flatpickr until needed
         $isProjectList = ($directory === 'project' && ($page === 'index' || $page === ''));
+        // /project/detail.php: defer Quill + Sortable (lazy via project-detail.js / todo-modal)
+        $isProjectDetail = ($directory === 'project' && $page === 'detail');
+        $deferQuill = $isProjectList || $isProjectDetail;
+        $deferSortable = $isProjectList || $isProjectDetail;
 
         $tableDirs = [
             'project', 'parent_project', 'member', 'property', 'holiday',
@@ -25,12 +29,13 @@ if (!function_exists('app_resolve_asset_context')) {
             'page' => $page,
             'is_login' => $isLogin,
             'is_project_list' => $isProjectList,
+            'is_project_detail' => $isProjectDetail,
             'needs_data_tables' => !$isLogin && in_array($directory, $tableDirs, true),
             'needs_jszip' => !$isLogin && in_array($directory, $tableDirs, true) && !$isProjectList,
             // Flatpickr JS/CSS: project list loads on demand (filter / quick-edit / todo)
             'needs_flatpickr' => !$isLogin && in_array($directory, $tableDirs, true) && !$isProjectList,
-            'needs_quill' => !$isLogin && !$isProjectList,
-            'needs_sortable' => in_array($directory, ['project', 'parent_project'], true) && !$isProjectList,
+            'needs_quill' => !$isLogin && !$deferQuill,
+            'needs_sortable' => in_array($directory, ['project', 'parent_project'], true) && !$deferSortable,
             'needs_chat' => !$isLogin && !$isProjectList,
             'needs_chat_css' => !$isLogin && !$isProjectList,
             'needs_customer_modal' => !$isLogin && !empty($_SESSION['show_project']) && !$isProjectList,
