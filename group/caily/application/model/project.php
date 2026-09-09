@@ -39,6 +39,7 @@ class Project extends ApplicationModel {
             'updated_at' => array('except' => array('search')), //timestamp
             'department_id' => array(), //
             'progress' => array(), //0-100
+            'progress_started_at' => array('except' => array('search')), // first progress update timestamp
             'estimated_hours' => array(), //float
             'actual_hours' => array(), //float
             'building_size' => array(), //string
@@ -66,6 +67,66 @@ class Project extends ApplicationModel {
             'yotei' => array(), //予定工程 JSON
         );
         $this->connect();
+        $this->ensureProgressStartedAtColumn();
+    }
+
+    /**
+     * Ensure progress_started_at column exists.
+     */
+    private function ensureProgressStartedAtColumn() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+        if ($table === '') {
+            $table = DB_PREFIX . 'projects';
+        }
+        try {
+            $row = $this->fetchOne(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+                . "AND COLUMN_NAME = 'progress_started_at'"
+            );
+            if (empty($row['cnt'])) {
+                $this->query(
+                    "ALTER TABLE `{$table}` ADD COLUMN `progress_started_at` DATETIME NULL DEFAULT NULL "
+                    . "COMMENT '初回進捗更新日時' AFTER `progress`"
+                );
+            }
+        } catch (Exception $e) {
+            error_log('ensureProgressStartedAtColumn failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Stamp progress_started_at only when project progress actually changes (update).
+     * Never overwrite an existing value. Not set on create / not backfilled from logs.
+     *
+     * @param array $oldRow Existing project row
+     * @param array $data   Update payload (by ref)
+     */
+    private function applyProgressStartedAt(array $oldRow, array &$data) {
+        $this->ensureProgressStartedAtColumn();
+        if (empty($oldRow) || empty($oldRow['id'])) {
+            return; // create — do not stamp
+        }
+        if (!empty($oldRow['progress_started_at'])) {
+            return;
+        }
+        if (!empty($data['progress_started_at'])) {
+            return;
+        }
+        if (!array_key_exists('progress', $data)) {
+            return;
+        }
+        $newProgress = intval($data['progress']);
+        $oldProgress = isset($oldRow['progress']) ? intval($oldRow['progress']) : 0;
+        if ($newProgress === $oldProgress) {
+            return;
+        }
+        $data['progress_started_at'] = date('Y-m-d H:i:s');
     }
 
     /**
@@ -2479,6 +2540,8 @@ class Project extends ApplicationModel {
             $data['progress'] = 100;
         }
 
+        $this->applyProgressStartedAt($old, $data);
+
         $nullScalarFields = [];
         if (array_key_exists('customer_id', $_POST)) {
             $customerId = trim((string)$_POST['customer_id']);
@@ -3329,6 +3392,7 @@ class Project extends ApplicationModel {
             'updated_by' => $_SESSION['userid'],
             'updated_at' => date('Y-m-d H:i:s')
         );
+        $this->applyProgressStartedAt(is_array($old) ? $old : [], $data);
         $result = $this->query_update($data, ['id' => $id]);
 
         // Ghi project log nếu tiến độ thay đổi
@@ -3554,6 +3618,7 @@ class Project extends ApplicationModel {
         }
 
         $this->applyEnergyDrawingShareFromPost($data, $old);
+        $this->applyProgressStartedAt($old, $data);
         
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {

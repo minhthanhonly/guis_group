@@ -547,6 +547,10 @@ if($_SESSION['show_project'] == 0){
                                           :title="getTimeRemainingForDate(project.caily_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ getTimeRemainingForDate(project.caily_nouki).text }}
                                     </span>
+                                    <span v-if="getNoukiScheduleJudgment('caily')"
+                                          :class="'badge ms-1 ' + getNoukiScheduleJudgment('caily').className">
+                                        {{ translateLabel(getNoukiScheduleJudgment('caily').textKey) }}
+                                    </span>
                                 </label>
                                 <div v-if="isEditMode">
                                     <div class="input-group mb-1">
@@ -579,6 +583,10 @@ if($_SESSION['show_project'] == 0){
                                     <span v-if="getTimeRemainingForDate(project.guis_nouki) && project.guis_nouki_status !== '納品済み'" :class="'badge ms-2 ' + getTimeRemainingForDate(project.guis_nouki).class"
                                           :title="getTimeRemainingForDate(project.guis_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ getTimeRemainingForDate(project.guis_nouki).text }}
+                                    </span>
+                                    <span v-if="getNoukiScheduleJudgment('guis')"
+                                          :class="'badge ms-1 ' + getNoukiScheduleJudgment('guis').className">
+                                        {{ translateLabel(getNoukiScheduleJudgment('guis').textKey) }}
                                     </span>
                                 </label>
                                 <div v-if="isEditMode && !isCailyBranchUser">

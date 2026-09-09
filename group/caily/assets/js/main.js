@@ -939,6 +939,164 @@ function getAppLanguage() {
   return 'en';
 }
 
+/**
+ * Duration in ms between two moments, excluding Saturday and Sunday (Asia/Tokyo weekdays).
+ * Returns signed ms (negative if end < start). Requires moment.
+ */
+function getBusinessDurationMs(startMoment, endMoment) {
+  if (typeof moment === 'undefined' || !startMoment || !endMoment) return 0;
+  if (!startMoment.isValid || !startMoment.isValid() || !endMoment.isValid || !endMoment.isValid()) return 0;
+
+  var start = startMoment.clone();
+  var end = endMoment.clone();
+  var sign = 1;
+  if (end.isBefore(start)) {
+    var tmp = start;
+    start = end;
+    end = tmp;
+    sign = -1;
+  }
+
+  var total = 0;
+  var current = start.clone();
+  while (current.isBefore(end)) {
+    var dow = current.day(); // 0 = Sun, 6 = Sat
+    var nextDay = current.clone().startOf('day').add(1, 'day');
+    var sliceEnd = moment.min(end, nextDay);
+    if (dow !== 0 && dow !== 6) {
+      total += sliceEnd.diff(current);
+    }
+    current = sliceEnd;
+  }
+  return sign * total;
+}
+
+/**
+ * Split absolute business duration into days / hours / minutes.
+ * @returns {{ days: number, hours: number, minutes: number, totalMs: number, isNegative: boolean }}
+ */
+function getBusinessDurationParts(startMoment, endMoment) {
+  var totalMs = getBusinessDurationMs(startMoment, endMoment);
+  var abs = Math.abs(totalMs);
+  var dayMs = 1000 * 60 * 60 * 24;
+  var hourMs = 1000 * 60 * 60;
+  var minuteMs = 1000 * 60;
+  return {
+    totalMs: totalMs,
+    isNegative: totalMs < 0,
+    days: Math.floor(abs / dayMs),
+    hours: Math.floor((abs % dayMs) / hourMs),
+    minutes: Math.floor((abs % hourMs) / minuteMs)
+  };
+}
+
+/**
+ * Parse project datetime as Asia/Tokyo moment (shared).
+ */
+function parseScheduleMoment(value) {
+  if (!value || typeof moment === 'undefined') return null;
+  if (moment.isMoment && moment.isMoment(value)) {
+    return value.isValid() ? value.clone() : null;
+  }
+  var m = moment.tz
+    ? moment.tz(value, 'Asia/Tokyo')
+    : moment(value);
+  return m && m.isValid() ? m : null;
+}
+
+/**
+ * Working hours between two moments (Asia/Tokyo).
+ * Each weekday contributes up to 8 hours; Saturday and Sunday count as 0.
+ * Signed (negative if end < start).
+ */
+function getWorkingHoursBetween(startMoment, endMoment) {
+  if (typeof moment === 'undefined' || !startMoment || !endMoment) return 0;
+  if (!startMoment.isValid || !startMoment.isValid() || !endMoment.isValid || !endMoment.isValid()) return 0;
+
+  var WORK_HOURS_PER_DAY = 8;
+  var HOUR_MS = 1000 * 60 * 60;
+
+  var start = startMoment.clone();
+  var end = endMoment.clone();
+  var sign = 1;
+  if (end.isBefore(start)) {
+    var tmp = start;
+    start = end;
+    end = tmp;
+    sign = -1;
+  }
+
+  var totalHours = 0;
+  var current = start.clone();
+  while (current.isBefore(end)) {
+    var dow = current.day(); // 0 = Sun, 6 = Sat
+    var nextDay = current.clone().startOf('day').add(1, 'day');
+    var sliceEnd = moment.min(end, nextDay);
+    if (dow !== 0 && dow !== 6) {
+      var sliceHours = sliceEnd.diff(current) / HOUR_MS;
+      totalHours += Math.min(WORK_HOURS_PER_DAY, Math.max(0, sliceHours));
+    }
+    current = sliceEnd;
+  }
+  return sign * totalHours;
+}
+
+/**
+ * Schedule judgment for one deadline: 期限超過 (overdue) OR 進捗遅れ (behind).
+ * Never both.
+ * Behind schedule uses progress_started_at and working hours (8h/weekday, no Sat/Sun).
+ * @param {object} row - project row { status, progress, progress_started_at, ... }
+ * @param {string|object} deadlineRaw - deadline datetime or moment
+ * @param {{ isDelivered?: boolean }} [options]
+ * @returns {null|{ key: 'overdue'|'behind', textKey: string, className: string }}
+ */
+function getScheduleJudgment(row, deadlineRaw, options) {
+  options = options || {};
+  if (!row || options.isDelivered) return null;
+
+  var status = String(row.status || '');
+  var skip = {
+    completed: true,
+    cancelled: true,
+    paused: true,
+    deleted: true,
+    draft: true
+  };
+  if (skip[status] || skip[status.toLowerCase()]) return null;
+
+  var deadline = parseScheduleMoment(deadlineRaw);
+  if (!deadline) return null;
+
+  var now = moment.tz ? moment.tz('Asia/Tokyo') : moment();
+  if (!now || !now.isValid()) return null;
+
+  // 1) Past deadline → 期限超過
+  if (deadline.isBefore(now)) {
+    return { key: 'overdue', textKey: '期限超過', className: 'bg-danger' };
+  }
+
+  // 2) Behind expected progress → 進捗遅れ (working hours)
+  var anchor = parseScheduleMoment(row.progress_started_at);
+  if (!anchor) {
+    return null;
+  }
+  if (!now.isAfter(anchor)) return null;
+
+  var progress = parseInt(row.progress, 10);
+  if (isNaN(progress)) progress = 0;
+  if (progress >= 100) return null;
+
+  var totalHours = Math.abs(getWorkingHoursBetween(anchor, deadline));
+  var elapsedHours = Math.abs(getWorkingHoursBetween(anchor, now));
+  if (!(totalHours > 0)) return null;
+
+  var expected = (elapsedHours / totalHours) * 100;
+  if (progress < expected - 1) {
+    return { key: 'behind', textKey: '進捗遅れ', className: 'bg-warning' };
+  }
+  return null;
+}
+
 /** Avatar text uses カタカナ (user_ruby) when UI language is en or ja. */
 function shouldUseAvatarRuby() {
   const lang = String(getAppLanguage() || '').toLowerCase();

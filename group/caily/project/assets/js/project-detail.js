@@ -1355,11 +1355,13 @@ const vueApp = createApp({
             };
             
             if (endDate.isBefore(now)) {
-                // Đã quá hạn
-                const diff = now.diff(endDate);
-                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                // Đã quá hạn (loại trừ T7–CN)
+                const parts = (typeof getBusinessDurationParts === 'function')
+                    ? getBusinessDurationParts(endDate, now)
+                    : null;
+                const days = parts ? parts.days : Math.floor(now.diff(endDate) / (1000 * 60 * 60 * 24));
+                const hours = parts ? parts.hours : Math.floor((now.diff(endDate) % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = parts ? parts.minutes : Math.floor((now.diff(endDate) % (1000 * 60 * 60)) / (1000 * 60));
                 
                 if (days > 0) {
                     return {
@@ -1381,11 +1383,13 @@ const vueApp = createApp({
                     };
                 }
             } else {
-                // Còn thời gian
-                const diff = endDate.diff(now);
-                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                // Còn thời gian (loại trừ T7–CN)
+                const parts = (typeof getBusinessDurationParts === 'function')
+                    ? getBusinessDurationParts(now, endDate)
+                    : null;
+                const days = parts ? parts.days : Math.floor(endDate.diff(now) / (1000 * 60 * 60 * 24));
+                const hours = parts ? parts.hours : Math.floor((endDate.diff(now) % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                const minutes = parts ? parts.minutes : Math.floor((endDate.diff(now) % (1000 * 60 * 60)) / (1000 * 60));
                 
                 if (days > 0) {
                     return {
@@ -1408,6 +1412,18 @@ const vueApp = createApp({
                 }
             }
         },
+        /**
+         * 期限超過 or 進捗遅れ for CAILY/GUIS納期 (only one).
+         * @param {'caily'|'guis'} kind
+         */
+        getNoukiScheduleJudgment(kind) {
+            if (!this.project || typeof getScheduleJudgment !== 'function') return null;
+            const isCaily = kind === 'caily';
+            const deadline = isCaily ? this.project.caily_nouki : this.project.guis_nouki;
+            const status = isCaily ? this.project.caily_nouki_status : this.project.guis_nouki_status;
+            const isDelivered = !!(status && String(status).indexOf('納品済み') !== -1);
+            return getScheduleJudgment(this.project, deadline, { isDelivered: isDelivered });
+        },
         /** Remaining time for a given date (e.g. caily_nouki, guis_nouki). Returns null if status is draft/paused/cancelled. */
         getTimeRemainingForDate(dateStr) {
             if (!this.project || !dateStr) return null;
@@ -1423,11 +1439,14 @@ const vueApp = createApp({
             const remainingLabel = this.translateLabel('残り');
             const formatUnit = (value, label) => isVietnamese ? `${value} ${label}` : `${value}${label}`;
             const formatTimeText = (parts) => isVietnamese ? parts.filter(p => p).join(' ') : parts.filter(p => p).join('');
-            if (endDate.isBefore(now)) {
-                const diff = now.diff(endDate);
-                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const parts = (typeof getBusinessDurationParts === 'function')
+                ? getBusinessDurationParts(now, endDate)
+                : null;
+            const overdue = endDate.isBefore(now);
+            const days = parts ? parts.days : Math.floor(Math.abs(endDate.diff(now)) / (1000 * 60 * 60 * 24));
+            const hours = parts ? parts.hours : Math.floor((Math.abs(endDate.diff(now)) % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = parts ? parts.minutes : Math.floor((Math.abs(endDate.diff(now)) % (1000 * 60 * 60)) / (1000 * 60));
+            if (overdue) {
                 if (days > 0) {
                     return { text: formatTimeText([formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
                 } else if (hours > 0) {
@@ -1436,10 +1455,6 @@ const vueApp = createApp({
                     return { text: formatTimeText([formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
                 }
             } else {
-                const diff = endDate.diff(now);
-                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 if (days > 0) {
                     return { text: formatTimeText([remainingLabel, formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel)]), class: 'bg-label-info', isOverdue: false };
                 } else if (hours > 0) {
@@ -1466,11 +1481,14 @@ const vueApp = createApp({
             const remainingLabel = this.translateLabel('残り');
             const formatUnit = (value, label) => isVietnamese ? `${value} ${label}` : `${value}${label}`;
             const formatTimeText = (parts) => isVietnamese ? parts.filter(p => p).join(' ') : parts.filter(p => p).join('');
-            if (endDate.isBefore(now)) {
-                const diff = now.diff(endDate);
-                const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-                const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const parts = (typeof getBusinessDurationParts === 'function')
+                ? getBusinessDurationParts(now, endDate)
+                : null;
+            const overdue = endDate.isBefore(now);
+            const days = parts ? parts.days : Math.floor(Math.abs(endDate.diff(now)) / (1000 * 60 * 60 * 24));
+            const hours = parts ? parts.hours : Math.floor((Math.abs(endDate.diff(now)) % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = parts ? parts.minutes : Math.floor((Math.abs(endDate.diff(now)) % (1000 * 60 * 60)) / (1000 * 60));
+            if (overdue) {
                 if (days > 0) {
                     return { text: formatTimeText([formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
                 } else if (hours > 0) {
@@ -1478,10 +1496,6 @@ const vueApp = createApp({
                 }
                 return { text: formatTimeText([formatUnit(minutes, minuteLabel), overdueLabel]), class: 'bg-danger', isOverdue: true };
             }
-            const diff = endDate.diff(now);
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             if (days > 0) {
                 return { text: formatTimeText([remainingLabel, formatUnit(days, dayLabel), formatUnit(hours, hourLabel), formatUnit(minutes, minuteLabel)]), class: 'bg-label-info', isOverdue: false };
             } else if (hours > 0) {

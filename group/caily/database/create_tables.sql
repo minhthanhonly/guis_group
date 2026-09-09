@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS `groupware_projects` (
   `updated_at` timestamp NULL DEFAULT NULL,
   `department_id` int(11) DEFAULT NULL,
   `progress` int(11) DEFAULT 0,
+  `progress_started_at` datetime DEFAULT NULL COMMENT '初回進捗更新日時',
   `estimated_hours` decimal(10,2) DEFAULT 0.00,
   `actual_hours` decimal(10,2) DEFAULT 0.00,
   `customer_id` int(11) DEFAULT NULL,

@@ -1034,8 +1034,8 @@ $view->footing();
 }
 /* Ensure proper spacing in end date column */
 #projectTable td {
-    vertical-align: baseline;
-    padding: 0.2rem;
+    vertical-align: top;
+    padding: 0.4rem 0.2rem;
     border: 1px solid #aaa;
     
 }

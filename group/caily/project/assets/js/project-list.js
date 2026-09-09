@@ -4016,10 +4016,11 @@ var projectTable;
                             badges.push('<span class="badge ' + startLabel.class + ' ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + startText + '</span>');
                         }
                         
-                        // Overdue label — i18n
-                        if (isProjectOverdue(row)) {
-                            var overdueText = (typeof translateText === 'function' ? translateText('期限超過') : '期限超過');
-                            badges.push('<span class="badge bg-danger ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + overdueText + '</span>');
+                        // Overdue / behind-schedule — only one (shared getScheduleJudgment)
+                        var primaryJudgment = getProjectPrimaryScheduleJudgment(row);
+                        if (primaryJudgment) {
+                            var judgmentText = (typeof translateText === 'function' ? translateText(primaryJudgment.textKey) : primaryJudgment.textKey);
+                            badges.push('<span class="badge ' + primaryJudgment.className + ' ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + judgmentText + '</span>');
                         }
                         
                         // Period undecided label — i18n
@@ -4617,11 +4618,13 @@ var projectTable;
                                              'style="font-size: 0.7rem; padding: 0.2rem 0.4rem; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
                                              timeRemaining.text +
                                         '</span>' +
+                                        renderScheduleJudgmentBadgeHtml(row, data, { isDelivered: isDelivered }) +
                                         statusBadge +
                                     '</div>';
                         } else {
                             return '<div class="d-flex flex-column">' +
                                 '<span class="small text-muted"' + attrs + '>' + dateStr + '</span>' +
+                                renderScheduleJudgmentBadgeHtml(row, data, { isDelivered: isDelivered }) +
                                 statusBadge +
                             '</div>';
                         }
@@ -4677,11 +4680,13 @@ var projectTable;
                                              'style="font-size: 0.7rem; padding: 0.2rem 0.4rem; max-width: 70px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' +
                                              timeRemaining.text +
                                         '</span>' +
+                                        renderScheduleJudgmentBadgeHtml(row, data, { isDelivered: isDelivered }) +
                                         statusBadge +
                                     '</div>';
                         } else {
                             return '<div class="d-flex flex-column">' +
                                 '<span class="small text-muted"' + attrs + '>' + dateStr + '</span>' +
+                                renderScheduleJudgmentBadgeHtml(row, data, { isDelivered: isDelivered }) +
                                 statusBadge +
                             '</div>';
                         }
@@ -7395,12 +7400,22 @@ var projectTable;
         // Short format for badge (max ~70px): d/h/m + 超
         const d = 'd', h = 'h', m = 'm';
         const 超 = '超';
+
+        const parts = (typeof getBusinessDurationParts === 'function')
+            ? getBusinessDurationParts(now, end)
+            : null;
+        const overdue = end.isBefore(now);
+        const days = parts
+            ? parts.days
+            : Math.floor(Math.abs(end.diff(now)) / (1000 * 60 * 60 * 24));
+        const hours = parts
+            ? parts.hours
+            : Math.floor((Math.abs(end.diff(now)) % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = parts
+            ? parts.minutes
+            : Math.floor((Math.abs(end.diff(now)) % (1000 * 60 * 60)) / (1000 * 60));
         
-        if (end.isBefore(now)) {
-            const diff = now.diff(end);
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        if (overdue) {
             let text = '', fullText = '';
             if (days > 0) {
                 text = days + d + (hours > 0 ? ' ' + hours + h : '') + ' ' + 超;
@@ -7414,10 +7429,6 @@ var projectTable;
             }
             return { text: text, fullText: fullText, class: 'bg-danger', isOverdue: true };
         } else {
-            const diff = end.diff(now);
-            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
             let text = '+', fullText = '+';
             let class_name = 'bg-label-info';
             if (days > 0) {
@@ -7451,13 +7462,25 @@ var projectTable;
 
     // Helper function to check if project is overdue (期限超過 badge on index list)
     function isProjectOverdue(row) {
-        const deadline = getOverdueDeadlineMoment(row);
-        if (!deadline || !deadline.isValid()) return false;
-        const now = typeof moment !== 'undefined' && moment.tz
-            ? moment.tz('Asia/Tokyo')
-            : (typeof moment !== 'undefined' ? moment() : null);
-        if (!now || !now.isValid()) return false;
-        return deadline.isBefore(now);
+        var judgment = getProjectPrimaryScheduleJudgment(row);
+        return !!(judgment && judgment.key === 'overdue');
+    }
+
+    /** Primary deadline judgment for favorite-column badge (CAILY納期 or 期限日). */
+    function getProjectPrimaryScheduleJudgment(row) {
+        if (typeof getScheduleJudgment !== 'function') return null;
+        var deadline = getOverdueDeadlineMoment(row);
+        if (!deadline) return null;
+        return getScheduleJudgment(row, deadline, {});
+    }
+
+    /** HTML badge for 期限超過 / 進捗遅れ (only one). */
+    function renderScheduleJudgmentBadgeHtml(row, deadlineRaw, options) {
+        if (typeof getScheduleJudgment !== 'function') return '';
+        var judgment = getScheduleJudgment(row, deadlineRaw, options || {});
+        if (!judgment) return '';
+        var text = (typeof translateText === 'function' ? translateText(judgment.textKey) : judgment.textKey);
+        return '<span class="badge ' + judgment.className + ' mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.65rem; padding: 0.15rem 0.35rem; white-space: nowrap;">' + text + '</span>';
     }
     
     // Helper function to check if project period is undecided (期間未定)
