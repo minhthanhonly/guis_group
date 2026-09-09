@@ -37,6 +37,145 @@ var projectTable;
         }, ms);
     }
 
+    function projectListAssetRoot() {
+        return (typeof window.ROOT === 'string' && window.ROOT) ? window.ROOT : '/';
+    }
+
+    function projectListCacheV() {
+        return window.__CACHE_VERSION || window.__PROJECT_CACHE_VERSION || '';
+    }
+
+    function projectListProjectCacheV() {
+        return window.__PROJECT_CACHE_VERSION || window.__CACHE_VERSION || '';
+    }
+
+    function withAppLoader() {
+        return window.AppLoader || null;
+    }
+
+    /** Quill CSS+JS — only needed for note modal / quick-edit description. */
+    function ensureProjectListQuill() {
+        if (typeof window.Quill !== 'undefined') {
+            return Promise.resolve();
+        }
+        if (window.__projectListQuillLoading) {
+            return window.__projectListQuillLoading;
+        }
+        var loader = withAppLoader();
+        if (!loader) {
+            return Promise.reject(new Error('AppLoader missing'));
+        }
+        var root = projectListAssetRoot();
+        var cv = projectListCacheV();
+        var q = function(path) { return root + path + (cv ? ('?v=' + cv) : ''); };
+        window.__projectListQuillLoading = Promise.all([
+            loader.loadStyle(q('assets/vendor/libs/quill/typography.css')),
+            loader.loadStyle(q('assets/vendor/libs/quill/editor.css'))
+        ]).then(function() {
+            return loader.loadScript(q('assets/vendor/libs/quill/quill.js'));
+        });
+        return window.__projectListQuillLoading;
+    }
+
+    /** JSZip — only for Excel export (DataTables Buttons excel). */
+    function ensureProjectListJszip() {
+        if (typeof window.JSZip !== 'undefined') {
+            return Promise.resolve();
+        }
+        if (window.__projectListJszipLoading) {
+            return window.__projectListJszipLoading;
+        }
+        var loader = withAppLoader();
+        if (!loader) {
+            return Promise.reject(new Error('AppLoader missing'));
+        }
+        var root = projectListAssetRoot();
+        var cv = projectListCacheV();
+        window.__projectListJszipLoading = loader.loadScript(
+            root + 'assets/vendor/libs/jszip/jszip.min.js' + (cv ? ('?v=' + cv) : '')
+        );
+        return window.__projectListJszipLoading;
+    }
+
+    /** Global customer modal script (footer skips it on project list). */
+    function ensureProjectListCustomerModal() {
+        if (typeof window.openGlobalCustomerModal === 'function') {
+            return Promise.resolve();
+        }
+        if (window.__projectListCustomerModalLoading) {
+            return window.__projectListCustomerModalLoading;
+        }
+        var loader = withAppLoader();
+        if (!loader) {
+            return Promise.reject(new Error('AppLoader missing'));
+        }
+        var root = projectListAssetRoot();
+        var cv = projectListCacheV();
+        window.__projectListCustomerModalLoading = loader.loadScript(
+            root + 'assets/js/customer-global-modal.js' + (cv ? ('?v=' + cv) : '')
+        );
+        return window.__projectListCustomerModalLoading;
+    }
+
+    /** Shepherd + project-list-tour.js — tour button / first-run. */
+    function ensureProjectListTourAssets() {
+        if (window.ProjectListTour && typeof window.ProjectListTour.start === 'function'
+            && typeof window.Shepherd !== 'undefined') {
+            return Promise.resolve();
+        }
+        if (window.__projectListTourLoading) {
+            return window.__projectListTourLoading;
+        }
+        var loader = withAppLoader();
+        if (!loader) {
+            return Promise.reject(new Error('AppLoader missing'));
+        }
+        var root = projectListAssetRoot();
+        var cv = projectListCacheV();
+        var pcv = projectListProjectCacheV();
+        window.__projectListTourLoading = loader.loadStyle(
+            root + 'assets/vendor/libs/shepherd/shepherd.css' + (cv ? ('?v=' + cv) : '')
+        ).then(function() {
+            return loader.loadScripts([
+                'https://cdn.jsdelivr.net/npm/shepherd.js@10.0.1/dist/js/shepherd.min.js',
+                root + 'project/assets/js/project-list-tour.js' + (pcv ? ('?v=' + pcv) : '')
+            ]);
+        });
+        return window.__projectListTourLoading;
+    }
+
+    function bindProjectListTourLazy() {
+        window.__projectListTourExternalBoot = true;
+        var btn = document.getElementById('projectListTourBtn');
+        if (btn && !btn.__tourLazyBound) {
+            btn.__tourLazyBound = true;
+            btn.addEventListener('click', function() {
+                ensureProjectListTourAssets().then(function() {
+                    if (window.ProjectListTour && typeof window.ProjectListTour.start === 'function') {
+                        window.ProjectListTour.start({ waitMs: 3000 });
+                    }
+                }).catch(function(err) {
+                    console.error('Failed to load project list tour:', err);
+                });
+            });
+        }
+        // First-run auto tour: load after idle so it does not block DCL
+        try {
+            if (localStorage.getItem('caily_project_list_tour_seen_v3') === '1') return;
+        } catch (e) { /* ignore */ }
+        var schedule = window.requestIdleCallback
+            ? function(fn) { window.requestIdleCallback(fn, { timeout: 4000 }); }
+            : function(fn) { setTimeout(fn, 2000); };
+        schedule(function() {
+            try {
+                if (localStorage.getItem('caily_project_list_tour_seen_v3') === '1') return;
+            } catch (e2) { /* ignore */ }
+            ensureProjectListTourAssets().catch(function(err) {
+                console.error('Failed to preload project list tour:', err);
+            });
+        });
+    }
+
     function guardProjectTableNetworkReload(table) {
         if (!table || table._bdModalReloadGuard) return;
         table._bdModalReloadGuard = true;
@@ -532,6 +671,17 @@ var projectTable;
             return;
         }
 
+        ensureProjectListJszip().then(function() {
+            exportProjectListToExcelAfterJszip();
+        }).catch(function(err) {
+            console.error('Failed to load JSZip:', err);
+            if (typeof showMessage === 'function') {
+                showProjectListError('Excel出力機能が利用できません。');
+            }
+        });
+    }
+
+    function exportProjectListToExcelAfterJszip() {
         var dt = projectTable;
         if (!ensureProjectListExcelButtons(dt)) {
             if (typeof showMessage === 'function') {
@@ -5079,7 +5229,7 @@ var projectTable;
             order: defaultOrder,
            
             pageLength: 50,
-            ordering: true,
+            ordering: false,
             responsive: false,
             language: {
                 search: '<span data-i18n="検索">検索</span>:',
@@ -6135,8 +6285,14 @@ var projectTable;
             quickEditModal.show();
             $('#quickEditModalLoading').removeClass('d-none');
 
+            var quillReady = ensureProjectListQuill().catch(function(err) {
+                console.error('Failed to load Quill for quick edit:', err);
+            });
+
             axios.get('/api/index.php?model=project&method=getById&id=' + projectId).then(function(res) {
                 const p = res.data && res.data.data ? res.data.data : (res.data || {});
+                return quillReady.then(function() { return p; });
+            }).then(function(p) {
                 const effectiveId = p.id || projectId;
                 $('#quickEditProjectId').val(effectiveId);
                 $('#quickEditProjectIdBadge').text('#' + effectiveId);
@@ -7263,9 +7419,25 @@ var projectTable;
             return false;
         }
         if (typeof window.openGlobalCustomerModal !== 'function') {
-            if (typeof showMessage === 'function') {
-                showMessage('顧客モーダルを開けません。ページを再読み込みしてください。', true);
-            }
+            ensureProjectListCustomerModal().then(function() {
+                if (typeof window.openGlobalCustomerModal !== 'function') {
+                    if (typeof showMessage === 'function') {
+                        showMessage('顧客モーダルを開けません。ページを再読み込みしてください。', true);
+                    }
+                    return;
+                }
+                Promise.resolve(window.openGlobalCustomerModal(customerId)).catch(function(err) {
+                    console.error('openGlobalCustomerModal failed:', err);
+                    if (typeof showMessage === 'function') {
+                        showMessage('顧客情報の読み込みに失敗しました。', true);
+                    }
+                });
+            }).catch(function(err) {
+                console.error('Failed to load customer modal:', err);
+                if (typeof showMessage === 'function') {
+                    showMessage('顧客モーダルを開けません。ページを再読み込みしてください。', true);
+                }
+            });
             return false;
         }
         Promise.resolve(window.openGlobalCustomerModal(customerId)).catch(function(err) {
@@ -7279,6 +7451,7 @@ var projectTable;
     
     // Setup auto-refresh timer once (independent of DataTable initialization)
     $(document).ready(function() {
+        bindProjectListTourLazy();
         // Backup: delegated click (DataTables scrollX may move rows outside #projectTable id)
         $(document).off('click.projectListCustomerInfo').on(
             'click.projectListCustomerInfo',
@@ -8329,7 +8502,10 @@ var projectTable;
             initQuillNoteEditor() {
                 if (!this.isNoteEditMode || !this.showNoteModal) return;
                 this.destroyQuillNoteEditor();
-                this.$nextTick(() => {
+                var self = this;
+                ensureProjectListQuill().then(function() {
+                    if (!self.isNoteEditMode || !self.showNoteModal) return;
+                    self.$nextTick(() => {
                 setTimeout(() => {
                     const toolbarOptions = [
                         ['bold', 'italic', 'underline', 'strike'],
@@ -8339,8 +8515,8 @@ var projectTable;
                         ['link', 'clean']
                     ];
                     const el = document.getElementById('quill_note_content');
-                    if (!el) return;
-                    this.quillNoteInstance = new Quill(el, {
+                    if (!el || typeof Quill === 'undefined') return;
+                    self.quillNoteInstance = new Quill(el, {
                         bounds: el,
                         placeholder: 'メモの詳細を入力してください...',
                         modules: {
@@ -8350,15 +8526,18 @@ var projectTable;
                         },
                         theme: 'snow'
                     });
-                    if (this.editingNote.content) {
-                        const html = typeof decodeHtmlEntities !== 'undefined' ? decodeHtmlEntities(this.editingNote.content) : this.editingNote.content;
-                        this.quillNoteInstance.root.innerHTML = html;
+                    if (self.editingNote.content) {
+                        const html = typeof decodeHtmlEntities !== 'undefined' ? decodeHtmlEntities(self.editingNote.content) : self.editingNote.content;
+                        self.quillNoteInstance.root.innerHTML = html;
                     }
-                        this.syncNoteEditorContent();
-                    this.quillNoteInstance.on('text-change', () => {
-                            this.syncNoteEditorContent();
+                        self.syncNoteEditorContent();
+                    self.quillNoteInstance.on('text-change', () => {
+                            self.syncNoteEditorContent();
                     });
                     }, 100);
+                    });
+                }).catch(function(err) {
+                    console.error('Failed to load Quill for note editor:', err);
                 });
             },
             destroyQuillNoteEditor() {
@@ -8693,7 +8872,7 @@ var projectTable;
                 const modal = new bootstrap.Modal(document.getElementById('newProjectModal'));
                 modal.show();
             },
-            editProject(project) {
+            async editProject(project) {
                 this.isEdit = true;
                 this.editingId = project.id;
                 this.newProject = {
@@ -8720,6 +8899,19 @@ var projectTable;
                 };
                 const modal = new bootstrap.Modal(document.getElementById('newProjectModal'));
                 modal.show();
+                // List API omits description — load full row fields for edit form
+                try {
+                    const res = await axios.get('/api/index.php?model=project&method=getById&id=' + encodeURIComponent(project.id));
+                    const p = res.data && res.data.data ? res.data.data : (res.data || {});
+                    if (p && p.id) {
+                        this.newProject.description = p.description || '';
+                        if (p.building_size) this.newProject.building_size = p.building_size;
+                        if (p.building_type) this.newProject.building_type = p.building_type;
+                        if (p.contact_phone) this.newProject.contact_phone = p.contact_phone;
+                    }
+                } catch (e) {
+                    console.warn('Failed to load project detail for edit:', e);
+                }
             },
             async saveProject() {
                 if (!this.formValidator) {

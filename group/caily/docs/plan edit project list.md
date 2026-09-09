@@ -16,7 +16,7 @@ Mục tiêu thực tế: **bảng usable &lt; 4s**, list API **1 lần**, HTML T
 | **1** | **`project/list` chỉ 1 lần khi vào trang** | DT init đã ajax; sau `initializeProjectTable()` còn `reloadProjectTable(true)` (~L8485–8487). Tìm thêm trigger thứ 3 (filter restore / sort / `loadProjects`) | −~350–700ms + −~356KB JSON |
 | **2** | **`Promise.all` trước DT** | Hiện `await loadTeamMap` rồi `await getCustomFields` tuần tự | −100–400ms trước list |
 | **3** | **Gzip HTML + JSON API** ✅ | PHP `output_compression.php`. MCP kanri: HTML −83%, list −90%. **CSS/JS tĩnh không đi qua PHP** — cần bật gzip nginx (xem `docs/nginx-gzip-static.conf.example`). `core.css` hiện ~819KB không nén. | HTML/API nhỏ hơn ~60–80% transfer |
-| **4** | **Slim `list` payload** | Mỗi draw ~178KB/50 rows → ~3.5KB/row | list 1 lần còn ~40–80KB |
+| **4** | **Slim `list` payload** ✅ | Bỏ `description`/field thừa; snippet notes + CAILY/GUISメモ; bỏ custom_fields rỗng. MCP local: **140KB → 100KB** (−29% JSON; custom_fields −70%, CAILYメモ −74%). | list nhỏ hơn rõ |
 
 **Done khi:** Network chỉ còn **1** `method=list`; bảng hiện đủ **&lt; ~5.5s** (không đổi asset lớn).
 
@@ -28,7 +28,7 @@ Shell đang chặn trước API (moment ~748KB, `project-list.js` ~460KB, `core.
 
 | # | Việc | Kỳ vọng |
 |---|---|---|
-| **5** | **Page asset profile cho list**: không Quill / Shepherd-tour / Sortable / chat / customer-modal / Excel(jszip) đến khi cần | DCL −2–4s |
+| **5** | **Page asset profile cho list**: không Quill / Shepherd-tour / Sortable / chat / customer-modal / Excel(jszip) đến khi cần ✅ | MCP local: script count **59→49**; Quill/Shepherd/Sortable/jszip/chat/customer/tour **không** load lúc đầu; DCL ~**0.7s** (mạng thường) |
 | **6** | **Bỏ/defer `moment` + `moment-timezone-with-data`** (CDN ~808KB) — dùng dayjs hoặc format native | −0.7–1.5MB |
 | **7** | Defer head blocking: chat CSS, task-timer, Tagify trùng, Flatpickr nếu chưa mở filter | First paint sớm hơn |
 | **8** | Code-split `project-list.js` (list core vs modal/Excel/tour/BD) | Parse −1–2s |

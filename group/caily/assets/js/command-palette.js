@@ -366,9 +366,25 @@
         if (searchMode === 'parent') {
             navigate(ROOT + 'parent_project/detail.php?id=' + encodeURIComponent(item.id));
         } else if (searchMode === 'customer') {
-            if (typeof window.openGlobalCustomerModal === 'function') {
-                window.openGlobalCustomerModal(item.id);
-            }
+            var openCustomer = function(id) {
+                if (typeof window.openGlobalCustomerModal === 'function') {
+                    window.openGlobalCustomerModal(id);
+                    return;
+                }
+                var root = window.ROOT || '/';
+                var cv = (document.documentElement && document.documentElement.getAttribute('data-cache-version')) || '';
+                var src = root + 'assets/js/customer-global-modal.js' + (cv ? ('?v=' + cv) : '');
+                if (window.AppLoader && typeof window.AppLoader.loadScript === 'function') {
+                    window.AppLoader.loadScript(src).then(function() {
+                        if (typeof window.openGlobalCustomerModal === 'function') {
+                            window.openGlobalCustomerModal(id);
+                        }
+                    }).catch(function(err) {
+                        console.error('Failed to load customer modal:', err);
+                    });
+                }
+            };
+            openCustomer(item.id);
         } else {
             navigate(ROOT + 'project/detail.php?id=' + encodeURIComponent(item.id));
         }

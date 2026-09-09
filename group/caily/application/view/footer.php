@@ -37,7 +37,9 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <?php endif; ?>
 
 <?php if ($appAssets['needs_data_tables']): ?>
+<?php if (!empty($appAssets['needs_jszip'])): ?>
 <script src="<?=$root?>assets/vendor/libs/jszip/jszip.min.js"></script>
+<?php endif; ?>
 <script src="<?=$root?>assets/vendor/libs/datatables-bs5/datatables-bootstrap5.js"></script>
 <?php endif; ?>
 
@@ -63,21 +65,22 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <?php if ($appAssets['needs_quill']): ?>
 <script src="<?=$root?>assets/vendor/libs/quill/quill.js"></script>
 <?php endif; ?>
+<?php if (!empty($appAssets['needs_sortable'])): ?>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" crossorigin="anonymous"></script>
+<?php endif; ?>
 <script src="<?=$root?>assets/js/todo-modal.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/main.js?v=<?=$cv?>"></script>
 <link rel="stylesheet" href="<?=$root?>assets/css/task-timer.css?v=<?=$cv?>">
 <script src="<?=$root?>assets/js/task-timer.js?v=<?=$cv?>"></script>
+<?php if (!empty($appAssets['needs_chat'])): ?>
 <script src="<?=$root?>assets/js/app-chat.js?v=<?=$cv?>"></script>
+<?php endif; ?>
 <script src="<?=$root?>assets/js/command-palette.js?v=<?=$cv?>"></script>
-<?php if (!empty($_SESSION['show_project'])): ?>
+<?php if (!empty($appAssets['needs_customer_modal'])): ?>
 <script src="<?=$root?>assets/js/customer-global-modal.js?v=<?=$cv?>"></script>
 <?php endif; ?>
 <script src="<?=$root?>js/library/jquery-ui.min.js"></script>
 <script src="<?=$root?>js/application.js?v=<?=$cv?>"></script>
-<?php if ($appAssets['needs_sortable']): ?>
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js" crossorigin="anonymous"></script>
-<?php endif; ?>
 <script src="<?=ROOT?>assets/js/image-modal.js"></script>
 <?php if (isset($_SESSION['userid'])): ?>
 <script src="<?=$root?>assets/js/notification.js?v=<?=$cv?>"></script>

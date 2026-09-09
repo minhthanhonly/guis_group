@@ -1564,13 +1564,8 @@ body > .select2-container--default,
 
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.css" />
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/tagify/tagify.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/typography.css" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/quill/editor.css?v=<?=CACHE_VERSION?>" />
-<link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/shepherd/shepherd.css" />
-<script src="<?=ROOT?>assets/vendor/libs/quill/quill.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/dataTables.colReorder.min.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/shepherd.js@10.0.1/dist/js/shepherd.min.js"></script>
 <!-- Chat page context: AI can use current project list data -->
 <script>
 window.__chatPageContext = window.__chatPageContext || {};
@@ -1579,13 +1574,11 @@ window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; 
 if (window.IS_CAILY_BRANCH_USER) {
     document.body.classList.add('is-caily-branch-user');
 }
+window.__PROJECT_CACHE_VERSION = <?= json_encode(PROJECT_CACHE_VERSION) ?>;
+window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 </script>
-<?php if (!empty($_SESSION['show_project'])): ?>
-<script src="<?=ROOT?>assets/js/customer-global-modal.js?v=<?=CACHE_VERSION?>"></script>
-<?php endif; ?>
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/business-document-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
-<script src="assets/js/project-list-tour.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

@@ -310,13 +310,47 @@ function mountTodoApp() {
                     }
                 },
 
+                ensureSortableLoaded() {
+                    if (typeof Sortable !== 'undefined') {
+                        return Promise.resolve();
+                    }
+                    if (window.__sortableJsLoading) {
+                        return window.__sortableJsLoading;
+                    }
+                    const loader = window.AppLoader;
+                    if (!loader || typeof loader.loadScript !== 'function') {
+                        return Promise.reject(new Error('AppLoader missing'));
+                    }
+                    window.__sortableJsLoading = loader.loadScript(
+                        'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
+                    ).catch(function(err) {
+                        delete window.__sortableJsLoading;
+                        throw err;
+                    });
+                    return window.__sortableJsLoading;
+                },
+
                 initTodoSortable() {
                     if (this.activeTab !== 'todos' || this.loadingTodos || this.editingTodoId) {
                         this.destroyTodoSortable();
                         return;
                     }
                     const listBody = document.getElementById('customTodoListBody');
-                    if (!listBody || typeof Sortable === 'undefined') {
+                    if (!listBody) {
+                        return;
+                    }
+                    if (typeof Sortable === 'undefined') {
+                        if (this._sortableLoadPending) {
+                            return;
+                        }
+                        this._sortableLoadPending = true;
+                        this.ensureSortableLoaded().then(() => {
+                            this._sortableLoadPending = false;
+                            this.$nextTick(() => this.initTodoSortable());
+                        }).catch((err) => {
+                            this._sortableLoadPending = false;
+                            console.error('Failed to load Sortable for Todo List:', err);
+                        });
                         return;
                     }
                     if (this.todoSortableInstance && this.todoSortableInstance.el === listBody) {

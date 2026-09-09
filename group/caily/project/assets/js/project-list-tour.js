@@ -417,6 +417,15 @@
     }
 
     function init() {
+        if (window.__projectListTourExternalBoot) {
+            // Button bound by project-list.js; still auto-start once when assets load.
+            maybeAutoStart();
+            if (typeof i18next !== 'undefined' && i18next.on) {
+                i18next.on('languageChanged', updateTourButtonTitle);
+            }
+            updateTourButtonTitle();
+            return;
+        }
         bindTourButton();
         maybeAutoStart();
         if (typeof i18next !== 'undefined' && i18next.on) {

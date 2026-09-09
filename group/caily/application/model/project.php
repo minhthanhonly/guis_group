@@ -296,6 +296,138 @@ class Project extends ApplicationModel {
     /**
      * Attach favorites, members, confirmation notes, task counts in batched queries (avoids per-row subqueries).
      */
+    /**
+     * Pack format: noteId_:_content_|_noteId_:_content_|_...
+     * Keep HTML content for list rendering; only cap how many notes are sent.
+     */
+    private function slimPackedConfirmationNotes($packed, $maxNotes = 8) {
+        if ($packed === null || $packed === '') {
+            return '';
+        }
+        $notes = explode('_|_', (string) $packed);
+        $out = array();
+        $n = 0;
+        foreach ($notes as $note) {
+            if ($n >= $maxNotes) {
+                break;
+            }
+            $raw = trim((string) $note);
+            if ($raw === '') {
+                continue;
+            }
+            $parts = explode('_:_', $raw, 3);
+            if (count($parts) < 2) {
+                continue;
+            }
+            $id = $parts[0];
+            $content = isset($parts[1]) ? (string) $parts[1] : '';
+            $important = isset($parts[2]) ? $parts[2] : '0';
+            $out[] = $id . '_:_' . $content . '_:_' . $important;
+            $n++;
+        }
+        return implode('_|_', $out);
+    }
+
+    private function slimNotesByDisplayColumnForList($notesByCol) {
+        if (!is_array($notesByCol) || empty($notesByCol)) {
+            return array();
+        }
+        $out = array();
+        foreach ($notesByCol as $col => $notes) {
+            if (!is_array($notes)) {
+                continue;
+            }
+            $colOut = array();
+            $n = 0;
+            foreach ($notes as $note) {
+                if ($n >= 5) {
+                    break;
+                }
+                if (!is_array($note)) {
+                    continue;
+                }
+                $colOut[] = array(
+                    'id' => isset($note['id']) ? $note['id'] : '',
+                    // Keep HTML — list UI renders ql-editor / tooltips from original markup
+                    'content' => isset($note['content']) ? $note['content'] : '',
+                    'is_important' => isset($note['is_important']) ? $note['is_important'] : 0,
+                );
+                $n++;
+            }
+            if (!empty($colOut)) {
+                $out[$col] = $colOut;
+            }
+        }
+        return $out;
+    }
+
+    private function slimCustomFieldsForList($raw) {
+        if ($raw === null || $raw === '') {
+            return '';
+        }
+        $decoded = is_array($raw) ? $raw : json_decode((string) $raw, true);
+        if (!is_array($decoded)) {
+            return is_string($raw) ? $raw : '';
+        }
+        $slim = array();
+        foreach ($decoded as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $label = isset($item['label']) ? trim((string) $item['label']) : '';
+            if ($label === '') {
+                continue;
+            }
+            $val = array_key_exists('value', $item) ? $item['value'] : '';
+            if ($val === null || $val === '' || $val === array()) {
+                continue;
+            }
+            if (is_string($val)) {
+                // Keep raw string (may include simple markup); only hard-cap extreme size
+                if (function_exists('mb_strlen') && mb_strlen($val, 'UTF-8') > 2000) {
+                    $val = mb_substr($val, 0, 2000, 'UTF-8') . '…';
+                } elseif (strlen($val) > 2000) {
+                    $val = substr($val, 0, 2000) . '…';
+                }
+            }
+            $slim[] = array('label' => $label, 'value' => $val);
+        }
+        if (empty($slim)) {
+            return '';
+        }
+        return json_encode($slim, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Drop/trim heavy fields not needed to render the DataTable row.
+     * Full description / note HTML is loaded via getById or note edit APIs.
+     */
+    private function slimProjectListPayload(array &$data) {
+        foreach ($data as &$project) {
+            unset($project['description']);
+            unset($project['parent_requests']);
+            // Large / unused on list surface
+            unset($project['actual_start_date'], $project['actual_end_date']);
+            unset($project['building_size'], $project['building_type']);
+            unset($project['contact_phone'], $project['branch_id']);
+            unset($project['department_custom_fields_set_id']);
+
+            if (isset($project['custom_fields'])) {
+                $project['custom_fields'] = $this->slimCustomFieldsForList($project['custom_fields']);
+            }
+            if (!empty($project['confirmation_notes_caily'])) {
+                $project['confirmation_notes_caily'] = $this->slimPackedConfirmationNotes($project['confirmation_notes_caily']);
+            }
+            if (!empty($project['confirmation_notes_guis'])) {
+                $project['confirmation_notes_guis'] = $this->slimPackedConfirmationNotes($project['confirmation_notes_guis']);
+            }
+            if (isset($project['notes_by_display_column'])) {
+                $project['notes_by_display_column'] = $this->slimNotesByDisplayColumnForList($project['notes_by_display_column']);
+            }
+        }
+        unset($project);
+    }
+
     private function attachProjectListAggregates(array &$data, $userId) {
         if (empty($data)) {
             return;
@@ -531,7 +663,7 @@ class Project extends ApplicationModel {
                 $month = $this->escape($_GET['filterEndMonth']);
                 $whereArr[] = "DATE_FORMAT(p.end_date, '%Y-%m') = '$month'";
             }
-            if ($this->canUserViewProjectDirectorListColumns($department_id)) {
+            if ($canViewDirectorColumns) {
                 if (isset($_GET['filterEstimateMonth']) && $_GET['filterEstimateMonth'] !== '') {
                     $month = $this->escape($_GET['filterEstimateMonth']);
                     $whereArr[] = "DATE_FORMAT(p.estimate_date, '%Y-%m') = '$month'";
@@ -848,6 +980,8 @@ class Project extends ApplicationModel {
             }
         }
         unset($project);
+
+        $this->slimProjectListPayload($data);
 
         return array(
             'draw' => $draw,
