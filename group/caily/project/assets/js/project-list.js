@@ -52,6 +52,25 @@ var projectTable;
     function withAppLoader() {
         return window.AppLoader || null;
     }
+    /** Business document Vue mixin — defer sync parse; gate createApp on this. */
+    (function startBdMixinLoad() {
+        var loader = withAppLoader();
+        var root = projectListAssetRoot();
+        var pcv = projectListProjectCacheV();
+        var url = root + 'project/assets/js/business-document-modal-mixin.js' + (pcv ? ('?v=' + pcv) : '');
+        if (loader && typeof loader.loadScript === 'function') {
+            window.__bdMixinReady = loader.loadScript(url);
+        } else {
+            window.__bdMixinReady = new Promise(function(resolve, reject) {
+                var s = document.createElement('script');
+                s.src = url;
+                s.onload = function() { resolve(); };
+                s.onerror = function() { reject(new Error('Failed to load business-document-modal-mixin.js')); };
+                document.head.appendChild(s);
+            });
+        }
+    })();
+
 
     /** Quill CSS+JS — only needed for note modal / quick-edit description. */
     function ensureProjectListQuill() {
@@ -397,284 +416,51 @@ var projectTable;
     var projectListResizeDepartmentId = null;
     var scrollRestoreApplied = false;
     var projectListBackNavigationHandled = false;
-    var isProjectListExporting = false;
-    var projectListExcelButtons = null;
+    /** Class on UI-only badges stripped during Excel export (shared with project-list-excel.js). */
     var REMOVE_FOR_EXCEL_CLASS = 'removeForExcel';
-
-    function isProjectListExcelExportAvailable() {
-        return typeof $ !== 'undefined'
-            && !!($.fn && $.fn.dataTable && $.fn.dataTable.Buttons);
-    }
-
-    function parseTeamLabelsFromExportHtml(inner) {
-        if (!inner) return [];
-        inner = String(inner);
-        if (inner.indexOf('<') === -1) {
-            var plain = inner.trim();
-            return plain ? [plain] : [];
+    /** Excel export — lazy-loaded from project-list-excel.js */
+    function ensureProjectListExcelModule() {
+        if (window.ProjectListExcelInstalled) {
+            return Promise.resolve();
         }
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(inner, 'text/html');
-        var labels = [];
-        doc.querySelectorAll('.badge').forEach(function(el) {
-            var text = (el.textContent || '').replace(/\s+/g, ' ').trim();
-            if (text) labels.push(text);
+        if (window.__projectListExcelLoading) {
+            return window.__projectListExcelLoading;
+        }
+        var loader = withAppLoader();
+        if (!loader) {
+            return Promise.reject(new Error('AppLoader missing'));
+        }
+        var root = projectListAssetRoot();
+        var pcv = projectListProjectCacheV();
+        window.__projectListExcelLoading = loader.loadScript(
+            root + 'project/assets/js/project-list-excel.js' + (pcv ? ('?v=' + pcv) : '')
+        ).then(function() {
+            window.__projectListExcelLoading = null;
         });
-        return labels;
-    }
-
-    function formatTeamsForExcelExport(rowIndex, innerHtml) {
-        var data = null;
-        if (projectTable && typeof rowIndex === 'number') {
-            try {
-                var rowData = projectTable.row(rowIndex).data();
-                data = rowData && rowData.teams;
-            } catch (e) {}
-        }
-        if (!data || data === '') {
-            var labelsFromHtml = parseTeamLabelsFromExportHtml(innerHtml);
-            var unassignedLabel = typeof translateText === 'function' ? translateText('未割り当て') : '未割り当て';
-            if (labelsFromHtml.length) {
-                if (labelsFromHtml.length === 1 && labelsFromHtml[0] === unassignedLabel) {
-                    return unassignedLabel;
-                }
-                return labelsFromHtml.join(', ');
-            }
-            return unassignedLabel;
-        }
-        var ids = typeof data === 'string'
-            ? data.split(',').map(function(item) { return item.trim(); }).filter(Boolean)
-            : [String(data)];
-        if (!ids.length) {
-            return typeof translateText === 'function' ? translateText('未割り当て') : '未割り当て';
-        }
-        return ids.map(function(id) {
-            var label = teamIdToName[id] || id;
-            return String(label).replace(/CL意匠/g, 'CL_').replace(/G意匠/g, 'G_');
-        }).join(', ');
-    }
-
-    function parseConfirmationNotesRawForExport(cellData) {
-        if (!cellData || cellData === '') return '';
-        var notes = String(cellData).split('_|_').filter(function(note) {
-            return note.trim() !== '';
-        });
-        if (!notes.length) return '';
-        var texts = notes.map(function(note) {
-            var arr = note.trim().split('_:_');
-            var text = arr.length > 1 ? arr[1] : note.trim();
-            var decoded = decodeHtmlForNote(text);
-            decoded = (decoded || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
-            return decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
-        }).filter(function(text) {
-            return text && text !== '-';
-        });
-        return texts.join('\n');
-    }
-
-    function parseConfirmationNotesFromExportHtml(inner) {
-        if (!inner) return '';
-        inner = String(inner);
-        if (inner.indexOf('<') === -1) {
-            var plain = inner.trim();
-            return plain === '-' ? '' : plain;
-        }
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(inner, 'text/html');
-        var texts = [];
-        doc.querySelectorAll('.note-text').forEach(function(el) {
-            var text = (el.textContent || '').replace(/\s+/g, ' ').trim();
-            if (text && text !== '-') texts.push(text);
-        });
-        return texts.join('\n');
-    }
-
-    function formatConfirmationNotesForExcelExport(rowIndex, innerHtml, fieldName) {
-        var data = null;
-        if (projectTable && typeof rowIndex === 'number' && fieldName) {
-            try {
-                var rowData = projectTable.row(rowIndex).data();
-                data = rowData && rowData[fieldName];
-            } catch (e) { /* ignore */ }
-        }
-        var fromRaw = parseConfirmationNotesRawForExport(data);
-        if (fromRaw) return fromRaw;
-        return parseConfirmationNotesFromExportHtml(innerHtml);
-    }
-
-    function getProjectListExcelExportOptions() {
-        return {
-            columns: function(idx) {
-                if (!projectTable) return false;
-                var col = projectTable.column(idx);
-                var name = '';
-                try {
-                    name = typeof col.name === 'function' ? col.name() : '';
-                } catch (e) {}
-                if (!name && projectTable.settings()[0] && projectTable.settings()[0].aoColumns[idx]) {
-                    name = projectTable.settings()[0].aoColumns[idx].name || '';
-                }
-                if (name === 'is_favorite') return false;
-                if (isProjectDirectorColumn(name) && !canViewProjectDirectorColumns()) return false;
-                return col.visible();
-            },
-            format: {
-                body: function(inner, row, column) {
-                    var colName = '';
-                    if (projectTable) {
-                        try {
-                            colName = projectTable.column(column).name() || '';
-                        } catch (e) {}
-                        if (!colName && projectTable.settings()[0] && projectTable.settings()[0].aoColumns[column]) {
-                            colName = projectTable.settings()[0].aoColumns[column].name || '';
-                        }
-                    }
-                    if (colName === 'teams') {
-                        return formatTeamsForExcelExport(row, inner);
-                    }
-                    if (colName === 'confirmation_notes_caily') {
-                        return formatConfirmationNotesForExcelExport(row, inner, 'confirmation_notes_caily');
-                    }
-                    if (colName === 'confirmation_notes_guis') {
-                        return formatConfirmationNotesForExcelExport(row, inner, 'confirmation_notes_guis');
-                    }
-                    return stripHtmlForExport(inner);
-                }
-            }
-        };
-    }
-
-    function applyProjectListExcelBorders(xlsx) {
-        if (!xlsx || !xlsx.xl || typeof $ === 'undefined') return;
-        var styleSheet = xlsx.xl['styles.xml'];
-        var sheet = null;
-        var worksheetKeys = xlsx.xl.worksheets ? Object.keys(xlsx.xl.worksheets) : [];
-        if (worksheetKeys.length) {
-            sheet = xlsx.xl.worksheets[worksheetKeys[0]];
-        }
-        if (!sheet || !styleSheet) return;
-
-        var styleCache = {};
-
-        function getBorderedStyle(styleIndex) {
-            styleIndex = parseInt(styleIndex || '0', 10);
-            if (styleCache[styleIndex] !== undefined) {
-                return styleCache[styleIndex];
-            }
-
-            var baseXf = $('cellXfs xf', styleSheet).eq(styleIndex);
-            var fontId = baseXf.attr('fontId') || '0';
-            var fillId = baseXf.attr('fillId') || '0';
-            var numFmtId = baseXf.attr('numFmtId') || '0';
-            var xfId = baseXf.attr('xfId') || '0';
-            var extraAttrs = '';
-            if (baseXf.attr('applyFont')) extraAttrs += ' applyFont="1"';
-            if (baseXf.attr('applyFill')) extraAttrs += ' applyFill="1"';
-            if (baseXf.attr('applyNumberFormat')) extraAttrs += ' applyNumberFormat="1"';
-            if (baseXf.attr('applyAlignment')) extraAttrs += ' applyAlignment="1"';
-
-            var borderId = $('border', styleSheet).length;
-            $('borders', styleSheet).append(
-                '<border><left style="thin"><color auto="1"/></left>' +
-                '<right style="thin"><color auto="1"/></right>' +
-                '<top style="thin"><color auto="1"/></top>' +
-                '<bottom style="thin"><color auto="1"/></bottom></border>'
-            );
-            $('borders', styleSheet).attr('count', borderId + 1);
-
-            var newIndex = $('cellXfs xf', styleSheet).length;
-            $('cellXfs', styleSheet).append(
-                '<xf numFmtId="' + numFmtId + '" fontId="' + fontId + '" fillId="' + fillId +
-                '" borderId="' + borderId + '" xfId="' + xfId + '"' + extraAttrs + ' applyBorder="1"/>'
-            );
-            $('cellXfs', styleSheet).attr('count', newIndex + 1);
-            styleCache[styleIndex] = newIndex;
-            return newIndex;
-        }
-
-        $('row c', sheet).each(function() {
-            var cell = $(this);
-            cell.attr('s', getBorderedStyle(cell.attr('s')));
-        });
-    }
-
-    function getProjectListExcelButtonConfig() {
-        return {
-            extend: 'excel',
-            className: 'buttons-project-excel-export d-none',
-            title: '',
-            filename: function() {
-                return getProjectListExcelFilename();
-            },
-            exportOptions: getProjectListExcelExportOptions(),
-            customize: function(xlsx) {
-                applyProjectListExcelBorders(xlsx);
-            }
-        };
-    }
-
-    function destroyProjectListExcelButtons() {
-        if (projectListExcelButtons) {
-            try {
-                projectListExcelButtons.destroy();
-            } catch (e) {
-                /* ignore */
-            }
-            projectListExcelButtons = null;
-        }
+        return window.__projectListExcelLoading;
     }
 
     function ensureProjectListExcelButtons(dt) {
-        if (!dt || !isProjectListExcelExportAvailable()) {
-            return false;
+        if (typeof window.__ensureProjectListExcelButtonsImpl === 'function') {
+            return window.__ensureProjectListExcelButtonsImpl(dt);
         }
-        destroyProjectListExcelButtons();
-        projectListExcelButtons = new $.fn.dataTable.Buttons(dt, {
-            buttons: [getProjectListExcelButtonConfig()]
-        });
-        return true;
+        // initComplete: no-op until user exports (avoid blocking / early excel parse)
+        return false;
     }
 
-    function stripHtmlForExport(inner) {
-        if (inner === null || inner === undefined) return '';
-        inner = String(inner);
-        if (!inner.length) return inner;
-        if (inner.indexOf('<') === -1) return inner.trim();
-        var parser = new DOMParser();
-        var doc = parser.parseFromString(inner, 'text/html');
-        doc.querySelectorAll('.' + REMOVE_FOR_EXCEL_CLASS).forEach(function(el) {
-            el.remove();
-        });
-        return (doc.body.textContent || doc.body.innerText || '').replace(/\s+/g, ' ').trim();
-    }
-
-    function getProjectListExcelFilename() {
-        var depName = (app && app.selectedDepartment && app.selectedDepartment.name)
-            ? String(app.selectedDepartment.name).replace(/[\\/:*?"<>|]/g, '_')
-            : 'project_list';
-        var stamp = (typeof moment !== 'undefined') ? moment().format('YYYYMMDD_HHmmss') : String(Date.now());
-        return depName + '_' + stamp;
+    function destroyProjectListExcelButtons() {
+        if (typeof window.__destroyProjectListExcelButtonsImpl === 'function') {
+            window.__destroyProjectListExcelButtonsImpl();
+        }
     }
 
     function exportProjectListToExcel() {
-        if (isProjectListExporting) return;
-        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
-            if (typeof showMessage === 'function') {
-                showProjectListError('テーブルが読み込まれていません。');
+        ensureProjectListExcelModule().then(function() {
+            if (typeof window.__exportProjectListToExcelImpl === 'function') {
+                window.__exportProjectListToExcelImpl();
             }
-            return;
-        }
-        if (!isProjectListExcelExportAvailable()) {
-            if (typeof showMessage === 'function') {
-                showProjectListError('Excel出力機能が利用できません。');
-            }
-            return;
-        }
-
-        ensureProjectListJszip().then(function() {
-            exportProjectListToExcelAfterJszip();
         }).catch(function(err) {
-            console.error('Failed to load JSZip:', err);
+            console.error('Failed to load project list Excel module:', err);
             if (typeof showMessage === 'function') {
                 showProjectListError('Excel出力機能が利用できません。');
             }
@@ -682,78 +468,49 @@ var projectTable;
     }
 
     function exportProjectListToExcelAfterJszip() {
-        var dt = projectTable;
-        if (!ensureProjectListExcelButtons(dt)) {
-            if (typeof showMessage === 'function') {
-                showProjectListError('Excel出力機能が利用できません。');
-            }
-            return;
+        if (typeof window.__exportProjectListToExcelAfterJszipImpl === 'function') {
+            window.__exportProjectListToExcelAfterJszipImpl();
         }
-
-        isProjectListExporting = true;
-        if (app) app.loading = true;
-
-        var pageInfo = dt.page.info();
-        var oldStart = pageInfo.start;
-        var oldLength = dt.page.len();
-        var exportLength = pageInfo.recordsDisplay || pageInfo.recordsTotal || oldLength;
-        if (!exportLength || exportLength < 1) {
-            isProjectListExporting = false;
-            if (app) app.loading = false;
-            if (typeof showMessage === 'function') {
-                showProjectListError('出力するデータがありません。');
-            }
-            return;
-        }
-        var restored = false;
-
-        function restorePagination() {
-            if (restored) return;
-            restored = true;
-            dt.one('preXhr', function(e, settings, data) {
-                data.start = oldStart;
-                data.length = oldLength;
-            });
-            dt.one('draw', function() {
-                isProjectListExporting = false;
-                if (app) app.loading = false;
-            });
-            dt.ajax.reload(null, false);
-        }
-
-        dt.one('preXhr', function(e, settings, data) {
-            data.start = 0;
-            data.length = exportLength;
-        });
-
-        dt.one('error.dt', function() {
-            if (!restored) {
-                isProjectListExporting = false;
-                if (app) app.loading = false;
-                if (typeof showMessage === 'function') {
-                    showProjectListError('Excel出力に失敗しました。');
-                }
-            }
-        });
-
-        dt.one('draw', function() {
-            try {
-                dt.button(0).trigger();
-            } catch (err) {
-                console.error('Excel export failed:', err);
-                if (typeof showMessage === 'function') {
-                    showProjectListError('Excel出力に失敗しました。', err);
-                }
-                isProjectListExporting = false;
-                if (app) app.loading = false;
-                restored = true;
-                return;
-            }
-            restorePagination();
-        });
-
-        dt.ajax.reload();
     }
+
+    /** Quick Edit modal — lazy-loaded from project-list-quick-edit.js */
+    function ensureProjectListQuickEditModule() {
+        if (window.ProjectListQuickEditInstalled
+            && typeof window.__openQuickEditProjectModalImpl === 'function') {
+            return Promise.resolve();
+        }
+        if (window.__projectListQuickEditLoading) {
+            return window.__projectListQuickEditLoading;
+        }
+        var loader = withAppLoader();
+        if (!loader) {
+            return Promise.reject(new Error('AppLoader missing'));
+        }
+        var root = projectListAssetRoot();
+        var pcv = projectListProjectCacheV();
+        window.__projectListQuickEditLoading = loader.loadScript(
+            root + 'project/assets/js/project-list-quick-edit.js' + (pcv ? ('?v=' + pcv) : '')
+        ).then(function() {
+            if (typeof window.installProjectListQuickEdit === 'function') {
+                window.installProjectListQuickEdit();
+            }
+            window.__projectListQuickEditLoading = null;
+        });
+        return window.__projectListQuickEditLoading;
+    }
+
+    window.openQuickEditProjectModal = function(projectId, isManagerOnly) {
+        ensureProjectListQuickEditModule().then(function() {
+            if (typeof window.__openQuickEditProjectModalImpl === 'function') {
+                window.__openQuickEditProjectModalImpl(projectId, isManagerOnly);
+            }
+        }).catch(function(err) {
+            console.error('Failed to load project list Quick Edit module:', err);
+            if (typeof showMessage === 'function') {
+                showProjectListError('クイック編集の読み込みに失敗しました。');
+            }
+        });
+    };
 
     function isBackForwardNavigation(event) {
         if (event && event.persisted) {
@@ -6202,500 +5959,7 @@ var projectTable;
             });
         }
 
-        // Quick Edit Tagify instances (destroy on each open, re-init after load)
-        let quickEditOrderTypeTagify = null, quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
-        let quickEditQuillInstance = null;
-        let quickEditIsManagerOnly = false;
-        let quickEditOriginalStatus = '';
-        let quickEditOriginalCailyNoukiStatus = '';
-        let quickEditOriginalGuisNoukiStatus = '';
-        let quickEditShareContext = null;
-        let quickEditEstimateStatus = '未発行';
-        let quickEditInvoiceStatus = '未発行';
-
-        function getQuickEditYoteiDraft() {
-            return {
-                from_month: ($('#quickEditYoteiFromMonth').val() || '').trim(),
-                from_part: ($('#quickEditYoteiFromPart').val() || '').trim(),
-                to_month: ($('#quickEditYoteiToMonth').val() || '').trim(),
-                to_part: ($('#quickEditYoteiToPart').val() || '').trim()
-            };
-        }
-
-        function destroyQuickEditYoteiMonthPickers() {
-            if (typeof window.YoteiField === 'undefined') return;
-            window.YoteiField.destroyMonthPicker(document.getElementById('quickEditYoteiFromMonth'));
-            window.YoteiField.destroyMonthPicker(document.getElementById('quickEditYoteiToMonth'));
-        }
-
-        function initQuickEditYoteiMonthPickers() {
-            if (typeof window.YoteiField === 'undefined') return;
-            window.YoteiField.initMonthPicker(
-                document.getElementById('quickEditYoteiFromMonth'),
-                function() { return ($('#quickEditYoteiFromMonth').val() || '').trim(); },
-                function(ym) { $('#quickEditYoteiFromMonth').val(ym || ''); refreshQuickEditYoteiPreview(); }
-            );
-            window.YoteiField.initMonthPicker(
-                document.getElementById('quickEditYoteiToMonth'),
-                function() { return ($('#quickEditYoteiToMonth').val() || '').trim(); },
-                function(ym) {
-                    $('#quickEditYoteiToMonth').val(ym || '');
-                    if (!ym) $('#quickEditYoteiToPart').val('');
-                    refreshQuickEditYoteiPreview();
-                }
-            );
-        }
-
-        function refreshQuickEditYoteiPreview() {
-            var draft = getQuickEditYoteiDraft();
-            var text = (typeof window.YoteiField !== 'undefined') ? window.YoteiField.buildDisplay(draft) : '';
-            $('#quickEditYoteiPreview').text(text || '');
-            var hasTo = !!draft.to_month;
-            $('#quickEditYoteiToPart').prop('disabled', !hasTo);
-            if (!hasTo) $('#quickEditYoteiToPart').val('');
-        }
-
-        function setQuickEditYoteiFromProject(yotei) {
-            var parsed = (typeof window.YoteiField !== 'undefined')
-                ? window.YoteiField.parse(yotei)
-                : { from_month: '', from_part: '', to_month: '', to_part: '' };
-            $('#quickEditYoteiFromMonth').val(parsed.from_month || '');
-            $('#quickEditYoteiFromPart').val(parsed.from_part || '');
-            $('#quickEditYoteiToMonth').val(parsed.to_month || '');
-            $('#quickEditYoteiToPart').val(parsed.to_part || '');
-            $('#quickEditYoteiError').text('');
-            $('#quickEditYoteiFromMonth, #quickEditYoteiToMonth').removeClass('is-invalid');
-            destroyQuickEditYoteiMonthPickers();
-            initQuickEditYoteiMonthPickers();
-            if (typeof window.YoteiField !== 'undefined') {
-                window.YoteiField.setMonthPickerValue(document.getElementById('quickEditYoteiFromMonth'), parsed.from_month || '');
-                window.YoteiField.setMonthPickerValue(document.getElementById('quickEditYoteiToMonth'), parsed.to_month || '');
-            }
-            refreshQuickEditYoteiPreview();
-            if (typeof window.applyDataI18n === 'function') {
-                var wrap = document.getElementById('quickEditProjectForm');
-                if (wrap) window.applyDataI18n(wrap);
-            }
-        }
-
-        function clearQuickEditYotei() {
-            $('#quickEditYoteiFromMonth').val('');
-            $('#quickEditYoteiFromPart').val('');
-            $('#quickEditYoteiToMonth').val('');
-            $('#quickEditYoteiToPart').val('');
-            $('#quickEditYoteiError').text('');
-            $('#quickEditYoteiFromMonth, #quickEditYoteiToMonth').removeClass('is-invalid');
-            if (typeof window.YoteiField !== 'undefined') {
-                window.YoteiField.setMonthPickerValue(document.getElementById('quickEditYoteiFromMonth'), '');
-                window.YoteiField.setMonthPickerValue(document.getElementById('quickEditYoteiToMonth'), '');
-            }
-            refreshQuickEditYoteiPreview();
-        }
-
-        $(document)
-            .off('click.quickEditYotei', '#quickEditYoteiClear')
-            .on('click.quickEditYotei', '#quickEditYoteiClear', function() { clearQuickEditYotei(); })
-            .off('input.quickEditYotei change.quickEditYotei', '#quickEditYoteiFromMonth, #quickEditYoteiFromPart, #quickEditYoteiToMonth, #quickEditYoteiToPart')
-            .on('input.quickEditYotei change.quickEditYotei', '#quickEditYoteiFromMonth, #quickEditYoteiFromPart, #quickEditYoteiToMonth, #quickEditYoteiToPart', function() {
-                refreshQuickEditYoteiPreview();
-            });
-
-        function destroyQuickEditQuill() {
-            if (quickEditQuillInstance) {
-                try {
-                    if (typeof quickEditQuillInstance.setText === 'function') quickEditQuillInstance.setText('');
-                    if (typeof quickEditQuillInstance.destroy === 'function') quickEditQuillInstance.destroy();
-                } catch (e) {}
-                quickEditQuillInstance = null;
-            }
-            var quillContainer = document.getElementById('quickEditQuillDescription');
-            if (quillContainer) {
-                var parent = quillContainer.parentElement;
-                if (parent) {
-                    var toolbar = parent.querySelector('.ql-toolbar');
-                    if (toolbar) toolbar.remove();
-                    parent.querySelectorAll('.ql-container, .ql-editor').forEach(function(el) {
-                        if (el !== quillContainer) el.remove();
-                    });
-                }
-                quillContainer.innerHTML = '';
-                quillContainer.className = 'custom_editor_content';
-                quillContainer.setAttribute('id', 'quickEditQuillDescription');
-                quillContainer.removeAttribute('contenteditable');
-                quillContainer.removeAttribute('data-gramm');
-                quillContainer.removeAttribute('data-gramm_editor');
-                quillContainer.removeAttribute('data-enable-grammarly');
-            }
-        }
-        function destroyQuickEditTagify() {
-            [quickEditOrderTypeTagify, quickEditTeamTagify, quickEditManagerTagify, quickEditMembersTagify].forEach(function(t) {
-                if (t && typeof t.destroy === 'function') { try { t.destroy(); } catch (e) {} }
-            });
-            quickEditOrderTypeTagify = quickEditTeamTagify = quickEditManagerTagify = quickEditMembersTagify = null;
-            // Clear value các input Tagify trước khi load dự án mới
-            $('#quickEditProjectOrderType, #quickEditTeamTags, #quickEditManagerTags, #quickEditMembersTags').val('');
-        }
-
-        function getQuickEditOrderTypeValue() {
-            if (quickEditOrderTypeTagify && Array.isArray(quickEditOrderTypeTagify.value)) {
-                return quickEditOrderTypeTagify.value.map(function(t) { return t.value; }).join(',');
-            }
-            return ($('#quickEditProjectOrderType').val() || '').toString().trim();
-        }
-
-        function setQuickEditOrderTypeInvalid(isInvalid) {
-            var $input = $('#quickEditProjectOrderType');
-            var $tagify = $input.next('.tagify');
-            if (!$tagify.length) $tagify = $input.parent().find('.tagify').first();
-            $input.toggleClass('is-invalid', !!isInvalid);
-            if ($tagify.length) $tagify.toggleClass('is-invalid', !!isInvalid);
-        }
-
-        // Quick Edit Project Modal: open and save (isManagerOnly = true: chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー)
-        window.openQuickEditProjectModal = function(projectId, isManagerOnly) {
-            quickEditIsManagerOnly = !!isManagerOnly;
-            var $form = $('#quickEditProjectForm');
-            if (quickEditIsManagerOnly) $form.addClass('quick-edit-manager-only-mode'); else $form.removeClass('quick-edit-manager-only-mode');
-            destroyQuickEditTagify();
-            var modalEl = document.getElementById('quickEditProjectModal');
-            var quickEditModal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            quickEditModal.show();
-            $('#quickEditModalLoading').removeClass('d-none');
-
-            var quillReady = ensureProjectListQuill().catch(function(err) {
-                console.error('Failed to load Quill for quick edit:', err);
-            });
-            var flatpickrReady = (typeof window.ensureFlatpickr === 'function')
-                ? window.ensureFlatpickr().catch(function(err) {
-                    console.error('Failed to load Flatpickr for quick edit:', err);
-                })
-                : Promise.resolve();
-
-            axios.get('/api/index.php?model=project&method=getById&id=' + projectId).then(function(res) {
-                const p = res.data && res.data.data ? res.data.data : (res.data || {});
-                return Promise.all([quillReady, flatpickrReady]).then(function() { return p; });
-            }).then(function(p) {
-                const effectiveId = p.id || projectId;
-                $('#quickEditProjectId').val(effectiveId);
-                $('#quickEditProjectIdBadge').text('#' + effectiveId);
-                $('#quickEditProjectVersion').val(normalizeProjectVersion(p.version));
-                $('#quickEditName').val(p.name || '');
-                var datetimePlaceholder = getProjectDateTimePlaceholder();
-                $('#quickEditStartDate, #quickEditEndDate, #quickEditCailyNouki, #quickEditGuisNouki')
-                    .attr('placeholder', datetimePlaceholder);
-                $('#quickEditStartDate').val(toProjectDateTimeInputValue(p.start_date));
-                $('#quickEditEndDate').val(toProjectDateTimeInputValue(p.end_date));
-                setQuickEditYoteiFromProject(p.yotei);
-                quickEditOriginalStatus = p.status || 'draft';
-                quickEditOriginalCailyNoukiStatus = p.caily_nouki_status || '';
-                quickEditOriginalGuisNoukiStatus = p.guis_nouki_status || '';
-                quickEditShareContext = {
-                    energy_drawing_share_status: p.energy_drawing_share_status || '',
-                    has_energy_sibling: !!(p.has_energy_sibling === 1 || p.has_energy_sibling === '1' || p.has_energy_sibling === true),
-                    department_name: p.department_name || ''
-                };
-                quickEditEstimateStatus = p.estimate_status || '未発行';
-                quickEditInvoiceStatus = p.invoice_status || '未発行';
-                syncQuickEditStatusOptions(quickEditOriginalStatus);
-                $('#quickEditStatus').val(quickEditOriginalStatus);
-                var orderTypeVal = typeof p.project_order_type === 'string'
-                    ? p.project_order_type
-                    : (Array.isArray(p.project_order_type) ? (p.project_order_type || []).join(',') : '');
-                // Clear trước khi init Tagify (tránh parse value cũ → trùng tag)
-                $('#quickEditProjectOrderType').val('');
-                $('input[name="tantou"]').prop('checked', false);
-                if (p.tantou === 'CAILY') $('#quickEditTantouCaily').prop('checked', true);
-                else if (p.tantou === 'GUIS') $('#quickEditTantouGuis').prop('checked', true);
-                $('#quickEditTantouDisplayText').text(p.tantou || '—');
-                $('#quickEditCailyNouki').val(toProjectDateTimeInputValue(p.caily_nouki));
-                $('#quickEditGuisNouki').val(toProjectDateTimeInputValue(p.guis_nouki));
-                $('#quickEditCailyNoukiStatus').prop('checked', !!(p.caily_nouki_status && String(p.caily_nouki_status).indexOf('納品済み') !== -1));
-                $('#quickEditGuisNoukiStatus').prop('checked', !!(p.guis_nouki_status && String(p.guis_nouki_status).indexOf('納品済み') !== -1));
-                $('#quickEditProgress').val(p.progress != null && p.progress !== '' ? parseInt(p.progress, 10) : 0);
-                updateQuickEditNoukiRequiredIndicators();
-
-                // 説明 (description): Quill editor like parent_project edit child project modal (destroy + DOM cleanup để không sinh nhiều instance)
-                destroyQuickEditQuill();
-                var quickEditDescEl = document.getElementById('quickEditQuillDescription');
-                if (quickEditDescEl && window.Quill) {
-                    var existingToolbar = quickEditDescEl.parentElement && quickEditDescEl.parentElement.querySelector('.ql-toolbar');
-                    if (existingToolbar) existingToolbar.remove();
-                    if (quickEditDescEl.classList.contains('ql-container')) {
-                        quickEditDescEl.className = 'custom_editor_content';
-                        quickEditDescEl.setAttribute('id', 'quickEditQuillDescription');
-                    }
-                    quickEditDescEl.innerHTML = '';
-                    quickEditQuillInstance = new Quill(quickEditDescEl, {
-                        bounds: quickEditDescEl,
-                        placeholder: '説明を入力してください...',
-                        modules: {
-                            toolbar: [
-                                ['bold', 'italic', 'underline', 'strike'],
-                                [{ color: [] }, { background: [] }],
-                                ['blockquote', 'code-block'],
-                                [{ 'header': 1 }, { 'header': 2 }],
-                                [{ 'list': 'ordered'}, { 'list': 'bullet' }],
-                                [{ 'indent': '-1'}, { 'indent': '+1' }],
-                                [{ 'align': [] }],
-                                ['link'],
-                                ['clean']
-                            ]
-                        },
-                        theme: 'snow'
-                    });
-                    var descHtml = (p.description || '').toString().trim();
-                    if (descHtml) {
-                        descHtml = (typeof decodeHtmlEntities === 'function') ? decodeHtmlEntities(descHtml) : descHtml.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
-                        quickEditQuillInstance.root.innerHTML = descHtml;
-                    }
-                }
-
-                var depId = p.department_id || '';
-                var savedCustom = [];
-                try {
-                    var raw = p.custom_fields;
-                    if (typeof raw === 'string' && raw.indexOf('&quot;') !== -1) raw = raw.replace(/&quot;/g, '"');
-                    savedCustom = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
-                } catch (e) { savedCustom = []; }
-                var savedValueMap = {};
-                savedCustom.forEach(function(f) { if (f && f.label) savedValueMap[String(f.label).trim()] = f.value || ''; });
-
-                axios.get('/api/index.php?model=department&method=getCustomFields').then(function(cfRes) {
-                    var sets = cfRes.data || [];
-                    var mergedFields = [];
-                    // Filter sets by department_id (use strict comparison)
-                    sets.filter(function(s) { 
-                        return s && s.department_id != null && String(s.department_id) === String(depId); 
-                    }).forEach(function(s) {
-                        if (s.fields && Array.isArray(s.fields)) {
-                            s.fields.forEach(function(f) {
-                                if (f && f.label && !mergedFields.some(function(ex) { 
-                                    return ex.label && String(ex.label).trim() === String(f.label || '').trim(); 
-                                })) {
-                                    mergedFields.push({ 
-                                        label: f.label || '', 
-                                        type: f.type || 'text', 
-                                        options: f.options || '',
-                                        one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
-                                    });
-                                }
-                            });
-                        }
-                    });
-                    var $wrap = $('#quickEditCustomFieldsWrap');
-                    $wrap.empty();
-                    if (mergedFields.length === 0) {
-                        // No custom fields found, but don't hide the wrapper
-                        return;
-                    }
-                    mergedFields.forEach(function(f, idx) {
-                        var label = f.label;
-                        var type = f.type;
-                        // Ensure options is a string before calling trim()
-                        var options = (f.options != null ? String(f.options) : '').trim();
-                        var opts = options ? options.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-                        var val = savedValueMap[String(label).trim()] || '';
-                        var safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                        var labelText = (typeof translateText === 'function' ? translateText(safeLabel) : safeLabel);
-                        var isOneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
-                        var colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6';
-                        var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '">';
-                        
-                        html += '<label class="form-label">' + labelText + '</label>';
-                        if (type === 'textarea') {
-                            html += '<textarea class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" rows="3">' + (val ? String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '') + '</textarea>';
-                        } else if (type === 'select') {
-                            html += '<select class="form-select quickEditCustomInput" data-custom-label="' + safeLabel + '"><option value="">選択してください</option>';
-                            opts.forEach(function(opt) { html += '<option value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' selected' : '') + '>' + String(opt).replace(/</g, '&lt;') + '</option>'; });
-                            html += '</select>';
-                        } else if (type === 'radio') {
-                            opts.forEach(function(opt) {
-                                html += '<div class="form-check"><input class="form-check-input quickEditCustomRadio" type="radio" name="quickEditCustomRadio_' + idx + '" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
-                            });
-                        } else if (type === 'checkbox') {
-                            var arr = val ? String(val).split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-                            opts.forEach(function(opt) {
-                                var checked = arr.indexOf(opt) !== -1;
-                                var optText = (typeof translateText === 'function' ? translateText(String(opt).replace(/</g, '&lt;')) : String(opt).replace(/</g, '&lt;'));
-                                html += '<div class="form-check"><input class="form-check-input quickEditCustomCheckbox" type="checkbox" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (checked ? ' checked' : '') + '><label class="form-check-label">' + optText + '</label></div>';
-                            });
-                        } else if (type === 'datetime') {
-                            var datetimeVal = val ? toProjectDateTimeInputValue(val) : '';
-                            html += '<input type="text" class="form-control quickEditCustomInput quickEditCustomDatetime" data-custom-label="' + safeLabel + '" value="' + (datetimeVal ? String(datetimeVal).replace(/"/g, '&quot;') : '') + '" placeholder="' + datetimePlaceholder.replace(/"/g, '&quot;') + '" autocomplete="off">';
-                        } else {
-                            html += '<input type="text" class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '">';
-                        }
-                        html += '</div>';
-                        $wrap.append(html);
-                    });
-                    if (typeof $().flatpickr === 'function') {
-                        $wrap.find('.quickEditCustomDatetime').each(function() {
-                            initQuickEditFlatpickr(this, { defaultHour: getCustomFieldDefaultHour(), defaultMinute: 0 });
-                        });
-                    }
-                }).catch(function(err) { 
-                    console.error('Error loading custom fields:', err);
-                    $('#quickEditCustomFieldsWrap').empty(); 
-                });
-
-                if (typeof $().flatpickr === 'function') {
-                    var fpOnChangeNouki = function() { updateQuickEditNoukiRequiredIndicators(); };
-                    initQuickEditFlatpickr('#quickEditStartDate', { defaultHour: getStartDateDefaultHour(), defaultMinute: 0 });
-                    initQuickEditFlatpickr('#quickEditEndDate', {
-                        defaultHour: getDeadlineDefaultHour(),
-                        defaultMinute: 0,
-                        onChange: fpOnChangeNouki
-                    });
-                    ['#quickEditCailyNouki', '#quickEditGuisNouki'].forEach(function(sel) {
-                        initQuickEditFlatpickr(sel, {
-                            defaultHour: getDeadlineDefaultHour(),
-                            defaultMinute: 0,
-                            onChange: fpOnChangeNouki
-                        });
-                    });
-                    updateQuickEditNoukiRequiredIndicators();
-                }
-
-                // Load team list, project members, department users then init Tagify
-                const teamIdsStr = (p.teams || '').toString().trim();
-                Promise.all([
-                    teamIdsStr ? axios.get('/api/index.php?model=team&method=listbyids&ids=' + teamIdsStr.split(',').map(function(id) { return id.trim(); }).filter(Boolean).join(',')) : Promise.resolve({ data: [] }),
-                    axios.get('/api/index.php?model=project&method=getMembers&project_id=' + projectId).catch(function() { return { data: [] }; }),
-                    depId ? axios.get('/api/index.php?model=department&method=get_users&department_id=' + depId).catch(function() { return { data: [] }; }) : Promise.resolve({ data: [] }),
-                    axios.get('/api/index.php?model=team&method=list').catch(function() { return { data: [] }; })
-                ]).then(function(results) {
-                    const teamList = (results[0].data && Array.isArray(results[0].data)) ? results[0].data : [];
-                    const membersRaw = results[1].data || [];
-                    const managersRaw = membersRaw.filter(function(m) { return m && m.role === 'manager'; });
-                    const managerIds = managersRaw.map(function(m) { return m.user_id; });
-                    const membersOnly = membersRaw.filter(function(m) { return m && m.role === 'member' && managerIds.indexOf(m.user_id) === -1; });
-                    const departmentUsers = (results[2].data && Array.isArray(results[2].data)) ? results[2].data : [];
-                    const allTeams = (results[3].data && Array.isArray(results[3].data)) ? results[3].data : [];
-                    const departmentTeams = depId ? allTeams.filter(function(t) { return String(t.department_id) === String(depId); }) : allTeams;
-
-                    if (!window.Tagify) {
-                        $('#quickEditProjectOrderType').val(orderTypeVal || '');
-                        $('#quickEditModalLoading').addClass('d-none');
-                        return;
-                    }
-
-                    // Clear trước khi gán tag mới, tránh giữ tag của dự án cũ
-                    $('#quickEditProjectOrderType, #quickEditTeamTags, #quickEditManagerTags, #quickEditMembersTags').val('');
-
-                    // 受注形態 Tagify (giống parent_project 案件依頼編集)
-                    const orderTypeInput = document.getElementById('quickEditProjectOrderType');
-                    if (orderTypeInput) {
-                        if (orderTypeInput.tagify) {
-                            try { orderTypeInput.tagify.destroy(); } catch (e) {}
-                        }
-                        orderTypeInput.value = '';
-                        quickEditOrderTypeTagify = new window.Tagify(orderTypeInput, {
-                            whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
-                            maxTags: 5,
-                            dropdown: {
-                                maxItems: 20,
-                                classname: 'tags-look-project-order-type',
-                                enabled: 0,
-                                closeOnSelect: true
-                            }
-                        });
-                        if (orderTypeVal && String(orderTypeVal).trim() !== '') {
-                            quickEditOrderTypeTagify.addTags(String(orderTypeVal).trim());
-                        }
-                    }
-
-                    const teamInput = document.getElementById('quickEditTeamTags');
-                    if (teamInput) {
-                        teamInput.value = '';
-                        quickEditTeamTagify = new window.Tagify(teamInput, {
-                            whitelist: departmentTeams.map(function(t) { return { value: t.name, id: t.id }; }),
-                            enforceWhitelist: false,
-                            dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
-                        });
-                        quickEditTeamTagify.addTags(teamList.map(function(t) { return { value: t.name, id: t.id }; }));
-                        // Tự động thêm/xóa members khi chọn/bỏ team (giống project/detail.php)
-                        quickEditTeamTagify.on('remove', function(e) {
-                            const removedTeamId = e.detail.data && e.detail.data.id;
-                            if (!removedTeamId || !quickEditMembersTagify) return;
-                            axios.get('/api/index.php?model=team&method=get&id=' + removedTeamId).then(function(res) {
-                                if (res.data && Array.isArray(res.data.members)) {
-                                    const teamMemberIds = res.data.members.map(function(m) { return String(m.user_id); });
-                                    const remain = quickEditMembersTagify.value.filter(function(tag) { return teamMemberIds.indexOf(String(tag.id)) === -1; });
-                                    quickEditMembersTagify.removeAllTags();
-                                    quickEditMembersTagify.addTags(remain);
-                                }
-                            }).catch(function() {});
-                        });
-                        quickEditTeamTagify.on('add', function(e) {
-                            const addedTeamId = e.detail.data && e.detail.data.id;
-                            if (!addedTeamId) return;
-                            axios.get('/api/index.php?model=team&method=get&id=' + addedTeamId).then(function(res) {
-                                if (res.data && Array.isArray(res.data.members)) {
-                                    if (quickEditMembersTagify) {
-                                        const teamMembers = res.data.members.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; });
-                                        const currentIds = quickEditMembersTagify.value.map(function(tag) { return String(tag.id); });
-                                        const toAdd = teamMembers.filter(function(m) { return currentIds.indexOf(String(m.id)) === -1; });
-                                        quickEditMembersTagify.addTags(toAdd);
-                                    }
-                                    var leaders = res.data.members.filter(function(m) { return m.leader == 1 || m.leader === '1'; });
-                                    if (leaders.length && quickEditManagerTagify) {
-                                        var leaderTags = leaders.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; });
-                                        var managerCurrentIds = quickEditManagerTagify.value.map(function(tag) { return String(tag.id); });
-                                        var leadersToAdd = leaderTags.filter(function(m) { return managerCurrentIds.indexOf(String(m.id)) === -1; });
-                                        quickEditManagerTagify.addTags(leadersToAdd);
-                                    }
-                                }
-                            }).catch(function() {});
-                        });
-                    }
-
-                    const managerInput = document.getElementById('quickEditManagerTags');
-                    if (managerInput) {
-                        managerInput.value = '';
-                        const allMembersForWhitelist = departmentUsers.map(function(u) { return { id: u.id || u.user_id, value: u.user_name || u.realname || '' }; });
-                        quickEditManagerTagify = new window.Tagify(managerInput, {
-                            whitelist: allMembersForWhitelist,
-                            enforceWhitelist: false,
-                            dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
-                        });
-                        quickEditManagerTagify.addTags(managersRaw.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; }));
-                    }
-
-                    const membersInput = document.getElementById('quickEditMembersTags');
-                    if (membersInput) {
-                        membersInput.value = '';
-                        const allMembersForWhitelist = departmentUsers.map(function(u) { return { id: u.id || u.user_id, value: u.user_name || u.realname || '' }; });
-                        quickEditMembersTagify = new window.Tagify(membersInput, {
-                            whitelist: allMembersForWhitelist,
-                            enforceWhitelist: false,
-                            dropdown: { maxItems: 1000, enabled: 0, closeOnSelect: true }
-                        });
-                        quickEditMembersTagify.addTags(membersOnly.map(function(m) { return { id: m.user_id, value: m.user_name || '' }; }));
-                    }
-                    $('#quickEditModalLoading').addClass('d-none');
-                }).catch(function(err) {
-                    console.error('Quick edit load team/members:', err);
-                    $('#quickEditModalLoading').addClass('d-none');
-                });
-            }).catch(function(err) {
-                console.error('Load project for quick edit:', err);
-                $('#quickEditModalLoading').addClass('d-none');
-                quickEditModal.hide();
-                if (typeof alert === 'function') alert('プロジェクトの取得に失敗しました。');
-            });
-        };
-
-        $('#quickEditProjectOrderTypeClear').on('click', function() { if (quickEditOrderTypeTagify) quickEditOrderTypeTagify.removeAllTags(); });
-        $('#quickEditTeamTagsClear').on('click', function() { if (quickEditTeamTagify) quickEditTeamTagify.removeAllTags(); });
-        $('#quickEditManagerTagsClear').on('click', function() { if (quickEditManagerTagify) quickEditManagerTagify.removeAllTags(); });
-        $('#quickEditMembersTagsClear').on('click', function() { if (quickEditMembersTagify) quickEditMembersTagify.removeAllTags(); });
-
-        var quickEditModalEl = document.getElementById('quickEditProjectModal');
-        if (quickEditModalEl) {
-            quickEditModalEl.addEventListener('hidden.bs.modal', function() {
-                destroyQuickEditQuill();
-            });
-        }
+        // Quick Edit modal — lazy-loaded from project-list-quick-edit.js (see ensureProjectListQuickEditModule)
 
         var businessDocumentModalEl = document.getElementById('businessDocumentModal');
         if (businessDocumentModalEl) {
@@ -6712,380 +5976,6 @@ var projectTable;
                 }
             });
         }
-
-        function isValidDateOrDateTime(str) {
-            if (!str || typeof str !== 'string') return false;
-            if (str.trim() === '') return false;
-            return !!parseProjectDateTimeInDisplayTz(str);
-        }
-
-        function hasQuickEditDateValue(value) {
-            return !!(value && String(value).trim() !== '');
-        }
-
-        function parseQuickEditDateTime(value) {
-            if (!hasQuickEditDateValue(value)) return null;
-            var parsed = parseProjectDateTimeInDisplayTz(value);
-            return parsed ? parsed.toDate() : null;
-        }
-
-        function getQuickEditDateFieldValue(selector) {
-            syncQuickEditDateFieldsFromPickers();
-            return fromProjectDateTimeInputValue($(selector).val() || '');
-        }
-
-        function syncQuickEditDateFieldsFromPickers() {
-            ['#quickEditStartDate', '#quickEditEndDate', '#quickEditCailyNouki', '#quickEditGuisNouki'].forEach(function(sel) {
-                var $el = $(sel);
-                if (!$el.length) return;
-                var el = $el[0];
-                var fp = $el.data('flatpickr') || (el && el._flatpickr);
-                var displayVal = getFlatpickrVisibleValue(fp, el);
-                if (!displayVal) {
-                    if (fp && fp.selectedDates && fp.selectedDates.length) {
-                        try { fp.clear(); } catch (e) {}
-                    }
-                    $el.val('');
-                    if (el) el.value = '';
-                    return;
-                }
-                if (fp && fp.selectedDates && fp.selectedDates.length > 0) {
-                    $el.val(fp.formatDate(fp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT));
-                } else {
-                    $el.val(displayVal);
-                }
-            });
-        }
-
-        function updateQuickEditNoukiRequiredIndicators() {
-            var showGuisFields = !isCailyBranchUser();
-            var end = ($('#quickEditEndDate').val() || '').trim();
-            var endFilled = showGuisFields && hasQuickEditDateValue(end);
-            var tantou = ($('input[name="tantou"]:checked').val() || '').trim();
-            $('#quickEditCailyNoukiRequired').toggleClass('d-none', !(endFilled && tantou === 'CAILY'));
-            $('#quickEditGuisNoukiRequired').toggleClass('d-none', !(endFilled && tantou === 'GUIS'));
-        }
-
-        function validateQuickEditNoukiFields() {
-            var errors = [];
-            var showGuisFields = !isCailyBranchUser();
-            var tantou = ($('input[name="tantou"]:checked').val() || '').trim();
-            var caily = ($('#quickEditCailyNouki').val() || '').trim();
-            var guis = ($('#quickEditGuisNouki').val() || '').trim();
-            var end = ($('#quickEditEndDate').val() || '').trim();
-            var endFilled = showGuisFields && hasQuickEditDateValue(end);
-
-            if (endFilled) {
-                if (tantou === 'CAILY' && !caily) {
-                    errors.push({ field: 'caily', message: translateText('担当がCAILYの場合、CAILY納期は必須です') });
-                }
-                if (tantou === 'GUIS' && !guis) {
-                    errors.push({ field: 'guis', message: translateText('担当がGUISの場合、GUIS納期は必須です') });
-                }
-            }
-
-            if (hasQuickEditDateValue(caily) && hasQuickEditDateValue(guis)) {
-                var cailyDate = parseQuickEditDateTime(caily);
-                var guisDate = parseQuickEditDateTime(guis);
-                if (cailyDate && guisDate && guisDate < cailyDate) {
-                    var msg = translateText('GUIS納期はCAILY納期以降である必要があります');
-                    if (showGuisFields) {
-                        errors.push({ field: 'guis', message: msg });
-                    } else {
-                        errors.push({ field: 'caily', message: msg });
-                    }
-                }
-            }
-
-            return errors;
-        }
-
-        function revalidateQuickEditNoukiOnChange() {
-            updateQuickEditNoukiRequiredIndicators();
-            var $cailyNouki = $('#quickEditCailyNouki');
-            var $guisNouki = $('#quickEditGuisNouki');
-            $cailyNouki.removeClass('is-invalid');
-            $guisNouki.removeClass('is-invalid');
-            $('#quickEditCailyNoukiError').text('');
-            $('#quickEditGuisNoukiError').text('');
-            var noukiErrors = validateQuickEditNoukiFields();
-            noukiErrors.forEach(function(err) {
-                if (err.field === 'caily') {
-                    $cailyNouki.addClass('is-invalid');
-                    $('#quickEditCailyNoukiError').text(err.message);
-                } else if (err.field === 'guis') {
-                    $guisNouki.addClass('is-invalid');
-                    $('#quickEditGuisNoukiError').text(err.message);
-                }
-            });
-        }
-
-        $(document).off('change.quickeditnouki').on('change.quickeditnouki', '#quickEditProjectForm input[name="tantou"]', revalidateQuickEditNoukiOnChange);
-        $(document).off('change.quickeditnoukidate input.quickeditnoukidate').on('change.quickeditnoukidate input.quickeditnoukidate', '#quickEditEndDate, #quickEditCailyNouki, #quickEditGuisNouki', revalidateQuickEditNoukiOnChange);
-
-        $('#quickEditProjectSaveBtnHeader').off('click.quickedit').on('click.quickedit', function() { $('#quickEditProjectSaveBtn').trigger('click.quickedit'); });
-
-        $('#quickEditProjectSaveBtn').off('click.quickedit').on('click.quickedit', async function() {
-            const id = $('#quickEditProjectId').val();
-            if (!id) {
-                if (typeof showMessage === 'function') showProjectListError(translateText('プロジェクトデータを読み込み中です。しばらくお待ちください。'));
-                return;
-            }
-            var $name = $('#quickEditName');
-            var $orderType = $('#quickEditProjectOrderType');
-            var $progress = $('#quickEditProgress');
-            var $startDate = $('#quickEditStartDate');
-            var $endDate = $('#quickEditEndDate');
-            var $cailyNouki = $('#quickEditCailyNouki');
-            var $guisNouki = $('#quickEditGuisNouki');
-            var $tantouWrap = $('#quickEditTantouWrap');
-            var errorIds = ['quickEditNameError', 'quickEditProjectOrderTypeError', 'quickEditTantouError', 'quickEditStartDateError', 'quickEditEndDateError', 'quickEditCailyNoukiError', 'quickEditGuisNoukiError', 'quickEditProgressError', 'quickEditYoteiError'];
-            errorIds.forEach(function(id) { $('#' + id).text(''); });
-            $name.removeClass('is-invalid');
-            setQuickEditOrderTypeInvalid(false);
-            $progress.removeClass('is-invalid');
-            $startDate.removeClass('is-invalid');
-            $endDate.removeClass('is-invalid');
-            $cailyNouki.removeClass('is-invalid');
-            $guisNouki.removeClass('is-invalid');
-            $tantouWrap.removeClass('is-invalid');
-            $('#quickEditYoteiFromMonth, #quickEditYoteiToMonth').removeClass('is-invalid');
-            var hasError = false;
-            if (!quickEditIsManagerOnly) {
-                if (!$name.val() || $name.val().toString().trim() === '') {
-                    $name.addClass('is-invalid');
-                    $('#quickEditNameError').text(translateText('案件名は必須です。'));
-                    hasError = true;
-                }
-                if (!getQuickEditOrderTypeValue()) {
-                    setQuickEditOrderTypeInvalid(true);
-                    $('#quickEditProjectOrderTypeError').text(translateText('受注形態は必須です。'));
-                    hasError = true;
-                }
-                if (!$('input[name="tantou"]:checked').length) {
-                    $tantouWrap.addClass('is-invalid');
-                    $('#quickEditTantouError').text(translateText('担当は必須です。'));
-                    hasError = true;
-                }
-                if ($startDate.val() && $startDate.val().toString().trim() !== '' && !isValidDateOrDateTime($startDate.val())) {
-                    $startDate.addClass('is-invalid');
-                    $('#quickEditStartDateError').text(translateText('開始日の形式が正しくありません。（例: 2025-01-15 09:00）'));
-                    hasError = true;
-                }
-                if (!isCailyBranchUser() && $endDate.val() && $endDate.val().toString().trim() !== '' && !isValidDateOrDateTime($endDate.val())) {
-                    $endDate.addClass('is-invalid');
-                    $('#quickEditEndDateError').text(translateText('期限日の形式が正しくありません。（例: 2025-02-28 18:00）'));
-                    hasError = true;
-                }
-                if ($cailyNouki.val() && $cailyNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($cailyNouki.val())) {
-                    $cailyNouki.addClass('is-invalid');
-                    $('#quickEditCailyNoukiError').text(translateText('CAILY納期の形式が正しくありません。（例: 2025-01-20 18:00）'));
-                    hasError = true;
-                }
-                if ($guisNouki.length && $guisNouki.val() && $guisNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($guisNouki.val())) {
-                    $guisNouki.addClass('is-invalid');
-                    $('#quickEditGuisNoukiError').text(translateText('GUIS納期の形式が正しくありません。（例: 2025-01-25 18:00）'));
-                    hasError = true;
-                }
-                var startVal = ($startDate.val() || '').trim();
-                var endVal = !isCailyBranchUser() ? ($endDate.val() || '').trim() : '';
-                if (startVal && endVal) {
-                    var startDt = parseQuickEditDateTime(startVal);
-                    var endDt = parseQuickEditDateTime(endVal);
-                    if (startDt && endDt && startDt >= endDt) {
-                        $endDate.addClass('is-invalid');
-                        $('#quickEditEndDateError').text(translateText('期限日は開始日より後である必要があります'));
-                        hasError = true;
-                    }
-                }
-                var noukiErrors = validateQuickEditNoukiFields();
-                noukiErrors.forEach(function(err) {
-                    if (err.field === 'caily') {
-                        $cailyNouki.addClass('is-invalid');
-                        $('#quickEditCailyNoukiError').text(err.message);
-                        hasError = true;
-                    } else if (err.field === 'guis') {
-                        $guisNouki.addClass('is-invalid');
-                        $('#quickEditGuisNoukiError').text(err.message);
-                        hasError = true;
-                    }
-                });
-            }
-            var progressVal = $progress.val();
-                if (progressVal !== '' && progressVal != null) {
-                var p = parseInt(progressVal, 10);
-                if (isNaN(p) || p < 0 || p > 100) {
-                    $progress.addClass('is-invalid');
-                    $('#quickEditProgressError').text(translateText('進捗率は0〜100の範囲で入力してください。'));
-                    hasError = true;
-                }
-            }
-            if (typeof window.YoteiField !== 'undefined') {
-                var yoteiDraft = getQuickEditYoteiDraft();
-                if (!window.YoteiField.isValid(yoteiDraft)) {
-                    $('#quickEditYoteiFromMonth, #quickEditYoteiToMonth').addClass('is-invalid');
-                    $('#quickEditYoteiError').text(translateText('予定工程の期間が正しくありません'));
-                    hasError = true;
-                }
-            }
-            if (hasError) {
-                return;
-            }
-            const $btn = $('#quickEditProjectSaveBtn, #quickEditProjectSaveBtnHeader');
-            const $spinner = $('#quickEditSaveSpinner, #quickEditSaveSpinnerHeader');
-            $btn.prop('disabled', true);
-            $spinner.removeClass('d-none');
-            const formData = new FormData();
-            formData.append('model', 'project');
-            formData.append('method', 'update');
-            formData.append('id', id);
-            formData.append('name', $('#quickEditName').val() || '');
-            formData.append('start_date', getQuickEditDateFieldValue('#quickEditStartDate'));
-            formData.append('end_date', getQuickEditDateFieldValue('#quickEditEndDate'));
-            var yoteiPayload = (typeof window.YoteiField !== 'undefined')
-                ? window.YoteiField.toPayload(getQuickEditYoteiDraft())
-                : null;
-            formData.append('yotei', yoteiPayload ? JSON.stringify(yoteiPayload) : '');
-            var quickEditStatus = $('#quickEditStatus').val() || 'draft';
-            if (isCailyBranchUser() && !canViewEndDateColumn()
-                && quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
-                if (typeof showMessage === 'function') {
-                    showProjectListError(translateText('このステータスは選択できません。'));
-                }
-                $btn.prop('disabled', false);
-                $spinner.addClass('d-none');
-                return;
-            }
-            if (quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
-                var paymentOk = await confirmPaymentInfoBeforeComplete({
-                    estimate_status: quickEditEstimateStatus,
-                    invoice_status: quickEditInvoiceStatus
-                });
-                if (!paymentOk) {
-                    $btn.prop('disabled', false);
-                    $spinner.addClass('d-none');
-                    return;
-                }
-            }
-            var newCailyNouki = $('#quickEditCailyNoukiStatus').is(':checked') ? '納品済み' : '';
-            var newGuisNouki = $('#quickEditGuisNoukiStatus').is(':checked') ? '納品済み' : '';
-            var statusBecameCompleted = quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed';
-            var noukiBecameDelivered =
-                (newCailyNouki === '納品済み' && String(quickEditOriginalCailyNoukiStatus || '').indexOf('納品済み') === -1)
-                || (newGuisNouki === '納品済み' && String(quickEditOriginalGuisNoukiStatus || '').indexOf('納品済み') === -1);
-            var shareAnswer = null;
-            if ((statusBecameCompleted || noukiBecameDelivered) && window.EnergyDrawingShare && quickEditShareContext) {
-                var shareProject = {
-                    id: $('#quickEditProjectId').val(),
-                    energy_drawing_share_status: quickEditShareContext.energy_drawing_share_status,
-                    department_name: quickEditShareContext.department_name,
-                    has_energy_sibling: quickEditShareContext.has_energy_sibling
-                };
-                var shareResult = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(shareProject, {
-                    departmentName: quickEditShareContext.department_name,
-                    hasEnergySibling: quickEditShareContext.has_energy_sibling
-                });
-                if (shareResult === false) {
-                    $btn.prop('disabled', false);
-                    $spinner.addClass('d-none');
-                    return;
-                }
-                shareAnswer = shareResult;
-            }
-            formData.append('status', quickEditStatus);
-            formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
-            formData.append('caily_nouki', getQuickEditDateFieldValue('#quickEditCailyNouki'));
-            formData.append('guis_nouki', getQuickEditDateFieldValue('#quickEditGuisNouki'));
-            formData.append('caily_nouki_status', newCailyNouki);
-            formData.append('guis_nouki_status', newGuisNouki);
-            formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
-            formData.append('project_order_type', getQuickEditOrderTypeValue());
-            formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
-            formData.append('managers', (quickEditManagerTagify && quickEditManagerTagify.value) ? quickEditManagerTagify.value.map(function(t) { return t.id; }).join(',') : '');
-            formData.append('members', (quickEditMembersTagify && quickEditMembersTagify.value) ? quickEditMembersTagify.value.map(function(t) { return t.id; }).join(',') : '');
-            var descContent = (quickEditQuillInstance && typeof quickEditQuillInstance.getSemanticHTML === 'function') ? quickEditQuillInstance.getSemanticHTML() : ($('#quickEditQuillDescriptionTextarea').val() || '');
-            formData.append('description', descContent);
-            var customFieldsData = [];
-            $('#quickEditCustomFieldsWrap .quick-edit-custom-field').each(function() {
-                var $field = $(this);
-                var label = $field.attr('data-custom-label');
-                var type = $field.attr('data-custom-type');
-                if (!label) return;
-                var value = '';
-                if (type === 'checkbox') {
-                    var checked = $field.find('.quickEditCustomCheckbox:checked').map(function() { return $(this).val(); }).get();
-                    value = checked.join(',');
-                } else if (type === 'radio') {
-                    var checkedEl = $field.find('.quickEditCustomRadio:checked');
-                    value = checkedEl.length ? checkedEl.val() : '';
-                } else {
-                    var input = $field.find('.quickEditCustomInput');
-                    value = input.length ? (input.val() || '').trim() : '';
-                    if (type === 'datetime') {
-                        var dtEl = input[0];
-                        var dtFp = dtEl && (dtEl._flatpickr || $(dtEl).data('flatpickr'));
-                        var dtDisplay = getFlatpickrVisibleValue(dtFp, dtEl);
-                        if (!dtDisplay) {
-                            if (dtFp && dtFp.selectedDates && dtFp.selectedDates.length) {
-                                try { dtFp.clear(); } catch (e) {}
-                            }
-                            value = '';
-                        } else if (dtFp && dtFp.selectedDates && dtFp.selectedDates.length > 0) {
-                            value = fromProjectDateTimeInputValue(
-                                dtFp.formatDate(dtFp.selectedDates[0], PROJECT_DATETIME_FLATPICKR_FORMAT)
-                            );
-                        } else {
-                            value = fromProjectDateTimeInputValue(dtDisplay);
-                        }
-                    }
-                }
-                customFieldsData.push({ label: label, value: value });
-            });
-            if (customFieldsData.length) formData.append('custom_fields', JSON.stringify(customFieldsData));
-            appendProjectVersionToFormData(formData, $('#quickEditProjectVersion').val());
-            if (window.EnergyDrawingShare) {
-                window.EnergyDrawingShare.appendEnergyDrawingShareToFormData(formData, shareAnswer);
-            }
-            axios.post('/api/index.php?model=project&method=update', formData, { headers: { 'Content-Type': 'multipart/form-data' } }).then(function(res) {
-                var data = res && res.data ? res.data : {};
-                if (data.status === 'success') {
-                bootstrap.Modal.getInstance(document.getElementById('quickEditProjectModal')).hide();
-                if (projectTable) reloadProjectTable(false);
-                if (typeof showMessage === 'function') showMessage(translateText('プロジェクトを更新しました。'));
-                    return;
-                }
-                if (handleProjectVersionConflict(data, function() {
-                    var reloadId = $('#quickEditProjectId').val();
-                    if (reloadId) {
-                        openQuickEditProjectModal(reloadId, quickEditIsManagerOnly);
-                    }
-                })) {
-                    return;
-                }
-                var errMsg = data.message || data.error || translateText('更新に失敗しました。');
-                if (typeof showMessage === 'function') showProjectListError(errMsg, data);
-                else if (typeof alert === 'function') alert(errMsg);
-            }).catch(function(err) {
-                console.error('Quick edit save:', err);
-                var errData = err.response && err.response.data ? err.response.data : {};
-                if (handleProjectVersionConflict(errData, function() {
-                    var reloadId = $('#quickEditProjectId').val();
-                    if (reloadId) {
-                        openQuickEditProjectModal(reloadId, quickEditIsManagerOnly);
-                    }
-                })) {
-                    return;
-                }
-                if (typeof showMessage === 'function') {
-                    showProjectListError(errData.message || translateText('更新に失敗しました。'), errData);
-                } else if (typeof alert === 'function') {
-                    alert(errData.message ? errData.message : translateText('更新に失敗しました。'));
-                }
-            }).finally(function() {
-                $btn.prop('disabled', false);
-                $spinner.addClass('d-none');
-            });
-        });
 
         // Hide context menu on click elsewhere
         $(document).on('click', function() {
@@ -7786,704 +6676,664 @@ var projectTable;
         return null;
     }
 
-    const { createApp } = Vue;
-    const app = createApp({
-        mixins: (typeof window.BusinessDocumentModalMixin !== 'undefined') ? [window.BusinessDocumentModalMixin] : [],
-        data() {
-            return {
-                loading: true,
-                selectedDepartment: null,
-                showClearAllFavoritesBtn: false,
-                projects: [],
-                departments: [],
-                branches: [],
-                selectedStatusKeys: [],
-                statuses: statuses,
-                userPermissions: null,
-                newProject: {
-                    name: '',
-                    description: '',
-                    status: 'draft',
-                    priority: 'medium',
-                    start_date: '',
-                    end_date: '',
-                    team: [],
-                    members: [],
-                    manager: [],
-                    department_id: '',
-                    building_size: '',
-                    building_type: '',
-                    building_number: '',
-                    building_branch: '',
-                    project_number: '',
-                    project_order_type: '新規',
-                    estimated_hours: '',
-                    amount: '',
-                    customer_id: '',
-                    company_name: '',
-                    teams: '',
-                    branch_id: '',
-                    contact_name: '',
-                    contact_phone: ''
-                },
-                categories: [],
-                companies: [],
-                contacts: [],
-                users: [],
-                teams: [],
-                isEdit: false,
-                perPage: 20,
-                currentPage: 1,
-                editingId: null,
-                deletingId: null,
-                tagifyInstance: null,
-                teamTagifyInstance: null,
-                membersTagifyInstance: null,
-                managerTagifyInstance: null,
-                customerTagifyInstance: null,
-                formValidator: null,
-                // Notes (確認必要メモ)
-                notes: [],
-                showNoteModal: false,
-                isNoteEditMode: false,
-                currentEditingNoteId: null, // Track which note is being edited
-                editingNote: {
-                    id: null,
-                    title: '',
-                    content: '',
-                    is_important: false,
-                    needs_confirmation: false,
-                    display_column: '',
-                    user_id: null
-                },
-                currentNoteProjectId: null,
-                quillNoteInstance: null,
-                quillNoteContent: '',
-                savingNote: false,
-                // Kadai queue properties
-                kadaiProjects: [],
-                isKadaiQueueExpanded: false,
-                // Column visibility (thứ tự đồng bộ với bảng sau khi merge COLUMN_ORDER)
-                availableColumns: buildAvailableColumnsList([], null, loadColumnVisibilityFromLocalStorage([])),
-                filterMyProjects: false
-            }
-        },
-        computed: {
-            isCailyBranchUser() {
-                return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
-            },
-            visibleColumnOptions() {
-                if (!this.isCailyBranchUser) return this.availableColumns || [];
-                var self = this;
-                var canView = typeof canViewEndDateColumn === 'function'
-                    ? canViewEndDateColumn()
-                    : (self.userPermissions && self.userPermissions.project_view_end_date == 1);
-                return (this.availableColumns || []).filter(function(col) {
-                    if (col.key === 'guis_nouki' || col.key === 'end_date') return canView;
-                    return true;
-                });
-            },
-            canViewEndDate() {
-                if (!this.isCailyBranchUser) return true;
-                if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
-                if (typeof canViewEndDateColumn === 'function') return canViewEndDateColumn();
-                return !!(this.userPermissions && this.userPermissions.project_view_end_date == 1);
-            },
-            createUrl() {
-               if(this.selectedDepartment) {
-                return `create.php?department_id=${this.selectedDepartment.id}`;
-               }
-               return `create.php`;
-            },
-            /** Options cho select 表示列: NOTE_DISPLAY_COLUMNS (giống detail) + custom fields, loại trùng tên khác suffix 状況 */
-            noteDisplayColumnOptions() {
-                function normLabel(t) { return (t || '').replace(/状況$/, ''); }
-                const canView = typeof canViewEndDateColumn === 'function'
-                    ? canViewEndDateColumn()
-                    : (this.userPermissions && this.userPermissions.project_view_end_date == 1);
-                const hiddenForCaily = this.isCailyBranchUser
-                    ? { guis_nouki: !canView, end_date: !canView }
-                    : {};
-                const hiddenForDirector = this.canViewProjectDirectorColumns()
-                    ? {}
-                    : (typeof PROJECT_DIRECTOR_COLUMN_KEYS !== 'undefined' ? PROJECT_DIRECTOR_COLUMN_KEYS : {});
-                const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : [])
-                    .filter(function(c) {
-                        return !hiddenForCaily[c.key] && !hiddenForDirector[c.key];
-                    })
-                    .map(function(c) {
-                    return { value: c.key, text: c.label };
-                });
-                const seen = {};
-                const seenNorm = {};
-                list.forEach(function(o) {
-                    seen[o.value] = true;
-                    seenNorm[normLabel(o.text)] = true;
-                });
-                const customDefs = (typeof customFieldColumnDefinitions !== 'undefined' && customFieldColumnDefinitions) ? customFieldColumnDefinitions : [];
-                customDefs.forEach(function(c) {
-                    var val = 'custom:' + (c.label || '').trim();
-                    var n = normLabel(c.label);
-                    if (val !== 'custom:' && !seen[val] && !seenNorm[n]) {
-                        seen[val] = true;
-                        seenNorm[n] = true;
-                        list.push({ value: val, text: (c.label || '').trim() });
-                    }
-                });
-                return list;
-            },
-            canSaveNote() {
-                const raw = (this.quillNoteContent || this.editingNote.content || '').trim();
-                return this.noteContentHasText(raw);
-            }
-        },
-        mounted() {
-            // Load filter state from localStorage
-            let filters = {};
-            try {
-                filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
-            } catch (e) {
-                filters = {};
-            }
-            if (filters.myProjects !== undefined) {
-                this.filterMyProjects = filters.myProjects == 1;
-            }
-            // Khôi phục status đã lưu (nếu có) để hiển thị trong 適用中のフィルター
-            this.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || '');
-            
-            // Load column visibility (thứ tự giống bảng khi đã chọn department / có save order)
-            migrateColumnVisibilityStorageIfNeeded(customFieldColumnDefinitions || []);
-            const columnVisibility = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions || []);
-            const depIdMount = this.selectedDepartment && this.selectedDepartment.id;
-            this.availableColumns = buildAvailableColumnsList([], depIdMount, columnVisibility);
-            this.$nextTick(() => {
-                applyI18nToProjectTableUI();
-            });
-            
-            this.loadDepartments();
-            // Không load dự án ngay lập tức, chỉ load khi có department được chọn
-
-            window.addEventListener('ai-action-success', (event) => {
-                const { action } = event.detail || {};
-                if (action && action.type && (action.type.indexOf('project_') === 0 || action.type.indexOf('parent_project_') === 0)) {
-                    this.loadProjects();
-                }
-            });
-            
-            // Auto-refresh kadai queue every 5 minutes (chỉ khi có department được chọn)
-            // setInterval(() => {
-            //     if (this.selectedDepartment && this.selectedDepartment.id) {
-            //         this.loadKadaiProjects();
-            //     }
-            // }, 5 * 60 * 1000);
-
-            // Initialize Tagify for project_order_type
-            this.$nextTick(() => {
-                const input = document.querySelector('#project_order_type');
-                if (input && window.Tagify) {
-                    this.tagifyInstance = new Tagify(input, {
-                        whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
-                        maxTags: 5,
-                        dropdown: {
-                            maxItems: 20,
-                            classname: "tags-look",
-                            enabled: 0,
-                            closeOnSelect: true
-                        },
-                        callbacks: {
-                            add: (e) => {
-                                const tags = this.tagifyInstance.value.map(tag => tag.value);
-                                this.newProject.project_order_type = tags;
-                                if (this.formValidator) {
-                                    this.formValidator.revalidateField('project_order_type');
-                                }
-                            },
-                            remove: (e) => {
-                                const tags = this.tagifyInstance.value.map(tag => tag.value);
-                                this.newProject.project_order_type = tags;
-                                if (this.formValidator) {
-                                    this.formValidator.revalidateField('project_order_type');
-                                }
-                            }
-                        }
-                    });
-
-                    // Set default value
-                    if (!this.newProject.project_order_type || this.newProject.project_order_type.length === 0) {
-                        this.tagifyInstance.addTags(['新規']);
-                    } else if (Array.isArray(this.newProject.project_order_type)) {
-                        this.tagifyInstance.addTags(this.newProject.project_order_type);
-                    }
-                }
-            });
-
-            // Initialize Tagify for team, members, and manager
-            this.$nextTick(() => {
-                // Initialize Tagify for team
-                const teamInput = document.querySelector('input[name="team_tags"]');
-                if (teamInput && window.Tagify) {
-                    this.teamTagifyInstance = new Tagify(teamInput, {
-                        whitelist: [],
-                        maxTags: 5,
-                        dropdown: {
-                            maxItems: 20,
-                            classname: "tags-look",
-                            enabled: 0,
-                            closeOnSelect: false
-                        },
-                        callbacks: {
-                            add: (e) => {
-                                const teamId = e.detail.tag.id;
-                                const teams = this.teamTagifyInstance.value.map(team => team.id);
-                                this.newProject.teams = teams;
-                                this.loadTeamMembers(teamId);
-                                if (this.formValidator) {
-                                    this.formValidator.revalidateField('team_tags');
-                                }
-                            },
-                            remove: (e) => {
-                                const teams = this.teamTagifyInstance.value.map(team => team.id);
-                                this.newProject.teams = teams;
-                                this.newProject.members = [];
-                                if (this.membersTagifyInstance) {
-                                    this.membersTagifyInstance.removeAllTags();
-                                }
-                                if (this.formValidator) {
-                                    this.formValidator.revalidateField('team_tags');
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // Initialize Tagify for members
-                const membersInput = document.querySelector('input[name="members_tags"]');
-                if (membersInput && window.Tagify) {
-                    this.membersTagifyInstance = new Tagify(membersInput, {
-                        whitelist: [],
-                        maxTags: 10,
-                        dropdown: {
-                            maxItems: 20,
-                            classname: "tags-look",
-                            enabled: 0,
-                            closeOnSelect: true
-                        },
-                        callbacks: {
-                            add: (e) => {
-                                const members = this.membersTagifyInstance.value.map(member => member.id);
-                                this.newProject.members = members;
-                                if (this.formValidator) {
-                                    this.formValidator.revalidateField('members_tags');
-                                }
-                            },
-                            remove: (e) => {
-                                const members = this.membersTagifyInstance.value.map(member => member.id);
-                                this.newProject.members = members;
-                                if (this.formValidator) {
-                                    this.formValidator.revalidateField('members_tags');
-                                }
-                            }
-                        }
-                    });
-                }
-
-                // Initialize Tagify for manager
-                const managerInput = document.querySelector('input[name="manager_tags"]');
-                if (managerInput && window.Tagify) {
-                    this.managerTagifyInstance = new Tagify(managerInput, {
-                        whitelist: [],
-                        maxTags: 10,
-                        dropdown: {
-                            maxItems: 20,
-                            classname: "tags-look",
-                            enabled: 0,
-                            closeOnSelect: true
-                        },
-                        callbacks: {
-                            add: (e) => {
-                                const manager = this.managerTagifyInstance.value.map(manager => manager.id);
-                                this.newProject.manager = manager;
-                                if (this.formValidator) {
-                                    this.formValidator.revalidateField('manager_tags');
-                                }
-                            },
-                            remove: (e) => {
-                                const manager = this.managerTagifyInstance.value.map(manager => manager.id);
-                                this.newProject.manager = manager;
-                                if (this.formValidator) {
-                                    this.formValidator.revalidateField('manager_tags');
-                                }
-                            }
-                        }
-                    });
-                }
-            });
-
-            // Initialize form validation
-            const form = document.querySelector('#newProjectModal form');
-            if (form) {
-                this.formValidator = FormValidation.formValidation(form, {
-                    fields: {
-                        name: {
-                            validators: {
-                                notEmpty: {
-                                    message: 'お施主様名を入力してください'
-                                }
-                            }
-                        },
-                        department_id: {
-                            validators: {
-                                notEmpty: {
-                                    message: '部署を選択してください'
-                                }
-                            }
-                        },
-                        category_id: {
-                            validators: {
-                                callback: {
-                                    message: 'カテゴリを選択してください',
-                                    callback: function(input) {
-                                        const categoryValue = $('#category_id').val();
-                                        console.log('Validating category_id:', categoryValue);
-                                        return categoryValue && categoryValue !== '';
-                                    }
-                                }
-                            }
-                        },
-                        company_name: {
-                            validators: {
-                                callback: {
-                                    message: '会社名を選択してください',
-                                    callback: function(input) {
-                                        const companyValue = $('#company_name').val();
-                                        console.log('Validating company_name:', companyValue);
-                                        return companyValue && companyValue !== '';
-                                    }
-                                }
-                            }
-                        },
-                        customer_id: {
-                            validators: {
-                                callback: {
-                                    message: '担当者名を選択してください',
-                                    callback: function(input) {
-                                        const customerValue = $('#customer_id').val();
-                                        console.log('Validating customer_id:', customerValue);
-                                        return customerValue && customerValue !== '';
-                                    }
-                                }
-                            }
-                        },
-                        building_size: {
-                            validators: {
-                                notEmpty: {
-                                    message: '建物規模を入力してください'
-                                }
-                            }
-                        },
-                        building_type: {
-                            validators: {
-                                notEmpty: {
-                                    message: '建物種類を入力してください'
-                                }
-                            }
-                        },
-                        project_number: {
-                            validators: {
-                                notEmpty: {
-                                    message: '連絡番号を入力してください'
-                                }
-                            }
-                        },
-                        project_order_type: {
-                            validators: {
-                                callback: {
-                                    message: '受注形態を選択してください',
-                                    callback: function(input) {
-                                        return app.tagifyInstance && app.tagifyInstance.value.length > 0;
-                                    }
-                                }
-                            }
-                        },
-                        priority: {
-                            validators: {
-                                notEmpty: {
-                                    message: '優先度を選択してください'
-                                }
-                            }
-                        },
-                        status: {
-                            validators: {
-                                notEmpty: {
-                                    message: '案件状況を選択してください'
-                                }
-                            }
-                        },
-                        start_date: {
-                            validators: {
-                                notEmpty: {
-                                    message: '開始日を選択してください'
-                                }
-                            }
-                        },
-                        end_date: {
-                            validators: {
-                                notEmpty: {
-                                    message: '期限日を選択してください'
-                                }
-                            }
-                        },
-                        team_tags: {
-                            validators: {
-                                callback: {
-                                    message: 'チームを選択してください',
-                                    callback: function(input) {
-                                        return app.teamTagifyInstance && app.teamTagifyInstance.value.length > 0;
-                                    }
-                                }
-                            }
-                        },
-                        members_tags: {
-                            validators: {
-                                callback: {
-                                    message: 'メンバーを選択してください',
-                                    callback: function(input) {
-                                        return app.membersTagifyInstance && app.membersTagifyInstance.value.length > 0;
-                                    }
-                                }
-                            }
-                        },
-                        manager_tags: {
-                            validators: {
-                                callback: {
-                                    message: 'メンバーを選択してください',
-                                    callback: function(input) {
-                                        return app.managerTagifyInstance && app.managerTagifyInstance.value.length > 0;
-                                    }
-                                }
-                            }
-                        }
+    var app;
+    function bootProjectListVueApp() {
+        const { createApp } = Vue;
+        app = createApp({
+            mixins: (typeof window.BusinessDocumentModalMixin !== 'undefined') ? [window.BusinessDocumentModalMixin] : [],
+            data() {
+                return {
+                    loading: true,
+                    selectedDepartment: null,
+                    showClearAllFavoritesBtn: false,
+                    projects: [],
+                    departments: [],
+                    branches: [],
+                    selectedStatusKeys: [],
+                    statuses: statuses,
+                    userPermissions: null,
+                    newProject: {
+                        name: '',
+                        description: '',
+                        status: 'draft',
+                        priority: 'medium',
+                        start_date: '',
+                        end_date: '',
+                        team: [],
+                        members: [],
+                        manager: [],
+                        department_id: '',
+                        building_size: '',
+                        building_type: '',
+                        building_number: '',
+                        building_branch: '',
+                        project_number: '',
+                        project_order_type: '新規',
+                        estimated_hours: '',
+                        amount: '',
+                        customer_id: '',
+                        company_name: '',
+                        teams: '',
+                        branch_id: '',
+                        contact_name: '',
+                        contact_phone: ''
                     },
-                    plugins: {
-                        trigger: new FormValidation.plugins.Trigger(),
-                        bootstrap5: new FormValidation.plugins.Bootstrap5({
-                            eleValidClass: '',
-                            rowSelector: '.form-control-validation'
-                        }),
+                    categories: [],
+                    companies: [],
+                    contacts: [],
+                    users: [],
+                    teams: [],
+                    isEdit: false,
+                    perPage: 20,
+                    currentPage: 1,
+                    editingId: null,
+                    deletingId: null,
+                    tagifyInstance: null,
+                    teamTagifyInstance: null,
+                    membersTagifyInstance: null,
+                    managerTagifyInstance: null,
+                    customerTagifyInstance: null,
+                    formValidator: null,
+                    // Notes (確認必要メモ)
+                    notes: [],
+                    showNoteModal: false,
+                    isNoteEditMode: false,
+                    currentEditingNoteId: null, // Track which note is being edited
+                    editingNote: {
+                        id: null,
+                        title: '',
+                        content: '',
+                        is_important: false,
+                        needs_confirmation: false,
+                        display_column: '',
+                        user_id: null
                     },
+                    currentNoteProjectId: null,
+                    quillNoteInstance: null,
+                    quillNoteContent: '',
+                    savingNote: false,
+                    // Kadai queue properties
+                    kadaiProjects: [],
+                    isKadaiQueueExpanded: false,
+                    // Column visibility (thứ tự đồng bộ với bảng sau khi merge COLUMN_ORDER)
+                    availableColumns: buildAvailableColumnsList([], null, loadColumnVisibilityFromLocalStorage([])),
+                    filterMyProjects: false
+                }
+            },
+            computed: {
+                isCailyBranchUser() {
+                    return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+                },
+                visibleColumnOptions() {
+                    if (!this.isCailyBranchUser) return this.availableColumns || [];
+                    var self = this;
+                    var canView = typeof canViewEndDateColumn === 'function'
+                        ? canViewEndDateColumn()
+                        : (self.userPermissions && self.userPermissions.project_view_end_date == 1);
+                    return (this.availableColumns || []).filter(function(col) {
+                        if (col.key === 'guis_nouki' || col.key === 'end_date') return canView;
+                        return true;
+                    });
+                },
+                canViewEndDate() {
+                    if (!this.isCailyBranchUser) return true;
+                    if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
+                    if (typeof canViewEndDateColumn === 'function') return canViewEndDateColumn();
+                    return !!(this.userPermissions && this.userPermissions.project_view_end_date == 1);
+                },
+                createUrl() {
+                   if(this.selectedDepartment) {
+                    return `create.php?department_id=${this.selectedDepartment.id}`;
+                   }
+                   return `create.php`;
+                },
+                /** Options cho select 表示列: NOTE_DISPLAY_COLUMNS (giống detail) + custom fields, loại trùng tên khác suffix 状況 */
+                noteDisplayColumnOptions() {
+                    function normLabel(t) { return (t || '').replace(/状況$/, ''); }
+                    const canView = typeof canViewEndDateColumn === 'function'
+                        ? canViewEndDateColumn()
+                        : (this.userPermissions && this.userPermissions.project_view_end_date == 1);
+                    const hiddenForCaily = this.isCailyBranchUser
+                        ? { guis_nouki: !canView, end_date: !canView }
+                        : {};
+                    const hiddenForDirector = this.canViewProjectDirectorColumns()
+                        ? {}
+                        : (typeof PROJECT_DIRECTOR_COLUMN_KEYS !== 'undefined' ? PROJECT_DIRECTOR_COLUMN_KEYS : {});
+                    const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : [])
+                        .filter(function(c) {
+                            return !hiddenForCaily[c.key] && !hiddenForDirector[c.key];
+                        })
+                        .map(function(c) {
+                        return { value: c.key, text: c.label };
+                    });
+                    const seen = {};
+                    const seenNorm = {};
+                    list.forEach(function(o) {
+                        seen[o.value] = true;
+                        seenNorm[normLabel(o.text)] = true;
+                    });
+                    const customDefs = (typeof customFieldColumnDefinitions !== 'undefined' && customFieldColumnDefinitions) ? customFieldColumnDefinitions : [];
+                    customDefs.forEach(function(c) {
+                        var val = 'custom:' + (c.label || '').trim();
+                        var n = normLabel(c.label);
+                        if (val !== 'custom:' && !seen[val] && !seenNorm[n]) {
+                            seen[val] = true;
+                            seenNorm[n] = true;
+                            list.push({ value: val, text: (c.label || '').trim() });
+                        }
+                    });
+                    return list;
+                },
+                canSaveNote() {
+                    const raw = (this.quillNoteContent || this.editingNote.content || '').trim();
+                    return this.noteContentHasText(raw);
+                }
+            },
+            mounted() {
+                // Load filter state from localStorage
+                let filters = {};
+                try {
+                    filters = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+                } catch (e) {
+                    filters = {};
+                }
+                if (filters.myProjects !== undefined) {
+                    this.filterMyProjects = filters.myProjects == 1;
+                }
+                // Khôi phục status đã lưu (nếu có) để hiển thị trong 適用中のフィルター
+                this.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || '');
+            
+                // Load column visibility (thứ tự giống bảng khi đã chọn department / có save order)
+                migrateColumnVisibilityStorageIfNeeded(customFieldColumnDefinitions || []);
+                const columnVisibility = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions || []);
+                const depIdMount = this.selectedDepartment && this.selectedDepartment.id;
+                this.availableColumns = buildAvailableColumnsList([], depIdMount, columnVisibility);
+                this.$nextTick(() => {
+                    applyI18nToProjectTableUI();
                 });
-            }
-        },
-        beforeUnmount() {
-            // Clean up Tagify instances when component is destroyed
-            if (this.tagifyInstance) {
-                this.tagifyInstance.destroy();
-            }
-            if (this.teamTagifyInstance) {
-                this.teamTagifyInstance.destroy();
-            }
-            if (this.membersTagifyInstance) {
-                this.membersTagifyInstance.destroy();
-            }
-            if (this.managerTagifyInstance) {
-                this.managerTagifyInstance.destroy();
-            }
-        },
-        methods: {
-            // Department localStorage methods
-            saveSelectedDepartmentToLocalStorage(department) {
-                if (department && department.id) {
-                    localStorage.setItem(SELECTED_DEPARTMENT_KEY, JSON.stringify({
-                        id: department.id,
-                        name: department.name,
-                        can_project: department.can_project
-                    }));
+            
+                this.loadDepartments();
+                // Không load dự án ngay lập tức, chỉ load khi có department được chọn
+
+                window.addEventListener('ai-action-success', (event) => {
+                    const { action } = event.detail || {};
+                    if (action && action.type && (action.type.indexOf('project_') === 0 || action.type.indexOf('parent_project_') === 0)) {
+                        this.loadProjects();
+                    }
+                });
+            
+                // Auto-refresh kadai queue every 5 minutes (chỉ khi có department được chọn)
+                // setInterval(() => {
+                //     if (this.selectedDepartment && this.selectedDepartment.id) {
+                //         this.loadKadaiProjects();
+                //     }
+                // }, 5 * 60 * 1000);
+
+                // Initialize Tagify for project_order_type
+                this.$nextTick(() => {
+                    const input = document.querySelector('#project_order_type');
+                    if (input && window.Tagify) {
+                        this.tagifyInstance = new Tagify(input, {
+                            whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                            maxTags: 5,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look",
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                            callbacks: {
+                                add: (e) => {
+                                    const tags = this.tagifyInstance.value.map(tag => tag.value);
+                                    this.newProject.project_order_type = tags;
+                                    if (this.formValidator) {
+                                        this.formValidator.revalidateField('project_order_type');
+                                    }
+                                },
+                                remove: (e) => {
+                                    const tags = this.tagifyInstance.value.map(tag => tag.value);
+                                    this.newProject.project_order_type = tags;
+                                    if (this.formValidator) {
+                                        this.formValidator.revalidateField('project_order_type');
+                                    }
+                                }
+                            }
+                        });
+
+                        // Set default value
+                        if (!this.newProject.project_order_type || this.newProject.project_order_type.length === 0) {
+                            this.tagifyInstance.addTags(['新規']);
+                        } else if (Array.isArray(this.newProject.project_order_type)) {
+                            this.tagifyInstance.addTags(this.newProject.project_order_type);
+                        }
+                    }
+                });
+
+                // Initialize Tagify for team, members, and manager
+                this.$nextTick(() => {
+                    // Initialize Tagify for team
+                    const teamInput = document.querySelector('input[name="team_tags"]');
+                    if (teamInput && window.Tagify) {
+                        this.teamTagifyInstance = new Tagify(teamInput, {
+                            whitelist: [],
+                            maxTags: 5,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look",
+                                enabled: 0,
+                                closeOnSelect: false
+                            },
+                            callbacks: {
+                                add: (e) => {
+                                    const teamId = e.detail.tag.id;
+                                    const teams = this.teamTagifyInstance.value.map(team => team.id);
+                                    this.newProject.teams = teams;
+                                    this.loadTeamMembers(teamId);
+                                    if (this.formValidator) {
+                                        this.formValidator.revalidateField('team_tags');
+                                    }
+                                },
+                                remove: (e) => {
+                                    const teams = this.teamTagifyInstance.value.map(team => team.id);
+                                    this.newProject.teams = teams;
+                                    this.newProject.members = [];
+                                    if (this.membersTagifyInstance) {
+                                        this.membersTagifyInstance.removeAllTags();
+                                    }
+                                    if (this.formValidator) {
+                                        this.formValidator.revalidateField('team_tags');
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // Initialize Tagify for members
+                    const membersInput = document.querySelector('input[name="members_tags"]');
+                    if (membersInput && window.Tagify) {
+                        this.membersTagifyInstance = new Tagify(membersInput, {
+                            whitelist: [],
+                            maxTags: 10,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look",
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                            callbacks: {
+                                add: (e) => {
+                                    const members = this.membersTagifyInstance.value.map(member => member.id);
+                                    this.newProject.members = members;
+                                    if (this.formValidator) {
+                                        this.formValidator.revalidateField('members_tags');
+                                    }
+                                },
+                                remove: (e) => {
+                                    const members = this.membersTagifyInstance.value.map(member => member.id);
+                                    this.newProject.members = members;
+                                    if (this.formValidator) {
+                                        this.formValidator.revalidateField('members_tags');
+                                    }
+                                }
+                            }
+                        });
+                    }
+
+                    // Initialize Tagify for manager
+                    const managerInput = document.querySelector('input[name="manager_tags"]');
+                    if (managerInput && window.Tagify) {
+                        this.managerTagifyInstance = new Tagify(managerInput, {
+                            whitelist: [],
+                            maxTags: 10,
+                            dropdown: {
+                                maxItems: 20,
+                                classname: "tags-look",
+                                enabled: 0,
+                                closeOnSelect: true
+                            },
+                            callbacks: {
+                                add: (e) => {
+                                    const manager = this.managerTagifyInstance.value.map(manager => manager.id);
+                                    this.newProject.manager = manager;
+                                    if (this.formValidator) {
+                                        this.formValidator.revalidateField('manager_tags');
+                                    }
+                                },
+                                remove: (e) => {
+                                    const manager = this.managerTagifyInstance.value.map(manager => manager.id);
+                                    this.newProject.manager = manager;
+                                    if (this.formValidator) {
+                                        this.formValidator.revalidateField('manager_tags');
+                                    }
+                                }
+                            }
+                        });
+                    }
+                });
+
+                // Initialize form validation
+                const form = document.querySelector('#newProjectModal form');
+                if (form) {
+                    this.formValidator = FormValidation.formValidation(form, {
+                        fields: {
+                            name: {
+                                validators: {
+                                    notEmpty: {
+                                        message: 'お施主様名を入力してください'
+                                    }
+                                }
+                            },
+                            department_id: {
+                                validators: {
+                                    notEmpty: {
+                                        message: '部署を選択してください'
+                                    }
+                                }
+                            },
+                            category_id: {
+                                validators: {
+                                    callback: {
+                                        message: 'カテゴリを選択してください',
+                                        callback: function(input) {
+                                            const categoryValue = $('#category_id').val();
+                                            console.log('Validating category_id:', categoryValue);
+                                            return categoryValue && categoryValue !== '';
+                                        }
+                                    }
+                                }
+                            },
+                            company_name: {
+                                validators: {
+                                    callback: {
+                                        message: '会社名を選択してください',
+                                        callback: function(input) {
+                                            const companyValue = $('#company_name').val();
+                                            console.log('Validating company_name:', companyValue);
+                                            return companyValue && companyValue !== '';
+                                        }
+                                    }
+                                }
+                            },
+                            customer_id: {
+                                validators: {
+                                    callback: {
+                                        message: '担当者名を選択してください',
+                                        callback: function(input) {
+                                            const customerValue = $('#customer_id').val();
+                                            console.log('Validating customer_id:', customerValue);
+                                            return customerValue && customerValue !== '';
+                                        }
+                                    }
+                                }
+                            },
+                            building_size: {
+                                validators: {
+                                    notEmpty: {
+                                        message: '建物規模を入力してください'
+                                    }
+                                }
+                            },
+                            building_type: {
+                                validators: {
+                                    notEmpty: {
+                                        message: '建物種類を入力してください'
+                                    }
+                                }
+                            },
+                            project_number: {
+                                validators: {
+                                    notEmpty: {
+                                        message: '連絡番号を入力してください'
+                                    }
+                                }
+                            },
+                            project_order_type: {
+                                validators: {
+                                    callback: {
+                                        message: '受注形態を選択してください',
+                                        callback: function(input) {
+                                            return app.tagifyInstance && app.tagifyInstance.value.length > 0;
+                                        }
+                                    }
+                                }
+                            },
+                            priority: {
+                                validators: {
+                                    notEmpty: {
+                                        message: '優先度を選択してください'
+                                    }
+                                }
+                            },
+                            status: {
+                                validators: {
+                                    notEmpty: {
+                                        message: '案件状況を選択してください'
+                                    }
+                                }
+                            },
+                            start_date: {
+                                validators: {
+                                    notEmpty: {
+                                        message: '開始日を選択してください'
+                                    }
+                                }
+                            },
+                            end_date: {
+                                validators: {
+                                    notEmpty: {
+                                        message: '期限日を選択してください'
+                                    }
+                                }
+                            },
+                            team_tags: {
+                                validators: {
+                                    callback: {
+                                        message: 'チームを選択してください',
+                                        callback: function(input) {
+                                            return app.teamTagifyInstance && app.teamTagifyInstance.value.length > 0;
+                                        }
+                                    }
+                                }
+                            },
+                            members_tags: {
+                                validators: {
+                                    callback: {
+                                        message: 'メンバーを選択してください',
+                                        callback: function(input) {
+                                            return app.membersTagifyInstance && app.membersTagifyInstance.value.length > 0;
+                                        }
+                                    }
+                                }
+                            },
+                            manager_tags: {
+                                validators: {
+                                    callback: {
+                                        message: 'メンバーを選択してください',
+                                        callback: function(input) {
+                                            return app.managerTagifyInstance && app.managerTagifyInstance.value.length > 0;
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            trigger: new FormValidation.plugins.Trigger(),
+                            bootstrap5: new FormValidation.plugins.Bootstrap5({
+                                eleValidClass: '',
+                                rowSelector: '.form-control-validation'
+                            }),
+                        },
+                    });
                 }
             },
-            
-            loadSelectedDepartmentFromLocalStorage() {
-                try {
-                    const savedDepartment = localStorage.getItem(SELECTED_DEPARTMENT_KEY);
-                    if (savedDepartment) {
-                        return JSON.parse(savedDepartment);
-                    }
-                } catch (error) {
-                    console.error('Error loading selected department from localStorage:', error);
+            beforeUnmount() {
+                // Clean up Tagify instances when component is destroyed
+                if (this.tagifyInstance) {
+                    this.tagifyInstance.destroy();
                 }
-                return null;
+                if (this.teamTagifyInstance) {
+                    this.teamTagifyInstance.destroy();
+                }
+                if (this.membersTagifyInstance) {
+                    this.membersTagifyInstance.destroy();
+                }
+                if (this.managerTagifyInstance) {
+                    this.managerTagifyInstance.destroy();
+                }
             },
-            
-            async loadDepartments() {
-                this.loading = true;
-                try {
-                    const response = await axios.get('/api/index.php?model=department&method=listByUser');
-                    this.departments = response.data || [];
-
-                    if (this.departments.length === 0) {
-                        this.selectedDepartment = null;
-                        this.loading = false;
-                        showProjectListError('どの部署にも所属していません。管理者に問い合わせてください。');
-                        return;
+            methods: {
+                // Department localStorage methods
+                saveSelectedDepartmentToLocalStorage(department) {
+                    if (department && department.id) {
+                        localStorage.setItem(SELECTED_DEPARTMENT_KEY, JSON.stringify({
+                            id: department.id,
+                            name: department.name,
+                            can_project: department.can_project
+                        }));
                     }
+                },
+            
+                loadSelectedDepartmentFromLocalStorage() {
+                    try {
+                        const savedDepartment = localStorage.getItem(SELECTED_DEPARTMENT_KEY);
+                        if (savedDepartment) {
+                            return JSON.parse(savedDepartment);
+                        }
+                    } catch (error) {
+                        console.error('Error loading selected department from localStorage:', error);
+                    }
+                    return null;
+                },
+            
+                async loadDepartments() {
+                    this.loading = true;
+                    try {
+                        const response = await axios.get('/api/index.php?model=department&method=listByUser');
+                        this.departments = response.data || [];
 
-                    if (this.selectedDepartment && this.selectedDepartment.id) {
-                        const matched = this.departments.find(
-                            (d) => d && d.id == this.selectedDepartment.id && d.can_project == 1
-                        );
-                        if (matched) {
-                            this.selectedDepartment = matched;
-                            this.saveSelectedDepartmentToLocalStorage(matched);
+                        if (this.departments.length === 0) {
+                            this.selectedDepartment = null;
                             this.loading = false;
+                            showProjectListError('どの部署にも所属していません。管理者に問い合わせてください。');
                             return;
                         }
-                        this.selectedDepartment = null;
-                    }
 
-                        const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
-                        if (savedDepartment) {
-                        const department = this.departments.find(
-                            (d) => d && d.id == savedDepartment.id && d.can_project == 1
-                        );
-                            if (department) {
-                                this.viewProjects(department);
+                        if (this.selectedDepartment && this.selectedDepartment.id) {
+                            const matched = this.departments.find(
+                                (d) => d && d.id == this.selectedDepartment.id && d.can_project == 1
+                            );
+                            if (matched) {
+                                this.selectedDepartment = matched;
+                                this.saveSelectedDepartmentToLocalStorage(matched);
+                                this.loading = false;
                                 return;
                             }
+                            this.selectedDepartment = null;
                         }
+
+                            const savedDepartment = this.loadSelectedDepartmentFromLocalStorage();
+                            if (savedDepartment) {
+                            const department = this.departments.find(
+                                (d) => d && d.id == savedDepartment.id && d.can_project == 1
+                            );
+                                if (department) {
+                                    this.viewProjects(department);
+                                    return;
+                                }
+                            }
                         
-                    const firstDepartment = this.departments.find((d) => d && d.can_project == 1);
-                        if (firstDepartment) {
-                            this.viewProjects(firstDepartment);
-                        } else {
-                            this.loading = false;
+                        const firstDepartment = this.departments.find((d) => d && d.can_project == 1);
+                            if (firstDepartment) {
+                                this.viewProjects(firstDepartment);
+                            } else {
+                                this.loading = false;
+                            showProjectListError('どの部署にも所属していません。管理者に問い合わせてください。');
+                        }
+                    } catch (error) {
+                        console.error('Error loading departments:', error);
+                        this.loading = false;
+                        if (this.selectedDepartment && this.selectedDepartment.id) {
+                            return;
+                        }
+                        this.departments = [];
                         showProjectListError('どの部署にも所属していません。管理者に問い合わせてください。');
                     }
-                } catch (error) {
-                    console.error('Error loading departments:', error);
-                    this.loading = false;
-                    if (this.selectedDepartment && this.selectedDepartment.id) {
-                        return;
+                },
+                async getUserPermissions(departmentId) {
+                    try {
+                        const response = await axios.get(`/api/index.php?model=department&method=get_user_permission_by_department&userid=${USER_ID}&department_id=${departmentId}`);
+                        this.userPermissions = response.data;
+                        return this.userPermissions;
+                    } catch (error) {
+                        console.error('Error loading user permissions:', error);
+                        this.userPermissions = null;
+                        return null;
                     }
-                    this.departments = [];
-                    showProjectListError('どの部署にも所属していません。管理者に問い合わせてください。');
-                }
-            },
-            async getUserPermissions(departmentId) {
-                try {
-                    const response = await axios.get(`/api/index.php?model=department&method=get_user_permission_by_department&userid=${USER_ID}&department_id=${departmentId}`);
-                    this.userPermissions = response.data;
-                    return this.userPermissions;
-                } catch (error) {
-                    console.error('Error loading user permissions:', error);
-                    this.userPermissions = null;
-                    return null;
-                }
-            },
-            // Check if user has specific permission
-            hasPermission(permission) {
-                if(USER_ROLE == 'administrator') return true;
-                if (!this.userPermissions) return false;
-                return this.userPermissions[permission] == 1;
-            },
-            // Check if user can perform project actions
-            canAddProject() {
-                return this.hasPermission('project_add');
-            },
-            canEditProject() {
-                return this.hasPermission('project_edit');
-            },
-            canDeleteProject() {
-                return this.hasPermission('project_delete');
-            },
-            canManageProject() {
-                return this.hasPermission('project_manager');
-            },
-            canViewProjectDirectorColumns() {
-                if (USER_ROLE == 'administrator') return true;
-                if (!this.userPermissions) return false;
-                return this.userPermissions.project_director == 1
-                    || this.userPermissions.project_director_stat == 1
-                    || this.userPermissions.project_director_view == 1
-                    || this.userPermissions.project_director_edit == 1;
-            },
-            canCommentProject() {
-                return this.hasPermission('project_comment');
-            },
-            // ----- Notes (確認必要メモ) methods -----
-            async loadNotesForProject(projectId) {
-                try {
-                    const response = await axios.get(`/api/index.php?model=project&method=getNotes&project_id=${projectId}`);
-                    if (response.data && response.data.status === 'success') {
-                        this.notes = response.data.data || [];
-                    } else {
+                },
+                // Check if user has specific permission
+                hasPermission(permission) {
+                    if(USER_ROLE == 'administrator') return true;
+                    if (!this.userPermissions) return false;
+                    return this.userPermissions[permission] == 1;
+                },
+                // Check if user can perform project actions
+                canAddProject() {
+                    return this.hasPermission('project_add');
+                },
+                canEditProject() {
+                    return this.hasPermission('project_edit');
+                },
+                canDeleteProject() {
+                    return this.hasPermission('project_delete');
+                },
+                canManageProject() {
+                    return this.hasPermission('project_manager');
+                },
+                canViewProjectDirectorColumns() {
+                    if (USER_ROLE == 'administrator') return true;
+                    if (!this.userPermissions) return false;
+                    return this.userPermissions.project_director == 1
+                        || this.userPermissions.project_director_stat == 1
+                        || this.userPermissions.project_director_view == 1
+                        || this.userPermissions.project_director_edit == 1;
+                },
+                canCommentProject() {
+                    return this.hasPermission('project_comment');
+                },
+                // ----- Notes (確認必要メモ) methods -----
+                async loadNotesForProject(projectId) {
+                    try {
+                        const response = await axios.get(`/api/index.php?model=project&method=getNotes&project_id=${projectId}`);
+                        if (response.data && response.data.status === 'success') {
+                            this.notes = response.data.data || [];
+                        } else {
+                            this.notes = [];
+                        }
+                    } catch (error) {
+                        console.error('Error loading notes:', error);
                         this.notes = [];
                     }
-                } catch (error) {
-                    console.error('Error loading notes:', error);
-                    this.notes = [];
-                }
-            },
-            openNoteModalFromListById(projectId, noteId) {
-                this.currentNoteProjectId = projectId;
-                this.showNoteModal = true;
-                this.isNoteEditMode = true;
-                this.currentEditingNoteId = noteId; // Track which note is being edited
-                this.destroyQuillNoteEditor();
-                this.quillNoteContent = '';
+                },
+                openNoteModalFromListById(projectId, noteId) {
+                    this.currentNoteProjectId = projectId;
+                    this.showNoteModal = true;
+                    this.isNoteEditMode = true;
+                    this.currentEditingNoteId = noteId; // Track which note is being edited
+                    this.destroyQuillNoteEditor();
+                    this.quillNoteContent = '';
                 
-                // Reset editing note
-                this.editingNote = {
-                    id: null,
-                    title: '',
-                    content: '',
-                    is_important: false,
-                    needs_confirmation: 0,
-                    display_column: '',
-                    user_id: null
-                };
-                this.loadNotesForProject(projectId).then(() => {
-                    const match = this.notes.find(n => String(n.id) === String(noteId));
-                    if (match) {
-                        this.editingNote = {
-                            id: match.id,
-                            title: match.title,
-                            content: decodeHtmlForNote(match.content),
-                            is_important: match.is_important == 1,
-                            needs_confirmation: Number(match.needs_confirmation) || 0,
-                            display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : '',
-                            user_id: match.user_id
-                        };
-                        this.quillNoteContent = this.editingNote.content || '';
-                    }
-                    this.$nextTick(() => {
-                        this.initQuillNoteEditor();
-                    });
-                });
-            },
-            openNoteModalFromList(projectId, noteContent = null, noteType = 0, displayColumnKey = '') {
-                this.currentNoteProjectId = projectId;
-                this.showNoteModal = true;
-                this.isNoteEditMode = true;
-                this.currentEditingNoteId = null; // No specific note ID for fallback mode
-                this.destroyQuillNoteEditor();
-                this.quillNoteContent = '';
-                // noteType: 1 = CAILYメモ, 2 = GUISメモ. Nếu noteType = 0, set mặc định theo branch hiện tại (NOTE_DEFAULT_TYPE)
-                if (!noteType && typeof window !== 'undefined' && typeof window.NOTE_DEFAULT_TYPE !== 'undefined') {
-                    var def = parseInt(window.NOTE_DEFAULT_TYPE, 10);
-                    if (!isNaN(def)) noteType = def;
-                }
-                this.editingNote = {
-                    id: null,
-                    title: '',
-                    content: '',
-                    is_important: false,
-                    needs_confirmation: noteType || 0,
-                    display_column: displayColumnKey || '',
-                    user_id: null
-                };
-                this.loadNotesForProject(projectId).then(() => {
-                    if (noteContent) {
-                        const trimmed = noteContent.trim();
-                        const match = this.notes.find(n => (n.content || '').trim() === trimmed && (n.needs_confirmation == 1 || n.needs_confirmation == 2));
+                    // Reset editing note
+                    this.editingNote = {
+                        id: null,
+                        title: '',
+                        content: '',
+                        is_important: false,
+                        needs_confirmation: 0,
+                        display_column: '',
+                        user_id: null
+                    };
+                    this.loadNotesForProject(projectId).then(() => {
+                        const match = this.notes.find(n => String(n.id) === String(noteId));
                         if (match) {
                             this.editingNote = {
                                 id: match.id,
@@ -8491,909 +7341,959 @@ var projectTable;
                                 content: decodeHtmlForNote(match.content),
                                 is_important: match.is_important == 1,
                                 needs_confirmation: Number(match.needs_confirmation) || 0,
-                                display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : (displayColumnKey || ''),
+                                display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : '',
                                 user_id: match.user_id
                             };
                             this.quillNoteContent = this.editingNote.content || '';
-                        } else {
-                            this.editingNote.content = decodeHtmlForNote(noteContent);
-                            this.editingNote.needs_confirmation = noteType || 0;
-                            this.quillNoteContent = this.editingNote.content || '';
                         }
-                    }
-                    this.$nextTick(() => {
-                        this.initQuillNoteEditor();
-                    });
-                });
-            },
-            closeNoteModal() {
-                this.showNoteModal = false;
-                this.isNoteEditMode = false;
-                this.savingNote = false;
-                this.currentEditingNoteId = null; // Clear editing note tracking
-                this.destroyQuillNoteEditor();
-                
-                this.editingNote = {
-                    id: null,
-                    title: '',
-                    content: '',
-                    is_important: false,
-                    needs_confirmation: 0,
-                    display_column: '',
-                    user_id: null
-                };
-                this.quillNoteContent = '';
-            },
-            getNoteDisplayColumnLabel(value) {
-                if (!value) return '';
-                const opts = this.noteDisplayColumnOptions || [];
-                const o = opts.find(function(x) { return x.value === value; });
-                return o ? o.text : value;
-            },
-            getQuillNoteHtml() {
-                if (!this.quillNoteInstance) return '';
-                if (typeof this.quillNoteInstance.getSemanticHTML === 'function') {
-                    return this.quillNoteInstance.getSemanticHTML();
-                }
-                return this.quillNoteInstance.root ? this.quillNoteInstance.root.innerHTML : '';
-            },
-            syncNoteEditorContent() {
-                if (!this.quillNoteInstance) return;
-                this.quillNoteContent = this.getQuillNoteHtml();
-            },
-            noteContentHasText(rawContent) {
-                if (!rawContent) return false;
-                const text = String(rawContent).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
-                return text.length > 0;
-            },
-            initQuillNoteEditor() {
-                if (!this.isNoteEditMode || !this.showNoteModal) return;
-                this.destroyQuillNoteEditor();
-                var self = this;
-                ensureProjectListQuill().then(function() {
-                    if (!self.isNoteEditMode || !self.showNoteModal) return;
-                    self.$nextTick(() => {
-                setTimeout(() => {
-                    const toolbarOptions = [
-                        ['bold', 'italic', 'underline', 'strike'],
-                        [{ color: [] }, { background: [] }],
-                        [{ list: 'ordered' }, { list: 'bullet' }],
-                        [{ header: '1' }, { header: '2' }, 'blockquote'],
-                        ['link', 'clean']
-                    ];
-                    const el = document.getElementById('quill_note_content');
-                    if (!el || typeof Quill === 'undefined') return;
-                    self.quillNoteInstance = new Quill(el, {
-                        bounds: el,
-                        placeholder: 'メモの詳細を入力してください...',
-                        modules: {
-                            toolbar: {
-                                container: toolbarOptions
-                            }
-                        },
-                        theme: 'snow'
-                    });
-                    if (self.editingNote.content) {
-                        const html = typeof decodeHtmlEntities !== 'undefined' ? decodeHtmlEntities(self.editingNote.content) : self.editingNote.content;
-                        self.quillNoteInstance.root.innerHTML = html;
-                    }
-                        self.syncNoteEditorContent();
-                    self.quillNoteInstance.on('text-change', () => {
-                            self.syncNoteEditorContent();
-                    });
-                    }, 100);
-                    });
-                }).catch(function(err) {
-                    console.error('Failed to load Quill for note editor:', err);
-                });
-            },
-            destroyQuillNoteEditor() {
-                    const el = document.getElementById('quill_note_content');
-                    if (el) {
-                    const editorRoot = el.closest('.custom_editor');
-                    if (editorRoot) {
-                        editorRoot.querySelectorAll('.ql-toolbar').forEach(function(toolbar) {
-                            toolbar.remove();
+                        this.$nextTick(() => {
+                            this.initQuillNoteEditor();
                         });
+                    });
+                },
+                openNoteModalFromList(projectId, noteContent = null, noteType = 0, displayColumnKey = '') {
+                    this.currentNoteProjectId = projectId;
+                    this.showNoteModal = true;
+                    this.isNoteEditMode = true;
+                    this.currentEditingNoteId = null; // No specific note ID for fallback mode
+                    this.destroyQuillNoteEditor();
+                    this.quillNoteContent = '';
+                    // noteType: 1 = CAILYメモ, 2 = GUISメモ. Nếu noteType = 0, set mặc định theo branch hiện tại (NOTE_DEFAULT_TYPE)
+                    if (!noteType && typeof window !== 'undefined' && typeof window.NOTE_DEFAULT_TYPE !== 'undefined') {
+                        var def = parseInt(window.NOTE_DEFAULT_TYPE, 10);
+                        if (!isNaN(def)) noteType = def;
                     }
-                        el.innerHTML = '';
-                    el.className = 'custom_editor_content';
-                    }
-                this.quillNoteInstance = null;
-                this.quillNoteContent = '';
-            },
-            getNoteEditorContent() {
-                const fromEditor = this.getQuillNoteHtml().trim();
-                if (fromEditor) return fromEditor;
-                return ((this.quillNoteContent || '').trim() || (this.editingNote.content || '').trim());
-            },
-            hasNoteEditorContent() {
-                return this.noteContentHasText(this.getNoteEditorContent());
-            },
-            async saveNote() {
-                if (this.savingNote) return;
-                const rawContent = this.getNoteEditorContent();
-                if (!this.hasNoteEditorContent()) {
-                    showProjectListError('内容を入力してください');
-                    return;
-                }
-                if (!this.currentNoteProjectId) {
-                    showProjectListError('プロジェクトIDが取得できません');
-                    return;
-                }
-                this.savingNote = true;
-                try {
-                    const formData = new FormData();
-                    formData.append('project_id', this.currentNoteProjectId);
-                    formData.append('content', rawContent);
-                    formData.append('is_important', this.editingNote.is_important ? 1 : 0);
-                    formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
-                    formData.append('display_column', this.editingNote.display_column || '');
-                    
-                    let response;
-                    if (this.editingNote.id) {
-                        formData.append('id', this.editingNote.id);
-                        response = await axios.post('/api/index.php?model=project&method=updateNote', formData);
-                    } else {
-                        response = await axios.post('/api/index.php?model=project&method=addNote', formData);
-                    }
-                    
-                    if (response.data && response.data.status === 'success') {
-                        showMessage('メモが保存されました');
-                        this.closeNoteModal();
-                        if (projectTable) {
-                            reloadProjectTable(false);
+                    this.editingNote = {
+                        id: null,
+                        title: '',
+                        content: '',
+                        is_important: false,
+                        needs_confirmation: noteType || 0,
+                        display_column: displayColumnKey || '',
+                        user_id: null
+                    };
+                    this.loadNotesForProject(projectId).then(() => {
+                        if (noteContent) {
+                            const trimmed = noteContent.trim();
+                            const match = this.notes.find(n => (n.content || '').trim() === trimmed && (n.needs_confirmation == 1 || n.needs_confirmation == 2));
+                            if (match) {
+                                this.editingNote = {
+                                    id: match.id,
+                                    title: match.title,
+                                    content: decodeHtmlForNote(match.content),
+                                    is_important: match.is_important == 1,
+                                    needs_confirmation: Number(match.needs_confirmation) || 0,
+                                    display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : (displayColumnKey || ''),
+                                    user_id: match.user_id
+                                };
+                                this.quillNoteContent = this.editingNote.content || '';
+                            } else {
+                                this.editingNote.content = decodeHtmlForNote(noteContent);
+                                this.editingNote.needs_confirmation = noteType || 0;
+                                this.quillNoteContent = this.editingNote.content || '';
+                            }
                         }
-                    } else {
-                        showProjectListError('メモの保存に失敗しました', response.data);
-                    }
-                } catch (error) {
-                    console.error('Error saving note:', error);
-                    showProjectListError('メモの保存に失敗しました', error);
-                } finally {
+                        this.$nextTick(() => {
+                            this.initQuillNoteEditor();
+                        });
+                    });
+                },
+                closeNoteModal() {
+                    this.showNoteModal = false;
+                    this.isNoteEditMode = false;
                     this.savingNote = false;
-                }
-            },
-            async deleteCurrentNote() {
-                if (!this.editingNote || !this.editingNote.id) return;
-                if (!confirm('このメモを削除しますか？')) return;
-                try {
-                    const formData = new FormData();
-                    formData.append('id', this.editingNote.id);
-                    const response = await axios.post('/api/index.php?model=project&method=deleteNote', formData);
-                    if (response.data && response.data.status === 'success') {
-                        showMessage('メモが削除されました');
-                        this.closeNoteModal();
-                        if (projectTable) {
-                            reloadProjectTable(false);
-                        }
-                    } else {
-                        showProjectListError('メモの削除に失敗しました', response.data);
+                    this.currentEditingNoteId = null; // Clear editing note tracking
+                    this.destroyQuillNoteEditor();
+                
+                    this.editingNote = {
+                        id: null,
+                        title: '',
+                        content: '',
+                        is_important: false,
+                        needs_confirmation: 0,
+                        display_column: '',
+                        user_id: null
+                    };
+                    this.quillNoteContent = '';
+                },
+                getNoteDisplayColumnLabel(value) {
+                    if (!value) return '';
+                    const opts = this.noteDisplayColumnOptions || [];
+                    const o = opts.find(function(x) { return x.value === value; });
+                    return o ? o.text : value;
+                },
+                getQuillNoteHtml() {
+                    if (!this.quillNoteInstance) return '';
+                    if (typeof this.quillNoteInstance.getSemanticHTML === 'function') {
+                        return this.quillNoteInstance.getSemanticHTML();
                     }
-                } catch (error) {
-                    console.error('Error deleting note:', error);
-                    showProjectListError('メモの削除に失敗しました', error);
-                }
-            },
-            canEditNote(note) {
-                // 案件一覧ではひとまず全ユーザーに編集を許可
-                return true;
-            },
-            async loadUsers() {
-                try {
-                    const response = await axios.get('/api/index.php?model=department&method=get_users&department_id=' + this.selectedDepartment.id);
-                    this.users = response.data || [];
-                } catch (error) {
-                    console.error('Error loading users:', error);
-                }
-            },
-            async loadTeams() {
-                try {
-                    const response = await axios.get('/api/index.php?model=team&method=listbydepartment&department_id=' + this.selectedDepartment.id);
-                    this.teams = response.data || [];
-                    return this.teams;
-                } catch (error) {
-                    console.error('Error loading teams:', error);
-                    return [];
-                }
-            },
-            getOrderTypeBadgeClass(orderType) {
-                const type = String(orderType || '').trim();
-                switch (type) {
-                    case '修正':
-                        return 'bg-warning'; // Yellow for edit
-                    case '新規':
-                        return 'bg-primary'; // Blue for new
-                    case '新規修正':
-                        return 'bg-success'; // Green for new revision
-                    case '変更':
-                        return 'bg-danger'; // Red for change
-                    default:
-                        return 'bg-info'; // Gray for unknown types
-                }
-            },
-            exportProjectListExcel() {
-                exportProjectListToExcel();
-            },
-            syncBusinessDocumentListRow() {
-                // Không reload/cập nhật DataTable khi modal đang mở — auto-save gọi liên tục;
-                // bảng được refresh một lần khi đóng modal (hidden.bs.modal).
-            },
-            viewProjects(department) {
-                if (!department || !department.id) {
-                    console.error('Invalid department object:', department);
-                    return;
-                }
-                
-                this.loading = true;
-                this.selectedDepartment = department;
-                // Cập nhật context chat để AI biết đang xem danh sách dự án của department nào
-                if (typeof window !== 'undefined') {
-                    window.__chatPageContext = window.__chatPageContext || {};
-                    window.__chatPageContext.page = 'project_list';
-                    window.__chatPageContext.department_id = department && department.id ? department.id : null;
-                }
-                // Save selected department to localStorage
-                this.saveSelectedDepartmentToLocalStorage(department);
-
-                var savedScroll = getSavedProjectListScroll();
-                if (savedScroll) {
-                    scheduleProjectListScrollRestore(savedScroll);
-                } else {
-                    pendingScrollRestore = null;
-                }
-                
-                // Destroy bảng cũ để refresh đúng custom fields và 列の表示 của department mới
-                destroyProjectTable();
-                
-                // Reset teams/members UI for new department (before async loads)
-                if (this.teamTagifyInstance) {
-                    this.teamTagifyInstance.removeAllTags();
-                }
-                if (this.membersTagifyInstance) {
-                    this.membersTagifyInstance.removeAllTags();
-                }
-                this.newProject.members = [];
-
-                // Overlap permission + teams + users while Vue flushes DOM
-                var teamsPromise = this.loadTeams();
-                var usersPromise = this.loadUsers();
-                var permissionsPromise = this.getUserPermissions(department.id);
-
-                this.$nextTick(async () => {
+                    return this.quillNoteInstance.root ? this.quillNoteInstance.root.innerHTML : '';
+                },
+                syncNoteEditorContent() {
+                    if (!this.quillNoteInstance) return;
+                    this.quillNoteContent = this.getQuillNoteHtml();
+                },
+                noteContentHasText(rawContent) {
+                    if (!rawContent) return false;
+                    const text = String(rawContent).replace(/<[^>]*>/g, '').replace(/&nbsp;/gi, ' ').trim();
+                    return text.length > 0;
+                },
+                initQuillNoteEditor() {
+                    if (!this.isNoteEditMode || !this.showNoteModal) return;
+                    this.destroyQuillNoteEditor();
+                    var self = this;
+                    ensureProjectListQuill().then(function() {
+                        if (!self.isNoteEditMode || !self.showNoteModal) return;
+                        self.$nextTick(() => {
+                    setTimeout(() => {
+                        const toolbarOptions = [
+                            ['bold', 'italic', 'underline', 'strike'],
+                            [{ color: [] }, { background: [] }],
+                            [{ list: 'ordered' }, { list: 'bullet' }],
+                            [{ header: '1' }, { header: '2' }, 'blockquote'],
+                            ['link', 'clean']
+                        ];
+                        const el = document.getElementById('quill_note_content');
+                        if (!el || typeof Quill === 'undefined') return;
+                        self.quillNoteInstance = new Quill(el, {
+                            bounds: el,
+                            placeholder: 'メモの詳細を入力してください...',
+                            modules: {
+                                toolbar: {
+                                    container: toolbarOptions
+                                }
+                            },
+                            theme: 'snow'
+                        });
+                        if (self.editingNote.content) {
+                            const html = typeof decodeHtmlEntities !== 'undefined' ? decodeHtmlEntities(self.editingNote.content) : self.editingNote.content;
+                            self.quillNoteInstance.root.innerHTML = html;
+                        }
+                            self.syncNoteEditorContent();
+                        self.quillNoteInstance.on('text-change', () => {
+                                self.syncNoteEditorContent();
+                        });
+                        }, 100);
+                        });
+                    }).catch(function(err) {
+                        console.error('Failed to load Quill for note editor:', err);
+                    });
+                },
+                destroyQuillNoteEditor() {
+                        const el = document.getElementById('quill_note_content');
+                        if (el) {
+                        const editorRoot = el.closest('.custom_editor');
+                        if (editorRoot) {
+                            editorRoot.querySelectorAll('.ql-toolbar').forEach(function(toolbar) {
+                                toolbar.remove();
+                            });
+                        }
+                            el.innerHTML = '';
+                        el.className = 'custom_editor_content';
+                        }
+                    this.quillNoteInstance = null;
+                    this.quillNoteContent = '';
+                },
+                getNoteEditorContent() {
+                    const fromEditor = this.getQuillNoteHtml().trim();
+                    if (fromEditor) return fromEditor;
+                    return ((this.quillNoteContent || '').trim() || (this.editingNote.content || '').trim());
+                },
+                hasNoteEditorContent() {
+                    return this.noteContentHasText(this.getNoteEditorContent());
+                },
+                async saveNote() {
+                    if (this.savingNote) return;
+                    const rawContent = this.getNoteEditorContent();
+                    if (!this.hasNoteEditorContent()) {
+                        showProjectListError('内容を入力してください');
+                        return;
+                    }
+                    if (!this.currentNoteProjectId) {
+                        showProjectListError('プロジェクトIDが取得できません');
+                        return;
+                    }
+                    this.savingNote = true;
                     try {
-                        await permissionsPromise;
-                        refreshProjectListSortFieldOptions();
-                        if (typeof document !== 'undefined' && document.body) {
-                            document.body.classList.toggle('can-view-end-date', canViewEndDateColumn());
+                        const formData = new FormData();
+                        formData.append('project_id', this.currentNoteProjectId);
+                        formData.append('content', rawContent);
+                        formData.append('is_important', this.editingNote.is_important ? 1 : 0);
+                        formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
+                        formData.append('display_column', this.editingNote.display_column || '');
+                    
+                        let response;
+                        if (this.editingNote.id) {
+                            formData.append('id', this.editingNote.id);
+                            response = await axios.post('/api/index.php?model=project&method=updateNote', formData);
+                        } else {
+                            response = await axios.post('/api/index.php?model=project&method=addNote', formData);
                         }
-                        syncQuickEditStatusOptions();
-                        // DataTable serverSide already ajax-loads on init — do not reload here
-                        await initializeProjectTable();
+                    
+                        if (response.data && response.data.status === 'success') {
+                            showMessage('メモが保存されました');
+                            this.closeNoteModal();
+                            if (projectTable) {
+                                reloadProjectTable(false);
+                            }
+                        } else {
+                            showProjectListError('メモの保存に失敗しました', response.data);
+                        }
+                    } catch (error) {
+                        console.error('Error saving note:', error);
+                        showProjectListError('メモの保存に失敗しました', error);
                     } finally {
-                        this.loading = false;
+                        this.savingNote = false;
                     }
-                });
+                },
+                async deleteCurrentNote() {
+                    if (!this.editingNote || !this.editingNote.id) return;
+                    if (!confirm('このメモを削除しますか？')) return;
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', this.editingNote.id);
+                        const response = await axios.post('/api/index.php?model=project&method=deleteNote', formData);
+                        if (response.data && response.data.status === 'success') {
+                            showMessage('メモが削除されました');
+                            this.closeNoteModal();
+                            if (projectTable) {
+                                reloadProjectTable(false);
+                            }
+                        } else {
+                            showProjectListError('メモの削除に失敗しました', response.data);
+                        }
+                    } catch (error) {
+                        console.error('Error deleting note:', error);
+                        showProjectListError('メモの削除に失敗しました', error);
+                    }
+                },
+                canEditNote(note) {
+                    // 案件一覧ではひとまず全ユーザーに編集を許可
+                    return true;
+                },
+                async loadUsers() {
+                    try {
+                        const response = await axios.get('/api/index.php?model=department&method=get_users&department_id=' + this.selectedDepartment.id);
+                        this.users = response.data || [];
+                    } catch (error) {
+                        console.error('Error loading users:', error);
+                    }
+                },
+                async loadTeams() {
+                    try {
+                        const response = await axios.get('/api/index.php?model=team&method=listbydepartment&department_id=' + this.selectedDepartment.id);
+                        this.teams = response.data || [];
+                        return this.teams;
+                    } catch (error) {
+                        console.error('Error loading teams:', error);
+                        return [];
+                    }
+                },
+                getOrderTypeBadgeClass(orderType) {
+                    const type = String(orderType || '').trim();
+                    switch (type) {
+                        case '修正':
+                            return 'bg-warning'; // Yellow for edit
+                        case '新規':
+                            return 'bg-primary'; // Blue for new
+                        case '新規修正':
+                            return 'bg-success'; // Green for new revision
+                        case '変更':
+                            return 'bg-danger'; // Red for change
+                        default:
+                            return 'bg-info'; // Gray for unknown types
+                    }
+                },
+                exportProjectListExcel() {
+                    exportProjectListToExcel();
+                },
+                syncBusinessDocumentListRow() {
+                    // Không reload/cập nhật DataTable khi modal đang mở — auto-save gọi liên tục;
+                    // bảng được refresh một lần khi đóng modal (hidden.bs.modal).
+                },
+                viewProjects(department) {
+                    if (!department || !department.id) {
+                        console.error('Invalid department object:', department);
+                        return;
+                    }
+                
+                    this.loading = true;
+                    this.selectedDepartment = department;
+                    // Cập nhật context chat để AI biết đang xem danh sách dự án của department nào
+                    if (typeof window !== 'undefined') {
+                        window.__chatPageContext = window.__chatPageContext || {};
+                        window.__chatPageContext.page = 'project_list';
+                        window.__chatPageContext.department_id = department && department.id ? department.id : null;
+                    }
+                    // Save selected department to localStorage
+                    this.saveSelectedDepartmentToLocalStorage(department);
 
-                teamsPromise.then(() => {
-                    if (this.teamTagifyInstance) {
-                        this.teamTagifyInstance.whitelist = this.teams.map(team => ({
-                            id: team.id,
-                            value: team.name,
-                            name: team.name
-                        }));
+                    var savedScroll = getSavedProjectListScroll();
+                    if (savedScroll) {
+                        scheduleProjectListScrollRestore(savedScroll);
+                    } else {
+                        pendingScrollRestore = null;
                     }
-                    refreshFilterTeamSelect(this.teams);
-                });
-                usersPromise.then(() => {
+                
+                    // Destroy bảng cũ để refresh đúng custom fields và 列の表示 của department mới
+                    destroyProjectTable();
+                
+                    // Reset teams/members UI for new department (before async loads)
+                    if (this.teamTagifyInstance) {
+                        this.teamTagifyInstance.removeAllTags();
+                    }
                     if (this.membersTagifyInstance) {
-                        this.membersTagifyInstance.whitelist = this.users.map(user => ({
-                            id: user.id,
-                            value: user.user_name,
-                            name: user.user_name
-                        }));
+                        this.membersTagifyInstance.removeAllTags();
+                    }
+                    this.newProject.members = [];
+
+                    // Overlap permission + teams + users while Vue flushes DOM
+                    var teamsPromise = this.loadTeams();
+                    var usersPromise = this.loadUsers();
+                    var permissionsPromise = this.getUserPermissions(department.id);
+
+                    this.$nextTick(async () => {
+                        try {
+                            await permissionsPromise;
+                            refreshProjectListSortFieldOptions();
+                            if (typeof document !== 'undefined' && document.body) {
+                                document.body.classList.toggle('can-view-end-date', canViewEndDateColumn());
+                            }
+                            syncQuickEditStatusOptions();
+                            // DataTable serverSide already ajax-loads on init — do not reload here
+                            await initializeProjectTable();
+                        } finally {
+                            this.loading = false;
+                        }
+                    });
+
+                    teamsPromise.then(() => {
+                        if (this.teamTagifyInstance) {
+                            this.teamTagifyInstance.whitelist = this.teams.map(team => ({
+                                id: team.id,
+                                value: team.name,
+                                name: team.name
+                            }));
+                        }
+                        refreshFilterTeamSelect(this.teams);
+                    });
+                    usersPromise.then(() => {
+                        if (this.membersTagifyInstance) {
+                            this.membersTagifyInstance.whitelist = this.users.map(user => ({
+                                id: user.id,
+                                value: user.user_name,
+                                name: user.user_name
+                            }));
+                        }
+                        if (this.managerTagifyInstance) {
+                            this.managerTagifyInstance.whitelist = this.users.map(user => ({
+                                id: user.id,
+                                value: user.user_name,
+                                name: user.user_name
+                            }));
+                        }
+                    });
+                },
+                isStatusFilterSelected(status) {
+                    return this.selectedStatusKeys.indexOf(status.key) !== -1;
+                },
+                toggleProjectStatusFilter(status) {
+                    const key = status && status.key;
+                    if (!isValidProjectStatusKey(key)) return;
+                    const idx = this.selectedStatusKeys.indexOf(key);
+                    if (idx >= 0) {
+                        this.selectedStatusKeys.splice(idx, 1);
+                    } else {
+                        this.selectedStatusKeys.push(key);
+                    }
+                    if (typeof saveFiltersToLocalStorage === 'function') {
+                        saveFiltersToLocalStorage();
+                    }
+                    renderActiveFilters();
+                    if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+                        applyProjectListDefaultSort(projectTable);
+                    }
+                    this.loadProjects();
+                },
+                filterProjectByStatus(status) {
+                    this.toggleProjectStatusFilter(status);
+                },
+                onFavoritesFilterChange() {
+                    const isChecked = $('#filterFavoritesOnly').is(':checked');
+                    this.showClearAllFavoritesBtn = isChecked;
+                    // Save filter state to localStorage
+                    saveFiltersToLocalStorage();
+                    if (projectTable) {
+                        reloadProjectTable(true);
+                    }
+                },
+                async toggleProjectFavorite(projectId, element) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('project_id', projectId);
+                    
+                        const response = await axios.post('/api/index.php?model=project&method=toggleFavorite', formData);
+                    
+                        if (response.data && response.data.status === 'success') {
+                            // Update icon appearance
+                            const isFavorite = response.data.is_favorite;
+                            $(element).toggleClass('text-warning', isFavorite).toggleClass('text-muted', !isFavorite);
+                            $(element).attr('title', isFavorite ? 'お気に入りから削除' : 'お気に入りに追加');
+                        
+                            // Update row data if table exists
+                            if (projectTable) {
+                                const row = $(element).closest('tr');
+                                const rowData = projectTable.row(row).data();
+                                if (rowData) {
+                                    rowData.is_favorite = isFavorite ? 1 : 0;
+                                }
+                            }
+                        } else {
+                            showProjectListError(response.data?.message || '操作に失敗しました。', response.data);
+                        }
+                    } catch (error) {
+                        console.error('Error toggling favorite:', error);
+                        showProjectListError('操作に失敗しました。', error);
+                    }
+                },
+                async clearAllFavorites() {
+                    try {
+                        const result = await Swal.fire({
+                            title: '確認',
+                            text: 'すべてのお気に入りを削除しますか？',
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#d33',
+                            cancelButtonColor: '#3085d6',
+                            confirmButtonText: '削除',
+                            cancelButtonText: 'キャンセル'
+                        });
+                    
+                        if (result.isConfirmed) {
+                            const response = await axios.post('/api/index.php?model=project&method=clearAllFavorites');
+                        
+                            if (response.data && response.data.status === 'success') {
+                                // Uncheck the favorites filter
+                                $('#filterFavoritesOnly').prop('checked', false);
+                                this.showClearAllFavoritesBtn = false;
+                                // Reload the table
+                                if (projectTable) {
+                                    reloadProjectTable(true);
+                                }
+                            } else {
+                                showProjectListError(response.data?.message || '削除に失敗しました。', response.data);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error clearing all favorites:', error);
+                        showProjectListError('削除に失敗しました。', error);
+                    }
+                },
+                async loadProjects() {
+                    try {
+                        // Ensure DataTable is initialized before reloading
+                        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
+                            await initializeProjectTable();
+                        } else {
+                            reloadProjectTable(true);
+                        }
+                    } catch (error) {
+                        console.error('Error loading projects:', error);
+                    }
+                },
+                openNewProjectModal() {
+                    this.isEdit = false;
+                    this.editingId = null;
+                    this.resetProjectForm();
+                    if (this.selectedDepartment) {
+                        this.newProject.department_id = this.selectedDepartment.id;
+                    }
+                    const modal = new bootstrap.Modal(document.getElementById('newProjectModal'));
+                    modal.show();
+                },
+                async editProject(project) {
+                    this.isEdit = true;
+                    this.editingId = project.id;
+                    this.newProject = {
+                        name: project.name || '',
+                        description: project.description || '',
+                        status: project.status || 'draft',
+                        priority: project.priority || 'medium',
+                        start_date: project.start_date || '',
+                        end_date: project.end_date || '',
+                        members: [],
+                        department_id: project.department_id || '',
+                        building_size: project.building_size || '',
+                        building_type: project.building_type || '',
+                        project_number: project.project_number || '',
+                        project_order_type: project.project_order_type || ['new'],
+                        estimated_hours: project.estimated_hours || '',
+                        amount: project.amount || '',
+                        teams: project.teams || '',
+                        customer_id: project.customer_id || '',
+                        company_name: project.company_name || '',
+                        branch_id: project.branch_id || '',
+                        contact_name: project.contact_name || '',
+                        contact_phone: project.contact_phone || ''
+                    };
+                    const modal = new bootstrap.Modal(document.getElementById('newProjectModal'));
+                    modal.show();
+                    // List API omits description — load full row fields for edit form
+                    try {
+                        const res = await axios.get('/api/index.php?model=project&method=getById&id=' + encodeURIComponent(project.id));
+                        const p = res.data && res.data.data ? res.data.data : (res.data || {});
+                        if (p && p.id) {
+                            this.newProject.description = p.description || '';
+                            if (p.building_size) this.newProject.building_size = p.building_size;
+                            if (p.building_type) this.newProject.building_type = p.building_type;
+                            if (p.contact_phone) this.newProject.contact_phone = p.contact_phone;
+                        }
+                    } catch (e) {
+                        console.warn('Failed to load project detail for edit:', e);
+                    }
+                },
+                async saveProject() {
+                    if (!this.formValidator) {
+                        console.error('Form validator not initialized');
+                        return;
+                    }
+
+                    // Check field visibility and disable validation for hidden fields
+                    const companyNameVisible = $('#company_name').closest('.form-group').is(':visible');
+                    const customerIdVisible = $('#customer_id').closest('.form-group').is(':visible');
+
+                    // Store original validation state
+                    const originalValidators = {};
+                
+                    if (!companyNameVisible) {
+                        originalValidators.company_name = true;
+                        this.formValidator.disableValidator('company_name');
+                    }
+                    if (!customerIdVisible) {
+                        originalValidators.customer_id = true;
+                        this.formValidator.disableValidator('customer_id');
+                    }
+
+                    // Validate the form
+                    const status = await this.formValidator.validate();
+
+                    // Restore original validation state
+                    Object.keys(originalValidators).forEach(field => {
+                        this.formValidator.enableValidator(field);
+                    });
+
+                    if (status === 'Valid') {
+                        try {
+                            const formData = new FormData();
+                            formData.append('model', 'project');
+                            formData.append('method', this.isEdit ? 'edit' : 'add');
+                        
+                            if (this.isEdit) {
+                                formData.append('id', this.editingId);
+                            }
+                        
+                            // Get and validate Select2 values
+                            const categorySelect = $('#category_id');
+                            const companySelect = $('#company_name');
+                            const customerSelect = $('#customer_id');
+                        
+                            const categoryId = categorySelect.select2('data')[0]?.id || '';
+                            const companyName = companySelect.select2('data')[0]?.id || '';
+                            const customerId = customerSelect.select2('data')[0]?.id || '';
+                        
+                            // Update newProject with Select2 values
+                            this.newProject.category_id = categoryId;
+                            this.newProject.company_name = companyName;
+                            this.newProject.customer_id = customerId;
+                        
+                            // Get team data from Tagify
+                            const teamData = this.teamTagifyInstance ? this.teamTagifyInstance.value.map(tag => tag.id || tag.value) : [];
+                            const membersData = this.membersTagifyInstance ? this.membersTagifyInstance.value.map(tag => tag.id || tag.value) : [];
+                            const managerData = this.managerTagifyInstance ? this.managerTagifyInstance.value.map(tag => tag.id || tag.value) : [];
+                        
+                            // Append all project data
+                            Object.keys(this.newProject).forEach(key => {
+                                if (key === 'members' && Array.isArray(this.newProject[key])) {
+                                    // Use membersData from Tagify instead of this.newProject.members
+                                    membersData.forEach(member => {
+                                        formData.append('members[]', member);
+                                    });
+                                } else if (key === 'team') {
+                                    // Add team data from Tagify
+                                    teamData.forEach(team => {
+                                        formData.append('team[]', team);
+                                    });
+                                } else if (key === 'manager') {
+                                    // Add manager data from Tagify
+                                    managerData.forEach(manager => {
+                                        formData.append('manager[]', manager);
+                                    });
+                                } else if (key === 'project_order_type' && this.tagifyInstance) {
+                                    const tags = this.tagifyInstance.value.map(tag => tag.value);
+                                    formData.append(key, JSON.stringify(tags));
+                                } else {
+                                    formData.append(key, this.newProject[key] || '');
+                                }
+                            });
+                        
+                            // Explicitly add Select2 values to ensure they're included
+                            if (categoryId) {
+                                formData.set('category_id', categoryId);
+                            }
+                            if (companyName) {
+                                formData.set('company_name', companyName);
+                            }
+                            if (customerId) {
+                                formData.set('customer_id', customerId);
+                            }
+
+
+                            const response = await axios.post('/api/index.php?model=project&method=add', formData);
+                        
+                            if (response.data.status == 'success') {
+                                showMessage(this.isEdit ? 'プロジェクトを更新しました。' : 'プロジェクトを作成しました。');
+                                bootstrap.Modal.getInstance(document.getElementById('newProjectModal')).hide();
+                                this.loadProjects();
+                                this.resetProjectForm();
+                            } else{
+                                showProjectListError('プロジェクトの保存に失敗しました。', response.data);
+                            }
+                        } catch (error) {
+                            console.error('Error saving project:', error);
+                            showProjectListError('プロジェクトの保存に失敗しました。', error);
+                        }
+                    }
+                },
+                deleteProject(id) {
+                    this.deletingId = id;
+                    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+                    modal.show();
+                },
+                async confirmDelete() {
+                    try {
+                        const formData = new FormData();
+                        formData.append('model', 'project');
+                        formData.append('method', 'delete');
+                        formData.append('id', this.deletingId);
+                    
+                        const response = await axios.post('/api/index.php?model=project&method=delete', formData);
+                    
+                        if (response.data) {
+                            showMessage('プロジェクトを削除しました。');
+                            bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+                            this.loadProjects();
+                        }
+                    } catch (error) {
+                        console.error('Error deleting project:', error);
+                        if (error.response?.data?.error) {
+                            showProjectListError(error.response.data.error, error.response.data);
+                        } else {
+                            showProjectListError('プロジェクトの削除に失敗しました。', error);
+                        }
+                    }
+                },
+                resetProjectForm() {
+                    this.newProject = {
+                        name: '',
+                        description: '',
+                        status: 'draft',
+                        priority: 'medium',
+                        start_date: '',
+                        end_date: '',
+                        team: [],
+                        members: [],
+                        manager: [],
+                        department_id: '',
+                        building_size: '',
+                        building_type: '',
+                        building_number: '',
+                        building_branch: '',
+                        project_number: '',
+                        project_order_type: '新規',
+                        estimated_hours: '',
+                        amount: '',
+                        customer_id: '',
+                        company_name: '',
+                        branch_id: '',
+                        contact_name: '',
+                        contact_phone: ''
+                    };
+                    this.companies = [];
+                    this.contacts = [];
+                
+                    // Reset Tagify instances
+                    if (this.tagifyInstance) {
+                        this.tagifyInstance.removeAllTags();
+                        this.tagifyInstance.addTags(['新規']);
+                    }
+                    if (this.teamTagifyInstance) {
+                        this.teamTagifyInstance.removeAllTags();
+                    }
+                    if (this.membersTagifyInstance) {
+                        this.membersTagifyInstance.removeAllTags();
                     }
                     if (this.managerTagifyInstance) {
-                        this.managerTagifyInstance.whitelist = this.users.map(user => ({
-                            id: user.id,
-                            value: user.user_name,
-                            name: user.user_name
-                        }));
+                        this.managerTagifyInstance.removeAllTags();
                     }
-                });
-            },
-            isStatusFilterSelected(status) {
-                return this.selectedStatusKeys.indexOf(status.key) !== -1;
-            },
-            toggleProjectStatusFilter(status) {
-                const key = status && status.key;
-                if (!isValidProjectStatusKey(key)) return;
-                const idx = this.selectedStatusKeys.indexOf(key);
-                if (idx >= 0) {
-                    this.selectedStatusKeys.splice(idx, 1);
-                } else {
-                    this.selectedStatusKeys.push(key);
-                }
-                if (typeof saveFiltersToLocalStorage === 'function') {
-                    saveFiltersToLocalStorage();
-                }
-                renderActiveFilters();
-                if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                    applyProjectListDefaultSort(projectTable);
-                }
-                this.loadProjects();
-            },
-            filterProjectByStatus(status) {
-                this.toggleProjectStatusFilter(status);
-            },
-            onFavoritesFilterChange() {
-                const isChecked = $('#filterFavoritesOnly').is(':checked');
-                this.showClearAllFavoritesBtn = isChecked;
-                // Save filter state to localStorage
-                saveFiltersToLocalStorage();
-                if (projectTable) {
-                    reloadProjectTable(true);
-                }
-            },
-            async toggleProjectFavorite(projectId, element) {
-                try {
-                    const formData = new FormData();
-                    formData.append('project_id', projectId);
-                    
-                    const response = await axios.post('/api/index.php?model=project&method=toggleFavorite', formData);
-                    
-                    if (response.data && response.data.status === 'success') {
-                        // Update icon appearance
-                        const isFavorite = response.data.is_favorite;
-                        $(element).toggleClass('text-warning', isFavorite).toggleClass('text-muted', !isFavorite);
-                        $(element).attr('title', isFavorite ? 'お気に入りから削除' : 'お気に入りに追加');
-                        
-                        // Update row data if table exists
-                        if (projectTable) {
-                            const row = $(element).closest('tr');
-                            const rowData = projectTable.row(row).data();
-                            if (rowData) {
-                                rowData.is_favorite = isFavorite ? 1 : 0;
+
+                    // Reset Select2 dropdowns
+                    $('#category_id').val(null).trigger('change');
+                    $('#company_name').val(null).trigger('change');
+                    $('#customer_id').val(null).trigger('change');
+
+                    // Hide dependent fields
+                    $('#company_name').closest('.form-group').hide();
+                    $('#customer_id').closest('.form-group').hide();
+
+                    // Reset form validation
+                    if (this.formValidator) {
+                        this.formValidator.resetForm();
+                        this.formValidator.disableValidator('company_name');
+                        this.formValidator.disableValidator('customer_id');
+                    }
+                },
+                async loadCategories() {
+                    try {
+                        const response = await axios.get('/api/index.php?model=customer&method=list_categories');
+                        if (response.data && response.data.data) {
+                            this.categories = response.data.data;
+                        }
+                    } catch (error) {
+                        console.error('Error loading categories:', error);
+                    }
+                },
+                async loadCompanies() {
+                    try {
+                        const response = await axios.get('/api/index.php?model=customer&method=list_companies');
+                        if (response.data && response.data.data) {
+                            this.companies = response.data.data;
+                        }
+                    } catch (error) {
+                        console.error('Error loading companies:', error);
+                    }
+                },
+                async loadContacts() {
+                    try {
+                        const response = await axios.get('/api/index.php?model=customer&method=list_contacts');
+                        if (response.data && response.data.data) {
+                            this.contacts = response.data.data;
+                        }
+                    } catch (error) {
+                        console.error('Error loading contacts:', error);
+                    }
+                },
+                async onCategoryChange() {
+                    if (this.newProject.category_id) {
+                        try {
+                            const response = await axios.get(`/api/index.php?model=customer&method=list_companies_by_category&category_id=${this.newProject.category_id}`);
+                            if (response.data && response.data.data) {
+                                this.companies = response.data.data;
+                                // Reset company and contact selections
+                                this.newProject.company_name = '';
+                                this.newProject.customer_id = '';
+                                this.contacts = [];
                             }
+                        } catch (error) {
+                            console.error('Error loading companies:', error);
+                            this.companies = [];
                         }
                     } else {
-                        showProjectListError(response.data?.message || '操作に失敗しました。', response.data);
+                        this.companies = [];
+                        this.newProject.company_name = '';
+                        this.newProject.customer_id = '';
+                        this.contacts = [];
                     }
-                } catch (error) {
-                    console.error('Error toggling favorite:', error);
-                    showProjectListError('操作に失敗しました。', error);
-                }
-            },
-            async clearAllFavorites() {
-                try {
-                    const result = await Swal.fire({
-                        title: '確認',
-                        text: 'すべてのお気に入りを削除しますか？',
-                        icon: 'warning',
-                        showCancelButton: true,
-                        confirmButtonColor: '#d33',
-                        cancelButtonColor: '#3085d6',
-                        confirmButtonText: '削除',
-                        cancelButtonText: 'キャンセル'
-                    });
-                    
-                    if (result.isConfirmed) {
-                        const response = await axios.post('/api/index.php?model=project&method=clearAllFavorites');
+                },
+                async onCompanyChange() {
+                    if (this.newProject.company_name) {
+                        try {
+                            const response = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_company&company_name=${encodeURIComponent(this.newProject.company_name)}`);
+                            if (response.data && response.data.data) {
+                                this.contacts = response.data.data;
+                                // Reset contact selection
+                                this.newProject.customer_id = '';
+                            }
+                        } catch (error) {
+                            console.error('Error loading contacts:', error);
+                            this.contacts = [];
+                        }
+                    } else {
+                        this.contacts = [];
+                        this.newProject.customer_id = '';
+                    }
+                },
+                openNewCustomerModal() {
+                    // Close dropdown of select2
+                    $('#customer_id').select2('close');
+                    // Open new customer modal
+                    const modal = new bootstrap.Modal(document.getElementById('newCustomerModal'));
+                    modal.show();
+                },
+                async loadTeamMembers(teamId) {
+                    try {
+                        const response = await axios.get(`/api/index.php?model=team&method=get&id=${teamId}`);
+                        if (response.data && response.data.members && response.data.whitelist) {
+                            const members = response.data.members.map(member => ({
+                                id: member.user_id,
+                                value: member.user_name,
+                                name: member.user_name
+                            }));
                         
-                        if (response.data && response.data.status === 'success') {
-                            // Uncheck the favorites filter
-                            $('#filterFavoritesOnly').prop('checked', false);
-                            this.showClearAllFavoritesBtn = false;
-                            // Reload the table
+                            if (this.membersTagifyInstance) {
+                                this.membersTagifyInstance.addTags(members);
+                                this.newProject.members = [...this.newProject.members, ...members.map(m => m.id)];
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading team members:', error);
+                    }
+                },
+            
+                // Kadai Queue Methods
+                async loadKadaiProjects() {
+                    // Chỉ load dự án khi có department được chọn
+                    if (!this.selectedDepartment || !this.selectedDepartment.id) {
+                        this.kadaiProjects = [];
+                        return;
+                    }
+                
+                    try {
+                        const url = `/api/index.php?model=project&method=list_kadai&department_id=${this.selectedDepartment.id}`;
+                        const response = await axios.get(url);
+                        if (response.data && response.data.data) {
+                            this.kadaiProjects = response.data.data;
+                        } else {
+                            this.kadaiProjects = [];
+                        }
+                    } catch (error) {
+                        console.error('Error loading kadai projects:', error);
+                        this.kadaiProjects = [];
+                    }
+                },
+            
+                toggleKadaiQueue() {
+                    this.isKadaiQueueExpanded = !this.isKadaiQueueExpanded;
+                },
+            
+                async refreshKadaiQueue() {
+                    await this.loadKadaiProjects();
+                },
+            
+                getStatusBadgeClass(status) {
+                    const statusObj = this.statuses.find(s => s.key === status);
+                    return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
+                },
+            
+                getStatusName(status) {
+                    const statusObj = this.statuses.find(s => s.key === status);
+                    return statusObj ? statusObj.name : status;
+                },
+            
+                formatDate(dateString) {
+                    return formatProjectDateTimeInline(dateString);
+                },
+            
+                async moveToMainProject(project) {
+                    try {
+                        const formData = new FormData();
+                        formData.append('model', 'project');
+                        formData.append('method', 'edit');
+                        formData.append('id', project.id);
+                        formData.append('is_kadai', '0');
+                    
+                        const response = await axios.post('/api/index.php?model=project&method=edit', formData);
+                    
+                        if (response.data.status === 'success') {
+                            showMessage('プロジェクトをメインプロジェクトに移動しました。');
+                            // Refresh both lists
+                            await this.loadKadaiProjects();
                             if (projectTable) {
                                 reloadProjectTable(true);
                             }
                         } else {
-                            showProjectListError(response.data?.message || '削除に失敗しました。', response.data);
+                            showProjectListError('プロジェクトの移動に失敗しました。', response.data);
                         }
+                    } catch (error) {
+                        console.error('Error moving project:', error);
+                        showProjectListError('プロジェクトの移動に失敗しました。', error);
                     }
-                } catch (error) {
-                    console.error('Error clearing all favorites:', error);
-                    showProjectListError('削除に失敗しました。', error);
-                }
-            },
-            async loadProjects() {
-                try {
-                    // Ensure DataTable is initialized before reloading
-                    if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
-                        await initializeProjectTable();
+                },
+            
+                toggleColumnVisibility(columnKey, event) {
+                    const isVisible = !!event.target.checked;
+                    const customDefs = customFieldColumnDefinitions || [];
+                    const visibility = loadColumnVisibilityFromLocalStorage(customDefs);
+                    if (Object.prototype.hasOwnProperty.call(visibility, columnKey)) {
+                        visibility[columnKey] = isVisible;
+                    }
+                    saveColumnVisibilityToLocalStorage(visibility, customDefs);
+
+                    if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+                        const appliedVisibility = applyColumnVisibility(projectTable, visibility, customDefs);
+                        saveColumnVisibilityToLocalStorage(appliedVisibility, customDefs);
+                        reapplyProjectListColumnWidthsAfterLayout(
+                            projectTable,
+                            this.selectedDepartment && this.selectedDepartment.id
+                        );
                     } else {
-                        reloadProjectTable(true);
+                        this.availableColumns = buildAvailableColumnsList(
+                            customDefs,
+                            this.selectedDepartment && this.selectedDepartment.id,
+                            visibility
+                        );
+                        scheduleColumnVisibilityMenuI18n();
                     }
-                } catch (error) {
-                    console.error('Error loading projects:', error);
-                }
-            },
-            openNewProjectModal() {
-                this.isEdit = false;
-                this.editingId = null;
-                this.resetProjectForm();
-                if (this.selectedDepartment) {
-                    this.newProject.department_id = this.selectedDepartment.id;
-                }
-                const modal = new bootstrap.Modal(document.getElementById('newProjectModal'));
-                modal.show();
-            },
-            async editProject(project) {
-                this.isEdit = true;
-                this.editingId = project.id;
-                this.newProject = {
-                    name: project.name || '',
-                    description: project.description || '',
-                    status: project.status || 'draft',
-                    priority: project.priority || 'medium',
-                    start_date: project.start_date || '',
-                    end_date: project.end_date || '',
-                    members: [],
-                    department_id: project.department_id || '',
-                    building_size: project.building_size || '',
-                    building_type: project.building_type || '',
-                    project_number: project.project_number || '',
-                    project_order_type: project.project_order_type || ['new'],
-                    estimated_hours: project.estimated_hours || '',
-                    amount: project.amount || '',
-                    teams: project.teams || '',
-                    customer_id: project.customer_id || '',
-                    company_name: project.company_name || '',
-                    branch_id: project.branch_id || '',
-                    contact_name: project.contact_name || '',
-                    contact_phone: project.contact_phone || ''
-                };
-                const modal = new bootstrap.Modal(document.getElementById('newProjectModal'));
-                modal.show();
-                // List API omits description — load full row fields for edit form
-                try {
-                    const res = await axios.get('/api/index.php?model=project&method=getById&id=' + encodeURIComponent(project.id));
-                    const p = res.data && res.data.data ? res.data.data : (res.data || {});
-                    if (p && p.id) {
-                        this.newProject.description = p.description || '';
-                        if (p.building_size) this.newProject.building_size = p.building_size;
-                        if (p.building_type) this.newProject.building_type = p.building_type;
-                        if (p.contact_phone) this.newProject.contact_phone = p.contact_phone;
-                    }
-                } catch (e) {
-                    console.warn('Failed to load project detail for edit:', e);
-                }
-            },
-            async saveProject() {
-                if (!this.formValidator) {
-                    console.error('Form validator not initialized');
-                    return;
-                }
-
-                // Check field visibility and disable validation for hidden fields
-                const companyNameVisible = $('#company_name').closest('.form-group').is(':visible');
-                const customerIdVisible = $('#customer_id').closest('.form-group').is(':visible');
-
-                // Store original validation state
-                const originalValidators = {};
-                
-                if (!companyNameVisible) {
-                    originalValidators.company_name = true;
-                    this.formValidator.disableValidator('company_name');
-                }
-                if (!customerIdVisible) {
-                    originalValidators.customer_id = true;
-                    this.formValidator.disableValidator('customer_id');
-                }
-
-                // Validate the form
-                const status = await this.formValidator.validate();
-
-                // Restore original validation state
-                Object.keys(originalValidators).forEach(field => {
-                    this.formValidator.enableValidator(field);
-                });
-
-                if (status === 'Valid') {
+                },
+            
+                async confirmProject(project) {
                     try {
+                        // Hiển thị confirm dialog
+                        if (!confirm(`プロジェクト「${project.name}」を承認しますか？\n\nこの操作により、プロジェクトは課題案件から削除され、メインプロジェクトリストに表示されます。`)) {
+                            return;
+                        }
+                    
                         const formData = new FormData();
                         formData.append('model', 'project');
-                        formData.append('method', this.isEdit ? 'edit' : 'add');
-                        
-                        if (this.isEdit) {
-                            formData.append('id', this.editingId);
-                        }
-                        
-                        // Get and validate Select2 values
-                        const categorySelect = $('#category_id');
-                        const companySelect = $('#company_name');
-                        const customerSelect = $('#customer_id');
-                        
-                        const categoryId = categorySelect.select2('data')[0]?.id || '';
-                        const companyName = companySelect.select2('data')[0]?.id || '';
-                        const customerId = customerSelect.select2('data')[0]?.id || '';
-                        
-                        // Update newProject with Select2 values
-                        this.newProject.category_id = categoryId;
-                        this.newProject.company_name = companyName;
-                        this.newProject.customer_id = customerId;
-                        
-                        // Get team data from Tagify
-                        const teamData = this.teamTagifyInstance ? this.teamTagifyInstance.value.map(tag => tag.id || tag.value) : [];
-                        const membersData = this.membersTagifyInstance ? this.membersTagifyInstance.value.map(tag => tag.id || tag.value) : [];
-                        const managerData = this.managerTagifyInstance ? this.managerTagifyInstance.value.map(tag => tag.id || tag.value) : [];
-                        
-                        // Append all project data
-                        Object.keys(this.newProject).forEach(key => {
-                            if (key === 'members' && Array.isArray(this.newProject[key])) {
-                                // Use membersData from Tagify instead of this.newProject.members
-                                membersData.forEach(member => {
-                                    formData.append('members[]', member);
-                                });
-                            } else if (key === 'team') {
-                                // Add team data from Tagify
-                                teamData.forEach(team => {
-                                    formData.append('team[]', team);
-                                });
-                            } else if (key === 'manager') {
-                                // Add manager data from Tagify
-                                managerData.forEach(manager => {
-                                    formData.append('manager[]', manager);
-                                });
-                            } else if (key === 'project_order_type' && this.tagifyInstance) {
-                                const tags = this.tagifyInstance.value.map(tag => tag.value);
-                                formData.append(key, JSON.stringify(tags));
-                            } else {
-                                formData.append(key, this.newProject[key] || '');
+                        formData.append('method', 'confirm');
+                        formData.append('id', project.id);
+                    
+                        const response = await axios.post('/api/index.php?model=project&method=confirm', formData);
+                    
+                        if (response.data.status === 'success') {
+                            showMessage('プロジェクトを承認しました。課題案件から削除されました。');
+                            // Refresh both lists
+                            await this.loadKadaiProjects();
+                            if (projectTable) {
+                                reloadProjectTable(true);
                             }
-                        });
-                        
-                        // Explicitly add Select2 values to ensure they're included
-                        if (categoryId) {
-                            formData.set('category_id', categoryId);
-                        }
-                        if (companyName) {
-                            formData.set('company_name', companyName);
-                        }
-                        if (customerId) {
-                            formData.set('customer_id', customerId);
-                        }
-
-
-                        const response = await axios.post('/api/index.php?model=project&method=add', formData);
-                        
-                        if (response.data.status == 'success') {
-                            showMessage(this.isEdit ? 'プロジェクトを更新しました。' : 'プロジェクトを作成しました。');
-                            bootstrap.Modal.getInstance(document.getElementById('newProjectModal')).hide();
-                            this.loadProjects();
-                            this.resetProjectForm();
-                        } else{
-                            showProjectListError('プロジェクトの保存に失敗しました。', response.data);
+                        } else {
+                            showProjectListError(response.data.message || 'プロジェクトの承認に失敗しました。', response.data);
                         }
                     } catch (error) {
-                        console.error('Error saving project:', error);
-                        showProjectListError('プロジェクトの保存に失敗しました。', error);
+                        console.error('Error confirming project:', error);
+                        showProjectListError('プロジェクトの承認に失敗しました。', error);
                     }
-                }
-            },
-            deleteProject(id) {
-                this.deletingId = id;
-                const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
-                modal.show();
-            },
-            async confirmDelete() {
-                try {
-                    const formData = new FormData();
-                    formData.append('model', 'project');
-                    formData.append('method', 'delete');
-                    formData.append('id', this.deletingId);
-                    
-                    const response = await axios.post('/api/index.php?model=project&method=delete', formData);
-                    
-                    if (response.data) {
-                        showMessage('プロジェクトを削除しました。');
-                        bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
-                        this.loadProjects();
-                    }
-                } catch (error) {
-                    console.error('Error deleting project:', error);
-                    if (error.response?.data?.error) {
-                        showProjectListError(error.response.data.error, error.response.data);
-                    } else {
-                        showProjectListError('プロジェクトの削除に失敗しました。', error);
-                    }
-                }
-            },
-            resetProjectForm() {
-                this.newProject = {
-                    name: '',
-                    description: '',
-                    status: 'draft',
-                    priority: 'medium',
-                    start_date: '',
-                    end_date: '',
-                    team: [],
-                    members: [],
-                    manager: [],
-                    department_id: '',
-                    building_size: '',
-                    building_type: '',
-                    building_number: '',
-                    building_branch: '',
-                    project_number: '',
-                    project_order_type: '新規',
-                    estimated_hours: '',
-                    amount: '',
-                    customer_id: '',
-                    company_name: '',
-                    branch_id: '',
-                    contact_name: '',
-                    contact_phone: ''
-                };
-                this.companies = [];
-                this.contacts = [];
-                
-                // Reset Tagify instances
-                if (this.tagifyInstance) {
-                    this.tagifyInstance.removeAllTags();
-                    this.tagifyInstance.addTags(['新規']);
-                }
-                if (this.teamTagifyInstance) {
-                    this.teamTagifyInstance.removeAllTags();
-                }
-                if (this.membersTagifyInstance) {
-                    this.membersTagifyInstance.removeAllTags();
-                }
-                if (this.managerTagifyInstance) {
-                    this.managerTagifyInstance.removeAllTags();
-                }
-
-                // Reset Select2 dropdowns
-                $('#category_id').val(null).trigger('change');
-                $('#company_name').val(null).trigger('change');
-                $('#customer_id').val(null).trigger('change');
-
-                // Hide dependent fields
-                $('#company_name').closest('.form-group').hide();
-                $('#customer_id').closest('.form-group').hide();
-
-                // Reset form validation
-                if (this.formValidator) {
-                    this.formValidator.resetForm();
-                    this.formValidator.disableValidator('company_name');
-                    this.formValidator.disableValidator('customer_id');
-                }
-            },
-            async loadCategories() {
-                try {
-                    const response = await axios.get('/api/index.php?model=customer&method=list_categories');
-                    if (response.data && response.data.data) {
-                        this.categories = response.data.data;
-                    }
-                } catch (error) {
-                    console.error('Error loading categories:', error);
-                }
-            },
-            async loadCompanies() {
-                try {
-                    const response = await axios.get('/api/index.php?model=customer&method=list_companies');
-                    if (response.data && response.data.data) {
-                        this.companies = response.data.data;
-                    }
-                } catch (error) {
-                    console.error('Error loading companies:', error);
-                }
-            },
-            async loadContacts() {
-                try {
-                    const response = await axios.get('/api/index.php?model=customer&method=list_contacts');
-                    if (response.data && response.data.data) {
-                        this.contacts = response.data.data;
-                    }
-                } catch (error) {
-                    console.error('Error loading contacts:', error);
-                }
-            },
-            async onCategoryChange() {
-                if (this.newProject.category_id) {
-                    try {
-                        const response = await axios.get(`/api/index.php?model=customer&method=list_companies_by_category&category_id=${this.newProject.category_id}`);
-                        if (response.data && response.data.data) {
-                            this.companies = response.data.data;
-                            // Reset company and contact selections
-                            this.newProject.company_name = '';
-                            this.newProject.customer_id = '';
-                            this.contacts = [];
-                        }
-                    } catch (error) {
-                        console.error('Error loading companies:', error);
-                        this.companies = [];
-                    }
-                } else {
-                    this.companies = [];
-                    this.newProject.company_name = '';
-                    this.newProject.customer_id = '';
-                    this.contacts = [];
-                }
-            },
-            async onCompanyChange() {
-                if (this.newProject.company_name) {
-                    try {
-                        const response = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_company&company_name=${encodeURIComponent(this.newProject.company_name)}`);
-                        if (response.data && response.data.data) {
-                            this.contacts = response.data.data;
-                            // Reset contact selection
-                            this.newProject.customer_id = '';
-                        }
-                    } catch (error) {
-                        console.error('Error loading contacts:', error);
-                        this.contacts = [];
-                    }
-                } else {
-                    this.contacts = [];
-                    this.newProject.customer_id = '';
-                }
-            },
-            openNewCustomerModal() {
-                // Close dropdown of select2
-                $('#customer_id').select2('close');
-                // Open new customer modal
-                const modal = new bootstrap.Modal(document.getElementById('newCustomerModal'));
-                modal.show();
-            },
-            async loadTeamMembers(teamId) {
-                try {
-                    const response = await axios.get(`/api/index.php?model=team&method=get&id=${teamId}`);
-                    if (response.data && response.data.members && response.data.whitelist) {
-                        const members = response.data.members.map(member => ({
-                            id: member.user_id,
-                            value: member.user_name,
-                            name: member.user_name
-                        }));
-                        
-                        if (this.membersTagifyInstance) {
-                            this.membersTagifyInstance.addTags(members);
-                            this.newProject.members = [...this.newProject.members, ...members.map(m => m.id)];
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error loading team members:', error);
-                }
-            },
-            
-            // Kadai Queue Methods
-            async loadKadaiProjects() {
-                // Chỉ load dự án khi có department được chọn
-                if (!this.selectedDepartment || !this.selectedDepartment.id) {
-                    this.kadaiProjects = [];
-                    return;
-                }
-                
-                try {
-                    const url = `/api/index.php?model=project&method=list_kadai&department_id=${this.selectedDepartment.id}`;
-                    const response = await axios.get(url);
-                    if (response.data && response.data.data) {
-                        this.kadaiProjects = response.data.data;
-                    } else {
-                        this.kadaiProjects = [];
-                    }
-                } catch (error) {
-                    console.error('Error loading kadai projects:', error);
-                    this.kadaiProjects = [];
-                }
-            },
-            
-            toggleKadaiQueue() {
-                this.isKadaiQueueExpanded = !this.isKadaiQueueExpanded;
-            },
-            
-            async refreshKadaiQueue() {
-                await this.loadKadaiProjects();
-            },
-            
-            getStatusBadgeClass(status) {
-                const statusObj = this.statuses.find(s => s.key === status);
-                return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
-            },
-            
-            getStatusName(status) {
-                const statusObj = this.statuses.find(s => s.key === status);
-                return statusObj ? statusObj.name : status;
-            },
-            
-            formatDate(dateString) {
-                return formatProjectDateTimeInline(dateString);
-            },
-            
-            async moveToMainProject(project) {
-                try {
-                    const formData = new FormData();
-                    formData.append('model', 'project');
-                    formData.append('method', 'edit');
-                    formData.append('id', project.id);
-                    formData.append('is_kadai', '0');
-                    
-                    const response = await axios.post('/api/index.php?model=project&method=edit', formData);
-                    
-                    if (response.data.status === 'success') {
-                        showMessage('プロジェクトをメインプロジェクトに移動しました。');
-                        // Refresh both lists
-                        await this.loadKadaiProjects();
-                        if (projectTable) {
-                            reloadProjectTable(true);
-                        }
-                    } else {
-                        showProjectListError('プロジェクトの移動に失敗しました。', response.data);
-                    }
-                } catch (error) {
-                    console.error('Error moving project:', error);
-                    showProjectListError('プロジェクトの移動に失敗しました。', error);
-                }
-            },
-            
-            toggleColumnVisibility(columnKey, event) {
-                const isVisible = !!event.target.checked;
-                const customDefs = customFieldColumnDefinitions || [];
-                const visibility = loadColumnVisibilityFromLocalStorage(customDefs);
-                if (Object.prototype.hasOwnProperty.call(visibility, columnKey)) {
-                    visibility[columnKey] = isVisible;
-                }
-                saveColumnVisibilityToLocalStorage(visibility, customDefs);
-
-                if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-                    const appliedVisibility = applyColumnVisibility(projectTable, visibility, customDefs);
-                    saveColumnVisibilityToLocalStorage(appliedVisibility, customDefs);
-                    reapplyProjectListColumnWidthsAfterLayout(
-                        projectTable,
-                        this.selectedDepartment && this.selectedDepartment.id
-                    );
-                } else {
-                    this.availableColumns = buildAvailableColumnsList(
-                        customDefs,
-                        this.selectedDepartment && this.selectedDepartment.id,
-                        visibility
-                    );
-                    scheduleColumnVisibilityMenuI18n();
-                }
-            },
-            
-            async confirmProject(project) {
-                try {
-                    // Hiển thị confirm dialog
-                    if (!confirm(`プロジェクト「${project.name}」を承認しますか？\n\nこの操作により、プロジェクトは課題案件から削除され、メインプロジェクトリストに表示されます。`)) {
-                        return;
-                    }
-                    
-                    const formData = new FormData();
-                    formData.append('model', 'project');
-                    formData.append('method', 'confirm');
-                    formData.append('id', project.id);
-                    
-                    const response = await axios.post('/api/index.php?model=project&method=confirm', formData);
-                    
-                    if (response.data.status === 'success') {
-                        showMessage('プロジェクトを承認しました。課題案件から削除されました。');
-                        // Refresh both lists
-                        await this.loadKadaiProjects();
-                        if (projectTable) {
-                            reloadProjectTable(true);
-                        }
-                    } else {
-                        showProjectListError(response.data.message || 'プロジェクトの承認に失敗しました。', response.data);
-                    }
-                } catch (error) {
-                    console.error('Error confirming project:', error);
-                    showProjectListError('プロジェクトの承認に失敗しました。', error);
-                }
-            },
+                },
             
 
-        },
-        watch: {
-            filterMyProjects(newVal) {
-                // Save to localStorage when filter changes
-                saveFiltersToLocalStorage();
+            },
+            watch: {
+                filterMyProjects(newVal) {
+                    // Save to localStorage when filter changes
+                    saveFiltersToLocalStorage();
+                }
             }
-        }
-    }).mount('#app');
+        }).mount('#app');
 
-    window.app = app;
+        window.app = app;
+    }
+
+    (window.__bdMixinReady || Promise.resolve()).then(function() {
+        bootProjectListVueApp();
+    }).catch(function(err) {
+        console.error('Failed to load business-document-modal-mixin:', err);
+        bootProjectListVueApp();
+    });
 
     // Fixed action buttons: show when scroll reaches #projectTableCard; offcanvas shows #projectFilterBox content
     (function() {
