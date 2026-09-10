@@ -1872,9 +1872,18 @@ var projectTable;
     function canViewEndDateColumn() {
         if (!isCailyBranchUser()) return true;
         if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
-        if (typeof window === 'undefined' || !window.app || !window.app.userPermissions) return false;
-        return window.app.userPermissions.project_view_end_date == 1;
+        if (typeof window === 'undefined' || !window.app) return false;
+        var p = window.app.userPermissions;
+        if (!p || typeof p !== 'object' || Array.isArray(p)) return false;
+        return p.project_view_end_date == 1 || p.project_view_end_date === '1' || p.project_view_end_date === true;
     }
+    window.canViewEndDateColumn = canViewEndDateColumn;
+
+    function syncCanViewEndDateBodyClass() {
+        if (typeof document === 'undefined' || !document.body) return;
+        document.body.classList.toggle('can-view-end-date', !!canViewEndDateColumn());
+    }
+    window.syncCanViewEndDateBodyClass = syncCanViewEndDateBodyClass;
 
     function filterColumnKeysForProjectDirector(keys) {
         if (canViewProjectDirectorColumns()) return keys || [];
@@ -5784,7 +5793,8 @@ var projectTable;
             if (!projectTable) return;
             const rowData = projectTable.row($(this)).data();
             if (!rowData) return;
-            var canFullEdit = window.app.canManageProject();
+            var canFullEdit = window.app.canManageProject()
+                || (typeof window.app.canEditProject === 'function' && window.app.canEditProject());
             var isManagerOfProject = isCurrentUserManagerOfProject(rowData);
             var isCreatorOfProject = isCurrentUserCreatorOfProject(rowData);
             var canShowEdit = canFullEdit || isManagerOfProject || isCreatorOfProject;
@@ -7656,7 +7666,9 @@ var projectTable;
                         try {
                             await permissionsPromise;
                             refreshProjectListSortFieldOptions();
-                            if (typeof document !== 'undefined' && document.body) {
+                            if (typeof syncCanViewEndDateBodyClass === 'function') {
+                                syncCanViewEndDateBodyClass();
+                            } else if (typeof document !== 'undefined' && document.body) {
                                 document.body.classList.toggle('can-view-end-date', canViewEndDateColumn());
                             }
                             syncQuickEditStatusOptions();

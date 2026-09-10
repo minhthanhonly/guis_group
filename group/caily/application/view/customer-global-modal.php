@@ -105,7 +105,8 @@
                                 </div>
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label"><span data-i18n="自社担当部署名">自社担当部署名</span> <span v-if="canEditCustomer" class="text-danger">*</span></label>
-                                    <select ref="guisDepartmentSelect" class="form-select select2" v-model="newCustomer.guis_department" required multiple>
+                                    <!-- No class "select2": main.js auto-inits .select2 and would double-bind with initSelect2() -->
+                                    <select ref="guisDepartmentSelect" class="form-select js-guis-department-select" v-model="newCustomer.guis_department" required multiple>
                                         <option v-for="department in departments" :key="department.id" :value="department.id">{{ department.name }}</option>
                                     </select>
                                     <div v-if="customerErrors.guis_department" class="text-danger small mt-1">{{ customerErrors.guis_department }}</div>

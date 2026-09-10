@@ -906,7 +906,7 @@ createApp({
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
         },
-        /** CAILY: 期限日閲覧 unlocks 完了 status + deadline fields. */
+        /** CAILY: 期限日閲覧 unlocks 完了 status and deadline fields (view + edit). */
         canViewEndDate() {
             if (!this.isCailyBranchUser) return true;
             if (this.isAdmin) return true;

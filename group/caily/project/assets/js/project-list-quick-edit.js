@@ -19,6 +19,7 @@
         let quickEditShareContext = null;
         let quickEditEstimateStatus = '未発行';
         let quickEditInvoiceStatus = '未発行';
+        let quickEditCanViewEndDate = false;
 
         function getQuickEditYoteiDraft() {
             return {
@@ -158,11 +159,85 @@
             if ($tagify.length) $tagify.toggleClass('is-invalid', !!isInvalid);
         }
 
+        function hasProjectViewEndDateFlag(perm) {
+            if (!perm || typeof perm !== 'object' || Array.isArray(perm)) return false;
+            return perm.project_view_end_date == 1
+                || perm.project_view_end_date === '1'
+                || perm.project_view_end_date === true;
+        }
+
+        function applyQuickEditEndDateVisibility(canView) {
+            var $form = $('#quickEditProjectForm');
+            var show = !!canView;
+            quickEditCanViewEndDate = show;
+            $form.toggleClass('show-end-date-fields', show);
+            if (typeof document !== 'undefined' && document.body) {
+                document.body.classList.toggle('can-view-end-date', show);
+            }
+            // Force visibility independent of manager-only / CSS race
+            if (show || !(typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true)) {
+                $('#quickEditEndDateWrap, #quickEditGuisNoukiWrap').removeClass('d-none').css('display', '');
+            } else {
+                $('#quickEditEndDateWrap, #quickEditGuisNoukiWrap').css('display', 'none');
+            }
+        }
+
+        /**
+         * Chỉ cần project_view_end_date — không phụ thuộc department manager / project manager.
+         * Ưu tiên quyền của department dự án; fallback quyền đang chọn trên list / mọi department.
+         */
+        function resolveQuickEditCanViewEndDate(project) {
+            if (!(typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true)) {
+                return Promise.resolve(true);
+            }
+            if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') {
+                return Promise.resolve(true);
+            }
+            if (typeof window.canViewEndDateColumn === 'function' && window.canViewEndDateColumn()) {
+                return Promise.resolve(true);
+            }
+            if (window.app && hasProjectViewEndDateFlag(window.app.userPermissions)) {
+                return Promise.resolve(true);
+            }
+
+            var deptId = project && project.department_id ? project.department_id : null;
+            var checks = [];
+            if (deptId) {
+                checks.push(
+                    axios.get('/api/index.php?model=department&method=get_user_permission_by_department&department_id=' + encodeURIComponent(deptId))
+                        .then(function(res) { return hasProjectViewEndDateFlag(res && res.data); })
+                        .catch(function() { return false; })
+                );
+            }
+            checks.push(
+                axios.get('/api/index.php?model=department&method=get_user_permissions')
+                    .then(function(res) {
+                        var list = res && res.data;
+                        if (!Array.isArray(list)) return hasProjectViewEndDateFlag(list);
+                        for (var i = 0; i < list.length; i++) {
+                            if (hasProjectViewEndDateFlag(list[i])) return true;
+                        }
+                        return false;
+                    })
+                    .catch(function() { return false; })
+            );
+            return Promise.all(checks).then(function(results) {
+                return results.some(Boolean);
+            });
+        }
+
         // Quick Edit Project Modal: open and save (isManagerOnly = true: chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー)
         window.__openQuickEditProjectModalImpl = function(projectId, isManagerOnly) {
             quickEditIsManagerOnly = !!isManagerOnly;
             var $form = $('#quickEditProjectForm');
             if (quickEditIsManagerOnly) $form.addClass('quick-edit-manager-only-mode'); else $form.removeClass('quick-edit-manager-only-mode');
+            // Provisional: sync from current list permission; refined after project load
+            if (typeof window.syncCanViewEndDateBodyClass === 'function') {
+                window.syncCanViewEndDateBodyClass();
+            }
+            applyQuickEditEndDateVisibility(
+                typeof window.canViewEndDateColumn === 'function' ? window.canViewEndDateColumn() : false
+            );
             destroyQuickEditTagify();
             var modalEl = document.getElementById('quickEditProjectModal');
             var quickEditModal = bootstrap.Modal.getOrCreateInstance(modalEl);
@@ -180,7 +255,10 @@
 
             axios.get('/api/index.php?model=project&method=getById&id=' + projectId).then(function(res) {
                 const p = res.data && res.data.data ? res.data.data : (res.data || {});
-                return Promise.all([quillReady, flatpickrReady]).then(function() { return p; });
+                return Promise.all([quillReady, flatpickrReady, resolveQuickEditCanViewEndDate(p)]).then(function(results) {
+                    applyQuickEditEndDateVisibility(results[2]);
+                    return p;
+                });
             }).then(function(p) {
                 const effectiveId = p.id || projectId;
                 $('#quickEditProjectId').val(effectiveId);
@@ -549,7 +627,7 @@
         }
 
         function updateQuickEditNoukiRequiredIndicators() {
-            var showGuisFields = !isCailyBranchUser();
+            var showGuisFields = !!quickEditCanViewEndDate;
             var end = ($('#quickEditEndDate').val() || '').trim();
             var endFilled = showGuisFields && hasQuickEditDateValue(end);
             var tantou = ($('input[name="tantou"]:checked').val() || '').trim();
@@ -559,7 +637,7 @@
 
         function validateQuickEditNoukiFields() {
             var errors = [];
-            var showGuisFields = !isCailyBranchUser();
+            var showGuisFields = !!quickEditCanViewEndDate;
             var tantou = ($('input[name="tantou"]:checked').val() || '').trim();
             var caily = ($('#quickEditCailyNouki').val() || '').trim();
             var guis = ($('#quickEditGuisNouki').val() || '').trim();
@@ -663,7 +741,8 @@
                     $('#quickEditStartDateError').text(translateText('開始日の形式が正しくありません。（例: 2025-01-15 09:00）'));
                     hasError = true;
                 }
-                if (!isCailyBranchUser() && $endDate.val() && $endDate.val().toString().trim() !== '' && !isValidDateOrDateTime($endDate.val())) {
+                var canEditEndDate = !!quickEditCanViewEndDate;
+                if (canEditEndDate && $endDate.val() && $endDate.val().toString().trim() !== '' && !isValidDateOrDateTime($endDate.val())) {
                     $endDate.addClass('is-invalid');
                     $('#quickEditEndDateError').text(translateText('期限日の形式が正しくありません。（例: 2025-02-28 18:00）'));
                     hasError = true;
@@ -673,13 +752,13 @@
                     $('#quickEditCailyNoukiError').text(translateText('CAILY納期の形式が正しくありません。（例: 2025-01-20 18:00）'));
                     hasError = true;
                 }
-                if ($guisNouki.length && $guisNouki.val() && $guisNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($guisNouki.val())) {
+                if (canEditEndDate && $guisNouki.length && $guisNouki.val() && $guisNouki.val().toString().trim() !== '' && !isValidDateOrDateTime($guisNouki.val())) {
                     $guisNouki.addClass('is-invalid');
                     $('#quickEditGuisNoukiError').text(translateText('GUIS納期の形式が正しくありません。（例: 2025-01-25 18:00）'));
                     hasError = true;
                 }
                 var startVal = ($startDate.val() || '').trim();
-                var endVal = !isCailyBranchUser() ? ($endDate.val() || '').trim() : '';
+                var endVal = canEditEndDate ? ($endDate.val() || '').trim() : '';
                 if (startVal && endVal) {
                     var startDt = parseQuickEditDateTime(startVal);
                     var endDt = parseQuickEditDateTime(endVal);
@@ -738,7 +817,7 @@
                 : null;
             formData.append('yotei', yoteiPayload ? JSON.stringify(yoteiPayload) : '');
             var quickEditStatus = $('#quickEditStatus').val() || 'draft';
-            if (isCailyBranchUser() && !canViewEndDateColumn()
+            if (isCailyBranchUser() && !quickEditCanViewEndDate
                 && quickEditStatus === 'completed' && quickEditOriginalStatus !== 'completed') {
                 if (typeof showMessage === 'function') {
                     showProjectListError(translateText('このステータスは選択できません。'));

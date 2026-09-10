@@ -825,12 +825,12 @@ if($_SESSION['show_project'] == 0){
                             <input type="text" class="form-control" name="name" id="quickEditName" required>
                             <div class="invalid-feedback" id="quickEditNameError"></div>
                         </div>
-                        <div class="col-md-4 quick-edit-full-only">
+                        <div class="col-md-4 quick-edit-full-only" id="quickEditStartDateWrap">
                             <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                             <input type="text" class="form-control" name="start_date" id="quickEditStartDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
                             <div class="invalid-feedback" id="quickEditStartDateError"></div>
                         </div>
-                        <div class="col-md-4 quick-edit-full-only quick-edit-guis-field">
+                        <div class="col-md-4" id="quickEditEndDateWrap">
                             <label class="form-label"><span data-i18n="期限日">期限日</span></label>
                             <input type="text" class="form-control" name="end_date" id="quickEditEndDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
                             <div class="invalid-feedback" id="quickEditEndDateError"></div>
@@ -911,7 +911,7 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="invalid-feedback" id="quickEditCailyNoukiError"></div>
                         </div>
-                        <div class="col-md-4 quick-edit-guis-field">
+                        <div class="col-md-4" id="quickEditGuisNoukiWrap">
                             <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span> <span id="quickEditGuisNoukiRequired" class="text-danger d-none">*</span></label>
                             <div class="d-flex flex-column">
                                 <input type="text" class="form-control" name="guis_nouki" id="quickEditGuisNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
@@ -1480,7 +1480,8 @@ body.pl-col-resizing * {
 #projectListColumnToolsRow {
     min-height: 2rem;
 }
-/* Quick edit: manager-only mode chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー, 予定工程 */
+/* Quick edit: manager-only mode chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー, 予定工程
+   (期限日 / GUIS納期 được JS bật riêng theo project_view_end_date) */
 #quickEditProjectForm.quick-edit-manager-only-mode .quick-edit-full-only {
     display: none !important;
 }
@@ -1491,8 +1492,14 @@ body.pl-col-resizing * {
 #quickEditProjectForm .invalid-feedback:not(:empty) {
     display: block;
 }
-body.is-caily-branch-user #quickEditProjectForm .quick-edit-guis-field {
+/* CAILY: ẩn 期限日/GUIS納期 mặc định; JS thêm .show-end-date-fields khi có project_view_end_date */
+body.is-caily-branch-user #quickEditProjectForm:not(.show-end-date-fields) #quickEditEndDateWrap,
+body.is-caily-branch-user #quickEditProjectForm:not(.show-end-date-fields) #quickEditGuisNoukiWrap {
     display: none !important;
+}
+body.is-caily-branch-user #quickEditProjectForm.show-end-date-fields #quickEditEndDateWrap,
+body.is-caily-branch-user #quickEditProjectForm.show-end-date-fields #quickEditGuisNoukiWrap {
+    display: block !important;
 }
 body.is-caily-branch-user #quickEditProjectForm #quickEditTantouWrap {
     display: none !important;

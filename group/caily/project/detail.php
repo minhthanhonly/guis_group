@@ -495,7 +495,7 @@ if($_SESSION['show_project'] == 0){
                                         {{ getTimeRemaining().text }}
                                     </span>
                                 </label>
-                                <template v-if="isEditMode && !isCailyBranchUser">
+                                <template v-if="isEditMode">
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                             :class="{ 'is-invalid': validationErrors.end_date }">

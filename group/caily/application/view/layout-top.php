@@ -469,55 +469,16 @@
                 <!-- Quick links -->
 
                 <!-- Change log -->
-                <li class="nav-item dropdown-notifications navbar-dropdown dropdown me-3 me-xl-2">
+                <!-- <li class="nav-item me-3 me-xl-2">
                   <a
-                    class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill"
-                    href="javascript:void(0);"
-                    data-bs-toggle="dropdown"
-                    data-bs-auto-close="outside"
-                    aria-expanded="false">
+                    class="nav-link btn btn-icon btn-text-secondary rounded-pill"
+                    href="<?=$root?>changelog/"
+                    title="変更履歴"
+                    aria-label="変更履歴"
+                    data-i18n="変更履歴">
                     <i class="icon-base ti tabler-history icon-22px text-heading"></i>
                   </a>
-                  <ul class="dropdown-menu dropdown-menu-end p-0">
-                    <li class="dropdown-menu-header border-bottom">
-                      <div class="dropdown-header d-flex align-items-center py-3">
-                        <h6 class="mb-0 me-auto" data-i18n="変更履歴">変更履歴</h6>
-                      </div>
-                    </li>
-                    <li class="dropdown-notifications-list scrollable-container">
-                      <ul class="list-group list-group-flush">
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                          <div class="d-flex">
-                            <div class="flex-grow-1">
-                              <h6 class="small mb-1">2025年7月15日</h6>
-                              <small class="mb-1 d-block text-body">
-                                <ul>
-                                  <li>
-                                    <p data-i18n="プロジェクト管理機能を追加しました。">プロジェクト管理機能を追加しました。</p>
-                                  </li>
-                                </ul>
-                              </small>
-                            </div>
-                          </div>
-                        </li>
-                        <li class="list-group-item list-group-item-action dropdown-notifications-item">
-                          <div class="d-flex">
-                            <div class="flex-grow-1">
-                              <h6 class="small mb-1">2025年5月21日</h6>
-                              <small class="mb-1 d-block text-body">
-                                <ul>
-                                  <li>
-                                    <p data-i18n="UIを変更しました。">UIを変更しました。</p>
-                                  </li>
-                                </ul>
-                              </small>
-                            </div>
-                          </div>
-                        </li>
-                      </ul>
-                    </li>
-                  </ul>
-                </li>
+                </li> -->
                 <style>
                   #notification_list{
                     right: 0;
@@ -1258,7 +1219,11 @@
             }
           </style>
 
-          <span class="app-version" style="background-color: #ccc; padding: 5px; border-radius: 5px; position: fixed; bottom: 10px; left: 10px; font-size: 10px; color: #000; z-index: 2000;">v<?=APP_VERSION?></span>
+          <div class="app-version-wrap">
+            <span class="app-version">v<?=APP_VERSION?></span>
+            <a style="font-size: 0.5125rem;" href="<?=$root?>docs/hethong/" class="btn btn-sm btn-outline-primary p-1" title="操作ガイド">操作ガイド</a>
+            <a style="font-size: 0.5125rem;" href="<?=$root?>changelog/" class="btn btn-sm btn-outline-primary p-1" data-i18n="変更履歴" title="変更履歴">変更履歴</a>
+          </div>
 
           <!-- Task Timer Widget - bottom right, left of Todo button -->
           <div id="global-task-timer-nav" class="global-task-timer-fab" style="display: none;" aria-live="polite">

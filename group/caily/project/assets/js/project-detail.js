@@ -852,7 +852,7 @@ const vueApp = createApp({
         canCommentProject() {
             return this.permission.can_manage_project || (this.permission.rule && this.permission.rule.project_comment == 1);
         },
-        /** Non-CAILY always; CAILY when project_view_end_date (view-only). */
+        /** Non-CAILY always; CAILY when project_view_end_date (view, and editable in project edit mode). */
         canViewEndDate() {
             if (!this.isCailyBranchUser) return true;
             if (this.isAdministrator()) return true;

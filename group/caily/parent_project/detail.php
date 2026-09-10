@@ -556,8 +556,8 @@ $view->heading('建物詳細');
                                     <th class="col-yotei"><span data-i18n="予定工程">予定工程</span></th>
                                     <th class="col-date"><span data-i18n="開始日">開始日</span></th>
                                     <th class="col-date"><span>CAILY納期</span></th>
-                                    <th v-if="!isCailyBranchUser" class="col-date"><span>GUIS納期</span></th>
-                                    <th v-if="!isCailyBranchUser" class="col-date"><span data-i18n="期限日">期限日</span></th>
+                                    <th v-if="canViewEndDate" class="col-date"><span>GUIS納期</span></th>
+                                    <th v-if="canViewEndDate" class="col-date"><span data-i18n="期限日">期限日</span></th>
                                     <th class="col-status"><span data-i18n="ステータス">ステータス</span></th>
                                     <th class="col-progress text-center"><span data-i18n="進捗">進捗</span></th>
                                     <th v-if="canViewBusinessDocuments" class="col-payment"><span data-i18n="決済情報">決済情報</span></th>
@@ -671,7 +671,7 @@ $view->heading('建物詳細');
                                         </span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
-                                    <td v-if="!isCailyBranchUser" class="col-date">
+                                    <td v-if="canViewEndDate" class="col-date">
                                         <span v-if="project.guis_nouki" :data-time="project.guis_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)">
                                             <span class="d-block">{{ formatDateTimeDatePart(project.guis_nouki) }}</span>
                                             <span class="d-block">{{ formatDateTimeTimePart(project.guis_nouki) }}</span>
@@ -679,7 +679,7 @@ $view->heading('建物詳細');
                                         <span v-else class="text-muted">-</span>
                                     </td>
                                    
-                                    <td v-if="!isCailyBranchUser" class="col-date">
+                                    <td v-if="canViewEndDate" class="col-date">
                                         <span v-if="project.end_date" :data-time="project.end_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)">
                                             <span class="d-block">{{ formatDateTimeDatePart(project.end_date) }}</span>
                                             <span class="d-block">{{ formatDateTimeTimePart(project.end_date) }}</span>
@@ -1846,7 +1846,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4" v-if="!isCailyBranchUser">
+                            <div class="col-md-4" v-if="canViewEndDate">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="期限日(実納期)">期限日(実納期)</span> <span v-if="(editingChildProject.guis_nouki || '').trim()" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.end_date"
@@ -1926,7 +1926,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4" v-if="!isCailyBranchUser">
+                            <div class="col-md-4" v-if="canViewEndDate">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label">GUIS納期 <span v-if="editingChildProject.end_date && editingChildProject.tantou === 'GUIS'" class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingChildProject.guis_nouki" 
@@ -2097,7 +2097,7 @@ $view->heading('建物詳細');
                                                                 <th><span data-i18n="部署">部署</span></th>
                                                                 <th><span data-i18n="受注形態">受注形態</span></th>
                                                                 <th><span data-i18n="開始日">開始日</span></th>
-                                                                <th v-if="!isCailyBranchUser"><span data-i18n="期限日">期限日</span></th>
+                                                                <th v-if="canViewEndDate"><span data-i18n="期限日">期限日</span></th>
                                                                 <th><span data-i18n="現在のステータス">現在のステータス</span></th>
                                                                 <th><span data-i18n="総額">総額</span></th>
                                                             </tr>
@@ -2137,7 +2137,7 @@ $view->heading('建物詳細');
                                                                     <span v-else>-</span>
                                                                 </td>
                                                                 <td>{{ formatDateTime(project.start_date) || '-' }}</td>
-                                                                <td v-if="!isCailyBranchUser">{{ formatDateTime(project.end_date) || '-' }}</td>
+                                                                <td v-if="canViewEndDate">{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                 <td>
                                                                     <span v-if="project.is_kadai == 1" class="badge bg-warning">
                                                                         承認待ち
@@ -2704,7 +2704,7 @@ $view->heading('建物詳細');
                                                                 <th><span data-i18n="部署">部署</span></th>
                                                                 <th><span data-i18n="受注形態">受注形態</span></th>
                                                                 <th><span data-i18n="開始日">開始日</span></th>
-                                                                <th v-if="!isCailyBranchUser"><span data-i18n="期限日">期限日</span></th>
+                                                                <th v-if="canViewEndDate"><span data-i18n="期限日">期限日</span></th>
                                                                 <th><span data-i18n="現在のステータス">現在のステータス</span></th>
                                                                 <th><span data-i18n="総額">総額</span></th>
                                                             </tr>
@@ -2739,7 +2739,7 @@ $view->heading('建物詳細');
                                                                     <span v-else>-</span>
                                                                 </td>
                                                                 <td>{{ formatDateTime(project.start_date) || '-' }}</td>
-                                                                <td v-if="!isCailyBranchUser">{{ formatDateTime(project.end_date) || '-' }}</td>
+                                                                <td v-if="canViewEndDate">{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                 <td>
                                                                     <span v-if="project.is_kadai == 1" class="badge bg-warning">
                                                                         承認待ち

@@ -82,18 +82,34 @@
                     }.bind(this));
                 },
                 initSelect2: function () {
-                    if (select2Ready || !this.$refs.guisDepartmentSelect) {
+                    if (!this.$refs.guisDepartmentSelect) {
                         return;
                     }
-                    if (typeof window.jQuery === 'undefined') {
+                    if (typeof window.jQuery === 'undefined' || !window.jQuery.fn || !window.jQuery.fn.select2) {
                         return;
                     }
                     var selectElement = window.jQuery(this.$refs.guisDepartmentSelect);
+                    if (select2Ready && selectElement.data('select2')) {
+                        return;
+                    }
+                    // Avoid double Select2 UI (e.g. leftover from main.js .select2 auto-init)
+                    if (selectElement.data('select2')) {
+                        try {
+                            selectElement.off('change.select2Customer');
+                            selectElement.select2('destroy');
+                        } catch (e) { /* ignore */ }
+                    }
+                    var wrap = selectElement.parent();
+                    if (wrap.length && wrap.hasClass('position-relative') && wrap.children('select').length === 1) {
+                        selectElement.unwrap();
+                    }
                     selectElement.select2({
                         dropdownParent: window.jQuery('#globalCustomerModal'),
-                        disabled: !this.canEditCustomer
+                        disabled: !this.canEditCustomer,
+                        placeholder: '選択してください',
+                        width: '100%'
                     });
-                    selectElement.on('change', function (event) {
+                    selectElement.off('change.select2Customer').on('change.select2Customer', function (event) {
                         var val = window.jQuery(event.target).val();
                         this.newCustomer.guis_department = val ? val : [];
                     }.bind(this));

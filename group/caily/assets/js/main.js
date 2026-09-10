@@ -1282,10 +1282,14 @@ if (typeof document !== 'undefined') {
 
 
 $(function() {
-  var select2 = $('.select2');
+  // Skip global customer modal — it owns Select2 via customer-global-modal.js
+  var select2 = $('.select2').not('#globalCustomerModal .select2, #global-customer-modal-app .select2, .js-guis-department-select');
   if (select2.length) {
     select2.each(function() {
       var $this = $(this);
+      if ($this.data('select2')) {
+        return;
+      }
       $this.wrap('<div class="position-relative"></div>').select2({
         placeholder: '選択してください',
         dropdownParent: $this.parent(),

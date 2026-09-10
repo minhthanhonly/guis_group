@@ -272,6 +272,43 @@
 
 }
 
+/* Fixed version + changelog (bottom-left) */
+.app-version-wrap {
+	position: fixed;
+	bottom: 10px;
+	left: 10px;
+	z-index: 2000;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 4px;
+}
+.app-version {
+	background-color: #ccc;
+	padding: 5px 8px;
+	border-radius: 5px;
+	font-size: 10px;
+	color: #000;
+	line-height: 1.2;
+}
+.app-changelog-btn {
+	display: inline-block;
+	background-color: #fff;
+	border: 1px solid #bbb;
+	color: #333;
+	padding: 3px 8px;
+	border-radius: 5px;
+	font-size: 10px;
+	line-height: 1.2;
+	text-decoration: none;
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+.app-changelog-btn:hover {
+	background-color: #f5f5f5;
+	color: #000;
+	text-decoration: none;
+}
+
 /* FAB bar — hàng button cố định góc dưới phải */
 #fab-bar {
 	position: fixed;
