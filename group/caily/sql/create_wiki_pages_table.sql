@@ -1,0 +1,26 @@
+-- Wiki pages table
+CREATE TABLE IF NOT EXISTS `groupware_wiki_pages` (
+    `id` int(11) NOT NULL AUTO_INCREMENT,
+    `title` varchar(255) NOT NULL,
+    `slug` varchar(255) NOT NULL,
+    `content` longtext NOT NULL,
+    `content_md` longtext,
+    `type` enum('mistake','experience','howto','decision','general') DEFAULT 'general',
+    `status` enum('draft','published','archived') DEFAULT 'published',
+    `visibility` enum('public','department','team','restricted') DEFAULT 'department',
+    `department_id` int(11) DEFAULT NULL,
+    `team_id` int(11) DEFAULT NULL,
+    `author_id` varchar(50) NOT NULL,
+    `view_count` int(11) DEFAULT 0,
+    `is_pinned` tinyint(1) DEFAULT 0,
+    `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_slug` (`slug`),
+    KEY `idx_department_id` (`department_id`),
+    KEY `idx_team_id` (`team_id`),
+    KEY `idx_author_id` (`author_id`),
+    KEY `idx_type_status` (`type`, `status`),
+    KEY `idx_visibility` (`visibility`),
+    FULLTEXT KEY `ft_title_content` (`title`, `content`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
