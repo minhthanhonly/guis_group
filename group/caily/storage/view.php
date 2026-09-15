@@ -11,6 +11,22 @@ if (isset($hash['data']['storage_file']) && strlen($hash['data']['storage_file']
 		}
 	}
 }
+$isProtected = !empty($hash['data']['is_protected']);
+$canEdit = $view->permitted($hash['data'], 'edit');
+$viewerUserid = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
+$viewerRealname = isset($_SESSION['realname']) ? (string)$_SESSION['realname'] : '';
+$previewable = array();
+foreach ($storageFiles as $filename) {
+	$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+	if (in_array($ext, array('pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'), true)) {
+		$previewable[] = array(
+			'name' => $filename,
+			'isPdf' => ($ext === 'pdf'),
+			'isImage' => ($ext !== 'pdf'),
+		);
+	}
+}
+$firstPreview = count($previewable) > 0 ? $previewable[0] : null;
 ?>
 
 <div class="container-xxl flex-grow-1 container-p-y">
@@ -19,7 +35,11 @@ if (isset($hash['data']['storage_file']) && strlen($hash['data']['storage_file']
 			class="card-header bg-label-secondary d-flex justify-content-sm-between align-items-sm-center flex-column flex-sm-row">
 			<div class="col-md-6">
 				<h4 class="card-title mb-0">
-					<span>ファイル情報</span></h4>
+					<span>ファイル情報</span>
+					<?php if ($isProtected) { ?>
+					<span class="badge bg-warning text-dark ms-2">保護ファイル</span>
+					<?php } ?>
+				</h4>
 			</div>
 			<div class="col-md-6">
 				<div class="d-flex row">
@@ -28,7 +48,7 @@ if (isset($hash['data']['storage_file']) && strlen($hash['data']['storage_file']
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 							<?php
-							if ($view->permitted($hash['data'], 'edit')) {
+							if ($canEdit) {
 								echo '<li><a class="btn btn-primary" href="edit.php?id='.$hash['data']['id'].'">編集</a></li>';
 								echo '<li><a class="btn btn-danger" href="delete.php?id='.$hash['data']['id'].'">削除</a></li>';
 							}
@@ -46,13 +66,18 @@ if (isset($hash['data']['storage_file']) && strlen($hash['data']['storage_file']
 					<tr><th>ファイル名</th><td>
 						<?php if (count($storageFiles) > 0) { ?>
 						<ul class="list-unstyled mb-0">
-							<?php foreach ($storageFiles as $filename) { ?>
+							<?php foreach ($storageFiles as $filename) {
+								if ($isProtected) {
+							?>
+							<li class="mb-1"><?=$view->escape($filename)?>&nbsp;<span class="text-muted small">[ダウンロード不可]</span></li>
+							<?php } else {
+								$dl = 'download.php?id='.intval($hash['data']['id']).'&file='.urlencode($filename);
+							?>
 							<li class="mb-1">
-								<a href="download.php?id=<?=$hash['data']['id']?>&file=<?=urlencode($filename)?>">
-									<?=$view->escape($filename)?>&nbsp;[ダウンロード]
-								</a>
+								<a href="<?=$dl?>"><?=$view->escape($filename)?>&nbsp;[ダウンロード]</a>
 							</li>
-							<?php } ?>
+							<?php }
+							} ?>
 						</ul>
 						<?php } else { ?>
 						&nbsp;
@@ -67,6 +92,22 @@ if (isset($hash['data']['storage_file']) && strlen($hash['data']['storage_file']
 				<?php
 				$view->property($hash['data']);
 				?>
+
+				<?php if ($firstPreview) { ?>
+				<div class="mt-4">
+					<h5 class="mb-2">プレビュー</h5>
+					<?php if (count($previewable) > 1) { ?>
+					<select id="storagePreviewSelect" class="form-select mb-2" style="max-width:420px;">
+						<?php foreach ($previewable as $i => $p) { ?>
+						<option value="<?=$i?>" data-name="<?=$view->escape($p['name'])?>" data-pdf="<?=$p['isPdf'] ? '1' : '0'?>" data-image="<?=$p['isImage'] ? '1' : '0'?>">
+							<?=$view->escape($p['name'])?>
+						</option>
+						<?php } ?>
+					</select>
+					<?php } ?>
+					<div id="storageViewerHost" class="border rounded p-2 bg-light"></div>
+				</div>
+				<?php } ?>
 			</div>
 		</div>
 	</div>
@@ -74,3 +115,59 @@ if (isset($hash['data']['storage_file']) && strlen($hash['data']['storage_file']
 <?php
 $view->footing();
 ?>
+<?php if ($firstPreview) { ?>
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="<?=ROOT?>assets/js/protected-file-viewer.js?v=<?=defined('CACHE_VERSION')?CACHE_VERSION:APP_VERSION?>"></script>
+<script>
+(function () {
+	var storageId = <?=intval($hash['data']['id'])?>;
+	var isProtected = <?= $isProtected ? 'true' : 'false' ?>;
+	var realname = <?= json_encode($viewerRealname, JSON_UNESCAPED_UNICODE) ?>;
+	var userid = <?= json_encode($viewerUserid, JSON_UNESCAPED_UNICODE) ?>;
+	var host = document.getElementById('storageViewerHost');
+	var select = document.getElementById('storagePreviewSelect');
+
+	function previewUrl(name) {
+		return 'download.php?id=' + storageId + '&file=' + encodeURIComponent(name) + '&inline=1';
+	}
+
+	function mountFromOption(opt) {
+		if (!host || !window.CailyProtectedViewer || !opt) return;
+		var name = opt.getAttribute('data-name') || opt.textContent;
+		CailyProtectedViewer.mount({
+			container: host,
+			url: previewUrl(name.trim()),
+			isPdf: opt.getAttribute('data-pdf') === '1',
+			isImage: opt.getAttribute('data-image') === '1',
+			isProtected: isProtected,
+			realname: realname,
+			userid: userid,
+			alt: name
+		});
+	}
+
+	if (select) {
+		select.addEventListener('change', function () {
+			var opt = select.options[select.selectedIndex];
+			mountFromOption(opt);
+		});
+		mountFromOption(select.options[select.selectedIndex]);
+	} else {
+		var fake = document.createElement('option');
+		fake.setAttribute('data-name', <?= json_encode($firstPreview['name'], JSON_UNESCAPED_UNICODE) ?>);
+		fake.setAttribute('data-pdf', <?= $firstPreview['isPdf'] ? "'1'" : "'0'" ?>);
+		fake.setAttribute('data-image', <?= $firstPreview['isImage'] ? "'1'" : "'0'" ?>);
+		mountFromOption(fake);
+	}
+
+	if (isProtected) {
+		document.addEventListener('keydown', function (e) {
+			var key = (e.key || '').toLowerCase();
+			if ((e.ctrlKey || e.metaKey) && (key === 'p' || key === 'c' || key === 'x' || key === 's')) {
+				e.preventDefault();
+			}
+		});
+	}
+})();
+</script>
+<?php } ?>

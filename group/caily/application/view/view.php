@@ -220,13 +220,21 @@ class View {
 				$element = '<li><a href="download.php?id=%s&file=%s"><img src="../images/file.gif" />&nbsp;%s</a></li>';
 				foreach ($array as $value) {
 					if (strlen($value) > 0) {
-						$value = $this->escape($value);
-						if (preg_match('/.+\.(jpeg|jpg|gif|png)$/', $value)) {
-							$file = $this->uploadencode(DIR_UPLOAD.$directory.'/'.$prefix.'_'.$value);
+						$logical = $value;
+						$display = $this->escape($value);
+						if (preg_match('/.+\.(jpeg|jpg|gif|png)$/i', $logical)) {
+							$base = DIR_UPLOAD.$directory.'/'.$prefix.'_';
+							$file = $base.$logical;
+							if (!file_exists($file) && function_exists('mb_convert_encoding')) {
+								$sjis = @mb_convert_encoding($logical, 'SJIS', 'UTF-8');
+								if (is_string($sjis) && $sjis !== '' && file_exists($base.$sjis)) {
+									$file = $base.$sjis;
+								}
+							}
 							$tag = $helper->resizeImage($file, 100, 100);
-							$result[0] .= sprintf($image, $id, urlencode($value), $id, urlencode($value), $tag, $value);
+							$result[0] .= sprintf($image, $id, urlencode($logical), $id, urlencode($logical), $tag, $display);
 						} else {
-							$result[1] .= sprintf($element, $id, urlencode($value), $value);
+							$result[1] .= sprintf($element, $id, urlencode($logical), $display);
 						}
 					}
 				}
@@ -243,10 +251,8 @@ class View {
 	}
 	
 	function uploadencode($string) {
-		if (stristr(PHP_OS, 'win')) {
-			$string = mb_convert_encoding($string, 'SJIS', 'SJIS, UTF-8');
-		}
-		return $string;
+		// UTF-8 on disk; legacy SJIS resolved in Model::resolvePrefixedUploadPath
+		return (string)$string;
 	}
 
 	

@@ -32,6 +32,7 @@ if(isset($hash['folder']['storage_title'])){
 			<div class="container py-12">
 
 				<form class="content" method="post" action="" enctype="multipart/form-data">
+					<input type="hidden" name="folder" value="<?=intval($_GET['folder'] ?? 0)?>" />
 					<?=$view->error($hash['error'])?>
 					<table class="form" cellspacing="0">
 						<tr><th>ファイル<span class="badge bg-label-danger mx-1">必須</span></th>
@@ -40,6 +41,12 @@ if(isset($hash['folder']['storage_title'])){
 						<tr><th>タイトル<span class="badge bg-label-danger mx-1">必須</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>
 						<tr><th>内容</th><td><textarea name="storage_comment" class="inputcomment form-control" rows="5"><?=$hash['data']['storage_comment']?></textarea></td></tr>
 						<tr><th>場所</th><td><?=$title?></td></tr>
+						<tr><th>ダウンロード保護</th><td>
+							<label class="form-check">
+								<input type="checkbox" name="is_protected" value="1" class="form-check-input" <?=!empty($hash['data']['is_protected']) ? 'checked' : ''?> />
+								<span class="form-check-label">保護する（ダウンロード不可・画面閲覧のみ）</span>
+							</label>
+						</td></tr>
 						<tr><th>公開設定<?=$view->explain('public')?></th><td><?=$view->permit($hash['data'])?></td></tr>
 						<tr><th>編集設定<?=$view->explain('edit')?></th><td><?=$view->permit($hash['data'], 'edit')?></td></tr>
 					</table>

@@ -43,6 +43,7 @@ if(isset($hash['folder']['storage_title'])){
 		<div class="card-body">
 			<div class="container py-12">
 				<form class="content" method="post" action="">
+					<input type="hidden" name="folder" value="<?=intval($_GET['folder'] ?? 0)?>" />
 					<?=$view->error($hash['error'])?>
 					<table class="form table table-bordered mb-4" cellspacing="0">
 						<tr><th>フォルダ名<span class="badge bg-label-danger mx-1">必須</span></th><td><input type="text" name="storage_title" class="inputtitle form-control" value="<?=$hash['data']['storage_title']?>" /></td></tr>

@@ -14,6 +14,7 @@ class Storage extends ApplicationModel {
 		'storage_date'=>array('fix'=>date('Y-m-d H:i:s'), 'except'=>array('search', 'update')),
 		'storage_file'=>array('except'=>array('update')),
 		'storage_size'=>array('except'=>array('search', 'update')),
+		'is_protected'=>array('fix'=>'0', 'except'=>array('search')),
 		'add_level'=>array('except'=>array('search')),
 		'add_group'=>array('except'=>array('search')),
 		'add_user'=>array('except'=>array('search')),
@@ -31,8 +32,8 @@ class Storage extends ApplicationModel {
 		$hash['parent'] = $this->permitFind('public', $_GET['folder']);
 		$this->where[] = "(storage_folder = '".intval($_GET['folder'])."')";
 		$hash += $this->permitList('storage_type DESC, storage_date', 1);
-		if ($_GET['folder'] > 0) {
-			$query = sprintf("SELECT id, storage_title FROM %s WHERE (storage_folder = %d) AND (storage_type = 'folder') AND %s ORDER BY storage_title", $this->table, intval($folder['storage_folder']) , $this->permitWhere());
+		if ($_GET['folder'] > 0 && is_array($hash['parent']) && isset($hash['parent']['storage_folder'])) {
+			$query = sprintf("SELECT id, storage_title FROM %s WHERE (storage_folder = %d) AND (storage_type = 'folder') AND %s ORDER BY storage_title", $this->table, intval($hash['parent']['storage_folder']), $this->permitWhere());
 			$data = $this->fetchAll($query);
 			$hash['folder'] = array();
 			if (is_array($data) && count($data) > 0) {
@@ -58,23 +59,34 @@ class Storage extends ApplicationModel {
 	
 	function add() {
 	
-		$hash['folder'] = $this->permitFolder($_GET['folder']);
+		$folderId = isset($_REQUEST['folder']) ? intval($_REQUEST['folder']) : intval($_GET['folder'] ?? 0);
+		$hash['folder'] = $this->permitFolder($folderId);
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$hasUpload = (is_array($_FILES['uploadfile']['name'] ?? null) && strlen((string)($_FILES['uploadfile']['name'][0] ?? '')) > 0)
 				|| (is_array($_POST['uploadedfile'] ?? null) && strlen((string)($_POST['uploadedfile'][0] ?? '')) > 0);
 			if (!$hasUpload) {
 				$this->error[] = 'アップロードするファイルを選択してください。';
 			}
+			$this->schema['storage_folder']['fix'] = $folderId;
+			$this->schema['storage_type']['fix'] = 'file';
+			$this->schema['storage_date']['fix'] = date('Y-m-d H:i:s');
 			$this->validateSchema('insert');
 			$this->permitValidate();
-			$prefix = $_SESSION['userid'].'_'.strtotime($this->post['storage_date']);
+			$this->normalizeStorageInsertPost('file', $folderId);
+			$ts = strtotime((string)($this->post['storage_date'] ?? ''));
+			if ($ts === false) {
+				$ts = time();
+				$this->post['storage_date'] = date('Y-m-d H:i:s', $ts);
+			}
+			$prefix = $_SESSION['userid'].'_'.$ts;
 			$this->post['storage_file'] = $this->uploadfile('storage', $prefix);
 			if (strlen((string)$this->post['storage_file']) <= 0 && count($this->error) <= 0) {
 				$this->error[] = 'アップロードするファイルを選択してください。';
 			}
 			$this->post['storage_size'] = $this->storageTotalSize($prefix, $this->post['storage_file']);
+			$this->post['is_protected'] = !empty($_POST['is_protected']) ? 1 : 0;
 			$this->insertPost();
-			$this->redirect('index.php'.$this->parameter(array('folder'=>$_GET['folder'])));
+			$this->redirect('index.php'.$this->parameter(array('folder'=>$folderId)));
 			$hash['data'] = $this->post;
 		}
 		$hash += $this->findUser($hash['data']);
@@ -99,6 +111,7 @@ class Storage extends ApplicationModel {
 			} else {
 				$this->post['storage_size'] = $this->storageTotalSize($prefix, $this->post['storage_file']);
 			}
+			$this->post['is_protected'] = !empty($_POST['is_protected']) ? 1 : 0;
 			$this->updatePost();
 			$this->redirect('index.php'.$this->parameter(array('folder'=>$hash['data']['storage_folder'])));
 			$this->post['storage_date'] = $hash['data']['storage_date'];
@@ -139,14 +152,18 @@ class Storage extends ApplicationModel {
 		if(!isset($_GET['folder'])){
 			$_GET['folder'] = 0;
 		}
-		$hash['folder'] = $this->permitFolder($_GET['folder']);
+		$folderId = isset($_REQUEST['folder']) ? intval($_REQUEST['folder']) : intval($_GET['folder']);
+		$hash['folder'] = $this->permitFolder($folderId);
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$this->schema['storage_type']['fix'] = 'folder';
+			$this->schema['storage_folder']['fix'] = $folderId;
 			$this->schema['storage_title'][0] = 'フォルダ名';
+			$this->schema['storage_date']['fix'] = date('Y-m-d H:i:s');
 			$this->validateSchema('insert');
 			$this->permitValidate();
+			$this->normalizeStorageInsertPost('folder', $folderId);
 			$this->insertPost();
-			$this->redirect('index.php'.$this->parameter(array('folder'=>$_GET['folder'])));
+			$this->redirect('index.php'.$this->parameter(array('folder'=>$folderId)));
 			$hash['data'] = $this->post;
 		}
 		$hash += $this->findUser($hash['data']);
@@ -162,6 +179,7 @@ class Storage extends ApplicationModel {
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$this->schema['storage_type']['fix'] = 'folder';
 			$this->schema['storage_title'][0] = 'フォルダ名';
+			$this->schema['is_protected']['except'] = array('search', 'update');
 			$hash['data'] = $this->permitUpdate('index.php'.$this->parameter(array('folder'=>$hash['data']['storage_folder'])));
 		}
 		$hash += $this->findUser($hash['data']);
@@ -229,6 +247,30 @@ class Storage extends ApplicationModel {
 		}
 	
 	}
+
+	/**
+	 * Ensure insert payload has valid type/folder/int fields (avoid '' into TINYINT / lost folder).
+	 */
+	private function normalizeStorageInsertPost($type, $folderId) {
+		$this->post['storage_type'] = ($type === 'folder') ? 'folder' : 'file';
+		$this->post['storage_folder'] = intval($folderId);
+		$this->post['is_protected'] = !empty($this->post['is_protected']) ? 1 : 0;
+		foreach (array('add_level', 'public_level', 'edit_level') as $levelKey) {
+			if (!isset($this->post[$levelKey]) || $this->post[$levelKey] === '' || $this->post[$levelKey] === null) {
+				$this->post[$levelKey] = 0;
+			} else {
+				$this->post[$levelKey] = intval($this->post[$levelKey]);
+			}
+		}
+		if (!isset($this->post['storage_date']) || !strtotime((string)$this->post['storage_date'])) {
+			$this->post['storage_date'] = date('Y-m-d H:i:s');
+		}
+		if ($type === 'folder') {
+			$this->post['storage_file'] = '';
+			$this->post['storage_size'] = '';
+			$this->post['is_protected'] = 0;
+		}
+	}
 	
 	function download() {
 		
@@ -238,12 +280,88 @@ class Storage extends ApplicationModel {
 		}
 		$requestFile = isset($_REQUEST['file']) ? (string)$_REQUEST['file'] : '';
 		$files = $this->storageFileList($data['storage_file'] ?? '');
-		if ($requestFile !== '' && in_array($requestFile, $files, true)) {
-			$this->attachment('storage', $data['owner'].'_'.strtotime($data['storage_date']), $requestFile, 'attachment');
-		} else {
+		if ($requestFile === '' || !in_array($requestFile, $files, true)) {
 			$this->died('ファイルが見つかりません。');
 		}
+
+		$isProtected = isset($data['is_protected']) && (intval($data['is_protected']) === 1);
+		$wantInline = isset($_REQUEST['inline']) && $_REQUEST['inline'] == '1';
+
+		$prefix = $data['owner'].'_'.strtotime($data['storage_date']);
+		$path = $this->resolveUploadFilePath('storage', $prefix, $requestFile);
+		if (!file_exists($path)) {
+			$this->died('ファイルが見つかりません。');
+		}
+
+		// Inline preview (PDF/image) — allowed for permitted viewers (viewer page only)
+		if ($wantInline) {
+			$this->logStorageAccess($data['id'], $requestFile, 'preview');
+			$this->streamInlineFile($path, $requestFile);
+			return;
+		}
+
+		// Protected: no download at all (view-only via title → preview)
+		if ($isProtected) {
+			$this->died('保護ファイルのためダウンロードできません。一覧のタイトルから閲覧してください。');
+		}
+
+		$this->logStorageAccess($data['id'], $requestFile, 'download');
+		$this->attachment('storage', $prefix, $requestFile, 'attachment');
 	
+	}
+
+	private function streamInlineFile($path, $filename) {
+		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+		$mimeMap = array(
+			'pdf' => 'application/pdf',
+			'jpg' => 'image/jpeg',
+			'jpeg' => 'image/jpeg',
+			'png' => 'image/png',
+			'gif' => 'image/gif',
+			'webp' => 'image/webp',
+			'bmp' => 'image/bmp',
+			'svg' => 'image/svg+xml',
+		);
+		$mime = isset($mimeMap[$ext]) ? $mimeMap[$ext] : 'application/octet-stream';
+		$size = filesize($path);
+		$encoded = rawurlencode($filename);
+		header('Content-Type: ' . $mime);
+		header('Content-Length: ' . $size);
+		header(sprintf(
+			'Content-Disposition: inline; filename="%s"; filename*=UTF-8\'\'%s',
+			$encoded,
+			$encoded
+		));
+		header('Cache-Control: no-store, no-cache, must-revalidate');
+		header('X-Content-Type-Options: nosniff');
+		if (ob_get_level()) {
+			ob_end_clean();
+		}
+		readfile($path);
+		exit;
+	}
+
+	private function logStorageAccess($storageId, $filename, $action = 'view') {
+		$storageId = intval($storageId);
+		if ($storageId <= 0) {
+			return;
+		}
+		try {
+			$this->query(sprintf(
+				"INSERT INTO " . DB_PREFIX . "storage_view_logs
+				 (storage_id, filename, userid, realname, action, ip, user_agent, created_at)
+				 VALUES (%d, '%s', '%s', '%s', '%s', '%s', '%s', NOW())",
+				$storageId,
+				$this->quote((string)$filename),
+				$this->quote((string)($_SESSION['userid'] ?? '')),
+				$this->quote((string)($_SESSION['realname'] ?? '')),
+				$this->quote((string)$action),
+				$this->quote((string)($_SERVER['REMOTE_ADDR'] ?? '')),
+				$this->quote(substr((string)($_SERVER['HTTP_USER_AGENT'] ?? ''), 0, 500))
+			));
+		} catch (Exception $e) {
+			// migration may be pending
+		}
 	}
 
 	/** @return string[] */
@@ -264,7 +382,7 @@ class Storage extends ApplicationModel {
 	function storageTotalSize($prefix, $filelist) {
 		$total = 0;
 		foreach ($this->storageFileList($filelist) as $name) {
-			$file = DIR_UPLOAD.'storage/'.$prefix.'_'.$this->uploadencode($name);
+			$file = $this->resolveUploadFilePath('storage', $prefix, $name);
 			if (file_exists($file)) {
 				$size = @filesize($file);
 				if ($size > 0) {

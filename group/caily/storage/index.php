@@ -76,7 +76,12 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 							$type = 'info';
 							$fileext = '';
 							$file = '';
-							if ($row['storage_type'] == 'file') {
+							if ($row['storage_type'] === 'folder') {
+								$fileext = 'folder tabler-filled';
+								$url = 'index.php?folder='.$row['id'];
+								$property = 'folderview.php?id='.$row['id'];
+								$type = 'warning';
+							} elseif ($row['storage_type'] == 'file') {
 								$fileNames = array();
 								if (strlen($row['storage_file']) > 0) {
 									foreach (explode(',', $row['storage_file']) as $filename) {
@@ -102,22 +107,36 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 									$fileext = 'file-type-xls';
 								} elseif ($fileext == 'ppt' || $fileext == 'pptx') {
 									$fileext = 'file-type-ppt';
+								} else {
+									$fileext = 'file';
 								}
 								$url = 'view.php?id='.$row['id'];
 								$fileLinks = array();
+								$isProtectedRow = !empty($row['is_protected']);
 								foreach ($fileNames as $filename) {
-									$fileLinks[] = '<a href="download.php?id='.$row['id'].'&file='.urlencode($filename).'">'.$view->escape($filename).'</a>';
+									$fileLinks[] = '<a href="'.$url.'">'.$view->escape($filename).'</a>';
 								}
 								$file = count($fileLinks) > 0 ? implode('<br>', $fileLinks) : '';
 								if (count($fileNames) > 1) {
 									$file .= '<div class="small text-muted mt-1">'.count($fileNames).'ファイル</div>';
 								}
+								if ($isProtectedRow) {
+									$file = '<span class="badge bg-warning text-dark me-1">保護・閲覧のみ</span>' . $file;
+								}
 								$property = $url;
 							} else {
-								$fileext = 'folder tabler-filled';
-								$url = 'index.php?folder='.$row['id'];
-								$property = 'folderview.php?id='.$row['id'];
-								$type = 'warning';
+								// Broken rows (empty type): show as file if has storage_file, else skip styling as folder
+								if (strlen($row['storage_file']) > 0) {
+									$url = 'view.php?id='.$row['id'];
+									$fileext = 'file';
+									$file = $view->escape($row['storage_file']);
+									$property = $url;
+								} else {
+									$fileext = 'folder tabler-filled';
+									$url = 'index.php?folder='.$row['id'];
+									$property = 'folderview.php?id='.$row['id'];
+									$type = 'warning';
+								}
 							}
 					?>
 							<tr><td><a class="storage<?=$row['storage_type']?> <?=$fileext?>" href="<?=$url?>"><i class="icon-base ti tabler-<?=$fileext?> me-2 text-<?=$type?>"></i><?=$row['storage_title']?></a>&nbsp;</td>

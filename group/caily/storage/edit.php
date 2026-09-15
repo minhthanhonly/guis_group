@@ -36,6 +36,12 @@ $view->heading('ファイル編集');
 						<tr><th>ファイルサイズ</th><td><?=$hash['data']['storage_size']?></td></tr>
 						<tr><th>内容</th><td><textarea name="storage_comment" class="inputcomment form-control" rows="5"><?=$hash['data']['storage_comment']?></textarea></td></tr>
 						<tr><th>場所</th><td><?=$hash['folder']['storage_title']?></td></tr>
+						<tr><th>ダウンロード保護</th><td>
+							<label class="form-check">
+								<input type="checkbox" name="is_protected" value="1" class="form-check-input" <?=!empty($hash['data']['is_protected']) ? 'checked' : ''?> />
+								<span class="form-check-label">保護する（ダウンロード不可・タイトルから画面閲覧のみ／透かし表示）</span>
+							</label>
+						</td></tr>
 						<tr><th>公開設定<?=$view->explain('public')?></th><td><?=$view->permit($hash['data'])?></td></tr>
 						<tr><th>編集設定<?=$view->explain('edit')?></th><td><?=$view->permit($hash['data'], 'edit')?></td></tr>
 					</table>

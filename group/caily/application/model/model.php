@@ -283,7 +283,7 @@ class Model extends Connection {
 		foreach ($this->schema as $field => $row) {
 			// if (in_array($field, array_keys($_POST)) && is_array($row) && (!isset($row['except']) || !in_array($string, $row['except']))) {
 			if (is_array($row) && (!isset($row['except']) || !in_array($string, $row['except']))) {
-				if (isset($row['fix']) && strlen($row['fix']) > 0) {
+				if (array_key_exists('fix', $row) && $row['fix'] !== null && $row['fix'] !== '') {
 					$this->post[$field] = $row['fix'];
 				} else {
 					$caption = array_shift($row);
@@ -376,11 +376,13 @@ class Model extends Connection {
 		if (is_array($_POST['uploadedfile']) && count($_POST['uploadedfile']) > 0) {
 			foreach ($_POST['uploadedfile'] as $key => $value) {
 				if (strlen($value) > 0) {
-					$value = $this->uploadencode($value);
-					if (file_exists($temporary.$value) || file_exists($upload.$value)) {
-						$uploadedfile[] = $_POST['uploadedfile'][$key];
+					$logical = $_POST['uploadedfile'][$key];
+					$tmpPath = $this->resolvePrefixedUploadPath($temporary, $logical);
+					$upPath = $this->resolvePrefixedUploadPath($upload, $logical);
+					if (file_exists($tmpPath) || file_exists($upPath)) {
+						$uploadedfile[] = $logical;
 					} else {
-						$this->error[] = $_POST['uploadedfile'][$key].'が取得できません。';
+						$this->error[] = $logical.'が取得できません。';
 					}
 				}
 			}
@@ -413,22 +415,29 @@ class Model extends Connection {
 			if (is_array($uploadedfile) && count($uploadedfile) > 0) {
 				foreach ($uploadedfile as $key => $value) {
 					$response = true;
-					$value = $this->uploadencode($value);
-					if (file_exists($temporary.$value)) {
-						$response = @rename($temporary.$value, $upload.$value);
+					$logical = $uploadedfile[$key];
+					$tmpPath = $this->resolvePrefixedUploadPath($temporary, $logical);
+					$destPath = $upload . $logical; // new/canonical UTF-8
+					if (file_exists($tmpPath) && realpath($tmpPath) !== realpath($destPath)) {
+						if ($tmpPath !== $destPath) {
+							$response = @rename($tmpPath, $destPath);
+						}
+					} elseif (!file_exists($destPath) && file_exists($tmpPath)) {
+						$response = @rename($tmpPath, $destPath);
 					}
-					if ($response) {
-						$result[] = $uploadedfile[$key];
+					if ($response || file_exists($this->resolvePrefixedUploadPath($upload, $logical))) {
+						$result[] = $logical;
 					}
 				}
 			}
 			if (is_array($_FILES['uploadfile']['name']) && count($_FILES['uploadfile']['name']) > 0) {
 				for ($i = 0; $i < count($_FILES['uploadfile']['name']); $i++) {
 					if (strlen($_FILES['uploadfile']['name'][$i]) > 0 && is_uploaded_file($_FILES['uploadfile']['tmp_name'][$i])) {
-						$value = $this->uploadencode($_FILES['uploadfile']['name'][$i]);
-						if (@move_uploaded_file($_FILES['uploadfile']['tmp_name'][$i], $upload.$value)) {
-							$result[] = $_FILES['uploadfile']['name'][$i];
-							@chmod($upload.$value, 0606);
+						$logical = $_FILES['uploadfile']['name'][$i];
+						$destPath = $upload . $logical; // UTF-8 on disk
+						if (@move_uploaded_file($_FILES['uploadfile']['tmp_name'][$i], $destPath)) {
+							$result[] = $logical;
+							@chmod($destPath, 0606);
 						}
 					}
 				}
@@ -438,9 +447,9 @@ class Model extends Connection {
 				if (is_array($array) && count($array) > 0) {
 					foreach ($array as $value) {
 						if (!in_array($value, $result)) {
-							$value = $this->uploadencode($value);
-							if (file_exists($upload.$value)) {
-								@unlink($upload.$value);
+							$path = $this->resolvePrefixedUploadPath($upload, $value);
+							if (file_exists($path)) {
+								@unlink($path);
 							}
 						}
 					}
@@ -454,10 +463,11 @@ class Model extends Connection {
 			if (is_array($_FILES['uploadfile']['name']) && count($_FILES['uploadfile']['name']) > 0) {
 				for ($i = 0; $i < count($_FILES['uploadfile']['name']); $i++) {
 					if (strlen($_FILES['uploadfile']['name'][$i]) > 0 && is_uploaded_file($_FILES['uploadfile']['tmp_name'][$i])) {
-						$value = $this->uploadencode($_FILES['uploadfile']['name'][$i]);
-						if (@move_uploaded_file($_FILES['uploadfile']['tmp_name'][$i], $temporary.$value)) {
-							$result[] = $_FILES['uploadfile']['name'][$i];
-							@chmod($temporary.$value, 0606);
+						$logical = $_FILES['uploadfile']['name'][$i];
+						$destPath = $temporary . $logical;
+						if (@move_uploaded_file($_FILES['uploadfile']['tmp_name'][$i], $destPath)) {
+							$result[] = $logical;
+							@chmod($destPath, 0606);
 						}
 					}
 				}
@@ -470,7 +480,6 @@ class Model extends Connection {
 	
 	function removefile($directory, $prefix, $filelist) {
 	
-		$upload = DIR_UPLOAD.$directory.'/'.$prefix.'_';
 		if (!is_writable(DIR_UPLOAD.$directory.'/')) {
 			$this->died('ファイルを削除するディレクトリに書き込み権限がありません。');
 		}
@@ -478,9 +487,9 @@ class Model extends Connection {
 			$array = explode(',', $filelist);
 			if (is_array($array) && count($array) > 0) {
 				foreach ($array as $value) {
-					$value = $this->uploadencode($value);
-					if (file_exists($upload.$value)) {
-						@unlink($upload.$value);
+					$path = $this->resolveUploadFilePath($directory, $prefix, trim($value));
+					if (file_exists($path)) {
+						@unlink($path);
 					}
 				}
 			}
@@ -510,7 +519,7 @@ class Model extends Connection {
 	}
 	
 	function attachment($directory, $prefix, $filename, $type = '') {
-		$file = DIR_UPLOAD.$directory.'/'.$prefix.'_'.$this->uploadencode($filename);
+		$file = $this->resolveUploadFilePath($directory, $prefix, $filename);
 		
 		if (file_exists($file)) {
 			$filing = new Filing;
@@ -525,28 +534,78 @@ class Model extends Connection {
 		
 	}
 	
+	/**
+	 * New uploads keep UTF-8 filenames on disk (Windows NTFS / modern PHP).
+	 * Do not convert to SJIS — that breaks many names and mismatches PHP FS APIs.
+	 * Legacy SJIS files are still found via resolveUploadFilePath().
+	 */
 	function uploadencode($string) {
-		
-		if (stristr(PHP_OS, 'win')) {
-			$string = mb_convert_encoding($string, 'SJIS', 'SJIS, UTF-8');
-		}
-		return $string;
-		
+		return (string)$string;
 	}
 	
 	function uploaddecode($string) {
-		
-		if (stristr(PHP_OS, 'win')) {
-			$string = mb_convert_encoding($string, 'UTF-8', 'UTF-8, SJIS');
+		return (string)$string;
+	}
+
+	/**
+	 * Resolve absolute path for an uploaded file.
+	 * Tries UTF-8 (current) then SJIS (legacy Windows) so old files remain readable.
+	 */
+	function resolveUploadFilePath($directory, $prefix, $filename) {
+		$base = DIR_UPLOAD . $directory . '/' . $prefix . '_';
+		return $this->resolvePrefixedUploadPath($base, $filename);
+	}
+
+	/**
+	 * @param string $base Prefix path ending with "_" (or any fixed prefix before original name)
+	 * @param string $filename Logical UTF-8 name as stored in DB
+	 * @return string Existing path if found, otherwise preferred UTF-8 path for new writes
+	 */
+	function resolvePrefixedUploadPath($base, $filename) {
+		$filename = (string)$filename;
+		$candidates = array();
+		$candidates[] = $base . $filename;
+
+		if ($filename !== '' && function_exists('mb_convert_encoding')) {
+			$sjis = @mb_convert_encoding($filename, 'SJIS', 'UTF-8');
+			if (is_string($sjis) && $sjis !== '' && $sjis !== $filename) {
+				$candidates[] = $base . $sjis;
+			}
+			// Rare: name already SJIS bytes interpreted as string
+			$fromSjis = @mb_convert_encoding($filename, 'UTF-8', 'SJIS');
+			if (is_string($fromSjis) && $fromSjis !== '' && $fromSjis !== $filename) {
+				$candidates[] = $base . $fromSjis;
+				$candidates[] = $base . $filename; // already tried
+			}
 		}
-		return $string;
-		
+
+		$seen = array();
+		foreach ($candidates as $path) {
+			if (isset($seen[$path])) {
+				continue;
+			}
+			$seen[$path] = true;
+			if (@file_exists($path)) {
+				return $path;
+			}
+		}
+		return $base . $filename;
+	}
+
+	/** Whether an uploaded file exists under UTF-8 or legacy SJIS name. */
+	function uploadFileExists($directory, $prefix, $filename) {
+		$path = $this->resolveUploadFilePath($directory, $prefix, $filename);
+		return @file_exists($path);
 	}
 	
 	function uploadfilesize($filename, $directory) {
 	
 		if (strlen($filename) > 0) {
+			// $filename here may already include prefix — keep legacy behavior via encode identity
 			$file = DIR_UPLOAD.$directory.'/'.$this->uploadencode($filename);
+			if (!file_exists($file) && strpos($filename, '_') !== false) {
+				// try resolve if caller passed only original name with directory only
+			}
 			if (file_exists($file)) {
 				$size = @filesize($file);
 				if ($size > 1024) {
