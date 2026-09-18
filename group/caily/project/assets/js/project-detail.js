@@ -348,6 +348,12 @@ function fromProjectDateTimeInputValue(value) {
     return parsed.format(PROJECT_DATETIME_SERVER_FORMAT);
 }
 
+function isFilledProjectDeadline(value) {
+    if (value === undefined || value === null) return false;
+    const s = String(value).trim();
+    return s !== '' && s !== '-' && s !== '0000-00-00' && s !== '0000-00-00 00:00:00';
+}
+
 function formatProjectDateTimeForDisplay(value) {
     if (value === undefined || value === null) return '-';
     const s = String(value).trim();
@@ -627,6 +633,15 @@ const vueApp = createApp({
     computed: {
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+        },
+        isPeriodUndecided() {
+            const project = this.project;
+            if (!project) return false;
+            const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
+            if (skipStatuses.includes(project.status)) return false;
+            return !(isFilledProjectDeadline(project.guis_nouki)
+                || isFilledProjectDeadline(project.caily_nouki)
+                || isFilledProjectDeadline(project.end_date));
         },
         yoteiDisplayText() {
             if (typeof window.YoteiField === 'undefined') return '-';

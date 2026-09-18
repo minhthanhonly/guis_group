@@ -1775,10 +1775,15 @@ $(document).ready(function() {
                         }
                     }
 
-                    // 期間未定: thiếu start_date, hoặc (thiếu end_date và không có caily_nouki/guis_nouki)
-                    const hasNouki = !!(project.caily_nouki && String(project.caily_nouki).trim() && project.caily_nouki !== '-') ||
-                        !!(project.guis_nouki && String(project.guis_nouki).trim() && project.guis_nouki !== '-');
-                    const periodUndecided = !project.start_date || (!project.end_date && !hasNouki);
+                    // 期間未定: ẩn nếu đã có 1 trong CAILY納期 / GUIS納期 / 期限日
+                    const hasFilledDeadline = function(value) {
+                        if (value === undefined || value === null) return false;
+                        const s = String(value).trim();
+                        return s !== '' && s !== '-' && s !== '0000-00-00' && s !== '0000-00-00 00:00:00';
+                    };
+                    const periodUndecided = !hasFilledDeadline(project.caily_nouki)
+                        && !hasFilledDeadline(project.guis_nouki)
+                        && !hasFilledDeadline(project.end_date);
                     const task = {
                         id: project.id,
                         text: (project.name || '') + (periodUndecided ? ' 期間未定' : ''),

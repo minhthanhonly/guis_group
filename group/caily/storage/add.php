@@ -2,10 +2,7 @@
 
 require_once('../application/loader.php');
 $view->heading('ファイルアップロード');
-$title = "ルート";
-if(isset($hash['folder']['storage_title'])){
-	$title = $hash['folder']['storage_title'];
-}
+$title = isset($hash['folder']['storage_title']) ? $hash['folder']['storage_title'] : 'ファイル共有';
 
 ?>
 <div class="container-xxl flex-grow-1 container-p-y">

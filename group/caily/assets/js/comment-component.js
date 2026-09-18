@@ -1212,35 +1212,47 @@ window.CommentComponent = {
         },
         
         initTooltips() {
-            // Initialize Bootstrap tooltips for like count badges
-            const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-            tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl, {
-                    trigger: 'hover',
-                    html: true
-                });
-            });
+            this._bindCommentTooltips();
         },
         
         updateTooltips() {
-            // Update tooltips after comments are loaded or updated
             this.$nextTick(() => {
-                // Update existing tooltips or create new ones
-                const tooltipElements = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-                tooltipElements.forEach(el => {
-                    const tooltip = bootstrap.Tooltip.getInstance(el);
-                    if (tooltip) {
-                        // Update the tooltip content
-                        const newTitle = el.getAttribute('title') || el.getAttribute('data-bs-original-title') || '';
-                        tooltip.setContent({ '.tooltip-inner': newTitle });
-                    } else {
-                        // Create new tooltip if it doesn't exist
-                        new bootstrap.Tooltip(el, {
-                            trigger: 'hover',
-                            html: true
-                        });
+                this._bindCommentTooltips(true);
+            });
+        },
+
+        _getTooltipTitle(el) {
+            const raw = el.getAttribute('data-bs-title')
+                || el.getAttribute('title')
+                || el.getAttribute('data-bs-original-title');
+            if (raw == null || raw === '' || raw === 'null') {
+                return '';
+            }
+            return raw;
+        },
+
+        _bindCommentTooltips(updateExisting) {
+            if (typeof bootstrap === 'undefined' || !bootstrap.Tooltip) return;
+            const root = (this.$el && this.$el.querySelectorAll) ? this.$el : document.querySelector('.comment-component');
+            if (!root || !root.querySelectorAll) return;
+            const tooltipElements = root.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipElements.forEach((el) => {
+                const title = this._getTooltipTitle(el);
+                if (!title) return;
+                try {
+                    const existing = bootstrap.Tooltip.getInstance(el);
+                    if (existing) {
+                        if (updateExisting && typeof existing.setContent === 'function') {
+                            existing.setContent({ '.tooltip-inner': title });
+                        }
+                        return;
                     }
-                });
+                    new bootstrap.Tooltip(el, {
+                        trigger: 'hover',
+                        html: true,
+                        title: title
+                    });
+                } catch (e) { /* skip invalid tooltip elements */ }
             });
         },
         

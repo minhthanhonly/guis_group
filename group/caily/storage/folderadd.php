@@ -2,7 +2,7 @@
 
 require_once('../application/loader.php');
 $view->heading('フォルダ追加');
-$title = "ルート";
+$title = isset($hash['folder']['storage_title']) ? $hash['folder']['storage_title'] : 'ファイル共有';
 if(isset($hash['folder']['storage_title'])){
 	$title = $hash['folder']['storage_title'];
 	$hash['data']['storage_folder'] = $view->initialize($hash['data']['storage_folder'], intval($_REQUEST['folder']));

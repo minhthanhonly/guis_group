@@ -2,11 +2,14 @@
 
 
 class Storage extends ApplicationModel {
+
+	var $companyRootsReady = false;
 	
 	function __construct() {
 	
 		$this->schema = array(
 		'storage_folder'=>array('fix'=>intval($_GET['folder']), 'except'=>array('search', 'update')),
+		'company_root'=>array('except'=>array('search', 'insert', 'update')),
 		'storage_type'=>array('fix'=>'file'),
 		'storage_title'=>array('タイトル', 'notnull', 'length:1000'),
 		'storage_name'=>array('fix'=>$_SESSION['realname']),
@@ -26,20 +29,64 @@ class Storage extends ApplicationModel {
 		'edit_user'=>array('except'=>array('search')));
 		
 	}
+
+	function permitFind($level = 'public', $id = 0) {
+
+		$this->ensureCompanyRoots();
+		$data = parent::permitFind($level, $id);
+		if ($this->companyRootsReady && is_array($data) && !empty($data['id'])) {
+			$this->assertCompanyRootAccess($data);
+		}
+		return $data;
+
+	}
 	
 	function index() {
 		
-		$hash['parent'] = $this->permitFind('public', $_GET['folder']);
-		$this->where[] = "(storage_folder = '".intval($_GET['folder'])."')";
+		$this->ensureCompanyRoots();
+		$folderId = intval($_GET['folder'] ?? 0);
+		$hash['parent'] = null;
+		$hash['is_company_picker'] = ($folderId <= 0 && $this->companyRootsReady);
+		$hash['is_company_root'] = false;
+		if ($folderId > 0) {
+			$hash['parent'] = $this->permitFind('public', $folderId);
+			$hash['is_company_root'] = $this->isCompanyRootFolder($hash['parent']);
+		}
+		$this->where[] = "(storage_folder = '".$folderId."')";
 		$hash += $this->permitList('storage_type DESC, storage_date', 1);
-		if ($_GET['folder'] > 0 && is_array($hash['parent']) && isset($hash['parent']['storage_folder'])) {
-			$query = sprintf("SELECT id, storage_title FROM %s WHERE (storage_folder = %d) AND (storage_type = 'folder') AND %s ORDER BY storage_title", $this->table, intval($hash['parent']['storage_folder']), $this->permitWhere());
-			$data = $this->fetchAll($query);
-			$hash['folder'] = array();
-			if (is_array($data) && count($data) > 0) {
-				foreach ($data as $row) {
-					$hash['folder'][$row['id']] = $row['storage_title'];
+		if ($folderId <= 0 && $this->companyRootsReady && is_array($hash['list'])) {
+			$hash['list'] = array_values(array_filter($hash['list'], function ($row) {
+				if (!$this->isCompanyRootFolder($row)) {
+					return false;
 				}
+				return $this->canAccessCompanyRoot($row['company_root']);
+			}));
+			usort($hash['list'], array($this, 'compareCompanyRootList'));
+			$hash['count'] = count($hash['list']);
+		}
+		$sidebarParent = 0;
+		if ($folderId > 0 && is_array($hash['parent']) && isset($hash['parent']['storage_folder'])) {
+			$sidebarParent = intval($hash['parent']['storage_folder']);
+		}
+		$rootSelect = $this->companyRootsReady ? ', company_root' : '';
+		$query = sprintf(
+			"SELECT id, storage_title%s FROM %s WHERE (storage_folder = %d) AND (storage_type = 'folder') AND %s ORDER BY storage_title",
+			$rootSelect,
+			$this->table,
+			$sidebarParent,
+			$this->permitWhere()
+		);
+		$data = $this->fetchAll($query);
+		$hash['folder'] = array();
+		if (is_array($data) && count($data) > 0) {
+			if ($sidebarParent === 0) {
+				usort($data, array($this, 'compareCompanyRootList'));
+			}
+			foreach ($data as $row) {
+				if ($this->isCompanyRootFolder($row) && !$this->canAccessCompanyRoot($row['company_root'])) {
+					continue;
+				}
+				$hash['folder'][$row['id']] = $row['storage_title'];
 			}
 		}
 		return $hash;
@@ -51,6 +98,8 @@ class Storage extends ApplicationModel {
 		$hash['data'] = $this->permitFind();
 		if ($hash['data']['storage_folder'] > 0) {
 			$hash['folder'] = $this->permitFind('public', $hash['data']['storage_folder']);
+		} else {
+			$hash['folder'] = array('storage_title' => 'ファイル共有');
 		}
 		$hash += $this->findUser($hash['data']);
 		return $hash;
@@ -175,7 +224,12 @@ class Storage extends ApplicationModel {
 		
 		$hash['data'] = $this->permitFind('edit');
 		$this->type($hash['data'], 'folder');
-		$hash['folder'] = $this->permitFolder($hash['data']['storage_folder']);
+		$this->assertCompanyRootMutable($hash['data']);
+		if ($hash['data']['storage_folder'] > 0) {
+			$hash['folder'] = $this->permitFolder($hash['data']['storage_folder']);
+		} else {
+			$hash['folder'] = array('storage_title' => 'ファイル共有');
+		}
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$this->schema['storage_type']['fix'] = 'folder';
 			$this->schema['storage_title'][0] = 'フォルダ名';
@@ -191,7 +245,12 @@ class Storage extends ApplicationModel {
 		
 		$hash['data'] = $this->permitFind('edit');
 		$this->type($hash['data'], 'folder');
-		$hash['folder'] = $this->permitFolder($hash['data']['storage_folder']);
+		$this->assertCompanyRootMutable($hash['data']);
+		if ($hash['data']['storage_folder'] > 0) {
+			$hash['folder'] = $this->permitFolder($hash['data']['storage_folder']);
+		} else {
+			$hash['folder'] = array('storage_title' => 'ファイル共有');
+		}
 		if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 			$query = "SELECT ".implode(',', $this->schematize())." FROM ".$this->table." WHERE storage_folder = ".intval($_POST['id']);
 			$data = $this->fetchAll($query);
@@ -225,14 +284,15 @@ class Storage extends ApplicationModel {
 	
 	function permitFolder($id) {
 		
-		if ($id >= 0) {
-			$data = $this->permitFind('public', $id);
-			if ($this->permitted($data, 'add')) {
-				return $data;
-			} else {
-				$this->died('このフォルダへの書き込み権限がありません。');
-			}
+		$id = intval($id);
+		if ($id <= 0) {
+			$this->died('GUISまたはCAILYフォルダを選択してください。');
 		}
+		$data = $this->permitFind('public', $id);
+		if ($this->permitted($data, 'add')) {
+			return $data;
+		}
+		$this->died('このフォルダへの書き込み権限がありません。');
 	
 	}
 	
@@ -362,6 +422,187 @@ class Storage extends ApplicationModel {
 		} catch (Exception $e) {
 			// migration may be pending
 		}
+	}
+
+	function isCailyEmployee() {
+		$group = (string)($_SESSION['group'] ?? '');
+		return ($group === '6' || $group === '7');
+	}
+
+	function isCompanyRootFolder($data) {
+		if (!is_array($data)) {
+			return false;
+		}
+		$root = isset($data['company_root']) ? strtoupper(trim((string)$data['company_root'])) : '';
+		return ($root === 'GUIS' || $root === 'CAILY');
+	}
+
+	function canAccessCompanyRoot($company) {
+		$company = strtoupper(trim((string)$company));
+		if ($company === '') {
+			return true;
+		}
+		if ((string)($_SESSION['userid'] ?? '') === 'admin') {
+			return true;
+		}
+		if ($company === 'GUIS') {
+			return !$this->isCailyEmployee();
+		}
+		if ($company === 'CAILY') {
+			return true;
+		}
+		return true;
+	}
+
+	function assertCompanyRootAccess($data) {
+		$company = $this->resolveCompanyRoot($data);
+		if ($company !== '' && !$this->canAccessCompanyRoot($company)) {
+			$this->died('閲覧する権限がありません。');
+		}
+	}
+
+	function assertCompanyRootMutable($data) {
+		if ($this->isCompanyRootFolder($data)) {
+			$this->died('会社ルートフォルダは変更・削除できません。');
+		}
+	}
+
+	function resolveCompanyRoot($data) {
+		if (!$this->companyRootsReady) {
+			return '';
+		}
+		if ($this->isCompanyRootFolder($data)) {
+			return strtoupper(trim((string)$data['company_root']));
+		}
+		$folderId = 0;
+		if (is_array($data)) {
+			if (isset($data['storage_folder'])) {
+				$folderId = intval($data['storage_folder']);
+			} elseif (isset($data['id'])) {
+				$folderId = intval($data['id']);
+			}
+		} else {
+			$folderId = intval($data);
+		}
+		$guard = 0;
+		while ($folderId > 0 && $guard < 100) {
+			$guard++;
+			$row = $this->fetchOne(sprintf(
+				"SELECT id, storage_folder, company_root FROM %s WHERE id = %d",
+				$this->table,
+				$folderId
+			));
+			if (!is_array($row) || empty($row['id'])) {
+				break;
+			}
+			if ($this->isCompanyRootFolder($row)) {
+				return strtoupper(trim((string)$row['company_root']));
+			}
+			$folderId = intval($row['storage_folder']);
+		}
+		return '';
+	}
+
+	private function compareCompanyRootList($a, $b) {
+		$order = array('GUIS' => 0, 'CAILY' => 1);
+		$aRoot = isset($a['company_root']) ? strtoupper(trim((string)$a['company_root'])) : '';
+		$bRoot = isset($b['company_root']) ? strtoupper(trim((string)$b['company_root'])) : '';
+		$aOrder = array_key_exists($aRoot, $order) ? $order[$aRoot] : 9;
+		$bOrder = array_key_exists($bRoot, $order) ? $order[$bRoot] : 9;
+		if ($aOrder === $bOrder) {
+			return strcasecmp((string)($a['storage_title'] ?? ''), (string)($b['storage_title'] ?? ''));
+		}
+		return ($aOrder < $bOrder) ? -1 : 1;
+	}
+
+	private function ensureCompanyRoots() {
+		if ($this->companyRootsReady) {
+			return;
+		}
+		if (!$this->ensureCompanyRootColumn()) {
+			unset($this->schema['company_root']);
+			return;
+		}
+		foreach (array('GUIS', 'CAILY') as $company) {
+			$row = $this->fetchOne(sprintf(
+				"SELECT id FROM %s WHERE company_root = '%s' LIMIT 1",
+				$this->table,
+				$this->quote($company)
+			));
+			if (!is_array($row) || empty($row['id'])) {
+				try {
+					$this->insertCompanyRootFolder($company);
+				} catch (Exception $e) {
+					// unique race: another request inserted the company root
+				}
+			}
+		}
+		$guis = $this->fetchOne(sprintf(
+			"SELECT id FROM %s WHERE company_root = 'GUIS' LIMIT 1",
+			$this->table
+		));
+		$caily = $this->fetchOne(sprintf(
+			"SELECT id FROM %s WHERE company_root = 'CAILY' LIMIT 1",
+			$this->table
+		));
+		$guisId = (is_array($guis) && !empty($guis['id'])) ? intval($guis['id']) : 0;
+		$cailyId = (is_array($caily) && !empty($caily['id'])) ? intval($caily['id']) : 0;
+		if ($guisId > 0) {
+			$this->query(sprintf(
+				"UPDATE %s SET storage_folder = %d
+				 WHERE storage_folder = 0
+				   AND (company_root IS NULL OR company_root = '')",
+				$this->table,
+				$guisId
+			));
+		}
+		$this->companyRootsReady = ($guisId > 0 && $cailyId > 0);
+	}
+
+	private function ensureCompanyRootColumn() {
+		try {
+			$row = $this->fetchOne("SHOW COLUMNS FROM `".$this->table."` LIKE 'company_root'");
+			if (is_array($row) && !empty($row['Field'])) {
+				return true;
+			}
+			$this->query(
+				"ALTER TABLE `".$this->table."`
+				 ADD COLUMN `company_root` VARCHAR(8) DEFAULT NULL AFTER `storage_folder`,
+				 ADD UNIQUE KEY `uk_storage_company_root` (`company_root`)"
+			);
+			$row = $this->fetchOne("SHOW COLUMNS FROM `".$this->table."` LIKE 'company_root'");
+			return (is_array($row) && !empty($row['Field']));
+		} catch (Exception $e) {
+			return false;
+		}
+	}
+
+	private function insertCompanyRootFolder($company) {
+		$company = strtoupper(trim((string)$company));
+		if ($company !== 'GUIS' && $company !== 'CAILY') {
+			return;
+		}
+		$now = date('Y-m-d H:i:s');
+		$owner = 'admin';
+		$this->query(sprintf(
+			"INSERT INTO %s (
+				storage_folder, company_root, storage_type, storage_title, storage_name,
+				storage_comment, storage_date, storage_file, storage_size, is_protected,
+				add_level, add_group, add_user, public_level, public_group, public_user,
+				edit_level, edit_group, edit_user, owner, created
+			) VALUES (
+				0, '%s', 'folder', '%s', 'システム',
+				'', '%s', '', '', 0,
+				0, '', '', 0, '', '',
+				2, '', '', '%s', '%s'
+			)",
+			$this->table,
+			$this->quote($company),
+			$this->quote($company),
+			$this->quote($now),
+			$this->quote($owner),
+			$this->quote($now)
+		));
 	}
 
 	/** @return string[] */

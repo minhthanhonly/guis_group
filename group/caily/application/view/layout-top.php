@@ -202,13 +202,14 @@
                 <div data-i18n="オンライン状況">オンライン状況</div>
               </a>
             </li>
-            <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
+           
             <li class="menu-item <?php if($directory == 'storage') echo 'active open'; ?>">
               <a href="<?=$root?>storage/" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-server-2"></i>
                 <div data-i18n="ファイル共有">ファイル共有</div>
               </a>
             </li>
+            <?php if($_SESSION['group'] != '7' && $_SESSION['group'] != '6'){ ?>
             <li class="menu-item <?php if($directory == 'forum') echo 'active open'; ?>">
               <a href="<?=$root?>forum/?folder=0" class="menu-link">
                 <i class="menu-icon icon-base ti tabler-news"></i>

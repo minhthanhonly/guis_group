@@ -5,8 +5,10 @@ require_once('../application/loader.php');
 $view->heading('ファイル共有');
 $pagination = new Pagination(array('folder'=>$_GET['folder']));
 $current[intval($_GET['folder'])] = ' class="current"';
-if (strlen($hash['folder'][$_GET['folder']]) > 0) {
-	$caption = ' - '.$hash['folder'][$_GET['folder']];
+$isCompanyPicker = !empty($hash['is_company_picker']);
+$caption = '';
+if (!empty($hash['parent']['storage_title'])) {
+	$caption = ' - '.$hash['parent']['storage_title'];
 }
 ?>
 <div class="container-xxl flex-grow-1 container-p-y">
@@ -16,6 +18,9 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 			<div class="col-md-6">
 				<h4 class="card-title mb-0">
 					<span>ファイル共有<?=$caption?></span></h4>
+				<?php if ($isCompanyPicker) { ?>
+				<div class="text-muted small mt-1" data-i18n="会社フォルダを選択してください">会社フォルダを選択してください</div>
+				<?php } ?>
 			</div>
 			<div class="col-md-6">
 				<div class="d-flex row">
@@ -31,8 +36,10 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 					<div class="col-md-6">
 						<ul class="operate d-flex gap-2 list-unstyled justify-content-end">
 							<?php
-								echo '<li><a class="btn btn-primary" href="add.php' . $view->positive(array('folder'=>$_GET['folder'])) . '">ファイルアップロード</a></li>';
-								echo '<li><a class="btn btn-info" href="folderadd.php' . $view->positive(array('folder'=>$_GET['folder'])) . '">フォルダ追加</a></li>';
+								if (!$isCompanyPicker) {
+									echo '<li><a class="btn btn-primary" href="add.php' . $view->positive(array('folder'=>$_GET['folder'])) . '">ファイルアップロード</a></li>';
+									echo '<li><a class="btn btn-info" href="folderadd.php' . $view->positive(array('folder'=>$_GET['folder'])) . '">フォルダ追加</a></li>';
+								}
 							?>
 						</ul>
 					</div>
@@ -52,10 +59,10 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 										echo '<li class="storageprevious"><a href="index.php'.$view->positive(array('folder'=>$hash['parent']['storage_folder'])).'">上へ</a></li>';
 									}
 									foreach ($hash['folder'] as $key => $value) {
-										echo sprintf('<li%s><a href="index.php?folder=%s">%s</a></li>', $current[$key], $key, $value);
+										echo sprintf('<li%s><a href="index.php?folder=%s">%s</a></li>', isset($current[$key]) ? $current[$key] : '', $key, $value);
 									}
 								} else {
-									echo '<li class="current"><a href="index.php">ルート</a></li>';
+									echo '<li class="current"><a href="index.php">ファイル共有</a></li>';
 								}
 								?>
 							</ul>
@@ -138,8 +145,15 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 									$type = 'warning';
 								}
 							}
+							$privateBadge = '';
+							$publicLevel = isset($row['public_level']) ? intval($row['public_level']) : 0;
+							if ($publicLevel === 1) {
+								$privateBadge = '<span class="badge badge-outline-secondary ms-1" data-i18n="非公開">非公開</span>';
+							} elseif ($publicLevel === 2) {
+								$privateBadge = '<span class="badge badge-outline-info ms-1" data-i18n="制限">制限</span>';
+							}
 					?>
-							<tr><td><a class="storage<?=$row['storage_type']?> <?=$fileext?>" href="<?=$url?>"><i class="icon-base ti tabler-<?=$fileext?> me-2 text-<?=$type?>"></i><?=$row['storage_title']?></a>&nbsp;</td>
+							<tr><td><a class="storage<?=$row['storage_type']?> <?=$fileext?>" href="<?=$url?>"><i class="icon-base ti tabler-<?=$fileext?> me-2 text-<?=$type?>"></i><?=$row['storage_title']?></a><?=$privateBadge?>&nbsp;</td>
 							<td><?=$file?>&nbsp;</td>
 							<td><?=$row['storage_size']?>&nbsp;</td>
 							<td><?=$row['storage_name']?>&nbsp;</td>
@@ -152,7 +166,7 @@ if (strlen($hash['folder'][$_GET['folder']]) > 0) {
 						</table>
 						<?=$view->pagination($pagination, $hash['count']);?>
 						<?php
-						if (isset($hash['parent']['id']) && $view->permitted($hash['parent'], 'edit')) {
+						if (isset($hash['parent']['id']) && empty($hash['parent']['company_root']) && $view->permitted($hash['parent'], 'edit')) {
 						?>
 						<div class="mt-4 d-flex gap-2 justify-content-end">
 							<a href="folderedit.php?id=<?=$hash['parent']['id']?>" class="btn btn-label-primary">フォルダ編集</a>

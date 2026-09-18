@@ -7005,11 +7005,19 @@ var projectTable;
     }
     
     // Helper function to check if project period is undecided (期間未定)
-    // Similar to project-gantt.js logic
+    // Hidden when any of guis_nouki / caily_nouki / end_date is set
+    function isFilledDeadline(value) {
+        if (value === undefined || value === null) return false;
+        var s = String(value).trim();
+        return s !== '' && s !== '-' && s !== '0000-00-00' && s !== '0000-00-00 00:00:00';
+    }
     function isPeriodUndecided(row) {
         const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
-        if (skipStatuses.includes(row.status)) return false;
-        return !row.start_date || (!row.end_date);
+        if (!row || skipStatuses.includes(row.status)) return false;
+        if (isFilledDeadline(row.guis_nouki) || isFilledDeadline(row.caily_nouki) || isFilledDeadline(row.end_date)) {
+            return false;
+        }
+        return true;
     }
     
     function getStartDateLabel(startDate) {
