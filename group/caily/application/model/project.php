@@ -1359,6 +1359,9 @@ class Project extends ApplicationModel {
         if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
             return true;
         }
+        if ($this->isCurrentUserDepartmentProjectManager()) {
+            return true;
+        }
         // Creator of the child project may edit/delete it
         if (!empty($project['created_by']) && isset($_SESSION['userid'])
             && strval($project['created_by']) === strval($_SESSION['userid'])) {
@@ -1397,6 +1400,9 @@ class Project extends ApplicationModel {
             return false;
         }
         if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        if ($this->isCurrentUserDepartmentProjectManager()) {
             return true;
         }
         $project = $this->fetchOne("SELECT department_id FROM " . $this->table . " WHERE id = " . $project_id);
@@ -4594,7 +4600,29 @@ class Project extends ApplicationModel {
     }
 
     /**
-     * Business document view: 業務担当 統計/閲覧/編集 only (not project_manager).
+     * True if the current user is department project_manager on any department.
+     */
+    public function isCurrentUserDepartmentProjectManager() {
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached;
+        }
+        $current_userid = isset($_SESSION['userid']) ? $this->escape($_SESSION['userid']) : '';
+        if ($current_userid === '') {
+            $cached = false;
+            return false;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT COUNT(*) as c FROM %suser_department WHERE userid = '%s' AND project_manager = 1",
+            DB_PREFIX,
+            $current_userid
+        ));
+        $cached = $row && isset($row['c']) && (int)$row['c'] > 0;
+        return $cached;
+    }
+
+    /**
+     * Business document view: 業務担当 統計/閲覧/編集, or department project_manager (any department).
      */
     public function canUserViewBusinessDocuments($project_id) {
         $project_id = intval($project_id);
@@ -4602,6 +4630,9 @@ class Project extends ApplicationModel {
             return false;
         }
         if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        if ($this->isCurrentUserDepartmentProjectManager()) {
             return true;
         }
         $project = $this->fetchOne("SELECT department_id FROM " . $this->table . " WHERE id = " . $project_id);
@@ -4631,7 +4662,7 @@ class Project extends ApplicationModel {
     }
 
     /**
-     * Business document edit: 業務担当 編集 only (not project_manager).
+     * Business document edit: 業務担当 編集, or department project_manager (any department).
      */
     public function canUserEditBusinessDocuments($project_id) {
         $project_id = intval($project_id);
@@ -4639,6 +4670,9 @@ class Project extends ApplicationModel {
             return false;
         }
         if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator') {
+            return true;
+        }
+        if ($this->isCurrentUserDepartmentProjectManager()) {
             return true;
         }
         $project = $this->fetchOne("SELECT department_id FROM " . $this->table . " WHERE id = " . $project_id);

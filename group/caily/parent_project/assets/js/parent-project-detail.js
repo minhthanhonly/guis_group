@@ -907,6 +907,12 @@ createApp({
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
         },
+        isDepartmentManager() {
+            if (!this.permission || this.permission.length === 0) return false;
+            return this.permission.some((rule) =>
+                rule.project_manager === '1' || rule.project_manager === 1
+            );
+        },
         /** CAILY: 期限日閲覧 unlocks 完了 status and deadline fields (view + edit). */
         canViewEndDate() {
             if (!this.isCailyBranchUser) return true;
@@ -958,7 +964,7 @@ createApp({
             return this.isProjectManager || canAddQuotation;
         },
         canViewBusinessDocuments() {
-            if (this.isAdmin) return true;
+            if (this.isAdmin || this.isDepartmentManager) return true;
             if (!this.permission || this.permission.length === 0) return false;
             return this.permission.some((rule) =>
                 rule.project_director_stat === '1' || rule.project_director_stat === 1
@@ -968,7 +974,7 @@ createApp({
             );
         },
         canEditBusinessDocuments() {
-            if (this.isAdmin) return true;
+            if (this.isAdmin || this.isDepartmentManager) return true;
             if (!this.permission || this.permission.length === 0) return false;
             return this.permission.some((rule) =>
                 rule.project_director_edit === '1' || rule.project_director_edit === 1
@@ -1142,11 +1148,12 @@ createApp({
         },
         canEditChildProject(project) {
             if (this.isAdmin) return true;
+            if (this.isDepartmentManager) return true;
             if (this.isChildProjectCreator(project)) return true;
             let canEditChildProject = false;
             if (this.permission && this.permission.length > 0) {
                 for (const rule of this.permission) {
-                    if (((rule.project_edit === "1" || rule.project_edit === 1) || (rule.project_manager === "1" || rule.project_manager === 1))
+                    if ((rule.project_edit === "1" || rule.project_edit === 1)
                         && project.department_id == rule.department_id) {
                         canEditChildProject = true;
                         break;

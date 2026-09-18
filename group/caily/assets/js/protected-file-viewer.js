@@ -117,11 +117,11 @@
             +     '<option value="0.5">50%</option>'
             +     '<option value="0.75">75%</option>'
             +     '<option value="1">100%</option>'
-            +     '<option value="1.25" selected>125%</option>'
+            +     '<option value="1.25">125%</option>'
             +     '<option value="1.5">150%</option>'
             +     '<option value="2">200%</option>'
             +     '<option value="fit-width">幅に合わせる</option>'
-            +     '<option value="fit-page">ページに合わせる</option>'
+            +     '<option value="fit-page" selected>ページに合わせる</option>'
             +   '</select>'
             +   '<button type="button" class="caily-protect-btn" data-act="zoom-in" title="拡大">＋</button>'
             + '</div>'
@@ -145,14 +145,65 @@
     /**
      * @param {object} options
      * @param {HTMLElement} options.container
-     * @param {string} options.url - authenticated stream URL (inline)
+     * @param {string} [options.url] - stream URL (unprotected preview)
+     * @param {ArrayBuffer|Uint8Array} [options.data] - file bytes (protected: no blob URL)
      * @param {boolean} options.isPdf
      * @param {boolean} options.isImage
      * @param {string} options.realname
      * @param {string} options.userid
      * @param {string} [options.alt]
      * @param {boolean} [options.isProtected] - watermark + copy/print lock only when true
+     * @param {string} [options.fitMode] - 'page' | 'width' | 'fit' (default zoom)
      */
+    function toUint8(data) {
+        if (!data) return null;
+        if (data instanceof Uint8Array) {
+            return data.slice(0);
+        }
+        if (data instanceof ArrayBuffer) {
+            return new Uint8Array(data.slice(0));
+        }
+        if (ArrayBuffer.isView(data)) {
+            return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+        }
+        return null;
+    }
+
+    function mountImageFromBytes(stage, bytes, wmText, isProtected) {
+        var blob = new Blob([bytes]);
+        var draw = function (source, width, height, close) {
+            var canvas = document.createElement('canvas');
+            canvas.className = 'caily-protect-img';
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(source, 0, 0);
+            if (close) close();
+            stage.appendChild(canvas);
+            if (isProtected) createWatermarkLayer(stage, wmText);
+        };
+        if (typeof createImageBitmap === 'function') {
+            return createImageBitmap(blob).then(function (bitmap) {
+                draw(bitmap, bitmap.width, bitmap.height, function () {
+                    if (bitmap.close) bitmap.close();
+                });
+            });
+        }
+        return new Promise(function (resolve, reject) {
+            var tmp = URL.createObjectURL(blob);
+            var img = new Image();
+            img.onload = function () {
+                URL.revokeObjectURL(tmp);
+                draw(img, img.naturalWidth, img.naturalHeight);
+                resolve();
+            };
+            img.onerror = function () {
+                URL.revokeObjectURL(tmp);
+                reject(new Error('image load failed'));
+            };
+            img.src = tmp;
+        });
+    }
+
     function mountProtectedViewer(options) {
         var container = options.container;
         if (!container) return Promise.resolve();
@@ -169,7 +220,14 @@
         stage.className = 'caily-protect-stage';
         container.appendChild(stage);
 
+        var fileBytes = toUint8(options.data);
+
         if (options.isImage) {
+            if (fileBytes) {
+                return mountImageFromBytes(stage, fileBytes, wmText, isProtected).catch(function () {
+                    stage.innerHTML = '<div class="alert alert-warning m-2">画像の表示に失敗しました。</div>';
+                });
+            }
             var img = document.createElement('img');
             img.className = 'caily-protect-img';
             img.alt = options.alt || '';
@@ -187,11 +245,14 @@
         }
 
         if (typeof pdfjsLib === 'undefined') {
+            if (isProtected) {
+                stage.innerHTML = '<div class="alert alert-warning m-2">プレビューを表示できません。</div>';
+                return Promise.resolve();
+            }
             var iframe = document.createElement('iframe');
             iframe.className = 'caily-protect-iframe';
             iframe.src = options.url;
             stage.appendChild(iframe);
-            if (isProtected) createWatermarkLayer(stage, wmText);
             return Promise.resolve();
         }
 
@@ -208,13 +269,20 @@
         pdfjsLib.GlobalWorkerOptions.workerSrc = options.workerSrc
             || (pdfjsBase + 'build/pdf.worker.min.js');
 
+        var initialFit = null;
+        if (options.fitMode === 'width') {
+            initialFit = 'width';
+        } else if (options.fitMode === 'page' || options.fitMode === 'fit') {
+            initialFit = 'page';
+        }
+
         var state = {
             pdf: null,
             scale: DEFAULT_SCALE,
             rotation: 0,
             currentPage: 1,
             rendering: false,
-            fitMode: null // 'width' | 'page' | null
+            fitMode: initialFit
         };
 
         var pageInput = toolbar.querySelector('[data-act="page"]');
@@ -406,15 +474,24 @@
             }
         });
 
-        return pdfjsLib.getDocument({
-            url: options.url,
-            withCredentials: true,
+        var docParams = {
             cMapUrl: options.cMapUrl || (pdfjsBase + 'cmaps/'),
             cMapPacked: true,
             standardFontDataUrl: options.standardFontDataUrl || (pdfjsBase + 'standard_fonts/')
-        }).promise.then(function (pdf) {
+        };
+        if (fileBytes) {
+            docParams.data = fileBytes;
+        } else {
+            docParams.url = options.url;
+            docParams.withCredentials = true;
+        }
+
+        return pdfjsLib.getDocument(docParams).promise.then(function (pdf) {
             state.pdf = pdf;
             syncPageUi();
+            if (initialFit) {
+                return applyFit(initialFit);
+            }
             return renderAll();
         }).catch(function (err) {
             console.error('PDF load failed', err);
@@ -441,11 +518,11 @@
             + '.caily-protect-zoomselect{height:30px;border:1px solid #555;border-radius:4px;'
             + 'background:#1f1f1f;color:#fff;padding:0 6px;max-width:140px;}'
             + '.caily-protect-tb-note{margin-left:auto;font-size:12px;opacity:.75;}'
-            + '.caily-protect-stage{position:relative;overflow:auto;max-height:75vh;background:#525659;border-radius:.35rem;}'
+            + '.caily-protect-stage{position:relative;overflow:auto;height:75vh;max-height:75vh;background:#525659;border-radius:.35rem;}'
             + '.caily-protect-pages{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px;}'
             + '.caily-protect-pagewrap{position:relative;box-shadow:0 1px 4px rgba(0,0,0,.35);background:#fff;}'
             + '.caily-protect-page{display:block;max-width:none;height:auto;background:#fff;}'
-            + '.caily-protect-img{display:block;max-width:100%;height:auto;margin:0 auto;}'
+            + '.caily-protect-img{display:block;max-width:100%;max-height:75vh;width:auto;height:auto;margin:0 auto;object-fit:contain;}'
             + '.caily-protect-iframe{width:100%;height:70vh;border:0;background:#fff;}'
             + '.caily-protect-wm{pointer-events:none;position:absolute;inset:0;z-index:5;overflow:hidden;}'
             + '.caily-protect-wm-line{display:block;transform:rotate(-28deg);font-size:28px;font-weight:700;'

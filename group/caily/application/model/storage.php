@@ -102,6 +102,10 @@ class Storage extends ApplicationModel {
 			$hash['folder'] = array('storage_title' => 'ファイル共有');
 		}
 		$hash += $this->findUser($hash['data']);
+		$hash['preview_token'] = '';
+		if (!empty($hash['data']['id']) && !empty($hash['data']['is_protected'])) {
+			$hash['preview_token'] = $this->issueProtectedPreviewTicket(intval($hash['data']['id']));
+		}
 		return $hash;
 	
 	}
@@ -353,16 +357,19 @@ class Storage extends ApplicationModel {
 			$this->died('ファイルが見つかりません。');
 		}
 
-		// Inline preview (PDF/image) — allowed for permitted viewers (viewer page only)
-		if ($wantInline) {
+		if ($isProtected) {
+			if (!$wantInline || !$this->isAllowedProtectedPreviewRequest(intval($data['id']))) {
+				$this->denyProtectedFileAccess();
+			}
 			$this->logStorageAccess($data['id'], $requestFile, 'preview');
-			$this->streamInlineFile($path, $requestFile);
+			$this->streamInlineFile($path, $requestFile, true);
 			return;
 		}
 
-		// Protected: no download at all (view-only via title → preview)
-		if ($isProtected) {
-			$this->died('保護ファイルのためダウンロードできません。一覧のタイトルから閲覧してください。');
+		if ($wantInline) {
+			$this->logStorageAccess($data['id'], $requestFile, 'preview');
+			$this->streamInlineFile($path, $requestFile, false);
+			return;
 		}
 
 		$this->logStorageAccess($data['id'], $requestFile, 'download');
@@ -370,7 +377,7 @@ class Storage extends ApplicationModel {
 	
 	}
 
-	private function streamInlineFile($path, $filename) {
+	private function streamInlineFile($path, $filename, $isProtected = false) {
 		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 		$mimeMap = array(
 			'pdf' => 'application/pdf',
@@ -384,7 +391,8 @@ class Storage extends ApplicationModel {
 		);
 		$mime = isset($mimeMap[$ext]) ? $mimeMap[$ext] : 'application/octet-stream';
 		$size = filesize($path);
-		$encoded = rawurlencode($filename);
+		$dispositionName = $isProtected ? ('preview.'.$ext) : $filename;
+		$encoded = rawurlencode($dispositionName);
 		header('Content-Type: ' . $mime);
 		header('Content-Length: ' . $size);
 		header(sprintf(
@@ -392,12 +400,109 @@ class Storage extends ApplicationModel {
 			$encoded,
 			$encoded
 		));
-		header('Cache-Control: no-store, no-cache, must-revalidate');
+		header('Cache-Control: no-store, no-cache, must-revalidate, private');
+		header('Pragma: no-cache');
 		header('X-Content-Type-Options: nosniff');
+		header('X-Frame-Options: DENY');
 		if (ob_get_level()) {
 			ob_end_clean();
 		}
 		readfile($path);
+		exit;
+	}
+
+	private function issueProtectedPreviewTicket($storageId) {
+		$storageId = intval($storageId);
+		$this->pruneProtectedPreviewTickets();
+		$token = bin2hex(random_bytes(32));
+		if (!isset($_SESSION['storage_preview_tickets']) || !is_array($_SESSION['storage_preview_tickets'])) {
+			$_SESSION['storage_preview_tickets'] = array();
+		}
+		$_SESSION['storage_preview_tickets'][$token] = array(
+			'sid' => $storageId,
+			'uid' => (string)($_SESSION['userid'] ?? ''),
+			'exp' => time() + 900
+		);
+		return $token;
+	}
+
+	private function pruneProtectedPreviewTickets() {
+		if (!isset($_SESSION['storage_preview_tickets']) || !is_array($_SESSION['storage_preview_tickets'])) {
+			return;
+		}
+		$now = time();
+		foreach ($_SESSION['storage_preview_tickets'] as $token => $row) {
+			if (!is_array($row) || empty($row['exp']) || intval($row['exp']) < $now) {
+				unset($_SESSION['storage_preview_tickets'][$token]);
+			}
+		}
+	}
+
+	private function validateProtectedPreviewTicket($token, $storageId) {
+		$this->pruneProtectedPreviewTickets();
+		$token = (string)$token;
+		if ($token === '' || !isset($_SESSION['storage_preview_tickets'][$token])) {
+			return false;
+		}
+		$row = $_SESSION['storage_preview_tickets'][$token];
+		if (!is_array($row)) {
+			return false;
+		}
+		if ((string)($row['uid'] ?? '') !== (string)($_SESSION['userid'] ?? '')) {
+			return false;
+		}
+		if (intval($row['sid'] ?? 0) !== intval($storageId)) {
+			return false;
+		}
+		if (intval($row['exp'] ?? 0) < time()) {
+			return false;
+		}
+		return true;
+	}
+
+	private function isBrowserDocumentNavigation() {
+		$dest = strtolower((string)($_SERVER['HTTP_SEC_FETCH_DEST'] ?? ''));
+		$mode = strtolower((string)($_SERVER['HTTP_SEC_FETCH_MODE'] ?? ''));
+		if ($mode === 'navigate') {
+			return true;
+		}
+		return in_array($dest, array('document', 'iframe', 'embed', 'object', 'frame'), true);
+	}
+
+	private function isSameSitePreviewOrigin() {
+		$origin = (string)($_SERVER['HTTP_ORIGIN'] ?? '');
+		if ($origin === '') {
+			$origin = (string)($_SERVER['HTTP_REFERER'] ?? '');
+		}
+		if ($origin === '') {
+			return false;
+		}
+		$originHost = parse_url($origin, PHP_URL_HOST);
+		$reqHost = preg_replace('/:\d+$/', '', (string)($_SERVER['HTTP_HOST'] ?? ''));
+		return ($originHost !== '' && $reqHost !== '' && strcasecmp($originHost, $reqHost) === 0);
+	}
+
+	private function isAllowedProtectedPreviewRequest($storageId) {
+		if (strtoupper((string)($_SERVER['REQUEST_METHOD'] ?? '')) !== 'POST') {
+			return false;
+		}
+		if ($this->isBrowserDocumentNavigation()) {
+			return false;
+		}
+		if (!$this->isSameSitePreviewOrigin()) {
+			return false;
+		}
+		$token = (string)($_POST['preview_token'] ?? '');
+		return $this->validateProtectedPreviewTicket($token, $storageId);
+	}
+
+	private function denyProtectedFileAccess() {
+		http_response_code(403);
+		header('Content-Type: text/plain; charset=UTF-8');
+		header('Cache-Control: no-store, no-cache, must-revalidate, private');
+		header('X-Content-Type-Options: nosniff');
+		header('X-Frame-Options: DENY');
+		echo '保護ファイルは直接ダウンロードできません。';
 		exit;
 	}
 

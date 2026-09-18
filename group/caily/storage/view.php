@@ -122,6 +122,7 @@ $view->footing();
 (function () {
 	var storageId = <?=intval($hash['data']['id'])?>;
 	var isProtected = <?= $isProtected ? 'true' : 'false' ?>;
+	var previewToken = <?= json_encode((string)($hash['preview_token'] ?? ''), JSON_UNESCAPED_UNICODE) ?>;
 	var realname = <?= json_encode($viewerRealname, JSON_UNESCAPED_UNICODE) ?>;
 	var userid = <?= json_encode($viewerUserid, JSON_UNESCAPED_UNICODE) ?>;
 	var host = document.getElementById('storageViewerHost');
@@ -131,18 +132,49 @@ $view->footing();
 		return 'download.php?id=' + storageId + '&file=' + encodeURIComponent(name) + '&inline=1';
 	}
 
-	function mountFromOption(opt) {
-		if (!host || !window.CailyProtectedViewer || !opt) return;
-		var name = opt.getAttribute('data-name') || opt.textContent;
-		CailyProtectedViewer.mount({
+	function mountViewer(opt, name, extra) {
+		CailyProtectedViewer.mount(Object.assign({
 			container: host,
-			url: previewUrl(name.trim()),
 			isPdf: opt.getAttribute('data-pdf') === '1',
 			isImage: opt.getAttribute('data-image') === '1',
 			isProtected: isProtected,
 			realname: realname,
 			userid: userid,
-			alt: name
+			alt: name,
+			fitMode: 'page'
+		}, extra || {}));
+	}
+
+	function mountFromOption(opt) {
+		if (!host || !window.CailyProtectedViewer || !opt) return;
+		var name = (opt.getAttribute('data-name') || opt.textContent || '').trim();
+		if (!isProtected) {
+			mountViewer(opt, name, { url: previewUrl(name) });
+			return;
+		}
+		host.innerHTML = '<div class="text-muted p-3">読み込み中...</div>';
+		fetch('download.php', {
+			method: 'POST',
+			credentials: 'same-origin',
+			headers: {
+				'X-Requested-With': 'XMLHttpRequest',
+				'Accept': 'application/octet-stream'
+			},
+			body: new URLSearchParams({
+				id: String(storageId),
+				file: name,
+				inline: '1',
+				preview_token: previewToken
+			})
+		}).then(function (res) {
+			if (!res.ok) {
+				throw new Error('preview denied');
+			}
+			return res.arrayBuffer();
+		}).then(function (buf) {
+			mountViewer(opt, name, { data: buf });
+		}).catch(function () {
+			host.innerHTML = '<div class="alert alert-warning mb-0">プレビューを表示できません。</div>';
 		});
 	}
 
