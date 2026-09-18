@@ -467,6 +467,7 @@ if($_SESSION['show_project'] == 0){
                         <div class="col-md-6">
                             <label class="form-label">見積金額(税抜き) <span class="text-danger">*</span></label>
                             <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.amount"
+                                   placeholder="未入力" data-i18n="未入力"
                                    @input="scheduleBdUpdate" min="0" step="1">
                     </div>
                         <div class="col-md-6">
@@ -478,7 +479,7 @@ if($_SESSION['show_project'] == 0){
                             <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(businessDocumentProject.amount)">
                             </div>
                         <div class="col-md-6">
-                            <label class="form-label">見積番号 <span class="text-danger">*</span></label>
+                            <label class="form-label">見積番号</label>
                             <input type="text" autocomplete="off" class="form-control" v-model="businessDocumentProject.estimate_number" @change="scheduleBdUpdate">
                             </div>
                         <div class="col-md-6">
@@ -501,7 +502,7 @@ if($_SESSION['show_project'] == 0){
                                 </ul>
                             </div>
                             <div v-if="!isBdEstimateDocumentFieldsComplete()" class="form-text text-muted">
-                                発行済にするには見積日・見積金額・見積番号が必要です
+                                発行済にするには見積日・見積金額が必要です
                             </div>
                                 </div>
                             </div>
@@ -526,6 +527,7 @@ if($_SESSION['show_project'] == 0){
                                         @click="copyBdEstimateAmountToInvoice">見積と同額</button>
                                 </div>
                             <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.invoice_amount"
+                                   placeholder="未入力" data-i18n="未入力"
                                    @input="scheduleBdUpdate" min="0" step="1">
                             </div>
                         <div class="col-md-6">
@@ -537,7 +539,7 @@ if($_SESSION['show_project'] == 0){
                             <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(businessDocumentProject.invoice_amount)">
                                 </div>
                         <div class="col-md-6">
-                            <label class="form-label">請求番号 <span class="text-danger">*</span></label>
+                            <label class="form-label">請求番号</label>
                             <input type="text" autocomplete="off" class="form-control" v-model="businessDocumentProject.invoice_number" @change="scheduleBdUpdate">
                             </div>
                         <div class="col-md-6">
@@ -560,7 +562,7 @@ if($_SESSION['show_project'] == 0){
                                 </ul>
                                     </div>
                             <div v-if="!isBdInvoiceDocumentFieldsComplete()" class="form-text text-muted">
-                                発行済にするには請求日・請求金額・請求番号が必要です
+                                発行済にするには請求日・請求金額が必要です
                                 </div>
                             </div>
                             </div>
@@ -845,6 +847,7 @@ if($_SESSION['show_project'] == 0){
                                 <option value="contract" data-i18n="請負">請負</option>
                                 <option value="waiting_documents" data-i18n="資料待ち">資料待ち</option>
                                 <option value="in_progress" data-i18n="進行中">進行中</option>
+                                <option value="waiting_invoice" data-i18n="請求待ち">請求待ち</option>
                                 <option value="completed" data-i18n="完了">完了</option>
                                 <option value="paused" data-i18n="一時停止">一時停止</option>
                                 <option value="cancelled" data-i18n="中止">中止</option>
@@ -1381,6 +1384,10 @@ body.pl-col-resizing * {
     background-color: rgba(255, 193, 7, 0.08) !important;
 }
 
+#projectTable tbody tr.table-row-status-dark {
+    background-color: rgba(67, 89, 113, 0.18) !important;
+}
+
 #projectTable tbody tr.table-row-status-danger {
     background-color: rgba(220, 53, 69, 0.2) !important;
 }
@@ -1391,6 +1398,7 @@ body.pl-col-resizing * {
 #projectTable tbody tr.table-row-status-success:hover,
 #projectTable tbody tr.table-row-status-warning:hover,
 #projectTable tbody tr.table-row-status-waiting-documents:hover,
+#projectTable tbody tr.table-row-status-dark:hover,
 #projectTable tbody tr.table-row-status-danger:hover {
     background-color: inherit;
     opacity: 0.8;
@@ -1401,7 +1409,7 @@ body.pl-col-resizing * {
     outline: 2px solid var(--bs-primary);
     outline-offset: -2px;
 }
-#projectTable tbody tr.table-row-status-secondary:hover, #projectTable tbody tr.table-row-status-info:hover, #projectTable tbody tr.table-row-status-primary:hover, #projectTable tbody tr.table-row-status-success:hover, #projectTable tbody tr.table-row-status-warning:hover, #projectTable tbody tr.table-row-status-waiting-documents:hover, #projectTable tbody tr.table-row-status-danger:hover{
+#projectTable tbody tr.table-row-status-secondary:hover, #projectTable tbody tr.table-row-status-info:hover, #projectTable tbody tr.table-row-status-primary:hover, #projectTable tbody tr.table-row-status-success:hover, #projectTable tbody tr.table-row-status-warning:hover, #projectTable tbody tr.table-row-status-waiting-documents:hover, #projectTable tbody tr.table-row-status-dark:hover, #projectTable tbody tr.table-row-status-danger:hover{
     opacity: 1!important;
 }
 #projectFilterBox .card-body{

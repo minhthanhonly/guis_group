@@ -489,6 +489,7 @@ createApp({
                 { value: 'contract', label: '請負', color: 'info' },
                 { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'waiting_invoice', label: '請求待ち', color: 'dark' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
                 { value: 'cancelled', label: '中止', color: 'danger' }
@@ -1725,7 +1726,7 @@ createApp({
                 '意匠': 'primary',
                 '設備': 'info',
                 '3D設備': 'success',
-                '省エネ': 'warning',
+                '省エネ': 'lime',
                 '3D': 'secondary',
                 'その他': 'dark'
             };
@@ -1734,15 +1735,49 @@ createApp({
         getParentRequestBadgeClass(request) {
             return `bg-${this.getParentRequestColor(request)}`;
         },
+        getParentRequestUnfulfilledBadgeClass(request) {
+            return 'bg-warning text-dark';
+        },
         mapDepartmentNameToRequestType(departmentName) {
             const name = String(departmentName || '').trim();
-            const map = {
-                '設備設計': '設備',
-                '意匠設計': '意匠',
-                '省エネ計算': '省エネ',
-                '技術課設備': '3D設備'
-            };
-            return map[name] || '';
+            if (!name) return '';
+            const rules = [
+                ['3D設備', '3D設備'],
+                ['技術課設備', '3D設備'],
+                ['省エネ', '省エネ'],
+                ['意匠', '意匠'],
+                ['設備', '設備']
+            ];
+            for (let i = 0; i < rules.length; i++) {
+                if (name.indexOf(rules[i][0]) !== -1) return rules[i][1];
+            }
+            return '';
+        },
+        applyParentRequestTypeFlag(type, value) {
+            if (type === '意匠') this.request_design = value;
+            else if (type === '設備') this.request_equipment = value;
+            else if (type === '3D設備') this.request_3d_equipment = value;
+            else if (type === '省エネ') this.request_energy_saving = value;
+            else if (type === '3D') this.request_3d = value;
+        },
+        syncParentRequestsFromDepartment(departmentId, departmentName) {
+            const type = this.mapDepartmentNameToRequestType(
+                this.resolveChildDepartmentName(departmentId) || departmentName
+            );
+            if (!type || !this.parentProject) return;
+            const current = String(this.parentProject.requests || '').split(',').map(r => r.trim()).filter(Boolean);
+            if (!current.includes(type)) {
+                current.push(type);
+                this.parentProject.requests = current.join(',');
+            }
+            if (this.originalParentProject) {
+                const orig = String(this.originalParentProject.requests || '').split(',').map(r => r.trim()).filter(Boolean);
+                if (!orig.includes(type)) {
+                    orig.push(type);
+                    this.originalParentProject.requests = orig.join(',');
+                }
+            }
+            this.applyParentRequestTypeFlag(type, true);
         },
         resolveChildDepartmentName(departmentId) {
             const id = parseInt(departmentId, 10);
@@ -4832,6 +4867,11 @@ createApp({
                     if (modal) {
                         modal.hide();
                     }
+
+                    this.syncParentRequestsFromDepartment(
+                        this.editingChildProject.department_id,
+                        this.editingChildProject.department_name
+                    );
                     
                     // Reload child projects
                     await this.loadChildProjects();
@@ -5175,6 +5215,8 @@ createApp({
                         if (modal) {
                             modal.hide();
                         }
+
+                        this.syncParentRequestsFromDepartment(this.newChildProject.department_id);
                         
                         // Reload child projects
                         this.loadChildProjects();
@@ -6387,9 +6429,22 @@ createApp({
             p.estimate_number = p.estimate_number || '';
             p.invoice_number = p.invoice_number || '';
             p.payment_note = p.payment_note || '';
-            p.invoice_amount = p.invoice_amount != null ? Number(p.invoice_amount) : 0;
-            p.amount = p.amount != null ? Number(p.amount) : 0;
+            p.invoice_amount = this.normalizeBdAmountInputValue(p.invoice_amount);
+            p.amount = this.normalizeBdAmountInputValue(p.amount);
             this.normalizeBdDateFields();
+        },
+        normalizeBdAmountInputValue(value) {
+            // Empty/null → '' (placeholder 未入力). Keep 0 as a real value.
+            if (value == null || value === '') return '';
+            const n = Number(value);
+            if (!Number.isFinite(n)) return '';
+            return n;
+        },
+        getBdAmountForApi(value) {
+            if (value == null || value === '') return '';
+            const n = Number(value);
+            if (!Number.isFinite(n)) return '';
+            return String(n);
         },
         normalizeBdDateFields() {
             if (!this.businessDocumentProject) return;
@@ -6479,21 +6534,18 @@ createApp({
             // Do not call syncBdDatesFromPickers() here — used in template during render;
             // mutating reactive state would hang the page (RESULT_CODE_HUNG).
             return this.hasBdDate('estimate_date')
-                && this.hasBdAmount(this.businessDocumentProject.amount)
-                && this.hasBdNumber(this.businessDocumentProject.estimate_number);
+                && this.hasBdAmount(this.businessDocumentProject.amount);
         },
         isBdInvoiceDocumentFieldsComplete() {
             if (!this.businessDocumentProject) return false;
             return this.hasBdDate('invoice_date')
-                && this.hasBdAmount(this.businessDocumentProject.invoice_amount)
-                && this.hasBdNumber(this.businessDocumentProject.invoice_number);
+                && this.hasBdAmount(this.businessDocumentProject.invoice_amount);
         },
         getBdEstimateDocumentFieldsValidationError() {
             if (!this.businessDocumentProject) return '';
             const missing = [];
             if (!this.hasBdDate('estimate_date')) missing.push('見積日');
             if (!this.hasBdAmount(this.businessDocumentProject.amount)) missing.push('見積金額');
-            if (!this.hasBdNumber(this.businessDocumentProject.estimate_number)) missing.push('見積番号');
             if (!missing.length) return '';
             return '発行済にするには以下を入力してください: ' + missing.join('、');
         },
@@ -6502,7 +6554,6 @@ createApp({
             const missing = [];
             if (!this.hasBdDate('invoice_date')) missing.push('請求日');
             if (!this.hasBdAmount(this.businessDocumentProject.invoice_amount)) missing.push('請求金額');
-            if (!this.hasBdNumber(this.businessDocumentProject.invoice_number)) missing.push('請求番号');
             if (!missing.length) return '';
             return '発行済にするには以下を入力してください: ' + missing.join('、');
         },
@@ -6567,13 +6618,13 @@ createApp({
                 }
                 const formData = new FormData();
                 formData.append('id', this.businessDocumentProjectId);
-                formData.append('amount', p.amount || 0);
+                formData.append('amount', this.getBdAmountForApi(p.amount));
                 formData.append('estimate_status', p.estimate_status || '未発行');
                 formData.append('estimate_date', this.getBdDateForApi('estimate_date'));
                 formData.append('estimate_number', p.estimate_number || '');
                 formData.append('invoice_status', p.invoice_status || '未発行');
                 formData.append('invoice_date', this.getBdDateForApi('invoice_date'));
-                formData.append('invoice_amount', p.invoice_amount != null ? p.invoice_amount : 0);
+                formData.append('invoice_amount', this.getBdAmountForApi(p.invoice_amount));
                 formData.append('invoice_number', p.invoice_number || '');
                 formData.append('payment_note', p.payment_note || '');
                 appendPaymentVersionToFormData(formData, this.businessDocumentProject);
@@ -6583,6 +6634,9 @@ createApp({
                     this.businessDocumentDirty = false;
                     this.businessDocumentError = '';
                     this._bdSuppressAutoSave = true;
+                    // Keep cleared amounts as empty so placeholder 未入力 stays visible
+                    this.businessDocumentProject.amount = this.normalizeBdAmountInputValue(this.businessDocumentProject.amount);
+                    this.businessDocumentProject.invoice_amount = this.normalizeBdAmountInputValue(this.businessDocumentProject.invoice_amount);
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBdDateForApi(key);
                         this.setBdServerDate(key, apiVal || '');
@@ -6708,8 +6762,7 @@ createApp({
         },
         copyBdEstimateAmountToInvoice() {
             if (!this.businessDocumentProject) return;
-            this.businessDocumentProject.invoice_amount = this.businessDocumentProject.amount != null
-                ? Number(this.businessDocumentProject.amount) : 0;
+            this.businessDocumentProject.invoice_amount = this.normalizeBdAmountInputValue(this.businessDocumentProject.amount);
             this.scheduleBdUpdate();
         },
         copyBdInvoiceAmountToPayment() {

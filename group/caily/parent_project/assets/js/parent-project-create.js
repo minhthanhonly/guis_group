@@ -94,6 +94,8 @@ createApp({
             customerSearchLoading: false,
             allCustomersForSearch: [],
             customerSearchLoaded: false,
+            duplicateDismissedKey: '',
+            duplicatePromptPromise: null,
         }
     },
     methods: {
@@ -191,8 +193,97 @@ createApp({
                 this.validationErrors.requests = '';
             }
         },
+        tText(key) {
+            if (typeof i18next !== 'undefined' && typeof i18next.t === 'function') {
+                return i18next.t(key) || key;
+            }
+            return key;
+        },
+        getDuplicateCheckKey() {
+            const construction = String(this.parentProject.construction_number || '').trim();
+            const projectName = String(this.parentProject.project_name || '').trim();
+            return construction + '|' + projectName;
+        },
+        async findDuplicateBuilding() {
+            const construction = String(this.parentProject.construction_number || '').trim();
+            const projectName = String(this.parentProject.project_name || '').trim();
+            if (!construction && !projectName) {
+                return null;
+            }
+            try {
+                const response = await axios.get('/api/index.php', {
+                    params: {
+                        model: 'parentproject',
+                        method: 'findDuplicate',
+                        construction_number: construction,
+                        project_name: projectName
+                    }
+                });
+                const data = response && response.data ? response.data : {};
+                if (data.status === 'success' && data.duplicate && data.duplicate.id) {
+                    return data.duplicate;
+                }
+            } catch (error) {
+                console.error('Error checking duplicate parent project:', error);
+            }
+            return null;
+        },
+        async confirmUseExistingBuilding() {
+            if (typeof Swal === 'undefined' || !Swal.fire) {
+                return window.confirm(this.tText('既に同じ建物があります。その建物を使用しますか？'));
+            }
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: this.tText('確認'),
+                text: this.tText('既に同じ建物があります。その建物を使用しますか？'),
+                showCancelButton: true,
+                confirmButtonText: this.tText('はい'),
+                cancelButtonText: this.tText('いいえ'),
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true
+            });
+            return !!(result && result.isConfirmed);
+        },
+        async promptDuplicateBuildingIfNeeded() {
+            if (this.duplicatePromptPromise) {
+                return this.duplicatePromptPromise;
+            }
+            this.duplicatePromptPromise = (async () => {
+                const checkKey = this.getDuplicateCheckKey();
+                if (checkKey === '|' || checkKey === this.duplicateDismissedKey) {
+                    return { duplicate: null, useExisting: false };
+                }
+                const duplicate = await this.findDuplicateBuilding();
+                if (!duplicate || !duplicate.id) {
+                    return { duplicate: null, useExisting: false };
+                }
+                const useExisting = await this.confirmUseExistingBuilding();
+                if (useExisting) {
+                    return { duplicate: duplicate, useExisting: true };
+                }
+                this.duplicateDismissedKey = checkKey;
+                return { duplicate: duplicate, useExisting: false };
+            })();
+            try {
+                return await this.duplicatePromptPromise;
+            } finally {
+                this.duplicatePromptPromise = null;
+            }
+        },
+        async onDuplicateFieldBlur() {
+            const result = await this.promptDuplicateBuildingIfNeeded();
+            if (result.useExisting && result.duplicate && result.duplicate.id) {
+                window.location.href = 'detail.php?id=' + encodeURIComponent(result.duplicate.id);
+            }
+        },
         async saveParentProject() {
             if (!this.validateParentProjectForm()) {
+                return;
+            }
+            const duplicateResult = await this.promptDuplicateBuildingIfNeeded();
+            if (duplicateResult.useExisting && duplicateResult.duplicate && duplicateResult.duplicate.id) {
+                window.location.href = 'detail.php?id=' + encodeURIComponent(duplicateResult.duplicate.id);
                 return;
             }
             

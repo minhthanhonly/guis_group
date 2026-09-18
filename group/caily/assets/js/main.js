@@ -1060,7 +1060,8 @@ function getScheduleJudgment(row, deadlineRaw, options) {
     cancelled: true,
     paused: true,
     deleted: true,
-    draft: true
+    draft: true,
+    waiting_invoice: true
   };
   if (skip[status] || skip[status.toLowerCase()]) return null;
 

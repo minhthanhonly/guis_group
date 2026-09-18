@@ -396,9 +396,22 @@
                 p.estimate_number = p.estimate_number || '';
                 p.invoice_number = p.invoice_number || '';
                 p.payment_note = p.payment_note || '';
-                p.invoice_amount = p.invoice_amount != null ? Number(p.invoice_amount) : 0;
-                p.amount = p.amount != null ? Number(p.amount) : 0;
+                p.invoice_amount = this.normalizeBdAmountInputValue(p.invoice_amount);
+                p.amount = this.normalizeBdAmountInputValue(p.amount);
                 this.normalizeBdDateFields();
+            },
+            normalizeBdAmountInputValue: function(value) {
+                // Empty/null → '' (placeholder 未入力). Keep 0 as a real value.
+                if (value == null || value === '') return '';
+                var n = Number(value);
+                if (!Number.isFinite(n)) return '';
+                return n;
+            },
+            getBdAmountForApi: function(value) {
+                if (value == null || value === '') return '';
+                var n = Number(value);
+                if (!Number.isFinite(n)) return '';
+                return String(n);
             },
             normalizeBdDateFields: function() {
                 var self = this;
@@ -546,21 +559,18 @@
                 // Do not call syncBdDatesFromPickers() here — this is used in the template
                 // during render; mutating reactive state would hang the page (RESULT_CODE_HUNG).
                 return this.hasBdDate('estimate_date')
-                    && this.hasBdAmount(this.businessDocumentProject.amount)
-                    && this.hasBdNumber(this.businessDocumentProject.estimate_number);
+                    && this.hasBdAmount(this.businessDocumentProject.amount);
             },
             isBdInvoiceDocumentFieldsComplete: function() {
                 if (!this.businessDocumentProject) return false;
                 return this.hasBdDate('invoice_date')
-                    && this.hasBdAmount(this.businessDocumentProject.invoice_amount)
-                    && this.hasBdNumber(this.businessDocumentProject.invoice_number);
+                    && this.hasBdAmount(this.businessDocumentProject.invoice_amount);
             },
             getBdEstimateDocumentFieldsValidationError: function() {
                 if (!this.businessDocumentProject) return '';
                 var missing = [];
                 if (!this.hasBdDate('estimate_date')) missing.push('見積日');
                 if (!this.hasBdAmount(this.businessDocumentProject.amount)) missing.push('見積金額');
-                if (!this.hasBdNumber(this.businessDocumentProject.estimate_number)) missing.push('見積番号');
                 if (!missing.length) return '';
                 return '発行済にするには以下を入力してください: ' + missing.join('、');
             },
@@ -569,7 +579,6 @@
                 var missing = [];
                 if (!this.hasBdDate('invoice_date')) missing.push('請求日');
                 if (!this.hasBdAmount(this.businessDocumentProject.invoice_amount)) missing.push('請求金額');
-                if (!this.hasBdNumber(this.businessDocumentProject.invoice_number)) missing.push('請求番号');
                 if (!missing.length) return '';
                 return '発行済にするには以下を入力してください: ' + missing.join('、');
             },
@@ -639,13 +648,13 @@
 
                 var formData = new FormData();
                 formData.append('id', this.businessDocumentProjectId);
-                formData.append('amount', p.amount || 0);
+                formData.append('amount', this.getBdAmountForApi(p.amount));
                 formData.append('estimate_status', p.estimate_status || '未発行');
                 formData.append('estimate_date', this.getBdDateForApi('estimate_date'));
                 formData.append('estimate_number', p.estimate_number || '');
                 formData.append('invoice_status', p.invoice_status || '未発行');
                 formData.append('invoice_date', this.getBdDateForApi('invoice_date'));
-                formData.append('invoice_amount', p.invoice_amount != null ? p.invoice_amount : 0);
+                formData.append('invoice_amount', this.getBdAmountForApi(p.invoice_amount));
                 formData.append('invoice_number', p.invoice_number || '');
                 formData.append('payment_note', p.payment_note || '');
                 appendPaymentVersionToFormData(formData, p);
@@ -657,6 +666,9 @@
                             self.businessDocumentDirty = false;
                             self.businessDocumentError = '';
                             self._bdSuppressAutoSave = true;
+                            // Keep cleared amounts as empty so placeholder 未入力 stays visible
+                            self.businessDocumentProject.amount = self.normalizeBdAmountInputValue(self.businessDocumentProject.amount);
+                            self.businessDocumentProject.invoice_amount = self.normalizeBdAmountInputValue(self.businessDocumentProject.invoice_amount);
                             BUSINESS_DOCUMENT_DATE_FIELDS.forEach(function(key) {
                                 var apiVal = self.getBdDateForApi(key);
                                 self.setBdServerDate(key, apiVal || '');
@@ -801,8 +813,7 @@
             },
             copyBdEstimateAmountToInvoice: function() {
                 if (!this.businessDocumentProject) return;
-                this.businessDocumentProject.invoice_amount = this.businessDocumentProject.amount != null
-                    ? Number(this.businessDocumentProject.amount) : 0;
+                this.businessDocumentProject.invoice_amount = this.normalizeBdAmountInputValue(this.businessDocumentProject.amount);
                 this.scheduleBdUpdate();
             },
             findBdStatusOption: function(list, status) {

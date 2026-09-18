@@ -6,6 +6,9 @@
 /* App body font: system stack (Google Font Public Sans removed — P1 #9) */
 :root {
   --bs-font-sans-serif: "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", "Yu Gothic", Meiryo, "Helvetica Neue", Arial, sans-serif;
+  --bs-lime: #84cc16;
+  --bs-lime-rgb: 132, 204, 22;
+  --bs-lime-contrast: #fff;
 }
 
 .menu .app-brand.demo {
@@ -664,6 +667,36 @@ span.avatar-initial:not(.avatar .avatar-initial) {
 	background: linear-gradient(135deg, #808080 0%, #b3b3b3 100%);
 }
 
+.btn-lime {
+	background: linear-gradient(135deg, var(--bs-lime) 0%, #65a30d 100%);
+	border: none;
+	color: var(--bs-lime-contrast) !important;
+}
+.btn-lime:hover:not(:disabled),
+.btn-lime:focus,
+.btn-lime.active,
+.btn-lime:active {
+	background: linear-gradient(135deg, #65a30d 0%, #4d7c0f 100%);
+	color: #fff !important;
+}
+.bg-lime {
+	background-color: var(--bs-lime) !important;
+	color: var(--bs-lime-contrast) !important;
+}
+.bg-label-lime {
+	background-color: #eef9cc !important;
+	color: #4d7c0f !important;
+}
+.text-lime {
+	color: var(--bs-lime) !important;
+}
+.badge-outline-lime {
+	--bs-badge-color: #4d7c0f;
+	--bs-badge-border-color: var(--bs-lime);
+	color: #4d7c0f !important;
+	border-color: var(--bs-lime);
+}
+
 .btn-primary:hover:not(:disabled) {
     transform: translateY(-2px);
 }
@@ -745,6 +778,10 @@ span.avatar-initial:not(.avatar .avatar-initial) {
 }
 .btn-label-gray{
 	background-color: #f0f0f0!important;
+}
+.btn-label-lime{
+	background-color: #eef9cc!important;
+	color: #4d7c0f!important;
 }
 .btn-label-primary{
 	background-color: #e9e7fd!important;

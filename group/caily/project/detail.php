@@ -237,7 +237,7 @@ if($_SESSION['show_project'] == 0){
                                                             <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
                                                                 <span v-for="item in parentRequestTypes" :key="item"
                                                                       class="badge me-1 mb-1"
-                                                                      :class="isParentRequestFulfilled(item) ? getRequestBadgeClass(item) : 'bg-warning text-dark'"
+                                                                      :class="isParentRequestFulfilled(item) ? getRequestBadgeClass(item) : getRequestUnfulfilledBadgeClass(item)"
                                                                       :title="isParentRequestFulfilled(item) ? '' : '未作成'">
                                                                     <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
                                                                     <i v-else class="fa fa-check me-1"></i>
@@ -817,7 +817,7 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label">見積金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label text-muted">消費税（10%）</label>
@@ -828,7 +828,7 @@ if($_SESSION['show_project'] == 0){
                                 <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(project.amount)">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">見積番号 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                <label class="form-label">見積番号</label>
                                 <input type="text" autocomplete="off" class="form-control" v-model="project.estimate_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
                             </div>
                             <div class="col-md-6">
@@ -852,7 +852,7 @@ if($_SESSION['show_project'] == 0){
                                         </ul>
                                     </div>
                                     <div v-if="!isEstimateDocumentFieldsComplete()" class="form-text text-muted">
-                                        発行済にするには見積日・見積金額・見積番号が必要です
+                                        発行済にするには見積日・見積金額が必要です
                                     </div>
                                 </div>
                                 <div v-else>
@@ -882,7 +882,7 @@ if($_SESSION['show_project'] == 0){
                                     <button v-if="canEditBusinessDocuments && !hasBusinessDocumentAmount(project.invoice_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
                                             @click="copyEstimateAmountToInvoice">見積と同額</button>
                                 </div>
-                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
                             </div>
                             <div class="col-md-6">
                                 <label class="form-label text-muted">消費税（10%）</label>
@@ -893,7 +893,7 @@ if($_SESSION['show_project'] == 0){
                                 <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(project.invoice_amount)">
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label">請求番号 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                <label class="form-label">請求番号</label>
                                 <input type="text" autocomplete="off" class="form-control" v-model="project.invoice_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
                             </div>
                             <div class="col-md-6">
@@ -917,7 +917,7 @@ if($_SESSION['show_project'] == 0){
                                         </ul>
                                     </div>
                                     <div v-if="!isInvoiceDocumentFieldsComplete()" class="form-text text-muted">
-                                        発行済にするには請求日・請求金額・請求番号が必要です
+                                        発行済にするには請求日・請求金額が必要です
                                     </div>
                                 </div>
                                 <div v-else>

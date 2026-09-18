@@ -222,7 +222,7 @@ $view->heading('建物一覧');
                                                 <span v-for="item in project.requests.split(',').map(v => v.trim()).filter(v => v)"
                                                       :key="item"
                                                       class="badge me-1 mb-1"
-                                                      :class="isParentRequestFulfilled(project, item) ? getRequestBadgeClass(item) : 'bg-warning text-dark'"
+                                                      :class="isParentRequestFulfilled(project, item) ? getRequestBadgeClass(item) : getRequestUnfulfilledBadgeClass(item)"
                                                       :title="isParentRequestFulfilled(project, item) ? '' : '未作成'">
                                                     <i v-if="!isParentRequestFulfilled(project, item)" class="fa fa-exclamation-triangle me-1"></i>
                                                     {{ item }}
@@ -890,8 +890,8 @@ $view->footing();
 .request-filter-btn.btn-label-info.active::after { background-color: #0dcaf0; }
 .request-filter-btn.btn-success.active::after,
 .request-filter-btn.btn-label-success.active::after { background-color: #198754; }
-.request-filter-btn.btn-warning.active::after,
-.request-filter-btn.btn-label-warning.active::after { background-color: #ffc107; }
+.request-filter-btn.btn-lime.active::after,
+.request-filter-btn.btn-label-lime.active::after { background-color: #84cc16; }
 .request-filter-btn.btn-dark.active::after,
 .request-filter-btn.btn-label-dark.active::after { background-color: #212529; }
 

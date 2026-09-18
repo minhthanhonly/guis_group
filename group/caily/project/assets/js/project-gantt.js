@@ -146,6 +146,11 @@ var statuses = [
         color: 'primary'
     },
     {
+        key: 'waiting_invoice',
+        name: '請求待ち',
+        color: 'dark'
+    },
+    {
         key: 'completed',
         name: '完了',
         color: 'success'

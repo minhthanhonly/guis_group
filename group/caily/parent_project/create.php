@@ -120,7 +120,7 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
-                                <input type="text" class="form-control" v-model="parentProject.construction_number">
+                                <input type="text" class="form-control" v-model="parentProject.construction_number" @blur="onDuplicateFieldBlur">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -149,7 +149,7 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" v-model="parentProject.project_name" required>
+                                <input type="text" class="form-control" v-model="parentProject.project_name" required @blur="onDuplicateFieldBlur">
                                 <div v-if="validationErrors.project_name" class="invalid-feedback d-block">
                                     {{ validationErrors.project_name }}
                                 </div>

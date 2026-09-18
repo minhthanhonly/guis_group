@@ -26,7 +26,7 @@ createApp({
                 { value: '意匠', label: '意匠', color: 'primary' },
                 { value: '設備', label: '設備', color: 'info' },
                 { value: '3D設備', label: '3D設備', color: 'success' },
-                { value: '省エネ', label: '省エネ', color: 'warning' },
+                { value: '省エネ', label: '省エネ', color: 'lime' },
                 { value: 'その他', label: 'その他', color: 'dark' }
             ],
             statusFilter: 'all',
@@ -142,6 +142,7 @@ createApp({
                 { value: 'contract', label: '請負', color: 'info' },
                 { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'waiting_invoice', label: '請求待ち', color: 'dark' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
                 { value: 'cancelled', label: '中止', color: 'danger' }
@@ -1038,6 +1039,9 @@ createApp({
         },
         getRequestBadgeClass(request) {
             return `bg-${this.getRequestColor(request)}`;
+        },
+        getRequestUnfulfilledBadgeClass(request) {
+            return 'bg-warning text-dark';
         },
         isParentRequestFulfilled(project, requestType) {
             const type = String(requestType || '').trim();

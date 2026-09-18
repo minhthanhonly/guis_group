@@ -245,6 +245,7 @@ var projectTable;
         { key: 'contract', name: '請負', color: 'info' },
         { key: 'waiting_documents', name: '資料待ち', color: 'warning' },
         { key: 'in_progress', name: '進行中', color: 'primary' },
+        { key: 'waiting_invoice', name: '請求待ち', color: 'dark' },
         { key: 'completed', name: '完了', color: 'success' },
         { key: 'paused', name: '一時停止', color: 'warning' },
         { key: 'cancelled', name: '中止', color: 'danger' }
@@ -2217,6 +2218,11 @@ var projectTable;
         if (s == null || s === '') return '';
         const t = String(s);
         return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function getParentProjectDetailUrl(parentProjectId) {
+        var id = parseInt(parentProjectId, 10);
+        return id > 0 ? ('../parent_project/detail.php?id=' + id) : '';
     }
 
     /** Format date-time for display (date and time on separate lines, no year; locale + timezone aware) */
@@ -4400,13 +4406,27 @@ var projectTable;
                 },
                 { 
                     name: 'parent_construction_number',
-                    width: '90px',
+                    width: '120px',
                     data: 'parent_construction_number',
+                    className: 'project-construction-cell',
                     render: function(data, type, row) {
-                        if (!data || data === '') {
-                            return '<span class="text-muted">-</span>';
+                        if (type === 'sort' || type === 'type' || type === 'filter') {
+                            return data || '';
                         }
-                        return `<span class="text-nowrap small">${data}</span>`;
+                        var numberHtml = (!data || data === '')
+                            ? '<span class="text-muted"></span>'
+                            : '<span class="text-nowrap small">' + escapeHtmlForNote(String(data)) + '</span><br>';
+                        var parentUrl = getParentProjectDetailUrl(row && row.parent_project_id);
+                        if (!parentUrl) {
+                            return numberHtml;
+                        }
+                        var label = typeof translateText === 'function' ? translateText('建物詳細') : '建物詳細';
+                        var parentId = parseInt(row.parent_project_id, 10);
+                        var btn = '<a href="' + parentUrl + '"'
+                            + ' class="btn btn-xs btn-outline-primary mt-1 project-hover-parent-trigger ' + REMOVE_FOR_EXCEL_CLASS + '"'
+                            + ' data-parent-project-id="' + parentId + '">'
+                            + '<span>' + escapeHtmlForNote(label) + '</span></a>';
+                        return numberHtml + btn;
                     },
                     title: '<span data-i18n="工事番号">工事番号</span>'
                 },
@@ -4737,7 +4757,7 @@ var projectTable;
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, '期限日') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        const timeRemaining = getTimeRemaining(data, row.status);
+                        const timeRemaining = isProjectNoukiDelivered(row) ? null : getTimeRemaining(data, row.status);
                         const dateStr = formatDateTimeWithLineBreak(data);
                         
                         if (timeRemaining) {
@@ -5236,14 +5256,17 @@ var projectTable;
             return;
         }
 
-        // Popup tasks khi hover cột ID hoặc name (di chuyển theo chuột, load task qua API)
+        // Popup tasks khi hover cột ID hoặc name (neo theo nút, tự nằm trong màn hình)
         (function initProjectTasksPopup() {
             var popup = null;
             var hideTimer = null;
             var lastProjectId = null;
             var abortController = null;
-            var offsetX = 12;
-            var offsetY = 8;
+            var currentTrigger = null;
+            var gap = 6;
+            var viewportMargin = 8;
+            var popupMaxWidth = 540;
+            var popupMaxHeight = 360;
 
             function getPopup() {
                 if (!popup) {
@@ -5257,32 +5280,74 @@ var projectTable;
                 return popup;
             }
 
-            function movePopup(e) {
+            function positionPopup() {
                 var el = getPopup();
-                if (el.style.display !== 'none') {
-                    el.style.left = (e.clientX + offsetX) + 'px';
-                    el.style.top = (e.clientY + offsetY) + 'px';
+                if (el.style.display === 'none' || !currentTrigger || !currentTrigger.getBoundingClientRect) return;
+                el.style.maxWidth = popupMaxWidth + 'px';
+                el.style.maxHeight = popupMaxHeight + 'px';
+                var rect = currentTrigger.getBoundingClientRect();
+                var vw = window.innerWidth;
+                var vh = window.innerHeight;
+                var popupW = el.offsetWidth;
+                var popupH = el.offsetHeight;
+                var left = rect.left;
+                if (left + popupW > vw - viewportMargin) {
+                    left = vw - popupW - viewportMargin;
                 }
+                if (left < viewportMargin) {
+                    left = viewportMargin;
+                }
+                var spaceBelow = vh - rect.bottom - gap;
+                var spaceAbove = rect.top - gap;
+                var top;
+                if (spaceBelow >= popupH) {
+                    top = rect.bottom + gap;
+                } else {
+                    if (spaceAbove >= popupH) {
+                        top = rect.top - popupH - gap;
+                    } else if (spaceAbove > spaceBelow) {
+                        el.style.maxHeight = Math.max(80, spaceAbove) + 'px';
+                        popupH = el.offsetHeight;
+                        top = Math.max(viewportMargin, rect.top - popupH - gap);
+                    } else {
+                        el.style.maxHeight = Math.max(80, spaceBelow) + 'px';
+                        top = rect.bottom + gap;
+                    }
+                }
+                popupH = el.offsetHeight;
+                if (top + popupH > vh - viewportMargin) {
+                    top = Math.max(viewportMargin, vh - popupH - viewportMargin);
+                }
+                if (top < viewportMargin) {
+                    top = viewportMargin;
+                }
+                el.style.left = Math.round(left) + 'px';
+                el.style.top = Math.round(top) + 'px';
             }
 
-            function showPopup(projectId, clientX, clientY) {
+            function showPopup(projectId, triggerEl) {
                 if (hideTimer) {
                     clearTimeout(hideTimer);
                     hideTimer = null;
                 }
+                currentTrigger = triggerEl || currentTrigger;
                 var el = getPopup();
-                el.style.left = (clientX + offsetX) + 'px';
-                el.style.top = (clientY + offsetY) + 'px';
                 el.style.display = 'block';
-                if (lastProjectId === projectId && el.getAttribute('data-loaded') === '1') return;
+                positionPopup();
+                if (lastProjectId === projectId && el.getAttribute('data-loaded') === '1') {
+                    positionPopup();
+                    return;
+                }
                 lastProjectId = projectId;
                 el.setAttribute('data-loaded', '0');
                 el.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading...</div>';
+                positionPopup();
                 if (abortController) abortController.abort();
                 abortController = new AbortController();
                 var axiosOpt = { signal: abortController.signal };
                 if (typeof axios === 'undefined') {
                     el.innerHTML = '<div class="text-muted small">axios not found</div>';
+                    positionPopup();
                     return;
                 }
                 var taskStatuses = [
@@ -5359,10 +5424,7 @@ var projectTable;
                     if (!total || total <= 0) {
                         return '0';
                     }
-                    if (Number.isInteger(total)) {
-                        return String(total);
-                    }
-                    return String(total);
+                    return (Math.round(total * 10) / 10).toFixed(1);
                 }
                 function getTaskAssigneeDisplay(t, members) {
                     if (!t.assigned_to && !t.assigned_to_name) return { firstInitials: '', firstTitle: '', restCount: 0 };
@@ -5459,10 +5521,12 @@ var projectTable;
                         el.innerHTML = html;
                     }
                     el.setAttribute('data-loaded', '1');
+                    positionPopup();
                 })
                     .catch(function(err) {
                         if (err.name === 'CanceledError' || err.name === 'AbortError') return;
                         el.innerHTML = '<div class="text-danger small">Failed to load tasks</div>';
+                        positionPopup();
                     });
             }
 
@@ -5479,16 +5543,11 @@ var projectTable;
                 if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
             }
 
-            $(document).on('mousemove', function(e) {
-                if ($(e.target).closest('#projectTasksPopup').length) return;
-                movePopup(e);
-            });
-
-            $('#projectTable').on('mouseenter', '.project-hover-tasks-trigger', function(e) {
+            $('#projectTable').on('mouseenter', '.project-hover-tasks-trigger', function() {
                 var projectId = $(this).data('project-id');
                 if (!projectId) return;
                 cancelHide();
-                showPopup(projectId, e.clientX, e.clientY);
+                showPopup(projectId, this);
             });
             $('#projectTable').on('mouseleave', '.project-id-cell, .project-progress-cell', function() {
                 scheduleHide();
@@ -5496,6 +5555,267 @@ var projectTable;
 
             $(document).on('mouseenter', '#projectTasksPopup', cancelHide);
             $(document).on('mouseleave', '#projectTasksPopup', scheduleHide);
+        })();
+
+        // Popup thông tin tòa nhà khi hover nút 建物詳細
+        (function initProjectParentPopup() {
+            var popup = null;
+            var hideTimer = null;
+            var lastParentId = null;
+            var abortController = null;
+            var currentTrigger = null;
+            var gap = 6;
+            var viewportMargin = 8;
+
+            function tLabel(key) {
+                return typeof translateText === 'function' ? translateText(key) : key;
+            }
+
+            function getPopup() {
+                if (!popup) {
+                    if (!document.getElementById('projectParentPopupStyle')) {
+                        var style = document.createElement('style');
+                        style.id = 'projectParentPopupStyle';
+                        style.textContent = '#projectParentPopup table.project-parent-children-table{table-layout:fixed;width:100%;}'
+                            + '#projectParentPopup table.project-parent-children-table th,'
+                            + '#projectParentPopup table.project-parent-children-table td{text-align:left!important;padding:0.25rem 0.4rem!important;vertical-align:middle;}';
+                        document.head.appendChild(style);
+                    }
+                    popup = document.createElement('div');
+                    popup.id = 'projectParentPopup';
+                    popup.className = 'project-parent-popup shadow border rounded bg-white p-2';
+                    popup.style.cssText = 'position: fixed; z-index: 9999; min-width: 420px; max-width: 560px; max-height: 420px; overflow: auto; display: none; pointer-events: auto;';
+                    popup.setAttribute('role', 'tooltip');
+                    document.body.appendChild(popup);
+                }
+                return popup;
+            }
+
+            function positionPopup() {
+                var el = getPopup();
+                if (el.style.display === 'none' || !currentTrigger || !currentTrigger.getBoundingClientRect) return;
+                el.style.maxWidth = '560px';
+                el.style.maxHeight = '420px';
+                var rect = currentTrigger.getBoundingClientRect();
+                var vw = window.innerWidth;
+                var vh = window.innerHeight;
+                var popupW = el.offsetWidth;
+                var popupH = el.offsetHeight;
+                var left = rect.left;
+                if (left + popupW > vw - viewportMargin) {
+                    left = vw - popupW - viewportMargin;
+                }
+                if (left < viewportMargin) {
+                    left = viewportMargin;
+                }
+                var spaceBelow = vh - rect.bottom - gap;
+                var spaceAbove = rect.top - gap;
+                var top;
+                if (spaceBelow >= popupH) {
+                    top = rect.bottom + gap;
+                } else {
+                    if (spaceAbove >= popupH) {
+                        top = rect.top - popupH - gap;
+                    } else if (spaceAbove > spaceBelow) {
+                        el.style.maxHeight = Math.max(80, spaceAbove) + 'px';
+                        popupH = el.offsetHeight;
+                        top = Math.max(viewportMargin, rect.top - popupH - gap);
+                    } else {
+                        el.style.maxHeight = Math.max(80, spaceBelow) + 'px';
+                        top = rect.bottom + gap;
+                    }
+                }
+                popupH = el.offsetHeight;
+                if (top + popupH > vh - viewportMargin) {
+                    top = Math.max(viewportMargin, vh - popupH - viewportMargin);
+                }
+                if (top < viewportMargin) {
+                    top = viewportMargin;
+                }
+                el.style.left = Math.round(left) + 'px';
+                el.style.top = Math.round(top) + 'px';
+            }
+
+            function getRequestBadgeClass(request) {
+                var map = {
+                    '意匠': 'bg-primary',
+                    '設備': 'bg-info',
+                    '3D設備': 'bg-success',
+                    '省エネ': 'bg-lime',
+                    '3D': 'bg-secondary',
+                    'その他': 'bg-dark'
+                };
+                return map[String(request || '').trim()] || 'bg-secondary';
+            }
+
+            function getChildStatusMeta(status) {
+                var key = String(status || '').trim();
+                var found = statuses.find(function(s) { return s.key === key; });
+                return found || { key: key, name: key || '-', color: 'secondary' };
+            }
+
+            function fieldRow(labelKey, valueHtml) {
+                if (!valueHtml) return '';
+                return '<div class="d-flex align-items-start gap-2 py-1 border-bottom border-light">'
+                    + '<span class="text-muted text-nowrap" style="min-width:6.5em;font-size:0.75rem;">' + escapeHtmlForNote(tLabel(labelKey)) + '</span>'
+                    + '<span class="small">' + valueHtml + '</span></div>';
+            }
+
+            function textOrEmpty(value) {
+                var s = value == null ? '' : String(value).trim();
+                return s ? escapeHtmlForNote(s) : '';
+            }
+
+            function formatNoukiDate(value) {
+                if (!value || (typeof value === 'string' && value.trim() === '')) return '-';
+                var m = toProjectDisplayMoment(value);
+                if (m) return formatProjectDateOnly(m);
+                return String(value).substring(0, 10);
+            }
+
+            function getSelectedDepartmentId() {
+                try {
+                    var dep = window.app && window.app.selectedDepartment;
+                    var id = dep && dep.id != null ? parseInt(dep.id, 10) : 0;
+                    return id > 0 ? id : 0;
+                } catch (e) {
+                    return 0;
+                }
+            }
+
+            function showPopup(parentId, triggerEl) {
+                if (hideTimer) {
+                    clearTimeout(hideTimer);
+                    hideTimer = null;
+                }
+                currentTrigger = triggerEl || currentTrigger;
+                var el = getPopup();
+                el.style.display = 'block';
+                positionPopup();
+                var cacheKey = String(parentId) + ':' + getSelectedDepartmentId();
+                if (lastParentId === cacheKey && el.getAttribute('data-loaded') === '1') {
+                    positionPopup();
+                    return;
+                }
+                lastParentId = cacheKey;
+                el.setAttribute('data-loaded', '0');
+                el.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1" role="status"></span>Loading...</div>';
+                positionPopup();
+                if (abortController) abortController.abort();
+                abortController = new AbortController();
+                var axiosOpt = { signal: abortController.signal };
+                if (typeof axios === 'undefined') {
+                    el.innerHTML = '<div class="text-muted small">axios not found</div>';
+                    positionPopup();
+                    return;
+                }
+                Promise.all([
+                    axios.get('/api/index.php?model=parentproject&method=getById&id=' + encodeURIComponent(parentId), axiosOpt),
+                    axios.get('/api/index.php?model=parentproject&method=getChildProjects&parent_project_id=' + encodeURIComponent(parentId), axiosOpt)
+                ]).then(function(results) {
+                    var parent = results[0].data || {};
+                    var children = Array.isArray(results[1].data) ? results[1].data : [];
+                    if (!parent || !parent.id) {
+                        el.innerHTML = '<div class="text-muted small">' + escapeHtmlForNote(tLabel('親プロジェクトが見つかりません。')) + '</div>';
+                        el.setAttribute('data-loaded', '1');
+                        positionPopup();
+                        return;
+                    }
+                    var parentUrl = getParentProjectDetailUrl(parent.id);
+                    var html = '<div class="small fw-bold mb-1">' + escapeHtmlForNote(tLabel('建物詳細')) + '</div>';
+                    html += fieldRow('お施主様名', textOrEmpty(parent.project_name));
+                    html += fieldRow('工事番号', textOrEmpty(parent.construction_number));
+                    html += fieldRow('管理番号', textOrEmpty(parent.project_number));
+                    html += fieldRow('会社名', textOrEmpty(parent.company_name));
+                    html += fieldRow('支店名', textOrEmpty(parent.branch_name));
+                    html += fieldRow('担当様', textOrEmpty(parent.contact_name));
+                    html += fieldRow('規模', textOrEmpty(parent.scale));
+                    var types = [parent.type1, parent.type2].map(function(v) { return String(v || '').trim(); }).filter(Boolean);
+                    if (types.length) {
+                        html += fieldRow('種類', types.map(function(item) {
+                            return '<span class="badge bg-info me-1">' + escapeHtmlForNote(item) + '</span>';
+                        }).join(''));
+                    }
+                    var requests = String(parent.requests || '').split(',').map(function(r) { return r.trim(); }).filter(Boolean);
+                    if (requests.length) {
+                        html += fieldRow('依頼', requests.map(function(item) {
+                            return '<span class="badge me-1 ' + getRequestBadgeClass(item) + '">' + escapeHtmlForNote(item) + '</span>';
+                        }).join(''));
+                    }
+                    var selectedDeptId = getSelectedDepartmentId();
+                    var otherChildren = children.filter(function(c) {
+                        if (String(c.status || '') === 'deleted') return false;
+                        if (!selectedDeptId) return true;
+                        return parseInt(c.department_id, 10) !== selectedDeptId;
+                    });
+                    html += '<div class="small fw-bold mt-2 mb-1">' + escapeHtmlForNote(tLabel('他部署の案件')) + ' (' + otherChildren.length + ')</div>';
+                    if (!otherChildren.length) {
+                        html += '<div class="text-muted small">' + escapeHtmlForNote(tLabel('他部署の案件がありません')) + '</div>';
+                    } else {
+                        var showGuisNouki = typeof canViewEndDateColumn !== 'function' || canViewEndDateColumn();
+                        html += '<table class="table table-sm mb-0 project-parent-children-table" style="font-size:0.75rem;">';
+                        html += '<thead><tr>';
+                        html += '<th class="text-nowrap text-start">' + escapeHtmlForNote(tLabel('部署')) + '</th>';
+                        html += '<th class="text-nowrap text-start">' + escapeHtmlForNote(tLabel('ステータス')) + '</th>';
+                        html += '<th class="text-nowrap text-start">' + escapeHtmlForNote(tLabel('CAILY納期')) + '</th>';
+                        if (showGuisNouki) {
+                            html += '<th class="text-nowrap text-start">' + escapeHtmlForNote(tLabel('GUIS納期')) + '</th>';
+                        }
+                        html += '</tr></thead><tbody>';
+                        otherChildren.slice(0, 15).forEach(function(c) {
+                            var st = getChildStatusMeta(c.status);
+                            var stLabel = tLabel(st.name);
+                            var dept = String(c.department_name || '').trim() || '-';
+                            var childUrl = 'detail.php?id=' + encodeURIComponent(c.id);
+                            html += '<tr>';
+                            html += '<td class="text-nowrap text-start"><a href="' + childUrl + '" class="text-decoration-none">' + escapeHtmlForNote(dept) + '</a></td>';
+                            html += '<td class="text-start"><span class="badge bg-' + escapeHtmlForNote(st.color) + '" style="font-size:0.65rem;">' + escapeHtmlForNote(stLabel) + '</span></td>';
+                            html += '<td class="text-nowrap text-start">' + escapeHtmlForNote(formatNoukiDate(c.caily_nouki)) + '</td>';
+                            if (showGuisNouki) {
+                                html += '<td class="text-nowrap text-start">' + escapeHtmlForNote(formatNoukiDate(c.guis_nouki)) + '</td>';
+                            }
+                            html += '</tr>';
+                        });
+                        html += '</tbody></table>';
+                        if (otherChildren.length > 15) {
+                            html += '<div class="text-muted py-1 small">+' + (otherChildren.length - 15) + ' more</div>';
+                        }
+                    }
+                    el.innerHTML = html;
+                    el.setAttribute('data-loaded', '1');
+                    positionPopup();
+                }).catch(function(err) {
+                    if (err.name === 'CanceledError' || err.name === 'AbortError') return;
+                    el.innerHTML = '<div class="text-danger small">Failed to load</div>';
+                    positionPopup();
+                });
+            }
+
+            function scheduleHide() {
+                if (hideTimer) clearTimeout(hideTimer);
+                hideTimer = setTimeout(function() {
+                    hideTimer = null;
+                    var el = getPopup();
+                    el.style.display = 'none';
+                }, 200);
+            }
+
+            function cancelHide() {
+                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+            }
+
+            $('#projectTable').on('mouseenter', '.project-hover-parent-trigger', function() {
+                var parentId = $(this).data('parent-project-id');
+                if (!parentId) return;
+                cancelHide();
+                showPopup(parentId, this);
+            });
+            $('#projectTable').on('mouseleave', '.project-construction-cell', function() {
+                scheduleHide();
+            });
+
+            $(document).on('mouseenter', '#projectParentPopup', cancelHide);
+            $(document).on('mouseleave', '#projectParentPopup', scheduleHide);
         })();
 
         var fixedScrollHeadUpdate = null;
@@ -5729,19 +6049,24 @@ var projectTable;
 
         // Custom context menu for adding confirmation notes (legacy: per note column, hiện chỉ để tránh lỗi khi hide/click)
         const $noteContextMenu = $('<div id="confirmationNoteContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
-        $noteContextMenu.append('<button class="dropdown-item" type="button" id="addConfirmationNoteBtn"><i class="fa fa-plus me-1"></i><span data-i18n="メモを追加">メモを追加</span></button>');
+        $noteContextMenu.append('<button class="dropdown-item" type="button" id="addConfirmationNoteBtn"><i class="fa fa-plus me-1"></i>' + buildI18nHeaderTitle('メモを追加') + '</button>');
         $('body').append($noteContextMenu);
 
         // ----- Context menu "案件を編集" + "Thêm vào todo" (gộp chung, ẩn/hiện Thêm vào todo theo ô có data-todo-title) -----
         const $rowContextMenu = $('<div id="projectRowContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:9999;"></div>');
-        $rowContextMenu.append('<button class="dropdown-item" type="button" id="copyProjectInfoRowBtn"><i class="fa fa-copy me-1"></i><span data-i18n="案件情報をコピー">案件情報をコピー</span></button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="copyProjectInfoRowBtn"><i class="fa fa-copy me-1"></i>' + buildI18nHeaderTitle('案件情報をコピー') + '</button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="openParentProjectDetailRowBtn"><i class="fa fa-building me-1"></i>' + buildI18nHeaderTitle('建物詳細を開く') + '</button>');
         $rowContextMenu.append('<div class="dropdown-divider project-row-context-divider"></div>');
-        $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i><span data-i18n="案件を編集">案件を編集</span></button>');
-        $rowContextMenu.append('<button class="dropdown-item" type="button" id="editParentConstructionNumberRowBtn"><i class="fa fa-hashtag me-1"></i><span data-i18n="工事番号を編集">工事番号を編集</span></button>');
-        $rowContextMenu.append('<button class="dropdown-item" type="button" id="editBusinessDocumentRowBtn" style="display:none;"><i class="fa fa-file-invoice me-1"></i><span data-i18n="決済情報">決済情報</span></button>');
-        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addNoteFromRowBtn"><i class="fa fa-sticky-note me-1"></i><span data-i18n="メモを追加">メモを追加</span></button>');
-        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addToTodoFromRowBtn" style="display:none;"><i class="fas fa-list-check me-1"></i><span data-i18n="追加Todo">追加Todo</span></button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="quickEditProjectRowBtn"><i class="fa fa-pencil-alt me-1"></i>' + buildI18nHeaderTitle('案件を編集') + '</button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="editParentConstructionNumberRowBtn"><i class="fa fa-hashtag me-1"></i>' + buildI18nHeaderTitle('工事番号を編集') + '</button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="editBusinessDocumentRowBtn" style="display:none;"><i class="fa fa-file-invoice me-1"></i>' + buildI18nHeaderTitle('決済情報') + '</button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addNoteFromRowBtn"><i class="fa fa-sticky-note me-1"></i>' + buildI18nHeaderTitle('メモを追加') + '</button>');
+        $rowContextMenu.append('<button class="dropdown-item" type="button" id="addToTodoFromRowBtn" style="display:none;"><i class="fas fa-list-check me-1"></i>' + buildI18nHeaderTitle('追加Todo') + '</button>');
         $('body').append($rowContextMenu);
+        if (typeof window.applyDataI18n === 'function') {
+            window.applyDataI18n($noteContextMenu[0]);
+            window.applyDataI18n($rowContextMenu[0]);
+        }
         let contextMenuRowProjectId = null;
         let contextMenuRowColumnKey = '';
         let contextMenuIsManagerOnly = false;
@@ -5818,6 +6143,7 @@ var projectTable;
             contextMenuIsManagerOnly = !canFullEdit && isManagerOfProject;
             var canEditBd = canEditBusinessDocumentsForContextMenu();
             $rowContextMenu.find('#copyProjectInfoRowBtn').show();
+            $rowContextMenu.find('#openParentProjectDetailRowBtn').toggle(hasParentProject);
             $rowContextMenu.find('#quickEditProjectRowBtn').toggle(canShowEdit);
             $rowContextMenu.find('#editParentConstructionNumberRowBtn').toggle(canEditParentConstruction);
             $rowContextMenu.find('#editBusinessDocumentRowBtn').toggle(!!canEditBd);
@@ -5825,6 +6151,9 @@ var projectTable;
             $rowContextMenu.find('#addToTodoFromRowBtn').toggle(!!contextMenuTodoEl);
             var hasSecondaryActions = canShowEdit || canEditParentConstruction || !!canEditBd || hasNoteColumn || !!contextMenuTodoEl;
             $rowContextMenu.find('.project-row-context-divider').toggle(hasSecondaryActions);
+            if (typeof window.applyDataI18n === 'function') {
+                window.applyDataI18n($rowContextMenu[0]);
+            }
             $rowContextMenu
                 .css({ top: e.pageY + 'px', left: e.pageX + 'px' })
                 .show();
@@ -5848,6 +6177,14 @@ var projectTable;
                 if (typeof showMessage === 'function') {
                     showProjectListError(typeof translateText === 'function' ? translateText('案件情報のコピーに失敗しました') : '案件情報のコピーに失敗しました');
                 }
+            }
+        });
+        $rowContextMenu.on('click', '#openParentProjectDetailRowBtn', function(ev) {
+            ev.stopPropagation();
+            $rowContextMenu.hide();
+            var parentUrl = getParentProjectDetailUrl(contextMenuRowData && contextMenuRowData.parent_project_id);
+            if (parentUrl) {
+                window.location.href = parentUrl;
             }
         });
         $rowContextMenu.on('click', '#quickEditProjectRowBtn', function(ev) {
@@ -6531,6 +6868,10 @@ var projectTable;
             var resetWrap = resetMenu.closest('.project-list-column-reset-tools');
             if (resetWrap) window.applyDataI18n(resetWrap);
         }
+        var rowCtx = document.getElementById('projectRowContextMenu');
+        if (rowCtx) window.applyDataI18n(rowCtx);
+        var noteCtx = document.getElementById('confirmationNoteContextMenu');
+        if (noteCtx) window.applyDataI18n(noteCtx);
     }
 
     /** Sau khi Vue cập nhật danh sách 列の表示 — áp dịch data-i18n cho nhãn cột */
@@ -6553,7 +6894,7 @@ var projectTable;
     }
 
     function getTimeRemaining(endDate, status) {
-        if (!endDate || status === 'paused' || status === 'completed' || status === 'deleted' || status === 'draft' || status === 'cancelled') {
+        if (!endDate || status === 'paused' || status === 'completed' || status === 'deleted' || status === 'draft' || status === 'cancelled' || status === 'waiting_invoice') {
             return null;
         }
         
@@ -6615,13 +6956,25 @@ var projectTable;
         }
     }
 
+    function isNoukiStatusDelivered(status) {
+        return !!(status && String(status).indexOf('納品済み') !== -1);
+    }
+
+    function isProjectNoukiDelivered(row) {
+        if (!row) return false;
+        if (isCailyBranchUser()) {
+            return isNoukiStatusDelivered(row.caily_nouki_status);
+        }
+        return isNoukiStatusDelivered(row.caily_nouki_status) || isNoukiStatusDelivered(row.guis_nouki_status);
+    }
+
     function getOverdueDeadlineMoment(row) {
         if (!row) return null;
-        const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted'];
+        const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted', 'waiting_invoice'];
         if (skipStatuses.includes(row.status)) return null;
+        if (isProjectNoukiDelivered(row)) return null;
 
         if (isCailyBranchUser()) {
-            if (row.caily_nouki_status && String(row.caily_nouki_status).indexOf('納品済み') !== -1) return null;
             return parseProjectDateMoment(row.caily_nouki);
         }
 
@@ -6639,7 +6992,7 @@ var projectTable;
         if (typeof getScheduleJudgment !== 'function') return null;
         var deadline = getOverdueDeadlineMoment(row);
         if (!deadline) return null;
-        return getScheduleJudgment(row, deadline, {});
+        return getScheduleJudgment(row, deadline, { isDelivered: isProjectNoukiDelivered(row) });
     }
 
     /** HTML badge for 期限超過 / 進捗遅れ (only one). */

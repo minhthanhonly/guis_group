@@ -15,7 +15,7 @@ class Project extends ApplicationModel {
             'name' => array(),
             'description' => array(),
             'priority' => array(), //low, medium, high, urgent
-            'status' => array(), //draft, open, confirming, quotation, contract, waiting_documents, in_progress, completed, paused, cancelled, deleted
+            'status' => array(), //draft, open, confirming, quotation, contract, waiting_documents, in_progress, waiting_invoice, completed, paused, cancelled, deleted
             'previous_status' => array(), //stores the previous status before being cancelled
             'start_date' => array(), //timestamp
             'end_date' => array(), //timestamp
@@ -586,7 +586,7 @@ class Project extends ApplicationModel {
             : [];
         $allowedStatusKeys = array(
             'draft', 'open', 'confirming', 'quotation', 'contract',
-            'waiting_documents', 'in_progress', 'completed', 'paused', 'cancelled'
+            'waiting_documents', 'in_progress', 'waiting_invoice', 'completed', 'paused', 'cancelled'
         );
         $statusKeys = array_values(array_intersect($statusKeys, $allowedStatusKeys));
         
@@ -854,7 +854,7 @@ class Project extends ApplicationModel {
         // Sắp xếp ưu tiên nếu showInactive=1
         $orderBy = '';
         
-        // Sắp xếp status theo thứ tự giống JS: draft, open, confirming, quotation, contract, waiting_documents, in_progress, completed, paused, cancelled
+        // Sắp xếp status theo thứ tự giống JS: draft, open, confirming, quotation, contract, waiting_documents, in_progress, waiting_invoice, completed, paused, cancelled
         // sortByStatus mặc định bật; truyền sortByStatus=0 để tắt
         $sortByStatus = !(isset($_GET['sortByStatus']) && (
             $_GET['sortByStatus'] === '0'
@@ -869,10 +869,11 @@ class Project extends ApplicationModel {
             WHEN 'contract' THEN 5 
             WHEN 'waiting_documents' THEN 6 
             WHEN 'in_progress' THEN 7 
-            WHEN 'completed' THEN 10 
-            WHEN 'paused' THEN 8 
-            WHEN 'cancelled' THEN 9 
-            ELSE 11 
+            WHEN 'waiting_invoice' THEN 8 
+            WHEN 'completed' THEN 11 
+            WHEN 'paused' THEN 9 
+            WHEN 'cancelled' THEN 10 
+            ELSE 12 
         END";
         
         $order_dir = strtoupper($order_dir) === 'DESC' ? 'DESC' : 'ASC';
@@ -1085,7 +1086,7 @@ class Project extends ApplicationModel {
                 : [];
             $allowedStatusKeys = array(
                 'draft', 'open', 'confirming', 'quotation', 'contract',
-                'waiting_documents', 'in_progress', 'completed', 'paused', 'cancelled'
+                'waiting_documents', 'in_progress', 'waiting_invoice', 'completed', 'paused', 'cancelled'
             );
             $statusKeys = array_values(array_intersect($statusKeys, $allowedStatusKeys));
 
@@ -1253,10 +1254,11 @@ class Project extends ApplicationModel {
             WHEN 'contract' THEN 5 
             WHEN 'waiting_documents' THEN 6 
             WHEN 'in_progress' THEN 7 
-            WHEN 'completed' THEN 10 
-            WHEN 'paused' THEN 8 
-            WHEN 'cancelled' THEN 9 
-            ELSE 11 
+            WHEN 'waiting_invoice' THEN 8 
+            WHEN 'completed' THEN 11 
+            WHEN 'paused' THEN 9 
+            WHEN 'cancelled' THEN 10 
+            ELSE 12 
         END";
         $order_dir = strtoupper($order_dir) === 'DESC' ? 'DESC' : 'ASC';
         $orderExpr = $this->resolveProjectListOrderExpression($order_column, $user_id);
@@ -2351,6 +2353,10 @@ class Project extends ApplicationModel {
 
         // Khi tạo dự án con: tạo 2 task mặc định (đồng bộ 2 bản vẽ kèm giá theo % tổng tiền)
         $this->createChildProjectDefaultTasks($project_id, $data);
+        $this->ensureParentRequestsIncludeChildDepartment(
+            isset($data['parent_project_id']) ? $data['parent_project_id'] : 0,
+            isset($data['department_id']) ? $data['department_id'] : 0
+        );
 
         return [
             'status' => 'success',
@@ -2848,6 +2854,11 @@ class Project extends ApplicationModel {
         if ($result) {
             $this->logProjectUpdateByField($id, $data, $old, $nullDatetimeFields);
             $departmentId = isset($data['department_id']) ? intval($data['department_id']) : intval($old['department_id'] ?? 0);
+            $parentProjectId = isset($data['parent_project_id']) ? intval($data['parent_project_id']) : intval($old['parent_project_id'] ?? 0);
+            $resultStatus = isset($data['status']) ? $data['status'] : (isset($old['status']) ? $old['status'] : '');
+            if ($resultStatus !== 'deleted') {
+                $this->ensureParentRequestsIncludeChildDepartment($parentProjectId, $departmentId);
+            }
             $projectName = isset($data['name']) ? $data['name'] : ($old['name'] ?? '');
 
             // Use userid (string) consistently for notification recipients.
@@ -3587,13 +3598,13 @@ class Project extends ApplicationModel {
     /**
      * Update project status from AI/API (checks canUserEditProject).
      * @param int $project_id
-     * @param string $status draft|open|confirming|quotation|contract|waiting_documents|in_progress|completed|paused|cancelled
+     * @param string $status draft|open|confirming|quotation|contract|waiting_documents|in_progress|waiting_invoice|completed|paused|cancelled
      * @return array ['status'=>'success'|'error', 'message'|'error'=>...]
      */
     public function updateStatusForAi($project_id, $status) {
         $project_id = intval($project_id);
         $status = trim((string) $status);
-        $allowed = ['draft', 'open', 'confirming', 'quotation', 'contract', 'waiting_documents', 'in_progress', 'completed', 'paused', 'cancelled'];
+        $allowed = ['draft', 'open', 'confirming', 'quotation', 'contract', 'waiting_documents', 'in_progress', 'waiting_invoice', 'completed', 'paused', 'cancelled'];
         if ($project_id <= 0 || !in_array($status, $allowed, true)) {
             return ['status' => 'error', 'error' => 'Invalid project_id or status'];
         }
@@ -5622,8 +5633,14 @@ class Project extends ApplicationModel {
         );
 
         // Add fields if they exist in POST
-        if (isset($_POST['amount'])) {
-            $data['amount'] = floatval($_POST['amount']);
+        $nullAmountFields = [];
+        if (array_key_exists('amount', $_POST)) {
+            $rawAmount = is_string($_POST['amount']) ? trim($_POST['amount']) : $_POST['amount'];
+            if ($rawAmount === '' || $rawAmount === null) {
+                $nullAmountFields[] = 'amount';
+            } else {
+                $data['amount'] = floatval($rawAmount);
+            }
         }
         if (isset($_POST['estimate_status'])) {
             $data['estimate_status'] = $_POST['estimate_status'];
@@ -5635,12 +5652,17 @@ class Project extends ApplicationModel {
             $data['invoice_status'] = $_POST['invoice_status'];
         }
         if (array_key_exists('invoice_amount', $_POST)) {
-            $data['invoice_amount'] = $_POST['invoice_amount'] !== '' ? floatval($_POST['invoice_amount']) : 0;
+            $rawInvoiceAmount = is_string($_POST['invoice_amount']) ? trim($_POST['invoice_amount']) : $_POST['invoice_amount'];
+            if ($rawInvoiceAmount === '' || $rawInvoiceAmount === null) {
+                $nullAmountFields[] = 'invoice_amount';
+            } else {
+                $data['invoice_amount'] = floatval($rawInvoiceAmount);
+            }
         }
         if (isset($_POST['invoice_number'])) {
             $data['invoice_number'] = $_POST['invoice_number'];
         }
-        // 無償: force clear related amounts (見積金額 / 請求金額)
+        // 無償: force related amounts to 0
         $estimateStatus = isset($data['estimate_status'])
             ? $data['estimate_status']
             : (isset($old['estimate_status']) ? $old['estimate_status'] : '');
@@ -5649,9 +5671,15 @@ class Project extends ApplicationModel {
             : (isset($old['invoice_status']) ? $old['invoice_status'] : '');
         if ($estimateStatus === '無償') {
             $data['amount'] = 0;
+            $nullAmountFields = array_values(array_filter($nullAmountFields, function ($field) {
+                return $field !== 'amount';
+            }));
         }
         if ($invoiceStatus === '無償') {
             $data['invoice_amount'] = 0;
+            $nullAmountFields = array_values(array_filter($nullAmountFields, function ($field) {
+                return $field !== 'invoice_amount';
+            }));
         }
         if (isset($_POST['payment_status'])) {
             $data['payment_status'] = $_POST['payment_status'];
@@ -5696,9 +5724,12 @@ class Project extends ApplicationModel {
         $result = true;
         $newPaymentVersion = $versionedUpdate['payment_version'];
 
-        if ($result && !empty($nullDatetimeFields)) {
+        if ($result && (!empty($nullDatetimeFields) || !empty($nullAmountFields))) {
             $setParts = [];
             foreach ($nullDatetimeFields as $field) {
+                $setParts[] = sprintf("`%s` = NULL", $this->escape($field));
+            }
+            foreach ($nullAmountFields as $field) {
                 $setParts[] = sprintf("`%s` = NULL", $this->escape($field));
             }
             $query = sprintf("UPDATE %s SET %s WHERE id = %d", $this->table, implode(', ', $setParts), $id);
@@ -5706,7 +5737,7 @@ class Project extends ApplicationModel {
         }
         
         if ($result) {
-            $this->logBusinessDocumentChanges($id, $old, $data, $nullDatetimeFields);
+            $this->logBusinessDocumentChanges($id, $old, $data, array_merge($nullDatetimeFields, $nullAmountFields));
 
             return ['status' => 'success', 'payment_version' => $newPaymentVersion];
         } else {
@@ -6140,6 +6171,7 @@ class Project extends ApplicationModel {
             'contract' => '請負',
             'waiting_documents' => '資料待ち',
             'in_progress' => '進行中',
+            'waiting_invoice' => '請求待ち',
             'completed' => '完了',
             'paused' => '一時停止',
             'cancelled' => '中止',
@@ -6168,6 +6200,7 @@ class Project extends ApplicationModel {
             'contract' => 'Hợp đồng',
             'waiting_documents' => 'Chờ tài liệu',
             'in_progress' => 'Đang tiến hành',
+            'waiting_invoice' => 'Chờ xuất hóa đơn',
             'completed' => 'Hoàn thành',
             'paused' => 'Tạm dừng',
             'cancelled' => 'Hủy bỏ',
@@ -7817,10 +7850,31 @@ class Project extends ApplicationModel {
             $hash['status'] = 'success';
             $hash['message_code'] = 'created';
             $hash['id'] = (int) $new_id;
+            $this->ensureParentRequestsIncludeChildDepartment($parent_project_id, $department_id);
         } else {
             $hash['message_code'] = 'insert failed';
         }
         return $hash;
+    }
+
+    /**
+     * When a child project department is not yet in the building 依頼 list, add it.
+     */
+    private function ensureParentRequestsIncludeChildDepartment($parentProjectId, $departmentId) {
+        $parentProjectId = intval($parentProjectId);
+        $departmentId = intval($departmentId);
+        if ($parentProjectId <= 0 || $departmentId <= 0) {
+            return;
+        }
+        try {
+            if (!class_exists('ParentProject')) {
+                require_once __DIR__ . '/parentproject.php';
+            }
+            $parentModel = new ParentProject();
+            $parentModel->ensureRequestTypeForDepartment($parentProjectId, $departmentId);
+        } catch (Exception $e) {
+            error_log('ensureParentRequestsIncludeChildDepartment: ' . $e->getMessage());
+        }
     }
 
     /**

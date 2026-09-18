@@ -484,6 +484,7 @@ const vueApp = createApp({
                 { value: 'contract', label: '請負', color: 'info' },
                 { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'waiting_invoice', label: '請求待ち', color: 'dark' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
                 { value: 'cancelled', label: '中止', color: 'danger' }
@@ -1451,7 +1452,8 @@ const vueApp = createApp({
         getTimeRemaining() {
             if (!this.project || !this.project.end_date || this.project.status === 'completed' ||
                  this.project.status === 'deleted' ||
-                 this.project.status === 'draft' || this.project.status === 'cancelled') {
+                 this.project.status === 'draft' || this.project.status === 'cancelled' ||
+                 this.project.status === 'waiting_invoice' || this.isProjectNoukiDelivered()) {
                 return null;
             }
             
@@ -1718,16 +1720,27 @@ const vueApp = createApp({
         isNoukiDelivered(status) {
             return String(status || '').indexOf('納品済み') !== -1;
         },
+        isProjectNoukiDelivered() {
+            if (!this.project) return false;
+            if (this.isCailyBranchUser) {
+                return this.isNoukiDelivered(this.project.caily_nouki_status);
+            }
+            return this.isNoukiDelivered(this.project.caily_nouki_status)
+                || this.isNoukiDelivered(this.project.guis_nouki_status);
+        },
         getRequestBadgeClass(request) {
             const map = {
                 '意匠': 'bg-primary',
                 '設備': 'bg-info',
                 '3D設備': 'bg-success',
-                '省エネ': 'bg-warning',
+                '省エネ': 'bg-lime',
                 '3D': 'bg-secondary',
                 'その他': 'bg-dark'
             };
             return map[String(request || '').trim()] || 'bg-secondary';
+        },
+        getRequestUnfulfilledBadgeClass(request) {
+            return String(this.getRequestBadgeClass(request) || 'bg-secondary').replace(/^bg-/, 'badge-outline-');
         },
         getEnergyDrawingShareLabel(project) {
             return window.EnergyDrawingShare
@@ -1844,13 +1857,19 @@ const vueApp = createApp({
             }
         },
         mapDepartmentNameToRequestType(departmentName) {
-            const map = {
-                '設備設計': '設備',
-                '意匠設計': '意匠',
-                '省エネ計算': '省エネ',
-                '技術課設備': '3D設備'
-            };
-            return map[String(departmentName || '').trim()] || '';
+            const name = String(departmentName || '').trim();
+            if (!name) return '';
+            const rules = [
+                ['3D設備', '3D設備'],
+                ['技術課設備', '3D設備'],
+                ['省エネ', '省エネ'],
+                ['意匠', '意匠'],
+                ['設備', '設備']
+            ];
+            for (let i = 0; i < rules.length; i++) {
+                if (name.indexOf(rules[i][0]) !== -1) return rules[i][1];
+            }
+            return '';
         },
         isParentRequestFulfilled(requestType) {
             const type = String(requestType || '').trim();
@@ -2125,13 +2144,13 @@ const vueApp = createApp({
                 }
                 const formData = new FormData();
                 formData.append('id', this.projectId);
-                formData.append('amount', this.project.amount || 0);
+                formData.append('amount', this.getBusinessDocumentAmountForApi(this.project.amount));
                 formData.append('estimate_status', this.project.estimate_status || '未発行');
                 formData.append('estimate_date', this.getBusinessDocumentDateForApi('estimate_date'));
                 formData.append('estimate_number', this.project.estimate_number || '');
                 formData.append('invoice_status', this.project.invoice_status || '未発行');
                 formData.append('invoice_date', this.getBusinessDocumentDateForApi('invoice_date'));
-                formData.append('invoice_amount', this.project.invoice_amount != null ? this.project.invoice_amount : 0);
+                formData.append('invoice_amount', this.getBusinessDocumentAmountForApi(this.project.invoice_amount));
                 formData.append('invoice_number', this.project.invoice_number || '');
                 formData.append('payment_note', this.project.payment_note || '');
                 appendPaymentVersionToFormData(formData, this.project);
@@ -2141,6 +2160,9 @@ const vueApp = createApp({
                     this.businessDocumentDirty = false;
                     this.businessDocumentError = '';
                     this._bdSuppressAutoSave = true;
+                    // Keep cleared amounts as empty so placeholder 未入力 stays visible
+                    this.project.amount = this.normalizeBusinessDocumentAmountInputValue(this.project.amount);
+                    this.project.invoice_amount = this.normalizeBusinessDocumentAmountInputValue(this.project.invoice_amount);
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBusinessDocumentDateForApi(key);
                         this.setBusinessDocumentServerDate(key, apiVal || '');
@@ -2200,10 +2222,23 @@ const vueApp = createApp({
             this.project.invoice_number = this.project.invoice_number || '';
             this.project.receipt_number = this.project.receipt_number || '';
             this.project.payment_note = this.project.payment_note || '';
-            this.project.invoice_amount = this.project.invoice_amount != null ? Number(this.project.invoice_amount) : 0;
+            this.project.invoice_amount = this.normalizeBusinessDocumentAmountInputValue(this.project.invoice_amount);
             this.project.payment_amount = this.project.payment_amount != null ? Number(this.project.payment_amount) : 0;
-            this.project.amount = this.project.amount != null ? Number(this.project.amount) : 0;
+            this.project.amount = this.normalizeBusinessDocumentAmountInputValue(this.project.amount);
             this.normalizeBusinessDocumentDateFields();
+        },
+        normalizeBusinessDocumentAmountInputValue(value) {
+            // Empty/null → '' (placeholder 未入力). Keep 0 as a real value.
+            if (value == null || value === '') return '';
+            const n = Number(value);
+            if (!Number.isFinite(n)) return '';
+            return n;
+        },
+        getBusinessDocumentAmountForApi(value) {
+            if (value == null || value === '') return '';
+            const n = Number(value);
+            if (!Number.isFinite(n)) return '';
+            return String(n);
         },
         normalizeBusinessDocumentDateFields() {
             if (!this.project) return;
@@ -2349,15 +2384,13 @@ const vueApp = createApp({
             if (!this.project) return false;
             this.syncBusinessDocumentDatesFromPickers();
             return this.hasBusinessDocumentDate('estimate_date')
-                && this.hasBusinessDocumentAmount(this.project.amount)
-                && this.hasBusinessDocumentNumber(this.project.estimate_number);
+                && this.hasBusinessDocumentAmount(this.project.amount);
         },
         isInvoiceDocumentFieldsComplete() {
             if (!this.project) return false;
             this.syncBusinessDocumentDatesFromPickers();
             return this.hasBusinessDocumentDate('invoice_date')
-                && this.hasBusinessDocumentAmount(this.project.invoice_amount)
-                && this.hasBusinessDocumentNumber(this.project.invoice_number);
+                && this.hasBusinessDocumentAmount(this.project.invoice_amount);
         },
         getEstimateDocumentFieldsValidationError() {
             if (!this.project) return '';
@@ -2365,7 +2398,6 @@ const vueApp = createApp({
             const missing = [];
             if (!this.hasBusinessDocumentDate('estimate_date')) missing.push('見積日');
             if (!this.hasBusinessDocumentAmount(this.project.amount)) missing.push('見積金額');
-            if (!this.hasBusinessDocumentNumber(this.project.estimate_number)) missing.push('見積番号');
             if (!missing.length) return '';
             return '発行済にするには以下を入力してください: ' + missing.join('、');
         },
@@ -2375,7 +2407,6 @@ const vueApp = createApp({
             const missing = [];
             if (!this.hasBusinessDocumentDate('invoice_date')) missing.push('請求日');
             if (!this.hasBusinessDocumentAmount(this.project.invoice_amount)) missing.push('請求金額');
-            if (!this.hasBusinessDocumentNumber(this.project.invoice_number)) missing.push('請求番号');
             if (!missing.length) return '';
             return '発行済にするには以下を入力してください: ' + missing.join('、');
         },
@@ -2447,7 +2478,7 @@ const vueApp = createApp({
         },
         copyEstimateAmountToInvoice() {
             if (!this.canEditBusinessDocuments || !this.project) return;
-            this.project.invoice_amount = this.project.amount != null ? Number(this.project.amount) : 0;
+            this.project.invoice_amount = this.normalizeBusinessDocumentAmountInputValue(this.project.amount);
             this.scheduleBusinessDocumentUpdate();
         },
         copyInvoiceAmountToPayment() {

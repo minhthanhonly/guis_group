@@ -2637,6 +2637,7 @@ EOT;
                         'quotation' => '見積',
                         'contract' => '請負/契約',
                         'waiting_documents' => '資料待ち',
+                        'waiting_invoice' => '請求待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -2722,7 +2723,7 @@ EOT;
         
         // Chỉ gửi status values khi có context projects/task (tiết kiệm token)
         if (in_array('projects', $contextKeys, true)) {
-            $parts[] = "[Project status values] Use these exact value in params.status or ACTION. draft=受付, open=納期検討/開始, confirming=仮受, quotation=見積, contract=請負/契約( hợp đồng), waiting_documents=資料待ち( chờ tài liệu), in_progress=進行中, completed=納品/完了, paused=一時停止, cancelled=中止.";
+            $parts[] = "[Project status values] Use these exact value in params.status or ACTION. draft=受付, open=納期検討/開始, confirming=仮受, quotation=見積, contract=請負/契約( hợp đồng), waiting_documents=資料待ち( chờ tài liệu), in_progress=進行中, waiting_invoice=請求待ち( chờ xuất hóa đơn), completed=納品/完了, paused=一時停止, cancelled=中止.";
         }
         if (in_array('projects', $contextKeys, true)) {
             $parts[] = "[Task status values] Use these exact value in params.status. new=新規, todo=未開始, in_progress=進行中, confirming=確認中, paused=一時停止, completed=完了, cancelled=キャンセル.";
@@ -2833,6 +2834,7 @@ EOT;
                         'quotation' => '見積',
                         'contract' => '請負/契約',
                         'waiting_documents' => '資料待ち',
+                        'waiting_invoice' => '請求待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -2862,6 +2864,7 @@ EOT;
                         'quotation' => '見積',
                         'contract' => '請負/契約',
                         'waiting_documents' => '資料待ち',
+                        'waiting_invoice' => '請求待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -2976,6 +2979,7 @@ EOT;
                         'quotation' => '見積',
                         'contract' => '請負/契約',
                         'waiting_documents' => '資料待ち',
+                        'waiting_invoice' => '請求待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -3077,6 +3081,7 @@ EOT;
                     'quotation' => '見積',
                     'contract' => '請負/契約',
                         'waiting_documents' => '資料待ち',
+                        'waiting_invoice' => '請求待ち',
                     'draft' => '受付',
                     'open' => '納期検討/開始',
                     'paused' => '一時停止',
@@ -3138,6 +3143,7 @@ EOT;
                         'quotation' => '見積',
                         'contract' => '請負/契約',
                         'waiting_documents' => '資料待ち',
+                        'waiting_invoice' => '請求待ち',
                         'draft' => '受付',
                         'open' => '納期検討/開始',
                         'paused' => '一時停止',
@@ -3159,6 +3165,7 @@ EOT;
                     'quotation' => '見積',
                     'contract' => '請負/契約',
                         'waiting_documents' => '資料待ち',
+                        'waiting_invoice' => '請求待ち',
                     'draft' => '受付',
                     'open' => '納期検討/開始',
                     'paused' => '一時停止',

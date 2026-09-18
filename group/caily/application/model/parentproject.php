@@ -261,16 +261,10 @@ class ParentProject extends ApplicationModel {
             DB_PREFIX,
             $idsList
         ));
-        $deptToRequest = array(
-            '設備設計' => '設備',
-            '意匠設計' => '意匠',
-            '省エネ計算' => '省エネ',
-            '技術課設備' => '3D設備',
-        );
         foreach ($fulfilledRows as $row) {
             $pid = (int)$row['parent_project_id'];
             $deptName = trim((string)($row['department_name'] ?? ''));
-            $type = isset($deptToRequest[$deptName]) ? $deptToRequest[$deptName] : '';
+            $type = $this->mapDepartmentNameToRequestType($deptName);
             if ($type === '') {
                 continue;
             }
@@ -290,6 +284,81 @@ class ParentProject extends ApplicationModel {
             $row['fulfilled_request_types'] = isset($fulfilledMap[$pid]) ? array_values($fulfilledMap[$pid]) : [];
         }
         unset($row);
+    }
+
+    function mapDepartmentNameToRequestType($departmentName) {
+        $name = trim((string)$departmentName);
+        if ($name === '') {
+            return '';
+        }
+        // Longer / more specific needles first (設備 vs 3D設備 / 技術課設備)
+        $rules = array(
+            '3D設備' => '3D設備',
+            '技術課設備' => '3D設備',
+            '省エネ' => '省エネ',
+            '意匠' => '意匠',
+            '設備' => '設備',
+        );
+        foreach ($rules as $needle => $type) {
+            if (mb_strpos($name, $needle) !== false) {
+                return $type;
+            }
+        }
+        return '';
+    }
+
+    /**
+     * If the department maps to an 依頼 type missing on the building, append it.
+     * @return bool true when requests were changed
+     */
+    function ensureRequestTypeForDepartment($parentProjectId, $departmentId) {
+        $parentProjectId = intval($parentProjectId);
+        $departmentId = intval($departmentId);
+        if ($parentProjectId <= 0 || $departmentId <= 0) {
+            return false;
+        }
+
+        $dept = $this->fetchOne(sprintf(
+            "SELECT name FROM %sdepartments WHERE id = %d LIMIT 1",
+            DB_PREFIX,
+            $departmentId
+        ));
+        $type = $this->mapDepartmentNameToRequestType($dept ? ($dept['name'] ?? '') : '');
+        if ($type === '') {
+            return false;
+        }
+
+        $parent = $this->fetchOne(sprintf(
+            "SELECT id, requests FROM %s WHERE id = %d LIMIT 1",
+            $this->table,
+            $parentProjectId
+        ));
+        if (!$parent) {
+            return false;
+        }
+
+        $current = array();
+        foreach (explode(',', (string)($parent['requests'] ?? '')) as $item) {
+            $item = trim($item);
+            if ($item !== '') {
+                $current[] = $item;
+            }
+        }
+        if (in_array($type, $current, true)) {
+            return false;
+        }
+
+        $oldRequests = isset($parent['requests']) ? (string)$parent['requests'] : '';
+        $current[] = $type;
+        $newRequests = implode(',', $current);
+        $ok = $this->query_update(array(
+            'requests' => $newRequests,
+            'updated_at' => date('Y-m-d H:i:s'),
+        ), array('id' => $parentProjectId));
+        if ($ok) {
+            $this->logParentProjectAction($parentProjectId, 'updated', '依頼を追加', $oldRequests, $newRequests);
+        }
+        return (bool)$ok;
     }
 
     function create($params = null) {
@@ -1150,6 +1219,48 @@ class ParentProject extends ApplicationModel {
         $query = "SELECT id, project_name, project_number, construction_number FROM " . $this->table
             . " WHERE project_number = '" . $this->quote($pn) . "' AND status != 'deleted' LIMIT 1";
         return $this->fetchOne($query);
+    }
+
+    /**
+     * Find an existing building by 工事番号 or お施主様名 (exact, trimmed).
+     * Prefers a construction_number match when both fields are provided.
+     */
+    function findDuplicate($params = null) {
+        $params = is_array($params) ? $params : array();
+        $construction = isset($params['construction_number']) ? trim((string)$params['construction_number']) : '';
+        $projectName = isset($params['project_name']) ? trim((string)$params['project_name']) : '';
+        if ($construction === '' && $projectName === '') {
+            return array('status' => 'success', 'duplicate' => null);
+        }
+
+        $conds = array();
+        if ($construction !== '') {
+            $conds[] = "TRIM(p.construction_number) = '" . $this->quote($construction) . "'";
+        }
+        if ($projectName !== '') {
+            $conds[] = "TRIM(p.project_name) = '" . $this->quote($projectName) . "'";
+        }
+
+        $order = 'p.id DESC';
+        if ($construction !== '') {
+            $order = "CASE WHEN TRIM(p.construction_number) = '" . $this->quote($construction) . "' THEN 0 ELSE 1 END, p.id DESC";
+        }
+
+        $query = sprintf(
+            "SELECT p.id, p.project_name, p.construction_number, p.project_number
+             FROM %s p
+             WHERE p.status != 'deleted' AND (%s)
+             ORDER BY %s
+             LIMIT 1",
+            $this->table,
+            implode(' OR ', $conds),
+            $order
+        );
+        $row = $this->fetchOne($query);
+        return array(
+            'status' => 'success',
+            'duplicate' => $row ? $row : null
+        );
     }
 
     /**
