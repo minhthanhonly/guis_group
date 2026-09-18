@@ -543,6 +543,11 @@ class Request extends ApplicationModel {
             }
             if (empty(trim($data['subject'] ?? ''))) $errors[] = '件名を入力してください。';
             if (empty(trim($data['description'] ?? ''))) $errors[] = '内容・詳細を入力してください。';
+        } elseif ($type == 'call_recording') {
+            if (empty(trim($data['call_datetime'] ?? ''))) $errors[] = '通話日時を入力してください。';
+            if (empty(trim($data['call_partner'] ?? ''))) $errors[] = '通話相手を入力してください。';
+            if (empty(trim($data['reason'] ?? ''))) $errors[] = '通話録音の確認が必要な理由を入力してください。';
+            if (empty(trim($data['confirm_content'] ?? ''))) $errors[] = '確認したい内容を入力してください。';
         }
         return $errors;
     }
@@ -627,6 +632,16 @@ class Request extends ApplicationModel {
         }
         if ($end_date === null && $type === 'attendance_correction' && !empty($data['date'])) {
             $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($start_date === null && $type === 'call_recording' && !empty($data['call_datetime'])) {
+            if (preg_match('/^(\d{4})[-\/](\d{2})[-\/](\d{2})/', $data['call_datetime'], $m)) {
+                $start_date = $m[1] . '-' . $m[2] . '-' . $m[3];
+            }
+        }
+        if ($end_date === null && $type === 'call_recording' && !empty($data['call_datetime'])) {
+            if (preg_match('/^(\d{4})[-\/](\d{2})[-\/](\d{2})/', $data['call_datetime'], $m)) {
+                $end_date = $m[1] . '-' . $m[2] . '-' . $m[3];
+            }
         }
         $addToCalendar = 0;
         if (in_array($type, ['leave', 'outing', 'trip', 'holiday_work'], true)) {
@@ -1408,6 +1423,16 @@ class Request extends ApplicationModel {
         }
         if ($end_date === null && $row['type'] === 'attendance_correction' && !empty($data['date'])) {
             $end_date = preg_match('/^\d{4}-\d{2}-\d{2}/', $data['date']) ? substr($data['date'], 0, 10) : $data['date'];
+        }
+        if ($start_date === null && $row['type'] === 'call_recording' && !empty($data['call_datetime'])) {
+            if (preg_match('/^(\d{4})[-\/](\d{2})[-\/](\d{2})/', $data['call_datetime'], $m)) {
+                $start_date = $m[1] . '-' . $m[2] . '-' . $m[3];
+            }
+        }
+        if ($end_date === null && $row['type'] === 'call_recording' && !empty($data['call_datetime'])) {
+            if (preg_match('/^(\d{4})[-\/](\d{2})[-\/](\d{2})/', $data['call_datetime'], $m)) {
+                $end_date = $m[1] . '-' . $m[2] . '-' . $m[3];
+            }
         }
         $update = [
             'data' => json_encode($data, JSON_UNESCAPED_UNICODE),
@@ -2394,6 +2419,12 @@ class Request extends ApplicationModel {
                 $lines[] = $fmt('添付資料', implode('、', array_filter($names)));
             }
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($type === 'call_recording') {
+            if (!empty($data['call_datetime'])) $lines[] = $fmt('通話日時', $data['call_datetime']);
+            if (!empty($data['call_partner'])) $lines[] = $fmt('通話相手', $data['call_partner']);
+            if (!empty($data['reason'])) $lines[] = $fmt('通話録音の確認が必要な理由', $data['reason']);
+            if (!empty($data['confirm_content'])) $lines[] = $fmt('確認したい内容', $data['confirm_content']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
         } else {
             foreach ($data as $k => $v) {
                 if ($v === null || $v === '' || is_array($v)) continue;
@@ -2674,6 +2705,12 @@ class Request extends ApplicationModel {
                 $lines[] = $fmt('添付資料', implode('、', array_filter($names)));
             }
             if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
+        } elseif ($requestType === 'call_recording') {
+            if (!empty($data['call_datetime'])) $lines[] = $fmt('通話日時', $data['call_datetime']);
+            if (!empty($data['call_partner'])) $lines[] = $fmt('通話相手', $data['call_partner']);
+            if (!empty($data['reason'])) $lines[] = $fmt('通話録音の確認が必要な理由', $data['reason']);
+            if (!empty($data['confirm_content'])) $lines[] = $fmt('確認したい内容', $data['confirm_content']);
+            if (!empty($data['note'])) $lines[] = $fmt('注記', $data['note']);
         } else {
             foreach ($data as $k => $v) {
                 if ($v === null || $v === '' || is_array($v)) continue;
@@ -2825,6 +2862,12 @@ class Request extends ApplicationModel {
             if (implode('、', $oldNames) !== implode('、', $newNames)) {
                 $lines[] = '添付資料: ' . (count($oldNames) ? implode('、', $oldNames) : '（なし）') . ' → ' . (count($newNames) ? implode('、', $newNames) : '（なし）');
             }
+            $addDiff('注記', 'note');
+        } elseif ($requestType === 'call_recording') {
+            $addDiff('通話日時', 'call_datetime');
+            $addDiff('通話相手', 'call_partner');
+            $addDiff('通話録音の確認が必要な理由', 'reason');
+            $addDiff('確認したい内容', 'confirm_content');
             $addDiff('注記', 'note');
         } else {
             foreach ($new as $k => $v) {
@@ -3044,6 +3087,8 @@ class Request extends ApplicationModel {
                 return '購入申請';
             case 'it_support':
                 return 'ITサポート';
+            case 'call_recording':
+                return '通話録音確認';
             default:
                 return '申請';
         }

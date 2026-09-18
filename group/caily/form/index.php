@@ -196,6 +196,8 @@
               <th v-if="currentTab === 'it_support'">区分</th>
               <th v-if="currentTab === 'it_support'">件名</th>
               <th v-if="currentTab === 'it_support'">緊急度</th>
+              <th v-if="currentTab === 'call_recording'">通話日時</th>
+              <th v-if="currentTab === 'call_recording'">通話相手</th>
               <th v-if="currentTab === 'trip_expense'">期間</th>
               <th v-if="currentTab === 'trip_expense'">出張先</th>
               <th v-if="currentTab === 'trip_expense'">精算額</th>
@@ -205,9 +207,9 @@
               <th v-if="currentTab === 'commuting_allowance'">適用開始日</th>
               <th v-if="currentTab === 'commuting_allowance'">合計片道運賃</th>
               <th v-if="currentTab === 'commuting_allowance'">１か月定期代</th>
-              <th class="reason-col" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">事由</th>
-              <th class="note-col" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">注記</th>
-              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">承認者(指定)</th>
+              <th class="reason-col" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase' || currentTab === 'call_recording'">事由</th>
+              <th class="note-col" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support' || currentTab === 'call_recording'">注記</th>
+              <th v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support' || currentTab === 'call_recording'">承認者(指定)</th>
               <th>コメント数</th>
               <th v-if="showAttachmentColumn">添付</th>
               <th>承認者</th>
@@ -311,9 +313,11 @@
               <td v-if="currentTab === 'it_support'">{{ req.data?.category || '-' }}</td>
               <td v-if="currentTab === 'it_support'">{{ req.data?.subject || '-' }}</td>
               <td v-if="currentTab === 'it_support'">{{ req.data?.priority || '-' }}</td>
-              <td class="reason-col" :title="req.data?.reason || '-'" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase'">{{ req.data?.reason || '-' }}</td>
-              <td class="note-col" :title="req.data?.note || '-'" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.data?.note || '-' }}</td>
-              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support'">{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
+              <td v-if="currentTab === 'call_recording'">{{ formatCallRecordingDateTime(req) }}</td>
+              <td v-if="currentTab === 'call_recording'">{{ req.data?.call_partner || '-' }}</td>
+              <td class="reason-col" :title="req.data?.reason || '-'" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'purchase' || currentTab === 'call_recording'">{{ req.data?.reason || '-' }}</td>
+              <td class="note-col" :title="req.data?.note || '-'" v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support' || currentTab === 'call_recording'">{{ req.data?.note || '-' }}</td>
+              <td v-if="currentTab === 'leave' || currentTab === 'outing' || currentTab === 'trip' || currentTab === 'holiday_work' || currentTab === 'overtime' || currentTab === 'attendance_correction' || currentTab === 'travel_expense' || currentTab === 'expense' || currentTab === 'trip_expense' || currentTab === 'commuting_allowance' || currentTab === 'purchase' || currentTab === 'it_support' || currentTab === 'call_recording'">{{ req.approver_user_realname || req.approver_user_id || '-' }}</td>
               <td>
                 {{ req.comment_count }}
                 <span v-if="Number(req.comment_count || 0) > 0 && Number(req.unread_comment || 0) > 0" class="badge bg-danger ms-1">未読</span>
@@ -653,6 +657,7 @@ import tripExpenseForm from './trip-expense-form.js?v=<?=CACHE_VERSION?>';
 import commutingAllowanceForm from './commuting-allowance-form.js?v=<?=CACHE_VERSION?>';
 import purchaseForm from './purchase-form.js?v=<?=CACHE_VERSION?>';
 import itSupportForm from './it-support-form.js?v=<?=CACHE_VERSION?>';
+import callRecordingForm from './call-recording-form.js?v=<?=CACHE_VERSION?>';
 const { createApp, defineAsyncComponent } = Vue;
 const app = createApp({
   mixins: [approverMultiselectMixin],
@@ -672,6 +677,7 @@ const app = createApp({
         {type: 'commuting_allowance', label: '通勤手当申請書', form: 'commuting-allowance-form'},
         {type: 'purchase', label: '備品購入依頼書', form: 'purchase-form'},
         {type: 'it_support', label: 'ITサポート', form: 'it-support-form'},
+        {type: 'call_recording', label: '通話録音確認', form: 'call-recording-form'},
       ],
       // 一時非表示（表示する場合は hiddenTabTypes から削除）
       hiddenTabTypes: ['travel_expense', 'expense', 'trip_expense'],
@@ -949,6 +955,10 @@ const app = createApp({
       if (d.datetime) return this.formatDateTime(d.datetime);
       return '-';
     },
+    formatCallRecordingDateTime(req) {
+      if (!req || !req.data || !req.data.call_datetime) return '-';
+      return this.formatDateTime(req.data.call_datetime) || req.data.call_datetime;
+    },
     formatOvertimeDateTime(req) {
       if (!req || !req.data) return '-';
       const d = req.data;
@@ -1187,7 +1197,8 @@ const app = createApp({
         trip_expense: tripExpenseForm,
         commuting_allowance: commutingAllowanceForm,
         purchase: purchaseForm,
-        it_support: itSupportForm
+        it_support: itSupportForm,
+        call_recording: callRecordingForm
       };
       return map[type] || null;
     },
@@ -1235,6 +1246,8 @@ const app = createApp({
         this.currentFormComponent = purchaseForm;
       } else if (current && current.form === 'it-support-form') {
         this.currentFormComponent = itSupportForm;
+      } else if (current && current.form === 'call-recording-form') {
+        this.currentFormComponent = callRecordingForm;
       } else {
         this.currentFormComponent = null;
       }
@@ -1293,6 +1306,7 @@ const app = createApp({
         const pass = d.one_month_commuter_pass != null && d.one_month_commuter_pass !== '' ? `１か月定期代: ¥${Number(d.one_month_commuter_pass || 0).toLocaleString()}` : '';
         return [appType, total, pass].filter(Boolean).join(' / ') || '';
       }
+      if (req.type === 'call_recording') return req.data?.reason || req.data?.confirm_content || '';
       return '';
     },
     statusLabel(status) {
@@ -1429,6 +1443,7 @@ const app = createApp({
     'commuting-allowance-form': commutingAllowanceForm,
     'purchase-form': purchaseForm,
     'it-support-form': itSupportForm,
+    'call-recording-form': callRecordingForm,
   }
 });
 app.component('approver-select', approverSelect);

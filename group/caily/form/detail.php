@@ -294,6 +294,13 @@
             @submitted="onEditSubmitted"
             @close="closeEditModal"
           ></it-support-form>
+          <call-recording-form
+            v-else-if="request.type === 'call_recording' && editForm && Object.keys(editForm).length > 0"
+            :key="'edit-call-recording-' + editFormKey + '-' + JSON.stringify(editForm)"
+            v-bind="{ defaultData: editForm, mode: 'edit' }"
+            @submitted="onEditSubmitted"
+            @close="closeEditModal"
+          ></call-recording-form>
         </div>
       </div>
     </div>
@@ -346,6 +353,8 @@ import purchaseDetail from './purchase-detail.js?v=<?=CACHE_VERSION?>';
 import purchaseForm from './purchase-form.js?v=<?=CACHE_VERSION?>';
 import itSupportDetail from './it-support-detail.js?v=<?=CACHE_VERSION?>';
 import itSupportForm from './it-support-form.js?v=<?=CACHE_VERSION?>';
+import callRecordingDetail from './call-recording-detail.js?v=<?=CACHE_VERSION?>';
+import callRecordingForm from './call-recording-form.js?v=<?=CACHE_VERSION?>';
 import { approverMultiselectMixin } from './approver-multiselect.js?v=<?=CACHE_VERSION?>';
 import approverSelect from './approver-select.js?v=<?=CACHE_VERSION?>';
 const { createApp } = Vue;
@@ -453,6 +462,7 @@ const app = createApp({
       if (this.request.type === 'commuting_allowance') return 'commuting-allowance-detail';
       if (this.request.type === 'purchase') return 'purchase-detail';
       if (this.request.type === 'it_support') return 'it-support-detail';
+      if (this.request.type === 'call_recording') return 'call-recording-detail';
       return 'default-detail';
     },
     sortedComments() {
@@ -802,6 +812,7 @@ const app = createApp({
         case 'commuting_allowance': return '通勤手当申請書';
         case 'purchase': return '購入申請';
         case 'it_support': return 'ITサポート';
+        case 'call_recording': return '通話録音確認';
         default: return type;
       }
     },
@@ -896,6 +907,8 @@ const app = createApp({
     'purchase-form': purchaseForm,
     'it-support-detail': itSupportDetail,
     'it-support-form': itSupportForm,
+    'call-recording-detail': callRecordingDetail,
+    'call-recording-form': callRecordingForm,
     'default-detail': {props:['data'], template:'<div>内容: {{ data }}</div>'}
   }
 });

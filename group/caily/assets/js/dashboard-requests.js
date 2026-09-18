@@ -19,6 +19,7 @@
     commuting_allowance: '通勤手当申請書',
     purchase: '備品購入依頼書',
     it_support: 'ITサポート',
+    call_recording: '通話録音確認',
   };
 
   createApp({
