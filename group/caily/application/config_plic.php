@@ -86,5 +86,12 @@ define('RETIRE_GROUP_NAME', '退職者');
 
 require_once 'version.php';
 
+if (!defined('APP_ENV')) {
+	define('APP_ENV', 'production');
+}
+if (!defined('SHOW_TEST_BANNER')) {
+	define('SHOW_TEST_BANNER', false);
+}
+
 error_reporting(E_ERROR | E_PARSE);
 ?>

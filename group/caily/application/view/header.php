@@ -2,7 +2,7 @@
 
 <html
   lang="ja"
-  class="layout-wide layout-navbar-fixed"
+  class="layout-wide layout-navbar-fixed<?= (defined('SHOW_TEST_BANNER') && SHOW_TEST_BANNER) ? ' has-test-env-banner' : '' ?>"
   dir="ltr"
   data-skin="default"
   data-assets-path="<?=$root?>assets/"

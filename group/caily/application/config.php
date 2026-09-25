@@ -105,5 +105,6 @@ define('RETIRE_GROUP', '5');
 define('RETIRE_GROUP_NAME', '退職者');
 
 require_once 'version.php';
+
 error_reporting(E_ERROR | E_PARSE);
 ?>

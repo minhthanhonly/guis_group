@@ -1,4 +1,9 @@
-<!-- Layout wrapper -->
+<?php if (defined('SHOW_TEST_BANNER') && SHOW_TEST_BANNER): ?>
+    <div class="env-test-banner" role="status">
+      <span data-i18n="これはテスト環境です。正式な運用データではありません。">これはテスト環境です。正式な運用データではありません。</span>
+    </div>
+<?php endif; ?>
+    <!-- Layout wrapper -->
     <div class="layout-wrapper layout-content-navbar">
       <div class="layout-container">
         <!-- Menu -->
