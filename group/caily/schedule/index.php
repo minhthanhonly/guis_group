@@ -88,7 +88,7 @@ $view->heading('スケジュール');
               </div>
               <div class="mb-5">
                 <label class="form-label" for="eventLabel">予定の種類</label>
-                <select class="select2 select-event-label form-select" id="eventLabel" name="eventLabel">
+                <select class="select-event-label form-select" id="eventLabel" name="eventLabel">
                   <option data-label="primary" value="仕事" selected>仕事</option>
                   <option data-label="warning" value="勤怠">勤怠</option>
                   <option data-label="info" value="個人">個人</option>
@@ -156,7 +156,15 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
 <script>
-  window.DAYOFF_API_URL = 'https://group.caily.com.vn/api/index.php?type=get_dayoff_all_api&debug=1';
+  <?php
+    $cailyApiBase = getenv('CAILY_API_URL');
+    if ($cailyApiBase === false || $cailyApiBase === '') {
+      $cailyApiBase = 'https://group.caily.com.vn/api/index.php';
+    }
+    $cailyApiBase = rtrim($cailyApiBase, '?&');
+    $dayoffApiUrl = $cailyApiBase . (strpos($cailyApiBase, '?') !== false ? '&' : '?') . 'type=get_dayoff_all_api&debug=1';
+  ?>
+  window.DAYOFF_API_URL = <?= json_encode($dayoffApiUrl, JSON_UNESCAPED_SLASHES) ?>;
 </script>
 <script src="<?=ROOT?>assets/js/dayoff-events.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=ROOT?>assets/js/app-calendar.js?v=<?=CACHE_VERSION?>"></script>

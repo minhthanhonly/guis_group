@@ -1284,7 +1284,7 @@ if (typeof document !== 'undefined') {
 
 $(function() {
   // Skip global customer modal — it owns Select2 via customer-global-modal.js
-  var select2 = $('.select2').not('#globalCustomerModal .select2, #global-customer-modal-app .select2, .js-guis-department-select');
+  var select2 = $('.select2').not('#globalCustomerModal .select2, #global-customer-modal-app .select2, .js-guis-department-select, #eventLabel, .select-event-label');
   if (select2.length) {
     select2.each(function() {
       var $this = $(this);

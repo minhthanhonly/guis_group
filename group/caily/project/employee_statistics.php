@@ -489,9 +489,23 @@ if($_SESSION['show_project'] == 0){
                                         </strong>
                                     </td>
                                     <td class="text-end">
-                                        <span class="text-info">¥{{ formatNumber(stat.total_drawings_revenue) }}</span>
+                                        <a href="javascript:void(0);"
+                                           class="fw-semibold text-decoration-underline"
+                                           :class="stat.total_drawings_revenue > 0 ? 'text-info' : 'text-muted'"
+                                           @click.stop="openAssignedDrawingsModal(stat)"
+                                           :title="'クリックして図面一覧を表示'">
+                                            ¥{{ formatNumber(stat.total_drawings_revenue) }}
+                                        </a>
                                     </td>
-                                    <td class="text-center">{{ stat.task_count }}</td>
+                                    <td class="text-center">
+                                        <a href="javascript:void(0);"
+                                           class="fw-semibold text-decoration-underline"
+                                           :class="stat.task_count > 0 ? 'text-primary' : 'text-muted'"
+                                           @click.stop="openAssignedTasksModal(stat)"
+                                           :title="'クリックしてタスク一覧を表示'">
+                                            {{ stat.task_count }}
+                                        </a>
+                                    </td>
                                     <td class="text-center" v-show="showReactionColumns">
                                         <span class="badge bg-success">{{ stat.task_likes }}</span>
                                     </td>
@@ -760,6 +774,186 @@ if($_SESSION['show_project'] == 0){
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assigned drawings modal (図面売上) -->
+    <div class="modal fade" id="employeeAssignedDrawingsModal" tabindex="-1" aria-labelledby="employeeAssignedDrawingsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="employeeAssignedDrawingsModalLabel">
+                        <i class="fa fa-drafting-compass me-1"></i>
+                        <span data-i18n="図面一覧">図面一覧</span>
+                        <small v-if="assignedDrawingsUserName" class="text-muted ms-2">{{ assignedDrawingsUserName }}</small>
+                        <small v-if="assignedDrawingsPeriod" class="text-muted ms-2">{{ assignedDrawingsPeriod }}</small>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <span class="small text-muted" data-i18n="この期間の図面売上に含まれる図面です">この期間の図面売上に含まれる図面です</span>
+                        <div class="small">
+                            <span class="me-3">
+                                <span data-i18n="図面数">図面数</span>:
+                                <strong>{{ assignedDrawingsTotalCount }}</strong>
+                            </span>
+                            <span>
+                                <span data-i18n="売上合計">売上合計</span>:
+                                <strong class="text-info">¥{{ formatNumber(assignedDrawingsTotalRevenue) }}</strong>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div v-if="assignedDrawingsLoading" class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                    </div>
+                    <div v-else-if="assignedDrawings.length === 0" class="text-center text-muted py-5">
+                        <span data-i18n="該当する図面がありません">該当する図面がありません</span>
+                    </div>
+                    <div v-else class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><span data-i18n="案件">案件</span></th>
+                                    <th><span data-i18n="図面">図面</span></th>
+                                    <th><span data-i18n="タスク">タスク</span></th>
+                                    <th class="text-center"><span data-i18n="ステータス">ステータス</span></th>
+                                    <th class="text-center"><span data-i18n="図面数">図面数</span></th>
+                                    <th class="text-end"><span data-i18n="図面売上">図面売上</span></th>
+                                    <th class="text-center"><span data-i18n="完了日">完了日</span></th>
+                                    <th class="text-center"><span data-i18n="計上日">計上日</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, idx) in assignedDrawings" :key="(row.drawing_id || 'x') + '-' + idx">
+                                    <td>
+                                        <a v-if="row.project_id" :href="`detail.php?id=${row.project_id}`" class="text-decoration-none" target="_blank">
+                                            <span class="badge bg-label-primary me-1">#{{ row.project_id }}</span>
+                                            {{ row.project_name || '-' }}
+                                        </a>
+                                        <span v-else>-</span>
+                                    </td>
+                                    <td>
+                                        <a v-if="row.project_id"
+                                           :href="`drawings.php?project_id=${row.project_id}`"
+                                           class="text-decoration-none fw-semibold"
+                                           target="_blank">
+                                            <span class="badge bg-label-secondary me-1">#{{ row.drawing_id }}</span>
+                                            {{ row.drawing_name || '-' }}
+                                        </a>
+                                        <span v-else class="text-muted">{{ row.drawing_name || '-' }}</span>
+                                    </td>
+                                    <td>
+                                        <a v-if="row.task_id && row.project_id"
+                                           :href="`task.php?project_id=${row.project_id}&task_id=${row.task_id}`"
+                                           class="text-decoration-none"
+                                           target="_blank">
+                                            {{ row.task_title || ('#' + row.task_id) }}
+                                        </a>
+                                        <span v-else class="text-muted">{{ row.task_title || '-' }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge" :class="getDrawingStatusBadgeClass(row.drawing_status)">
+                                            {{ getDrawingStatusLabel(row.drawing_status) }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">{{ row.drawing_count }}</td>
+                                    <td class="text-end text-info">¥{{ formatNumber(row.price) }}</td>
+                                    <td class="text-center">{{ formatDate(row.completed_at) }}</td>
+                                    <td class="text-center">{{ formatDate(row.revenue_date) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="閉じる">閉じる</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Assigned tasks modal (タスク数) -->
+    <div class="modal fade" id="employeeAssignedTasksModal" tabindex="-1" aria-labelledby="employeeAssignedTasksModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="employeeAssignedTasksModalLabel">
+                        <i class="fa fa-tasks me-1"></i>
+                        <span data-i18n="担当タスク一覧">担当タスク一覧</span>
+                        <small v-if="assignedTasksUserName" class="text-muted ms-2">{{ assignedTasksUserName }}</small>
+                        <small v-if="assignedTasksPeriod" class="text-muted ms-2">{{ assignedTasksPeriod }}</small>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <span class="small text-muted" data-i18n="この期間のタスク数に含まれる担当タスクです">この期間のタスク数に含まれる担当タスクです</span>
+                        <span>
+                            <span data-i18n="タスク数">タスク数</span>:
+                            <strong>{{ assignedTasksTotalCount }}</strong>
+                        </span>
+                    </div>
+
+                    <div v-if="assignedTasksLoading" class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">読み込み中...</span>
+                        </div>
+                    </div>
+                    <div v-else-if="assignedTasks.length === 0" class="text-center text-muted py-5">
+                        <span data-i18n="該当するタスクがありません">該当するタスクがありません</span>
+                    </div>
+                    <div v-else class="table-responsive">
+                        <table class="table table-sm table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><span data-i18n="案件">案件</span></th>
+                                    <th><span data-i18n="タスク">タスク</span></th>
+                                    <th class="text-center"><span data-i18n="ステータス">ステータス</span></th>
+                                    <th><span data-i18n="種別">種別</span></th>
+                                    <th class="text-center"><span data-i18n="期限日">期限日</span></th>
+                                    <th class="text-center"><span data-i18n="完了日">完了日</span></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(row, idx) in assignedTasks" :key="(row.task_id || 'x') + '-' + idx">
+                                    <td>
+                                        <a v-if="row.project_id" :href="`detail.php?id=${row.project_id}`" class="text-decoration-none" target="_blank">
+                                            <span class="badge bg-label-primary me-1">#{{ row.project_id }}</span>
+                                            {{ row.project_name || '-' }}
+                                        </a>
+                                        <span v-else>-</span>
+                                    </td>
+                                    <td>
+                                        <a v-if="row.task_id && row.project_id"
+                                           :href="`task.php?project_id=${row.project_id}&task_id=${row.task_id}`"
+                                           class="text-decoration-none fw-semibold"
+                                           target="_blank">
+                                            <span class="badge bg-label-secondary me-1">#{{ row.task_id }}</span>
+                                            {{ row.task_title || '-' }}
+                                        </a>
+                                        <span v-else class="text-muted">{{ row.task_title || '-' }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge" :class="getTaskStatusBadgeClass(row.task_status)">
+                                            {{ getTaskStatusLabel(row.task_status) }}
+                                        </span>
+                                    </td>
+                                    <td>{{ row.task_kind || '-' }}</td>
+                                    <td class="text-center">{{ formatDate(row.due_date) }}</td>
+                                    <td class="text-center">{{ formatDate(row.actual_end_date) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal" data-i18n="閉じる">閉じる</button>
                 </div>
             </div>
         </div>

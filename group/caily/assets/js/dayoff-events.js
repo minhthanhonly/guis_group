@@ -251,21 +251,38 @@
     if (dayoffListCache) {
       return dayoffListCache;
     }
-    const response = await axios.get(getApiUrl(), { withCredentials: true });
-    if (response.status !== 200 || !response.data || !response.data.success) {
-      if (response.data && typeof handleErrors === 'function') {
-        handleErrors(response.data);
+    try {
+      const response = await axios.get(getApiUrl(), {
+        withCredentials: true,
+        timeout: 8000
+      });
+      if (response.status !== 200 || !response.data || !response.data.success) {
+        console.warn('Dayoff API unavailable or returned error', response && response.data);
+        dayoffListCache = [];
+        return dayoffListCache;
       }
-      return [];
+      dayoffListCache = response.data.list || [];
+      try {
+        await resolveDayoffUserDisplaysFromGuis(dayoffListCache);
+      } catch (displayError) {
+        console.warn('resolveDisplayByUserids', displayError);
+      }
+      return dayoffListCache;
+    } catch (error) {
+      console.warn('Dayoff API request failed (schedule continues without CAILY dayoff)', error);
+      dayoffListCache = [];
+      return dayoffListCache;
     }
-    dayoffListCache = response.data.list || [];
-    await resolveDayoffUserDisplaysFromGuis(dayoffListCache);
-    return dayoffListCache;
   }
 
   async function fetchDayoffEventsForRange(rangeStart, rangeEnd, options) {
-    const list = await getDayoffList();
-    return filterDayoffEventsForRange(list, rangeStart, rangeEnd, options);
+    try {
+      const list = await getDayoffList();
+      return filterDayoffEventsForRange(list, rangeStart, rangeEnd, options);
+    } catch (error) {
+      console.warn('fetchDayoffEventsForRange failed', error);
+      return [];
+    }
   }
 
   global.DayoffEvents = {

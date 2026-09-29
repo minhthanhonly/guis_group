@@ -74,6 +74,19 @@ createApp({
             employeeTaskDetailsTotalRevenue: 0,
             employeeTaskDetailsTotalDrawings: 0,
             employeeTaskDetailsPeriod: '',
+            assignedDrawings: [],
+            assignedDrawingsLoading: false,
+            assignedDrawingsUserName: '',
+            assignedDrawingsPeriod: '',
+            assignedDrawingsTotalCount: 0,
+            assignedDrawingsTotalRevenue: 0,
+            assignedDrawingsModalInstance: null,
+            assignedTasks: [],
+            assignedTasksLoading: false,
+            assignedTasksUserName: '',
+            assignedTasksPeriod: '',
+            assignedTasksTotalCount: 0,
+            assignedTasksModalInstance: null,
             sortColumn: null, // Column to sort employee stats by
             sortDirection: 'asc', // 'asc' or 'desc'
             showReactionColumns: false, // 良い / 悪い columns in employee list
@@ -1488,6 +1501,213 @@ createApp({
                 this.employeeChartInstance.destroy();
                 this.employeeChartInstance = null;
             }
+        },
+
+        openAssignedDrawingsModal(stat) {
+            if (!stat || !stat.user_id) {
+                return;
+            }
+            this.assignedDrawingsUserName = stat.user_name || '';
+            if (stat.period_start && stat.period_end) {
+                this.assignedDrawingsPeriod = `${this.formatDate(stat.period_start)} ～ ${this.formatDate(stat.period_end)}`;
+            } else {
+                this.assignedDrawingsPeriod = '';
+            }
+            this.assignedDrawings = [];
+            this.assignedDrawingsTotalCount = 0;
+            this.assignedDrawingsTotalRevenue = 0;
+
+            const modalEl = document.getElementById('employeeAssignedDrawingsModal');
+            if (modalEl && window.bootstrap && bootstrap.Modal) {
+                this.assignedDrawingsModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+                this.assignedDrawingsModalInstance.show();
+            }
+
+            this.loadAssignedDrawings(stat);
+        },
+
+        async loadAssignedDrawings(stat) {
+            if (!stat || !stat.user_id) {
+                this.assignedDrawings = [];
+                this.assignedDrawingsTotalCount = 0;
+                this.assignedDrawingsTotalRevenue = 0;
+                return;
+            }
+
+            this.assignedDrawingsLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    model: 'employeestatistics',
+                    method: 'getUserAssignedDrawings',
+                    user_id: stat.user_id
+                });
+                if (stat.period_start) {
+                    params.set('period_start', stat.period_start);
+                }
+                if (stat.period_end) {
+                    params.set('period_end', stat.period_end);
+                }
+
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});
+                if (data && data.status === 'success') {
+                    this.assignedDrawings = Array.isArray(data.drawings) ? data.drawings : [];
+                    this.assignedDrawingsTotalCount = parseInt(data.total_count, 10) || this.assignedDrawings.length;
+                    this.assignedDrawingsTotalRevenue = parseFloat(data.total_revenue) || 0;
+                    if (data.period_start && data.period_end) {
+                        this.assignedDrawingsPeriod = `${this.formatDate(data.period_start)} ～ ${this.formatDate(data.period_end)}`;
+                    }
+                } else {
+                    this.assignedDrawings = [];
+                    this.assignedDrawingsTotalCount = 0;
+                    this.assignedDrawingsTotalRevenue = 0;
+                    if (data && data.message) {
+                        this.showError(data.message);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading assigned drawings:', error);
+                this.assignedDrawings = [];
+                this.assignedDrawingsTotalCount = 0;
+                this.assignedDrawingsTotalRevenue = 0;
+                this.showError('図面一覧の読み込みに失敗しました');
+            } finally {
+                this.assignedDrawingsLoading = false;
+            }
+        },
+
+        getDrawingStatusLabel(status) {
+            const map = {
+                todo: '未開始',
+                'in-progress': '進行中',
+                confirming: '確認中',
+                paused: '一時停止',
+                completed: '完了',
+                approved: '完了',
+                revised: '完了',
+                cancelled: 'キャンセル'
+            };
+            const key = map[status] || status || '—';
+            if (typeof i18next !== 'undefined' && i18next.t) {
+                const translated = i18next.t(key);
+                if (translated && translated !== key) {
+                    return translated;
+                }
+            }
+            return key;
+        },
+
+        getDrawingStatusBadgeClass(status) {
+            const map = {
+                todo: 'bg-label-secondary',
+                'in-progress': 'bg-label-primary',
+                confirming: 'bg-label-warning',
+                paused: 'bg-label-warning',
+                completed: 'bg-label-success',
+                approved: 'bg-label-success',
+                revised: 'bg-label-success',
+                cancelled: 'bg-label-danger'
+            };
+            return map[status] || 'bg-label-secondary';
+        },
+
+        openAssignedTasksModal(stat) {
+            if (!stat || !stat.user_id) {
+                return;
+            }
+            this.assignedTasksUserName = stat.user_name || '';
+            if (stat.period_start && stat.period_end) {
+                this.assignedTasksPeriod = `${this.formatDate(stat.period_start)} ～ ${this.formatDate(stat.period_end)}`;
+            } else {
+                this.assignedTasksPeriod = '';
+            }
+            this.assignedTasks = [];
+            this.assignedTasksTotalCount = 0;
+
+            const modalEl = document.getElementById('employeeAssignedTasksModal');
+            if (modalEl && window.bootstrap && bootstrap.Modal) {
+                this.assignedTasksModalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
+                this.assignedTasksModalInstance.show();
+            }
+
+            this.loadAssignedTasks(stat);
+        },
+
+        async loadAssignedTasks(stat) {
+            if (!stat || !stat.user_id) {
+                this.assignedTasks = [];
+                this.assignedTasksTotalCount = 0;
+                return;
+            }
+
+            this.assignedTasksLoading = true;
+            try {
+                const params = new URLSearchParams({
+                    model: 'employeestatistics',
+                    method: 'getUserAssignedTasks',
+                    user_id: stat.user_id
+                });
+                if (stat.period_start) {
+                    params.set('period_start', stat.period_start);
+                }
+                if (stat.period_end) {
+                    params.set('period_end', stat.period_end);
+                }
+
+                const response = await axios.get(`/api/index.php?${params.toString()}`);
+                const data = typeof response.data === 'string' ? JSON.parse(response.data) : (response.data || {});
+                if (data && data.status === 'success') {
+                    this.assignedTasks = Array.isArray(data.tasks) ? data.tasks : [];
+                    this.assignedTasksTotalCount = parseInt(data.total_count, 10) || this.assignedTasks.length;
+                    if (data.period_start && data.period_end) {
+                        this.assignedTasksPeriod = `${this.formatDate(data.period_start)} ～ ${this.formatDate(data.period_end)}`;
+                    }
+                } else {
+                    this.assignedTasks = [];
+                    this.assignedTasksTotalCount = 0;
+                    if (data && data.message) {
+                        this.showError(data.message);
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading assigned tasks:', error);
+                this.assignedTasks = [];
+                this.assignedTasksTotalCount = 0;
+                this.showError('担当タスク一覧の読み込みに失敗しました');
+            } finally {
+                this.assignedTasksLoading = false;
+            }
+        },
+
+        getTaskStatusLabel(status) {
+            const map = {
+                todo: '未開始',
+                'in-progress': '進行中',
+                confirming: '確認中',
+                paused: '一時停止',
+                completed: '完了',
+                cancelled: 'キャンセル'
+            };
+            const key = map[status] || status || '—';
+            if (typeof i18next !== 'undefined' && i18next.t) {
+                const translated = i18next.t(key);
+                if (translated && translated !== key) {
+                    return translated;
+                }
+            }
+            return key;
+        },
+
+        getTaskStatusBadgeClass(status) {
+            const map = {
+                todo: 'bg-label-secondary',
+                'in-progress': 'bg-label-primary',
+                confirming: 'bg-label-warning',
+                paused: 'bg-label-warning',
+                completed: 'bg-label-success',
+                cancelled: 'bg-label-danger'
+            };
+            return map[status] || 'bg-label-secondary';
         },
 
         async refreshEmployeeDetail() {

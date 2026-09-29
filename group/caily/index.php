@@ -464,7 +464,15 @@ $view->footing();
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/css/pages/app-calendar.css" />
 <script src="<?=ROOT?>assets/vendor/libs/fullcalendar/fullcalendar.js"></script>
 <script>
-  window.DAYOFF_API_URL = 'https://group.caily.com.vn/api/index.php?type=get_dayoff_all_api&debug=1';
+  <?php
+    $cailyApiBase = getenv('CAILY_API_URL');
+    if ($cailyApiBase === false || $cailyApiBase === '') {
+      $cailyApiBase = 'https://group.caily.com.vn/api/index.php';
+    }
+    $cailyApiBase = rtrim($cailyApiBase, '?&');
+    $dayoffApiUrl = $cailyApiBase . (strpos($cailyApiBase, '?') !== false ? '&' : '?') . 'type=get_dayoff_all_api&debug=1';
+  ?>
+  window.DAYOFF_API_URL = <?= json_encode($dayoffApiUrl, JSON_UNESCAPED_SLASHES) ?>;
 </script>
 <script src="<?=ROOT?>assets/js/dayoff-events.js?v=<?=CACHE_VERSION?>"></script>
 <script src="<?=ROOT?>assets/js/top.js?v=<?=CACHE_VERSION?>"></script>

@@ -54,8 +54,8 @@ document.addEventListener('DOMContentLoaded', async function () {
       'その他': 'success'
     };
 
-    // External jQuery Elements
-    const eventLabel = $('#eventLabel'); // ! Using jQuery vars due to select2 jQuery dependency
+    // Native select (avoid Select2 double-init with main.js)
+    const eventLabel = document.getElementById('eventLabel');
 
     let eventList = [];
     let forceUpdate = false;
@@ -90,27 +90,8 @@ document.addEventListener('DOMContentLoaded', async function () {
     // Offcanvas Instance
     const bsAddEventSidebar = new bootstrap.Offcanvas(addEventSidebar);
 
-
-    if (eventLabel.length) {
-      function renderBadges(option) {
-        if (!option.id) {
-          return option.text;
-        }
-        var $badge =
-          "<span class='badge badge-dot bg-" + $(option.element).data('label') + " me-2'> " + '</span>' + option.text;
-
-        return $badge;
-      }
-      eventLabel.wrap('<div class="position-relative"></div>').select2({
-        placeholder: 'Select value',
-        dropdownParent: eventLabel.parent(),
-        templateResult: renderBadges,
-        templateSelection: renderBadges,
-        minimumResultsForSearch: -1,
-        escapeMarkup: function (es) {
-          return es;
-        }
-      });
+    if (eventLabel && !eventLabel.value) {
+      eventLabel.value = '仕事';
     }
 
     // Render guest avatars
@@ -255,7 +236,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         eventStartDateDiv2.classList.remove('d-none');
       }
       eventToUpdate.allDay == true ? (allDaySwitch.checked = true) : (allDaySwitch.checked = false);
-      eventLabel.val(eventToUpdate.extendedProps.calendar).trigger('change');
+      if (eventLabel) {
+        eventLabel.value = eventToUpdate.extendedProps.calendar || '仕事';
+      }
       eventToUpdate.extendedProps.comment != undefined
         ? (eventComment.value = decodeHtmlEntities(eventToUpdate.extendedProps.comment))
         : null;
@@ -369,12 +352,19 @@ document.addEventListener('DOMContentLoaded', async function () {
       const events = currentEvents;
       let calendars = selectedCalendars();
       let selectedEvents = events.filter(function (event) {
-        return calendars.includes(event.extendedProps.calendar.toLowerCase());
+        const calendarType = event.extendedProps && event.extendedProps.calendar
+          ? String(event.extendedProps.calendar)
+          : '';
+        return calendars.includes(calendarType);
       });
 
       if (showCailyDayoffSwitch && showCailyDayoffSwitch.checked && typeof DayoffEvents !== 'undefined') {
-        const dayoffEvents = await DayoffEvents.fetchDayoffEventsForRange(info.start, info.end, { shortTitle: true });
-        selectedEvents = selectedEvents.concat(dayoffEvents);
+        try {
+          const dayoffEvents = await DayoffEvents.fetchDayoffEventsForRange(info.start, info.end, { shortTitle: true });
+          selectedEvents = selectedEvents.concat(dayoffEvents || []);
+        } catch (dayoffError) {
+          console.warn('CAILY dayoff events skipped', dayoffError);
+        }
       }
 
       selectedEvents = selectedEvents.map(function (event) {
@@ -687,7 +677,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             title: eventTitle.value,
             allDay: allDaySwitch.checked ? true : false,
             extendedProps: {
-              calendar: eventLabel.val(),
+              calendar: eventLabel ? eventLabel.value : '仕事',
               comment: eventComment.value,
               public_level: eventPublic.value
             },
@@ -713,7 +703,7 @@ document.addEventListener('DOMContentLoaded', async function () {
             allDay: allDaySwitch.checked ? true : false,
             extendedProps: {
               id: eventToUpdate.extendedProps.id,
-              calendar: eventLabel.val(),
+              calendar: eventLabel ? eventLabel.value : '仕事',
               comment: eventComment.value,
               public_level: eventPublic.value
             },
@@ -788,6 +778,9 @@ document.addEventListener('DOMContentLoaded', async function () {
       // eventGuests.val('').trigger('change');
       eventComment.value = '';
       eventPublic.value = '0';
+      if (eventLabel) {
+        eventLabel.value = '仕事';
+      }
       eventLastUpdate.classList.add('d-none');
       eventBtn.classList.remove('d-flex');
       eventBtn.classList.add('d-none');
@@ -811,6 +804,14 @@ document.addEventListener('DOMContentLoaded', async function () {
       btnSubmit.classList.remove('btn-update-event');
       btnSubmit.classList.add('btn-add-event');
       btnDeleteEvent.classList.add('d-none');
+      // resetValues() hides #eventBtn on close; restore for new event
+      if (eventBtn) {
+        eventBtn.classList.remove('d-none');
+        eventBtn.classList.add('d-flex');
+      }
+      if (btnCancel) {
+        btnCancel.classList.remove('d-none');
+      }
       appCalendarSidebar.classList.remove('show');
       appOverlay.classList.remove('show');
     });
