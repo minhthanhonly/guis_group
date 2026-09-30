@@ -369,6 +369,19 @@
                 </span>
               </li>
               <?php endif; ?>
+              <li class="nav-item me-2 me-xl-0">
+                <a
+                  class="nav-link"
+                  href="https://caily.com.vn/monitor/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title="サーバー監視"
+                  aria-label="サーバー監視"
+                  data-bs-toggle="tooltip"
+                  data-bs-placement="bottom">
+                  <i class="icon-base fa fa-heartbeat icon-22px nav-monitor-heartbeat"></i>
+                </a>
+              </li>
               <li class="nav-item dropdown-language dropdown me-2 me-xl-0">
                   <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown">
                     <i class="icon-base fa fa-language icon-22px text-heading"></i>
@@ -509,7 +522,7 @@
                     role="button"
                     aria-expanded="false">
                     <span class="position-relative">
-                      <i class="icon-base ti tabler-bell icon-22px text-heading"></i>
+                      <i class="icon-base ti tabler-bell icon-22px text-heading nav-notification-bell" id="nav-notification-bell"></i>
                       <span class="badge rounded-pill bg-danger badge-notifications border badge_number" id="notification_dot" style="display: none;"></span>
                     </span>
                   </a>

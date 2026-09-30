@@ -11,6 +11,87 @@
   --bs-lime-contrast: #fff;
 }
 
+/* Navbar monitor link — lub-dub + color only on hover */
+@keyframes nav-monitor-heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+    color: var(--bs-heading-color, inherit);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  14% {
+    transform: scale(1.22);
+    color: #28c76f;
+    filter: drop-shadow(0 0 6px rgba(40, 199, 111, 0.65));
+  }
+  28% {
+    transform: scale(1);
+    color: var(--bs-heading-color, inherit);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  42% {
+    transform: scale(1.18);
+    color: #28c76f;
+    filter: drop-shadow(0 0 6px rgba(40, 199, 111, 0.65));
+  }
+  70% {
+    transform: scale(1);
+    color: var(--bs-heading-color, inherit);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
+.nav-monitor-heartbeat {
+  display: inline-block;
+  transform-origin: center;
+}
+
+a:hover > .nav-monitor-heartbeat,
+a:focus-visible > .nav-monitor-heartbeat {
+  animation: nav-monitor-heartbeat 1.4s ease-in-out infinite;
+}
+
+/* Navbar bell — shake when unread notifications exist */
+@keyframes nav-bell-ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  10% {
+    transform: rotate(14deg);
+  }
+  20% {
+    transform: rotate(-12deg);
+  }
+  30% {
+    transform: rotate(10deg);
+  }
+  40% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(6deg);
+  }
+  60% {
+    transform: rotate(-4deg);
+  }
+  70% {
+    transform: rotate(2deg);
+  }
+  80% {
+    transform: rotate(0);
+  }
+}
+
+.nav-notification-bell {
+  display: inline-block;
+  transform-origin: top center;
+}
+
+.nav-notification-bell.is-ringing {
+  animation: nav-bell-ring 1.2s ease-in-out infinite;
+}
+
 .menu .app-brand.demo {
   height: 64px;
 }

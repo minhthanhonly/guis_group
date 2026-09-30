@@ -771,12 +771,15 @@ class NotificationManager {
         const dot = document.getElementById('notification_dot');
         if (!dot) return;
         const count = typeof totalUnread === 'number' ? totalUnread : this.getUnreadNotificationCounts().totalUnread;
+        const bell = document.getElementById('nav-notification-bell');
         if (count > 0) {
             dot.style.display = 'inline-flex';
             dot.textContent = count > 99 ? '99+' : String(count);
+            if (bell) bell.classList.add('is-ringing');
         } else {
             dot.style.display = 'none';
             dot.textContent = '';
+            if (bell) bell.classList.remove('is-ringing');
         }
     }
     

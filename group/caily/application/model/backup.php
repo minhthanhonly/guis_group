@@ -11,6 +11,9 @@ class Backup extends ApplicationModel
     /** @var resource|null */
     private $gzipHandle = null;
 
+    /** @var resource|null */
+    private $fileHandle = null;
+
     private function requireAdminUser()
     {
         if (($_SESSION['userid'] ?? '') !== 'admin') {
@@ -65,18 +68,7 @@ class Backup extends ApplicationModel
         header('Cache-Control: no-store, no-cache, must-revalidate');
         header('Pragma: no-cache');
 
-        $this->write("-- Database backup\n");
-        $this->write("-- Generated: " . date('Y-m-d H:i:s') . "\n");
-        $this->write("-- Database: " . DB_DATABASE . "\n\n");
-        $this->write("SET NAMES utf8mb4;\n");
-        $this->write("SET FOREIGN_KEY_CHECKS=0;\n\n");
-
-        foreach ($this->getDatabaseTables() as $table) {
-            $this->streamTableDump($table);
-            $this->flushOutput();
-        }
-
-        $this->write("SET FOREIGN_KEY_CHECKS=1;\n");
+        $this->writeFullDump();
 
         if ($this->gzipHandle) {
             gzclose($this->gzipHandle);
@@ -85,10 +77,118 @@ class Backup extends ApplicationModel
         exit;
     }
 
+    /**
+     * CLI / cron: dump DB to .sql then pack as .zip.
+     * @param string|null $destinationDir Directory for the zip (default: system temp)
+     * @return array{zip_path:string,zip_name:string,sql_name:string,bytes:int,table_count:int,database:string}
+     */
+    public function createZipBackup($destinationDir = null)
+    {
+        $this->connect();
+
+        @set_time_limit(0);
+        if (function_exists('ini_set')) {
+            @ini_set('memory_limit', '512M');
+        }
+
+        if (!class_exists('ZipArchive')) {
+            throw new RuntimeException('ZipArchive extension is not available.');
+        }
+
+        $dir = $destinationDir !== null && $destinationDir !== ''
+            ? rtrim($destinationDir, "/\\")
+            : sys_get_temp_dir();
+        if (!is_dir($dir) && !@mkdir($dir, 0755, true) && !is_dir($dir)) {
+            throw new RuntimeException('Cannot create backup directory: ' . $dir);
+        }
+        if (!is_writable($dir)) {
+            throw new RuntimeException('Backup directory is not writable: ' . $dir);
+        }
+
+        $stamp = date('Ymd_His');
+        $sqlName = DB_DATABASE . '_backup_' . $stamp . '.sql';
+        $zipName = DB_DATABASE . '_backup_' . $stamp . '.zip';
+        $sqlPath = $dir . DIRECTORY_SEPARATOR . $sqlName;
+        $zipPath = $dir . DIRECTORY_SEPARATOR . $zipName;
+
+        $this->fileHandle = @fopen($sqlPath, 'wb');
+        if (!$this->fileHandle) {
+            throw new RuntimeException('Cannot open SQL file for writing: ' . $sqlPath);
+        }
+
+        $tables = [];
+        try {
+            $tables = $this->getDatabaseTables();
+            $this->writeFullDump($tables);
+        } finally {
+            if ($this->fileHandle) {
+                fclose($this->fileHandle);
+                $this->fileHandle = null;
+            }
+        }
+
+        if (!is_file($sqlPath) || filesize($sqlPath) === 0) {
+            @unlink($sqlPath);
+            throw new RuntimeException('SQL dump file is empty or missing.');
+        }
+
+        $zip = new ZipArchive();
+        $opened = $zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE);
+        if ($opened !== true) {
+            @unlink($sqlPath);
+            throw new RuntimeException('Cannot create zip archive (code ' . $opened . ').');
+        }
+        if (!$zip->addFile($sqlPath, $sqlName)) {
+            $zip->close();
+            @unlink($sqlPath);
+            @unlink($zipPath);
+            throw new RuntimeException('Failed to add SQL file into zip.');
+        }
+        $zip->close();
+        @unlink($sqlPath);
+
+        if (!is_file($zipPath)) {
+            throw new RuntimeException('Zip file was not created.');
+        }
+
+        return [
+            'zip_path' => $zipPath,
+            'zip_name' => $zipName,
+            'sql_name' => $sqlName,
+            'bytes' => (int)filesize($zipPath),
+            'table_count' => count($tables),
+            'database' => DB_DATABASE,
+        ];
+    }
+
+    private function writeFullDump(array $tables = null)
+    {
+        if ($tables === null) {
+            $tables = $this->getDatabaseTables();
+        }
+
+        $this->write("-- Database backup\n");
+        $this->write("-- Generated: " . date('Y-m-d H:i:s') . "\n");
+        $this->write("-- Database: " . DB_DATABASE . "\n\n");
+        $this->write("SET NAMES utf8mb4;\n");
+        $this->write("SET FOREIGN_KEY_CHECKS=0;\n\n");
+
+        foreach ($tables as $table) {
+            $this->streamTableDump($table);
+            $this->flushOutput();
+        }
+
+        $this->write("SET FOREIGN_KEY_CHECKS=1;\n");
+    }
+
     private function write($data)
     {
         if ($this->gzipHandle) {
             gzwrite($this->gzipHandle, $data);
+            return;
+        }
+        if ($this->fileHandle) {
+            fwrite($this->fileHandle, $data);
             return;
         }
         echo $data;
