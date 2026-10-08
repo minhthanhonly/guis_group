@@ -1,7 +1,7 @@
 <?php
 /**
  * Post-login waiting screen for GUIS Plus Electron app.
- * App captures session cookies, then closes this window.
+ * Notifies local bridge (127.0.0.1:34567/login/complete), then app closes this window.
  */
 require_once('application/loader.php');
 
@@ -9,7 +9,8 @@ $userid = isset($_SESSION['userid']) ? (string) $_SESSION['userid'] : '';
 $realname = isset($_SESSION['realname']) ? (string) $_SESSION['realname'] : '';
 $view->heading('ログイン完了', 'login');
 ?>
-<div class="authentication-wrapper authentication-cover">
+<meta name="guis-plus-userid" content="<?= htmlspecialchars($userid, ENT_QUOTES, 'UTF-8') ?>" />
+<div class="authentication-wrapper authentication-cover" data-guis-plus-userid="<?= htmlspecialchars($userid, ENT_QUOTES, 'UTF-8') ?>">
 	<a href="index.php" class="app-brand auth-cover-brand">
 		<span class="app-brand-logo demo">
 			<span class="text-primary">
@@ -52,6 +53,77 @@ $view->heading('ログイン完了', 'login');
 					window.__GUIS_PLUS_LOGIN_WAIT__ = true;
 					window.__GUIS_PLUS_USERID__ = <?= json_encode($userid, JSON_UNESCAPED_UNICODE) ?>;
 					window.__GUIS_PLUS_REALNAME__ = <?= json_encode($realname, JSON_UNESCAPED_UNICODE) ?>;
+
+					(function notifyGuisPlusLoginComplete() {
+						var userId = String(window.__GUIS_PLUS_USERID__ || window.currentUserName || '').trim();
+						if (!userId) {
+							console.warn('[login-wait] missing userid — cannot notify GUIS Plus');
+							return;
+						}
+
+						var endpoints = [
+							'http://127.0.0.1:34567/login/complete',
+							'http://localhost:34567/login/complete'
+						];
+						var payload = JSON.stringify({
+							userId: userId,
+							userid: userId,
+							user_id: userId,
+							realname: String(window.__GUIS_PLUS_REALNAME__ || ''),
+							source: 'login-wait'
+						});
+						var attempt = 0;
+						var maxAttempts = 12;
+
+						function ping() {
+							attempt += 1;
+							var url = endpoints[(attempt - 1) % endpoints.length];
+							var done = false;
+
+							function retry() {
+								if (done) return;
+								done = true;
+								if (attempt < maxAttempts) {
+									setTimeout(ping, 500);
+								}
+							}
+
+							try {
+								fetch(url, {
+									method: 'POST',
+									headers: { 'Content-Type': 'application/json' },
+									body: payload,
+									mode: 'cors',
+									cache: 'no-store',
+									keepalive: true
+								}).then(function (res) {
+									if (res && res.ok) {
+										done = true;
+										console.log('[login-wait] notified GUIS Plus login complete');
+										return;
+									}
+									retry();
+								}).catch(function () {
+									retry();
+								});
+							} catch (e) {
+								retry();
+							}
+						}
+
+						ping();
+
+						// Safety: if this page opened inside GUIS Kanri app window (not startup
+						// login), bridge close won't apply — fall back to the app home.
+						setTimeout(function () {
+							try {
+								var root = (typeof window.ROOT === 'string' && window.ROOT) ? window.ROOT : '/';
+								window.location.replace(root.replace(/\/?$/, '/') + 'index.php');
+							} catch (e) {
+								window.location.href = 'index.php';
+							}
+						}, 2500);
+					})();
 				</script>
 			</div>
 		</div>

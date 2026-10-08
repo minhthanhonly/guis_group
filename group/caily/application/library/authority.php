@@ -202,7 +202,9 @@ class Authority
 	}
 
 	/**
-	 * Login initiated from GUIS Plus Electron (query/body from=guis_plus, or Electron UA).
+	 * Login initiated from GUIS Plus startup login window only (query/body from=guis_plus).
+	 * Do NOT use Electron UA here — GUIS Kanri app window is also Electron; logout→re-login
+	 * must go to index.php, not login-wait.php.
 	 */
 	function isGuisPlusAppRequest()
 	{
@@ -213,14 +215,7 @@ class Authority
 			$from = (string) $_GET['from'];
 		}
 		$from = strtolower(trim($from));
-		if ($from === 'guis_plus' || $from === 'guis-plus' || $from === 'guisplus' || $from === '1') {
-			return true;
-		}
-		$ua = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
-		if ($ua !== '' && stripos($ua, 'Electron') !== false && stripos($ua, 'GUIS') !== false) {
-			return true;
-		}
-		return false;
+		return ($from === 'guis_plus' || $from === 'guis-plus' || $from === 'guisplus' || $from === '1');
 	}
 
 	function checkRememberMe()

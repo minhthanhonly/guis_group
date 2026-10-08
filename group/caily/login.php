@@ -51,12 +51,8 @@ $view->heading('ログイン', 'login');
 			} elseif (isset($_GET['from'])) {
 				$fromApp = (string) $_GET['from'];
 			}
-			if ($fromApp === '') {
-				$ua = isset($_SERVER['HTTP_USER_AGENT']) ? (string) $_SERVER['HTTP_USER_AGENT'] : '';
-				if (stripos($ua, 'Electron') !== false) {
-					$fromApp = 'guis_plus';
-				}
-			}
+			// Only honor explicit from=guis_plus (startup login). Never infer from Electron UA —
+			// GUIS Kanri window re-login must stay a normal web login → index.php.
 			if ($fromApp !== '') {
 				echo '<input type="hidden" name="from" value="' . htmlspecialchars($fromApp, ENT_QUOTES, 'UTF-8') . '" />';
 			}

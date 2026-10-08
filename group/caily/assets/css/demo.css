@@ -11,7 +11,7 @@
   --bs-lime-contrast: #fff;
 }
 
-/* Navbar monitor link — lub-dub + color only on hover */
+/* Navbar monitor — hover lub-dub (green); blink red when uptime < 100% */
 @keyframes nav-monitor-heartbeat {
   0%,
   100% {
@@ -41,14 +41,33 @@
   }
 }
 
+@keyframes nav-monitor-alert-blink {
+  0%,
+  100% {
+    color: #ea5455;
+    opacity: 1;
+    filter: drop-shadow(0 0 4px rgba(234, 84, 85, 0.55));
+  }
+  50% {
+    color: #ea5455;
+    opacity: 0.25;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+}
+
 .nav-monitor-heartbeat {
   display: inline-block;
   transform-origin: center;
 }
 
-a:hover > .nav-monitor-heartbeat,
-a:focus-visible > .nav-monitor-heartbeat {
+.nav-monitor-link:hover > .nav-monitor-heartbeat:not(.is-degraded),
+.nav-monitor-link:focus-visible > .nav-monitor-heartbeat:not(.is-degraded) {
   animation: nav-monitor-heartbeat 1.4s ease-in-out infinite;
+}
+
+.nav-monitor-heartbeat.is-degraded {
+  color: #ea5455;
+  animation: nav-monitor-alert-blink 1s ease-in-out infinite;
 }
 
 /* Navbar bell — shake when unread notifications exist */

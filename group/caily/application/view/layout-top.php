@@ -371,17 +371,69 @@
               <?php endif; ?>
               <li class="nav-item me-2 me-xl-0">
                 <a
-                  class="nav-link"
+                  class="nav-link nav-monitor-link"
                   href="https://caily.com.vn/monitor/"
                   target="_blank"
                   rel="noopener noreferrer"
                   title="サーバー監視"
                   aria-label="サーバー監視"
                   data-bs-toggle="tooltip"
-                  data-bs-placement="bottom">
-                  <i class="icon-base fa fa-heartbeat icon-22px nav-monitor-heartbeat"></i>
+                  data-bs-placement="bottom"
+                  data-api="<?= htmlspecialchars(($root ?? ROOT) . 'api/monitor_uptime.php', ENT_QUOTES, 'UTF-8') ?>">
+                  <i class="icon-base fa fa-heartbeat icon-22px nav-monitor-heartbeat" id="nav-monitor-heartbeat"></i>
                 </a>
               </li>
+              <script>
+              (function () {
+                var link = document.querySelector('.nav-monitor-link');
+                var icon = document.getElementById('nav-monitor-heartbeat');
+                if (!link || !icon) return;
+                var apiUrl = link.getAttribute('data-api') || '';
+
+                function applyPercent(raw) {
+                  var pct = Number(raw);
+                  if (!isFinite(pct)) return;
+                  pct = Math.max(0, Math.min(100, pct));
+                  var degraded = pct < 100;
+                  icon.classList.toggle('is-degraded', degraded);
+                  var label = 'サーバー監視 ' + Math.round(pct) + '%';
+                  link.setAttribute('title', label);
+                  link.setAttribute('aria-label', label);
+                }
+
+                var publicApi = 'https://caily.com.vn/monitor/public/api.php?action=uptime';
+
+                function applyFromData(data) {
+                  if (data && data.ok && data.up_percent != null) {
+                    applyPercent(data.up_percent);
+                    return true;
+                  }
+                  return false;
+                }
+
+                function fetchJson(url, opts) {
+                  return fetch(url, opts).then(function (res) { return res.json(); });
+                }
+
+                function refresh() {
+                  if (!window.fetch) return;
+                  var chain = apiUrl
+                    ? fetchJson(apiUrl, { credentials: 'same-origin', cache: 'no-store' })
+                        .then(function (data) {
+                          if (applyFromData(data)) return true;
+                          // Proxy failed (e.g. server cannot reach upstream) → try browser direct
+                          return fetchJson(publicApi, { mode: 'cors', cache: 'no-store' })
+                            .then(applyFromData);
+                        })
+                    : fetchJson(publicApi, { mode: 'cors', cache: 'no-store' }).then(applyFromData);
+
+                  chain.catch(function () {});
+                }
+
+                refresh();
+                setInterval(refresh, 60000);
+              })();
+              </script>
               <li class="nav-item dropdown-language dropdown me-2 me-xl-0">
                   <a class="nav-link dropdown-toggle hide-arrow" href="javascript:void(0);" data-bs-toggle="dropdown">
                     <i class="icon-base fa fa-language icon-22px text-heading"></i>
