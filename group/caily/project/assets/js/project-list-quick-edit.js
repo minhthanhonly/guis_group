@@ -386,7 +386,19 @@
                         var colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6';
                         var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '">';
                 
-                        html += '<label class="form-label">' + labelText + '</label>';
+                        if (type === 'checkbox_select_all') {
+                            var arrForLabel = val ? String(val).split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
+                            var allCheckedLabel = opts.length > 0 && opts.every(function(opt) { return arrForLabel.indexOf(opt) !== -1; });
+                            html += '<div class="form-label d-flex align-items-center justify-content-between gap-2">'
+                                + '<span>' + labelText + '</span>'
+                                + '<button type="button" class="btn btn-sm btn-outline-secondary py-0 quickEditCustomCheckboxSelectAll">'
+                                + (allCheckedLabel
+                                    ? (typeof translateText === 'function' ? translateText('すべて解除') : 'すべて解除')
+                                    : (typeof translateText === 'function' ? translateText('すべて選択') : 'すべて選択'))
+                                + '</button></div>';
+                        } else {
+                            html += '<label class="form-label">' + labelText + '</label>';
+                        }
                         if (type === 'textarea') {
                             html += '<textarea class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" rows="3">' + (val ? String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '') + '</textarea>';
                         } else if (type === 'select') {
@@ -397,7 +409,7 @@
                             opts.forEach(function(opt) {
                                 html += '<div class="form-check"><input class="form-check-input quickEditCustomRadio" type="radio" name="quickEditCustomRadio_' + idx + '" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
                             });
-                        } else if (type === 'checkbox') {
+                        } else if (type === 'checkbox' || type === 'checkbox_select_all') {
                             var arr = val ? String(val).split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
                             opts.forEach(function(opt) {
                                 var checked = arr.indexOf(opt) !== -1;
@@ -692,6 +704,26 @@
         $(document).off('change.quickeditnouki').on('change.quickeditnouki', '#quickEditProjectForm input[name="tantou"]', revalidateQuickEditNoukiOnChange);
         $(document).off('change.quickeditnoukidate input.quickeditnoukidate').on('change.quickeditnoukidate input.quickeditnoukidate', '#quickEditEndDate, #quickEditCailyNouki, #quickEditGuisNouki', revalidateQuickEditNoukiOnChange);
 
+        $(document).off('click.quickeditselectall', '.quickEditCustomCheckboxSelectAll')
+            .on('click.quickeditselectall', '.quickEditCustomCheckboxSelectAll', function() {
+                var $field = $(this).closest('.quick-edit-custom-field');
+                var $opts = $field.find('.quickEditCustomCheckbox');
+                var allChecked = $opts.length > 0 && $opts.filter(':checked').length === $opts.length;
+                $opts.prop('checked', !allChecked);
+                var selectLabel = !allChecked ? 'すべて解除' : 'すべて選択';
+                $(this).text(typeof translateText === 'function' ? translateText(selectLabel) : selectLabel);
+            });
+        $(document).off('change.quickeditcheckboxsync', '.quick-edit-custom-field .quickEditCustomCheckbox')
+            .on('change.quickeditcheckboxsync', '.quick-edit-custom-field .quickEditCustomCheckbox', function() {
+                var $field = $(this).closest('.quick-edit-custom-field');
+                var $selectAll = $field.find('.quickEditCustomCheckboxSelectAll');
+                if (!$selectAll.length) return;
+                var $opts = $field.find('.quickEditCustomCheckbox');
+                var allChecked = $opts.length > 0 && $opts.filter(':checked').length === $opts.length;
+                var selectLabel = allChecked ? 'すべて解除' : 'すべて選択';
+                $selectAll.text(typeof translateText === 'function' ? translateText(selectLabel) : selectLabel);
+            });
+
         $('#quickEditProjectSaveBtnHeader').off('click.quickedit').on('click.quickedit', function() { $('#quickEditProjectSaveBtn').trigger('click.quickedit'); });
 
         $('#quickEditProjectSaveBtn').off('click.quickedit').on('click.quickedit', async function() {
@@ -882,7 +914,7 @@
                 var type = $field.attr('data-custom-type');
                 if (!label) return;
                 var value = '';
-                if (type === 'checkbox') {
+                if (type === 'checkbox' || type === 'checkbox_select_all') {
                     var checked = $field.find('.quickEditCustomCheckbox:checked').map(function() { return $(this).val(); }).get();
                     value = checked.join(',');
                 } else if (type === 'radio') {

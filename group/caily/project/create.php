@@ -258,7 +258,15 @@ if($_SESSION['show_project'] == 0){
                                             <textarea class="form-control" v-if="customFields[idx]" v-model="customFields[idx].value"></textarea>
                                         </div>
                                         <div v-else class="col-md-4 mb-3">
-                                            <label class="form-label">{{ field.label }}</label>
+                                            <div class="form-label d-flex align-items-center justify-content-between gap-2">
+                                                <span>{{ field.label }}</span>
+                                                <button v-if="field.type === 'checkbox_select_all' && customFields[idx]"
+                                                        type="button"
+                                                        class="btn btn-sm btn-outline-secondary py-0"
+                                                        @click="toggleAllCustomCheckbox(Object.assign(customFields[idx], { options: field.options }))">
+                                                    {{ isAllCustomCheckboxSelected({ options: field.options, valueArr: customFields[idx].valueArr }) ? translateLabel('すべて解除') : translateLabel('すべて選択') }}
+                                                </button>
+                                            </div>
                                             <template v-if="field.type === 'radio'">
                                                 <div v-if="customFields[idx]">
                                                     <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
@@ -273,7 +281,7 @@ if($_SESSION['show_project'] == 0){
                                                     <option v-for="opt in field.options.split(',')" :key="opt.trim()" :value="opt.trim()">{{ opt.trim() }}</option>
                                                 </select>
                                             </template>
-                                            <template v-else-if="field.type === 'checkbox'">
+                                            <template v-else-if="field.type === 'checkbox' || field.type === 'checkbox_select_all'">
                                                 <div v-if="customFields[idx]">
                                                     <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
                                                         <input class="form-check-input" type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="customFields[idx].valueArr">

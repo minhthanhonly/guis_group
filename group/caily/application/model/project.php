@@ -315,14 +315,20 @@ class Project extends ApplicationModel {
             if ($raw === '') {
                 continue;
             }
-            $parts = explode('_:_', $raw, 3);
+            // Format: id_:_content_:_isImportant[_:_label]
+            $parts = explode('_:_', $raw, 4);
             if (count($parts) < 2) {
                 continue;
             }
             $id = $parts[0];
             $content = isset($parts[1]) ? (string) $parts[1] : '';
             $important = isset($parts[2]) ? $parts[2] : '0';
-            $out[] = $id . '_:_' . $content . '_:_' . $important;
+            $label = isset($parts[3]) ? (string) $parts[3] : '';
+            $packedNote = $id . '_:_' . $content . '_:_' . $important;
+            if ($label !== '') {
+                $packedNote .= '_:_' . $label;
+            }
+            $out[] = $packedNote;
             $n++;
         }
         return implode('_|_', $out);
@@ -351,6 +357,7 @@ class Project extends ApplicationModel {
                     // Keep HTML — list UI renders ql-editor / tooltips from original markup
                     'content' => isset($note['content']) ? $note['content'] : '',
                     'is_important' => isset($note['is_important']) ? $note['is_important'] : 0,
+                    'label' => isset($note['label']) ? (string) $note['label'] : '',
                 );
                 $n++;
             }
@@ -457,7 +464,7 @@ class Project extends ApplicationModel {
         $notesGuis = [];
         $this->query("SET SESSION group_concat_max_len = 1048576");
         $noteRows = $this->fetchAll(sprintf(
-            "SELECT project_id, needs_confirmation, id, content, is_important
+            "SELECT project_id, needs_confirmation, id, content, is_important, label
              FROM %sproject_notes
              WHERE project_id IN (%s) AND needs_confirmation IN (1, 2)
              ORDER BY project_id, needs_confirmation, is_important DESC, created_at DESC",
@@ -466,7 +473,11 @@ class Project extends ApplicationModel {
         ));
         foreach ($noteRows as $row) {
             $pid = (int)$row['project_id'];
+            $labelSafe = str_replace(array('_:_', '_|_'), array('-', '-'), trim((string)($row['label'] ?? '')));
             $part = $row['id'] . '_:_' . ($row['content'] ?? '') . '_:_' . ($row['is_important'] ?? 0);
+            if ($labelSafe !== '') {
+                $part .= '_:_' . $labelSafe;
+            }
             if ((int)$row['needs_confirmation'] === 1) {
                 if (!isset($notesCaily[$pid])) {
                     $notesCaily[$pid] = [];
@@ -959,7 +970,7 @@ class Project extends ApplicationModel {
             $idsList = implode(',', array_map('intval', $projectIds));
             $notesTable = DB_PREFIX . 'project_notes';
             $notesRows = $this->fetchAll(
-                "SELECT project_id, display_column, id, content, is_important FROM {$notesTable} " .
+                "SELECT project_id, display_column, id, content, is_important, label FROM {$notesTable} " .
                 "WHERE project_id IN ({$idsList}) AND display_column IS NOT NULL AND TRIM(display_column) != '' " .
                 "ORDER BY is_important DESC, created_at DESC"
             );
@@ -969,7 +980,12 @@ class Project extends ApplicationModel {
                 if ($col === '') continue;
                 if (!isset($notesByProject[$pid])) $notesByProject[$pid] = [];
                 if (!isset($notesByProject[$pid][$col])) $notesByProject[$pid][$col] = [];
-                $notesByProject[$pid][$col][] = ['id' => $nr['id'], 'content' => $nr['content'] ?? '', 'is_important' => $nr['is_important'] ?? 0];
+                $notesByProject[$pid][$col][] = [
+                    'id' => $nr['id'],
+                    'content' => $nr['content'] ?? '',
+                    'is_important' => $nr['is_important'] ?? 0,
+                    'label' => isset($nr['label']) ? (string) $nr['label'] : '',
+                ];
             }
         }
         foreach ($data as &$project) {
@@ -8446,6 +8462,10 @@ class Project extends ApplicationModel {
         $needs_confirmation = isset($params['needs_confirmation']) && $params['needs_confirmation'] !== ''
             ? intval($params['needs_confirmation']) : 0;
         $display_column = isset($params['display_column']) ? trim((string)$params['display_column']) : '';
+        $label = isset($params['label']) ? trim((string)$params['label']) : '';
+        if (mb_strlen($label) > 100) {
+            $label = mb_substr($label, 0, 100);
+        }
         $now = date('Y-m-d H:i:s');
 
         require_once('projectnote.php');
@@ -8459,6 +8479,7 @@ class Project extends ApplicationModel {
             'is_important' => $is_important ? 1 : 0,
             'needs_confirmation' => 2,
             'display_column' => $display_column,
+            'label' => $label,
             'created_at' => $now,
             'updated_at' => $now,
         ));

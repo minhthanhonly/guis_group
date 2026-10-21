@@ -665,6 +665,12 @@ if($_SESSION['show_project'] == 0){
                                 <span class="badge bg-primary" v-else>確認必要</span>
                             </div>
                         </div>
+                        <div class="mb-3" v-if="editingNote.label">
+                            <label class="form-label"><span>ラベル</span></label>
+                            <div>
+                                <span class="note-label-chip" :style="getNoteLabelStyle(editingNote.label)"><i class="fa fa-tag note-label-chip-icon" aria-hidden="true"></i><span class="note-label-chip-text">{{ editingNote.label }}</span></span>
+                            </div>
+                        </div>
                         <div class="mb-3" v-if="editingNote.display_column">
                             <label class="form-label"><span>表示列</span></label>
                             <div>{{ getNoteDisplayColumnLabel(editingNote.display_column) }}</div>
@@ -686,6 +692,20 @@ if($_SESSION['show_project'] == 0){
                                     <i class="fa fa-exclamation-circle text-danger me-2"></i> <span data-i18n="重要メモ">重要メモ</span>
                                 </label>
                             </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label"><span>ラベル</span></label>
+                            <select class="form-select" v-model="editingNote.labelSelect" @change="onNoteLabelSelectChange">
+                                <option value="">— 選択 —</option>
+                                <option v-for="lbl in noteLabelSelectOptions" :key="lbl.name" :value="lbl.name">{{ lbl.name }}</option>
+                                <option :value="NOTE_LABEL_OTHER">その他</option>
+                            </select>
+                            <input v-if="editingNote.labelSelect === NOTE_LABEL_OTHER"
+                                   type="text"
+                                   class="form-control mt-2"
+                                   v-model="editingNote.labelOther"
+                                   maxlength="100"
+                                   placeholder="ラベルを入力">
                         </div>
                         <div class="mb-3">
                             <label class="form-label d-block"><span>区分</span></label>
@@ -1263,6 +1283,40 @@ body.pl-col-resizing * {
 
 #projectTable .badge:last-child {
     margin-right: 0;
+}
+
+/* Memo label chip — distinct from Bootstrap .badge */
+.note-label-chip {
+    --note-label-color: #6c757d;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    max-width: 12rem;
+    padding: 0.12rem 0.55rem 0.12rem 0.4rem;
+    border: 1px dashed color-mix(in srgb, var(--note-label-color) 70%, transparent);
+    border-left: 3px solid var(--note-label-color);
+    border-radius: 0.15rem 999px 999px 0.15rem;
+    background: color-mix(in srgb, var(--note-label-color) 12%, transparent);
+    color: var(--note-label-color);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.25;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.note-label-chip-icon {
+    font-size: 0.65rem;
+    opacity: 0.85;
+    flex-shrink: 0;
+}
+.note-label-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+[data-bs-theme="dark"] .note-label-chip {
+    background: color-mix(in srgb, var(--note-label-color) 22%, transparent);
+    border-color: color-mix(in srgb, var(--note-label-color) 55%, transparent);
 }
 
 /* Confirmation notes column */

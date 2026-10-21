@@ -2144,6 +2144,9 @@ var projectTable;
         });
     }
 
+    /** Select value for free-text note label (その他) */
+    const NOTE_LABEL_OTHER = '__other__';
+
     // Cột dùng cho note 表示列 (giống project-detail.js, bỏ is_favorite, ID, CAILYメモ, GUISメモ)
     const NOTE_DISPLAY_COLUMNS = [
         { key: 'status', label: '案件状況' },
@@ -2627,6 +2630,71 @@ var projectTable;
         return { short: short, full: full };
     }
 
+    /** Pack format: id_:_content_:_isImportant[_:_label] */
+    function parsePackedConfirmationNote(raw) {
+        var arr = String(raw || '').trim().split('_:_');
+        return {
+            id: arr[0] || '',
+            content: arr.length > 1 ? arr[1] : '',
+            isImportant: arr.length > 2 ? arr[2] : '0',
+            label: arr.length > 3 ? arr.slice(3).join('_:_') : ''
+        };
+    }
+
+    function getProjectListNoteLabelColor(labelName) {
+        if (!labelName) return '';
+        var labels = [];
+        try {
+            if (window.app && Array.isArray(window.app.noteLabels)) {
+                labels = window.app.noteLabels;
+            } else if (window.app && window.app.selectedDepartment && Array.isArray(window.app.selectedDepartment.note_labels)) {
+                labels = window.app.selectedDepartment.note_labels;
+            }
+        } catch (e) { /* ignore */ }
+        for (var i = 0; i < labels.length; i++) {
+            if (labels[i] && labels[i].name === labelName && labels[i].color) {
+                return String(labels[i].color);
+            }
+        }
+        return '';
+    }
+
+    function buildNoteLabelBadgeHtml(labelName) {
+        if (!labelName) return '';
+        var color = getProjectListNoteLabelColor(labelName) || '#6c757d';
+        var style = '--note-label-color:' + color + ';';
+        return '<span class="note-label-chip me-1" style="' + style + '">' +
+            '<i class="fa fa-tag note-label-chip-icon" aria-hidden="true"></i>' +
+            '<span class="note-label-chip-text">' + escapeHtmlForNote(labelName) + '</span>' +
+            '</span>';
+    }
+
+    function buildConfirmationNoteItemHtml(parsed) {
+        var decodedText = parsed.content || '';
+        if (typeof decodeHtmlEntities !== 'undefined') {
+            decodedText = decodeHtmlEntities(decodedText);
+        } else if (decodedText.indexOf('&lt;') !== -1 || decodedText.indexOf('&gt;') !== -1 || decodedText.indexOf('&amp;') !== -1) {
+            decodedText = decodedText.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+        }
+        decodedText = (decodedText || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
+        var isEditing = window.app && window.app.currentEditingNoteId === parsed.id;
+        var labelHtml = buildNoteLabelBadgeHtml(parsed.label);
+        return `
+            <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''} ${parsed.isImportant == 1 ? 'important-note' : ''}" ${parsed.id ? `data-note-id="${parsed.id}"` : ''}>
+                ${labelHtml ? '<div class="mb-1">' + labelHtml + '</div>' : ''}
+                <div class="note-text small ql-editor">${decodedText || '-'}</div>
+                <span class="note-actions d-none ms-1">
+                    <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
+                        <i class="fa fa-pencil-alt"></i>
+                    </span>
+                    <span class="note-delete-icon text-danger" title="メモを削除" style="cursor: pointer;">
+                        <i class="fa fa-trash"></i>
+                    </span>
+                </span>
+            </div>
+        `;
+    }
+
     function normalizeColumnVisibilityBool(value, fallback) {
         if (value === true || value === 1 || value === '1' || value === 'true') return true;
         if (value === false || value === 0 || value === '0' || value === 'false') return false;
@@ -2891,7 +2959,7 @@ var projectTable;
             if (typeof window.formatDateTime === 'function') return '<span class="small text-nowrap"' + attrs + '>' + window.formatDateTime(v) + '</span>';
             return '<span class="small text-nowrap"' + attrs + '>' + v + '</span>';
         }
-        if (type === 'checkbox' || type === 'radio' || type === 'select') {
+        if (type === 'checkbox' || type === 'checkbox_select_all' || type === 'radio' || type === 'select') {
             var badgeClass = 'bg-label-secondary';
             // Nếu giá trị chứa '問題' hoặc 'エラー' → đỏ
             if (v.indexOf('問題') !== -1 || v.indexOf('エラー') !== -1) {
@@ -4139,35 +4207,7 @@ var projectTable;
                                     </div>`);
                             return;
                         }
-                        const html = notes.map(note => {
-                            const raw = note.trim();
-                            const delim = '_:_';
-                            let arr = raw.split(delim);
-                            let id = arr[0];
-                            let text = arr[1];
-                            let isImportant = arr[2];
-                            let decodedText = text;
-                            if (typeof decodeHtmlEntities !== 'undefined') {
-                                decodedText = decodeHtmlEntities(text);
-                            } else if (text.indexOf('&lt;') !== -1 || text.indexOf('&gt;') !== -1 || text.indexOf('&amp;') !== -1) {
-                                decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
-                            }
-                            decodedText = (decodedText || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
-                            const isEditing = window.app && window.app.currentEditingNoteId === id;
-                            return `
-                                <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''} ${isImportant == 1 ? 'important-note' : ''}" ${id ? `data-note-id="${id}"` : ''}>
-                                    <div class="note-text small ql-editor">${decodedText || '-'}</div>
-                                    <span class="note-actions d-none ms-1">
-                                        <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
-                                            <i class="fa fa-pencil-alt"></i>
-                                        </span>
-                                        <span class="note-delete-icon text-danger" title="メモを削除" style="cursor: pointer;">
-                                            <i class="fa fa-trash"></i>
-                                        </span>
-                                    </span>
-                                </div>
-                            `;
-                        }).join('');
+                        const html = notes.map(note => buildConfirmationNoteItemHtml(parsePackedConfirmationNote(note))).join('');
                         $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                     },
                     title: buildI18nHeaderTitle('CAILYメモ'),
@@ -4211,35 +4251,7 @@ var projectTable;
                                     </div>`);
                             return;
                         }
-                        const html = notes.map(note => {
-                            const raw = note.trim();
-                            const delim = '_:_';
-                            let arr = raw.split(delim);
-                            let id = arr[0];
-                            let text = arr[1];
-                            let isImportant = arr[2];
-                            let decodedText = text;
-                            if (typeof decodeHtmlEntities !== 'undefined') {
-                                decodedText = decodeHtmlEntities(text);
-                            } else if (text.indexOf('&lt;') !== -1 || text.indexOf('&gt;') !== -1 || text.indexOf('&amp;') !== -1) {
-                                decodedText = text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
-                            }
-                            decodedText = (decodedText || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
-                            const isEditing = window.app && window.app.currentEditingNoteId === id;
-                            return `
-                                <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''} ${isImportant == 1 ? 'important-note' : ''}" ${id ? `data-note-id="${id}"` : ''}>
-                                    <div class="note-text small ql-editor">${decodedText || '-'}</div>
-                                    <span class="note-actions d-none ms-1">
-                                        <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
-                                            <i class="fa fa-pencil-alt"></i>
-                                        </span>
-                                        <span class="note-delete-icon text-danger" title="メモを削除" style="cursor: pointer;">
-                                            <i class="fa fa-trash"></i>
-                                        </span>
-                                    </span>
-                                </div>
-                            `;
-                        }).join('');
+                        const html = notes.map(note => buildConfirmationNoteItemHtml(parsePackedConfirmationNote(note))).join('');
                         $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                     },
                     title: buildI18nHeaderTitle('GUISメモ'),
@@ -5196,6 +5208,7 @@ var projectTable;
                             tooltipAttrs = ' data-bs-toggle="tooltip" data-bs-title="' + escapeHtmlForNote(sn.full) + '"';
                         }
                         var isImportant = n.is_important == 1;
+                        // Label only on CAILYメモ / GUISメモ columns — not on other column snippets
                         parts.push(
                             '<div class="confirmation-note-item mb-1 cell-note-snippet-item ' + (isImportant ? 'important-note' : '') + '" data-note-id="' + (n.id || '') + '" data-project-id="' + (rowData.id || '') + '" style="cursor:pointer"' + tooltipAttrs + '>' +
                                 '<div class="note-text small ql-editor" style="max-height:2.5em;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;">' + (decodedHtml || '-') + '</div>' +
@@ -7110,6 +7123,8 @@ var projectTable;
                     showNoteModal: false,
                     isNoteEditMode: false,
                     currentEditingNoteId: null, // Track which note is being edited
+                    NOTE_LABEL_OTHER: NOTE_LABEL_OTHER,
+                    noteLabelsCache: {},
                     editingNote: {
                         id: null,
                         title: '',
@@ -7117,9 +7132,13 @@ var projectTable;
                         is_important: false,
                         needs_confirmation: false,
                         display_column: '',
+                        label: '',
+                        labelSelect: '',
+                        labelOther: '',
                         user_id: null
                     },
                     currentNoteProjectId: null,
+                    currentNoteDepartmentId: null,
                     quillNoteInstance: null,
                     quillNoteContent: '',
                     savingNote: false,
@@ -7194,6 +7213,27 @@ var projectTable;
                         }
                     });
                     return list;
+                },
+                noteLabels() {
+                    const fromSelected = this.selectedDepartment && Array.isArray(this.selectedDepartment.note_labels)
+                        ? this.selectedDepartment.note_labels
+                        : null;
+                    if (fromSelected && fromSelected.length) {
+                        return fromSelected;
+                    }
+                    const deptId = this.currentNoteDepartmentId
+                        || (this.selectedDepartment && this.selectedDepartment.id)
+                        || null;
+                    if (deptId && this.noteLabelsCache[deptId]) {
+                        return this.noteLabelsCache[deptId];
+                    }
+                    return [];
+                },
+                noteLabelSelectOptions() {
+                    const otherVal = this.NOTE_LABEL_OTHER;
+                    return (this.noteLabels || []).filter(function(l) {
+                        return l && l.name && l.name !== 'その他' && l.name !== otherVal;
+                    });
                 },
                 canSaveNote() {
                     const raw = (this.quillNoteContent || this.editingNote.content || '').trim();
@@ -7581,6 +7621,7 @@ var projectTable;
                     try {
                         const response = await axios.get('/api/index.php?model=department&method=listByUser');
                         this.departments = response.data || [];
+                        this.noteLabelsCache = {};
 
                         if (this.departments.length === 0) {
                             this.selectedDepartment = null;
@@ -7685,8 +7726,89 @@ var projectTable;
                         this.notes = [];
                     }
                 },
+                resolveNoteDepartmentId(projectId) {
+                    if (this.selectedDepartment && this.selectedDepartment.id) {
+                        return this.selectedDepartment.id;
+                    }
+                    try {
+                        if (typeof projectTable !== 'undefined' && projectTable) {
+                            const rows = projectTable.rows({ page: 'current' }).data().toArray();
+                            const row = rows.find(r => String(r.id) === String(projectId));
+                            if (row && row.department_id) return row.department_id;
+                        }
+                    } catch (e) { /* ignore */ }
+                    return null;
+                },
+                async ensureNoteLabelsForDepartment(departmentId) {
+                    if (!departmentId) return;
+                    if (this.noteLabelsCache[departmentId]) return;
+                    if (this.selectedDepartment
+                        && String(this.selectedDepartment.id) === String(departmentId)
+                        && Array.isArray(this.selectedDepartment.note_labels)) {
+                        this.noteLabelsCache[departmentId] = this.selectedDepartment.note_labels;
+                        return;
+                    }
+                    try {
+                        const response = await axios.get('/api/index.php?model=department&method=get&id=' + departmentId);
+                        const labels = Array.isArray(response.data && response.data.note_labels)
+                            ? response.data.note_labels
+                            : [];
+                        this.noteLabelsCache[departmentId] = labels;
+                    } catch (e) {
+                        this.noteLabelsCache[departmentId] = [];
+                    }
+                },
+                getNoteLabelStyle(labelName) {
+                    if (!labelName) return {};
+                    const found = (this.noteLabels || []).find(l => l && l.name === labelName);
+                    const color = (found && found.color) ? found.color : '#6c757d';
+                    return { '--note-label-color': color };
+                },
+                buildEmptyEditingNote(overrides = {}) {
+                    return Object.assign({
+                        id: null,
+                        title: '',
+                        content: '',
+                        is_important: false,
+                        needs_confirmation: 0,
+                        display_column: '',
+                        label: '',
+                        labelSelect: '',
+                        labelOther: '',
+                        user_id: null
+                    }, overrides);
+                },
+                applySavedLabelToEditingNote(labelValue) {
+                    const label = (labelValue != null && labelValue !== undefined) ? String(labelValue).trim() : '';
+                    this.editingNote.label = label;
+                    if (!label) {
+                        this.editingNote.labelSelect = '';
+                        this.editingNote.labelOther = '';
+                        return;
+                    }
+                    const predefined = (this.noteLabelSelectOptions || []).some(l => l && l.name === label);
+                    if (predefined) {
+                        this.editingNote.labelSelect = label;
+                        this.editingNote.labelOther = '';
+                    } else {
+                        this.editingNote.labelSelect = this.NOTE_LABEL_OTHER;
+                        this.editingNote.labelOther = label;
+                    }
+                },
+                onNoteLabelSelectChange() {
+                    if (this.editingNote.labelSelect !== this.NOTE_LABEL_OTHER) {
+                        this.editingNote.labelOther = '';
+                    }
+                },
+                resolveNoteLabelForSave() {
+                    if (this.editingNote.labelSelect === this.NOTE_LABEL_OTHER) {
+                        return String(this.editingNote.labelOther || '').trim().slice(0, 100);
+                    }
+                    return String(this.editingNote.labelSelect || '').trim().slice(0, 100);
+                },
                 openNoteModalFromListById(projectId, noteId) {
                     this.currentNoteProjectId = projectId;
+                    this.currentNoteDepartmentId = this.resolveNoteDepartmentId(projectId);
                     this.showNoteModal = true;
                     this.isNoteEditMode = true;
                     this.currentEditingNoteId = noteId; // Track which note is being edited
@@ -7694,19 +7816,14 @@ var projectTable;
                     this.quillNoteContent = '';
                 
                     // Reset editing note
-                    this.editingNote = {
-                        id: null,
-                        title: '',
-                        content: '',
-                        is_important: false,
-                        needs_confirmation: 0,
-                        display_column: '',
-                        user_id: null
-                    };
-                    this.loadNotesForProject(projectId).then(() => {
+                    this.editingNote = this.buildEmptyEditingNote();
+                    Promise.all([
+                        this.loadNotesForProject(projectId),
+                        this.ensureNoteLabelsForDepartment(this.currentNoteDepartmentId)
+                    ]).then(() => {
                         const match = this.notes.find(n => String(n.id) === String(noteId));
                         if (match) {
-                            this.editingNote = {
+                            this.editingNote = this.buildEmptyEditingNote({
                                 id: match.id,
                                 title: match.title,
                                 content: decodeHtmlForNote(match.content),
@@ -7714,7 +7831,8 @@ var projectTable;
                                 needs_confirmation: Number(match.needs_confirmation) || 0,
                                 display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : '',
                                 user_id: match.user_id
-                            };
+                            });
+                            this.applySavedLabelToEditingNote(match.label);
                             this.quillNoteContent = this.editingNote.content || '';
                         }
                         this.$nextTick(() => {
@@ -7724,6 +7842,7 @@ var projectTable;
                 },
                 openNoteModalFromList(projectId, noteContent = null, noteType = 0, displayColumnKey = '') {
                     this.currentNoteProjectId = projectId;
+                    this.currentNoteDepartmentId = this.resolveNoteDepartmentId(projectId);
                     this.showNoteModal = true;
                     this.isNoteEditMode = true;
                     this.currentEditingNoteId = null; // No specific note ID for fallback mode
@@ -7734,21 +7853,19 @@ var projectTable;
                         var def = parseInt(window.NOTE_DEFAULT_TYPE, 10);
                         if (!isNaN(def)) noteType = def;
                     }
-                    this.editingNote = {
-                        id: null,
-                        title: '',
-                        content: '',
-                        is_important: false,
+                    this.editingNote = this.buildEmptyEditingNote({
                         needs_confirmation: noteType || 0,
-                        display_column: displayColumnKey || '',
-                        user_id: null
-                    };
-                    this.loadNotesForProject(projectId).then(() => {
+                        display_column: displayColumnKey || ''
+                    });
+                    Promise.all([
+                        this.loadNotesForProject(projectId),
+                        this.ensureNoteLabelsForDepartment(this.currentNoteDepartmentId)
+                    ]).then(() => {
                         if (noteContent) {
                             const trimmed = noteContent.trim();
                             const match = this.notes.find(n => (n.content || '').trim() === trimmed && (n.needs_confirmation == 1 || n.needs_confirmation == 2));
                             if (match) {
-                                this.editingNote = {
+                                this.editingNote = this.buildEmptyEditingNote({
                                     id: match.id,
                                     title: match.title,
                                     content: decodeHtmlForNote(match.content),
@@ -7756,7 +7873,8 @@ var projectTable;
                                     needs_confirmation: Number(match.needs_confirmation) || 0,
                                     display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : (displayColumnKey || ''),
                                     user_id: match.user_id
-                                };
+                                });
+                                this.applySavedLabelToEditingNote(match.label);
                                 this.quillNoteContent = this.editingNote.content || '';
                             } else {
                                 this.editingNote.content = decodeHtmlForNote(noteContent);
@@ -7774,17 +7892,10 @@ var projectTable;
                     this.isNoteEditMode = false;
                     this.savingNote = false;
                     this.currentEditingNoteId = null; // Clear editing note tracking
+                    this.currentNoteDepartmentId = null;
                     this.destroyQuillNoteEditor();
                 
-                    this.editingNote = {
-                        id: null,
-                        title: '',
-                        content: '',
-                        is_important: false,
-                        needs_confirmation: 0,
-                        display_column: '',
-                        user_id: null
-                    };
+                    this.editingNote = this.buildEmptyEditingNote();
                     this.quillNoteContent = '';
                 },
                 getNoteDisplayColumnLabel(value) {
@@ -7884,6 +7995,10 @@ var projectTable;
                         showProjectListError('プロジェクトIDが取得できません');
                         return;
                     }
+                    if (this.editingNote.labelSelect === this.NOTE_LABEL_OTHER && !this.resolveNoteLabelForSave()) {
+                        showProjectListError('その他のラベルを入力してください');
+                        return;
+                    }
                     this.savingNote = true;
                     try {
                         const formData = new FormData();
@@ -7892,6 +8007,7 @@ var projectTable;
                         formData.append('is_important', this.editingNote.is_important ? 1 : 0);
                         formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
                         formData.append('display_column', this.editingNote.display_column || '');
+                        formData.append('label', this.resolveNoteLabelForSave());
                     
                         let response;
                         if (this.editingNote.id) {

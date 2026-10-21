@@ -5,7 +5,7 @@
  *   key (required), project_id (required),
  *   content (required), title (optional; auto from first line of content),
  *   is_important (optional, 0|1), needs_confirmation (optional, 0|1|2),
- *   display_column (optional), user_id (optional, default admin).
+ *   display_column (optional), label (optional), user_id (optional, default admin).
  */
 header('Content-Type: application/json; charset=UTF-8');
 
@@ -19,6 +19,7 @@ $params = array(
     'is_important'       => isset($_REQUEST['is_important']) ? $_REQUEST['is_important'] : '',
     'needs_confirmation' => isset($_REQUEST['needs_confirmation']) ? $_REQUEST['needs_confirmation'] : '',
     'display_column'     => isset($_REQUEST['display_column']) ? $_REQUEST['display_column'] : '',
+    'label'              => isset($_REQUEST['label']) ? $_REQUEST['label'] : '',
     'user_id'            => isset($_REQUEST['user_id']) ? $_REQUEST['user_id'] : '',
     'key'                => isset($_REQUEST['key']) ? $_REQUEST['key'] : '',
 );

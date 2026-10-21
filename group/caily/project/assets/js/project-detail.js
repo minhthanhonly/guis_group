@@ -98,6 +98,9 @@ var NOTE_DISPLAY_COLUMNS = [
     { key: 'parent_guis_receiver', label: 'GUIS 受付者' }
 ];
 
+/** Select value for free-text note label (その他) */
+var NOTE_LABEL_OTHER = '__other__';
+
 const SERVER_TASK_TIMEZONE = 'Asia/Tokyo';
 const VIETNAM_TASK_TIMEZONE = 'Asia/Ho_Chi_Minh';
 const PROJECT_DATETIME_MOMENT_FORMAT = 'YYYY/M/D HH:mm';
@@ -574,6 +577,10 @@ const vueApp = createApp({
             notes: [],
             showNoteModal: false,
             isNoteEditMode: false,
+            NOTE_LABEL_OTHER: (typeof NOTE_LABEL_OTHER !== 'undefined' ? NOTE_LABEL_OTHER : '__other__'),
+            noteLabels: [],
+            noteFilterLabel: '',
+            noteFilterType: '',
             editingNote: {
                 id: null,
                 title: '',
@@ -581,6 +588,9 @@ const vueApp = createApp({
                 is_important: false,
                 needs_confirmation: false,
                 display_column: '',
+                label: '',
+                labelSelect: '',
+                labelOther: '',
                 user_id: null
             },
             quillNoteInstance: null,
@@ -750,6 +760,46 @@ const vueApp = createApp({
             // Return all custom field sets for the department
             if (!this.project || !this.project.department_id) return [];
             return this.departmentCustomFieldSets || [];
+        },
+        /** Predefined labels for select (exclude その他 which is always the free-text option) */
+        noteLabelSelectOptions() {
+            const otherVal = this.NOTE_LABEL_OTHER;
+            return (this.noteLabels || []).filter(function(l) {
+                return l && l.name && l.name !== 'その他' && l.name !== otherVal;
+            });
+        },
+        /** Unique labels present on current notes (for filter dropdown) */
+        noteFilterLabelOptions() {
+            const seen = {};
+            const out = [];
+            (this.notes || []).forEach(function(n) {
+                const name = n && n.label != null ? String(n.label).trim() : '';
+                if (!name || seen[name]) return;
+                seen[name] = true;
+                out.push(name);
+            });
+            out.sort(function(a, b) {
+                return a.localeCompare(b, 'ja');
+            });
+            return out;
+        },
+        filteredNotes() {
+            const labelFilter = this.noteFilterLabel;
+            const typeFilter = this.noteFilterType === '' || this.noteFilterType === null || this.noteFilterType === undefined
+                ? ''
+                : String(this.noteFilterType);
+            return (this.notes || []).filter(function(note) {
+                if (labelFilter === '__none__') {
+                    if (note.label != null && String(note.label).trim() !== '') return false;
+                } else if (labelFilter) {
+                    if (String(note.label || '').trim() !== labelFilter) return false;
+                }
+                if (typeFilter !== '') {
+                    const t = Number(note.needs_confirmation) || 0;
+                    if (String(t) !== typeFilter) return false;
+                }
+                return true;
+            });
         },
         /** Options cho select "表示列" (display_column): cột danh sách project + custom fields. Loại trùng tên khác suffix 状況 */
         noteDisplayColumnOptions() {
@@ -1265,10 +1315,19 @@ const vueApp = createApp({
         },
         async loadDepartment() {
             try {
+                if (!this.project || !this.project.department_id) {
+                    this.department = null;
+                    this.noteLabels = [];
+                    return;
+                }
                 const response = await axios.get(`/api/index.php?model=department&method=get&id=${this.project.department_id}`);
                 this.department = response.data;
+                this.noteLabels = Array.isArray(response.data && response.data.note_labels)
+                    ? response.data.note_labels
+                    : [];
             } catch (error) {
                 console.error('Error loading department:', error);
+                this.noteLabels = [];
             }
         },
         async loadMembers() {
@@ -3175,7 +3234,7 @@ const vueApp = createApp({
             const valueMap = {};
             this.customFields.forEach(field => {
                     if (field.label) {
-                    if (field.type === 'checkbox') {
+                    if (field.type === 'checkbox' || field.type === 'checkbox_select_all') {
                         valueMap[field.label.trim()] = Array.isArray(field.valueArr) ? field.valueArr.join(',') : '';
                     } else if (field.type === 'datetime') {
                         valueMap[field.label.trim()] = fromProjectDateTimeInputValue(field.value || '');
@@ -3622,13 +3681,55 @@ const vueApp = createApp({
                 this.notes = [];
             }
         },
+        buildEmptyEditingNote(overrides = {}) {
+            return Object.assign({
+                id: null,
+                title: '',
+                content: '',
+                is_important: false,
+                needs_confirmation: 0,
+                display_column: '',
+                label: '',
+                labelSelect: '',
+                labelOther: '',
+                user_id: null
+            }, overrides);
+        },
+        applySavedLabelToEditingNote(labelValue) {
+            const label = (labelValue != null && labelValue !== undefined) ? String(labelValue).trim() : '';
+            this.editingNote.label = label;
+            if (!label) {
+                this.editingNote.labelSelect = '';
+                this.editingNote.labelOther = '';
+                return;
+            }
+            const predefined = (this.noteLabelSelectOptions || []).some(l => l && l.name === label);
+            if (predefined) {
+                this.editingNote.labelSelect = label;
+                this.editingNote.labelOther = '';
+            } else {
+                this.editingNote.labelSelect = this.NOTE_LABEL_OTHER;
+                this.editingNote.labelOther = label;
+            }
+        },
+        onNoteLabelSelectChange() {
+            if (this.editingNote.labelSelect !== this.NOTE_LABEL_OTHER) {
+                this.editingNote.labelOther = '';
+            }
+        },
+        resolveNoteLabelForSave() {
+            if (this.editingNote.labelSelect === this.NOTE_LABEL_OTHER) {
+                return String(this.editingNote.labelOther || '').trim().slice(0, 100);
+            }
+            return String(this.editingNote.labelSelect || '').trim().slice(0, 100);
+        },
         openNoteModal(note = null) {
             this.showNoteModal = true;
             this.isNoteEditMode = false;
             
             if (note) {
                 // Edit existing note (decode HTML entities so &lt; shows as < in textarea)
-                this.editingNote = {
+                this.editingNote = this.buildEmptyEditingNote({
                     id: note.id,
                     title: note.title,
                     content: note.content ? this.decodeHtmlEntities(note.content) : '',
@@ -3636,20 +3737,15 @@ const vueApp = createApp({
                     needs_confirmation: Number(note.needs_confirmation) || 0,
                     display_column: (note.display_column != null && note.display_column !== undefined) ? String(note.display_column) : '',
                     user_id: note.user_id
-                };
+                });
+                this.applySavedLabelToEditingNote(note.label);
             } else {
                 // Create new note
                 var defaultType = (typeof window !== 'undefined' && typeof window.NOTE_DEFAULT_TYPE !== 'undefined') ? parseInt(window.NOTE_DEFAULT_TYPE, 10) : 0;
                 if (isNaN(defaultType)) defaultType = 0;
-                this.editingNote = {
-                    id: null,
-                    title: '',
-                    content: '',
-                    is_important: false,
-                    needs_confirmation: defaultType,
-                    display_column: '',
-                    user_id: null
-                };
+                this.editingNote = this.buildEmptyEditingNote({
+                    needs_confirmation: defaultType
+                });
             }
             // Init Quill editor nếu ở edit mode
             if (!note) {
@@ -3663,15 +3759,7 @@ const vueApp = createApp({
             this.showNoteModal = false;
             this.isNoteEditMode = false;
             this.destroyQuillNoteEditor();
-            this.editingNote = {
-                id: null,
-                title: '',
-                content: '',
-                is_important: false,
-                needs_confirmation: 0,
-                display_column: '',
-                user_id: null
-            };
+            this.editingNote = this.buildEmptyEditingNote();
             this.quillNoteContent = '';
         },
         getNoteDisplayColumnLabel(value) {
@@ -3680,11 +3768,25 @@ const vueApp = createApp({
             var o = opts.find(function(x) { return x.value === value; });
             return o ? o.text : value;
         },
+        getNoteLabelStyle(labelName) {
+            if (!labelName) return {};
+            const found = (this.noteLabels || []).find(l => l && l.name === labelName);
+            const color = (found && found.color) ? found.color : '#6c757d';
+            return { '--note-label-color': color };
+        },
+        clearNoteFilters() {
+            this.noteFilterLabel = '';
+            this.noteFilterType = '';
+        },
         async saveNote() {
             // Lấy nội dung từ Quill editor nếu có, nếu không dùng editingNote.content
             const rawContent = (this.quillNoteContent && this.quillNoteContent.trim()) || (this.editingNote.content || '').trim();
             if (!rawContent) {
                 this.showNotification('内容を入力してください', 'error');
+                return;
+            }
+            if (this.editingNote.labelSelect === this.NOTE_LABEL_OTHER && !this.resolveNoteLabelForSave()) {
+                this.showNotification('その他のラベルを入力してください', 'error');
                 return;
             }
             try {
@@ -3694,6 +3796,7 @@ const vueApp = createApp({
                 formData.append('is_important', this.editingNote.is_important ? 1 : 0);
                 formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
                 formData.append('display_column', this.editingNote.display_column || '');
+                formData.append('label', this.resolveNoteLabelForSave());
                 
                 let response;
                 if (this.editingNote.id) {
@@ -4319,6 +4422,34 @@ const vueApp = createApp({
             const val = this.getCustomFieldValue(fieldLabel);
             return (val || '').split(',').map(s => s.trim()).includes(opt);
         },
+        getCustomCheckboxOptions(field) {
+            return (field && field.options != null ? String(field.options) : '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        },
+        isAllCustomCheckboxSelected(field) {
+            const opts = this.getCustomCheckboxOptions(field);
+            if (!opts.length) return false;
+            const arr = Array.isArray(field.valueArr) ? field.valueArr : [];
+            return opts.every(o => arr.includes(o));
+        },
+        toggleAllCustomCheckbox(field) {
+            const opts = this.getCustomCheckboxOptions(field);
+            const checked = !this.isAllCustomCheckboxSelected(field);
+            field.valueArr = checked ? opts.slice() : [];
+            field.value = field.valueArr.join(',');
+        },
+        isAllCustomFieldCheckboxSelected(field) {
+            const opts = this.getCustomCheckboxOptions(field);
+            if (!opts.length) return false;
+            return opts.every(o => this.isCustomFieldCheckboxChecked(field.label, o));
+        },
+        onCustomFieldSelectAllToggle(field) {
+            const opts = this.getCustomCheckboxOptions(field);
+            const checked = !this.isAllCustomFieldCheckboxSelected(field);
+            this.updateCustomFieldValue(field.label, checked ? opts.join(',') : '');
+        },
         onCustomFieldCheckboxChange(field, opt, checked) {
             const current = (this.getCustomFieldValue(field.label) || '').split(',').map(s => s.trim()).filter(Boolean);
             if (checked) {
@@ -4759,7 +4890,7 @@ const vueApp = createApp({
                         this.customFields = allFieldsFromSets.map(f => {
                             const savedField = savedValueMap[f.label.trim()];
                             const oneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
-                            if (f.type === 'checkbox') {
+                            if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
                                 let arr = [];
                                 if (savedField && savedField.value) {
                                     arr = savedField.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -4790,7 +4921,7 @@ const vueApp = createApp({
                         // No saved data, just use fields from all sets
                         this.customFields = allFieldsFromSets.map(f => {
                             const oneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
-                            if (f.type === 'checkbox') {
+                            if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
                                 return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: '', valueArr: [] };
                             } else {
                                 return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: '' };
@@ -5119,7 +5250,7 @@ const vueApp = createApp({
                                     savedFieldValue: savedField ? savedField.value : null
                                 });
                                 
-                                if (f.type === 'checkbox') {
+                                if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
                                     let arr = [];
                                     if (savedField && savedField.value) {
                                         arr = savedField.value.split(',').map(s => s.trim()).filter(Boolean);
@@ -5160,7 +5291,7 @@ const vueApp = createApp({
                 if (JSON.stringify(newVal) === JSON.stringify(oldVal)) return;
                 
                 this.customFields.forEach((field, idx) => {
-                    if (field.type === 'checkbox') {
+                    if (field.type === 'checkbox' || field.type === 'checkbox_select_all') {
                         // If valueArr changes, update value
                         if (Array.isArray(field.valueArr)) {
                             this.customFields[idx].value = field.valueArr.join(',');
@@ -5184,7 +5315,10 @@ const vueApp = createApp({
             this.loadLogs(),
         ]);
         // Needs department_id from getById
-        await this.loadDepartmentCustomFieldSets();
+        await Promise.all([
+            this.loadDepartment(),
+            this.loadDepartmentCustomFieldSets(),
+        ]);
         this.initTooltips();
 
         // Dịch [data-i18n] sau khi Vue đã vẽ DOM (tránh text không đúng ngôn ngữ khi load)

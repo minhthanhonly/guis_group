@@ -93,6 +93,7 @@ if($_SESSION['show_project'] == 0){
                                             <option value="select" data-i18n="セレクト">セレクト</option>
                                             <option value="radio" data-i18n="ラジオ">ラジオ</option>
                                             <option value="checkbox" data-i18n="チェックボックス">チェックボックス</option>
+                                            <option value="checkbox_select_all" data-i18n="チェックボックス（すべて選択）">チェックボックス（すべて選択）</option>
                                         </select>
                                     </td>
                                     <td>
@@ -106,7 +107,7 @@ if($_SESSION['show_project'] == 0){
                                         </div>
                                     </td>
                                     <td>
-                                        <input class="form-control" v-model="field.options" :disabled="!['select','radio','checkbox'].includes(field.type)" :placeholder="field.type === 'select' || field.type === 'radio' || field.type === 'checkbox' ? 'A,B,C' : ''">
+                                        <input class="form-control" v-model="field.options" :disabled="!['select','radio','checkbox','checkbox_select_all'].includes(field.type)" :placeholder="['select','radio','checkbox','checkbox_select_all'].includes(field.type) ? 'A,B,C' : ''">
                                     </td>
                                     <td>
                                         <button class="btn btn-outline-danger btn-sm" @click="removeFieldFromModal(idx)"><i class="fa fa-times"></i></button>
@@ -214,7 +215,7 @@ const app = Vue.createApp({
                 }
                 labels.add(String(field.label).trim());
                 const optsStr = field.options != null ? String(field.options) : '';
-                if (['select', 'radio', 'checkbox'].includes(field.type) && !optsStr.trim()) {
+                if (['select', 'radio', 'checkbox', 'checkbox_select_all'].includes(field.type) && !optsStr.trim()) {
                     alert(`項目${idx + 1}：選択肢を入力してください`);
                     return;
                 }

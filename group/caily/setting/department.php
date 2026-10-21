@@ -101,6 +101,42 @@ $view->heading('部署設定');
                                 </select>
                             </div>
                             <div class="mb-3">
+                                <label class="form-label">メモラベル</label>
+                                <p class="text-muted small mb-2">案件メモの分類に使うラベルです。案件詳細・一覧のメモで選択できます。</p>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-2">
+                                        <thead>
+                                            <tr>
+                                                <th style="width:50%">ラベル名</th>
+                                                <th style="width:30%">色</th>
+                                                <th style="width:20%"></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="(label, index) in newDepartment.note_labels" :key="index">
+                                                <td>
+                                                    <input type="text" class="form-control form-control-sm" v-model="label.name" maxlength="100" placeholder="ラベル名">
+                                                </td>
+                                                <td>
+                                                    <input type="color" class="form-control form-control-color form-control-sm" v-model="label.color" title="色を選択">
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-sm btn-outline-danger" @click="removeNoteLabel(index)">
+                                                        <i class="icon-base ti tabler-trash"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="!newDepartment.note_labels.length">
+                                                <td colspan="3" class="text-muted small">ラベルがありません</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" @click="addNoteLabel">
+                                    <i class="bi bi-plus"></i> ラベルを追加
+                                </button>
+                            </div>
+                            <div class="mb-3">
                                 <label class="form-label">メンバー</label>
                                 <div class="mb-2">
                                     <select class="form-select" v-model="selectedUser" @change="addMember" style="max-width: 300px;">
@@ -281,6 +317,7 @@ $view->footing();
                         name: '',
                         can_project: 1,
                         description: '',
+                        note_labels: [],
                         members: [],
                         project_manager: {},
                         project_director_stat: {},
@@ -299,6 +336,21 @@ $view->footing();
                 }
             },
             methods: {
+                normalizeNoteLabels(raw) {
+                    if (!Array.isArray(raw)) return [];
+                    return raw
+                        .filter(l => l && String(l.name || '').trim() !== '')
+                        .map(l => ({
+                            name: String(l.name || '').trim().slice(0, 100),
+                            color: /^#[0-9A-Fa-f]{6}$/.test(String(l.color || '')) ? String(l.color) : '#6c757d'
+                        }));
+                },
+                addNoteLabel() {
+                    this.newDepartment.note_labels.push({ name: '', color: '#0d6efd' });
+                },
+                removeNoteLabel(index) {
+                    this.newDepartment.note_labels.splice(index, 1);
+                },
                 async loadDepartments() {
                     try {
                         const response = await axios.get('/api/index.php?model=department&method=list');
@@ -327,6 +379,7 @@ $view->footing();
                             name: departmentData.name,
                             can_project: departmentData.can_project,
                             description: departmentData.description,
+                            note_labels: this.normalizeNoteLabels(departmentData.note_labels),
                             members: [],
                             project_manager: {},
                             project_director_stat: {},
@@ -428,6 +481,7 @@ $view->footing();
                             name: this.newDepartment.name,
                             can_project: this.newDepartment.can_project,
                             description: this.newDepartment.description,
+                            note_labels: JSON.stringify(this.normalizeNoteLabels(this.newDepartment.note_labels)),
                             members: this.selectedMembers.map(m => m.id)
                         };
 
@@ -480,6 +534,7 @@ $view->footing();
                         name: '',
                         can_project: 1,
                         description: '',
+                        note_labels: [],
                         members: [],
                         project_manager: {},
                         project_director_stat: {},

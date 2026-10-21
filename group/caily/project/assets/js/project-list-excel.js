@@ -70,11 +70,16 @@ function parseConfirmationNotesRawForExport(cellData) {
     });
     if (!notes.length) return '';
     var texts = notes.map(function(note) {
+        // Format: id_:_content_:_isImportant[_:_label]
         var arr = note.trim().split('_:_');
         var text = arr.length > 1 ? arr[1] : note.trim();
+        var label = arr.length > 3 ? arr.slice(3).join('_:_') : '';
         var decoded = decodeHtmlForNote(text);
         decoded = (decoded || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
-        return decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+        var plain = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+        if (label && plain) return '[' + label + '] ' + plain;
+        if (label) return '[' + label + ']';
+        return plain;
     }).filter(function(text) {
         return text && text !== '-';
     });

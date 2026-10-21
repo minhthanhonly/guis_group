@@ -12,10 +12,36 @@ class ProjectNote extends ApplicationModel {
             'is_important' => array(),
             'needs_confirmation' => array(),
             'display_column' => array(),
+            'label' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
         );
         $this->connect();
+        $this->ensureLabelColumn();
+    }
+
+    /**
+     * メモラベル (label) — name string from department note_labels
+     */
+    private function ensureLabelColumn() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = $this->table;
+        $row = $this->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+            . "AND COLUMN_NAME = 'label'"
+        );
+        if (!empty($row['cnt'])) {
+            return;
+        }
+        $this->query(
+            "ALTER TABLE `{$table}` ADD COLUMN `label` varchar(100) DEFAULT NULL "
+            . "COMMENT 'メモラベル' AFTER `display_column`"
+        );
     }
 
     private function defaultNoteTitle() {
@@ -28,6 +54,17 @@ class ProjectNote extends ApplicationModel {
         return $text !== '';
     }
 
+    private function normalizeLabel($raw) {
+        $label = trim((string)$raw);
+        if ($label === '') {
+            return '';
+        }
+        if (mb_strlen($label) > 100) {
+            $label = mb_substr($label, 0, 100);
+        }
+        return $label;
+    }
+
     function create($params = null) {
         $data = array(
             'project_id' => isset($_POST['project_id']) ? intval($_POST['project_id']) : 0,
@@ -37,6 +74,7 @@ class ProjectNote extends ApplicationModel {
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
             'needs_confirmation' => isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0,
             'display_column' => isset($_POST['display_column']) ? trim((string)$_POST['display_column']) : '',
+            'label' => isset($_POST['label']) ? $this->normalizeLabel($_POST['label']) : '',
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -114,6 +152,7 @@ class ProjectNote extends ApplicationModel {
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
             'needs_confirmation' => isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0,
             'display_column' => isset($_POST['display_column']) ? trim((string)$_POST['display_column']) : '',
+            'label' => isset($_POST['label']) ? $this->normalizeLabel($_POST['label']) : '',
             'updated_at' => date('Y-m-d H:i:s')
         );
         
@@ -235,4 +274,4 @@ class ProjectNote extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Note not found'];
         }
     }
-} 
+}

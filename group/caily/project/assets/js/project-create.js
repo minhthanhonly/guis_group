@@ -363,6 +363,30 @@ createApp({
             if (!str) return '';
             return str.replace(/\//g, '-');
         },
+        translateLabel(label) {
+            if (typeof i18next !== 'undefined' && i18next.isInitialized) {
+                return i18next.t(label) || label;
+            }
+            return label;
+        },
+        getCustomCheckboxOptions(field) {
+            return (field && field.options != null ? String(field.options) : '')
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
+        },
+        isAllCustomCheckboxSelected(field) {
+            const opts = this.getCustomCheckboxOptions(field);
+            if (!opts.length) return false;
+            const arr = Array.isArray(field.valueArr) ? field.valueArr : [];
+            return opts.every(o => arr.includes(o));
+        },
+        toggleAllCustomCheckbox(field) {
+            const opts = this.getCustomCheckboxOptions(field);
+            const checked = !this.isAllCustomCheckboxSelected(field);
+            field.valueArr = checked ? opts.slice() : [];
+            field.value = field.valueArr.join(',');
+        },
         prepareCustomFieldsForSave() {
             if (!this.selectedCustomFieldSet) return [];
             return this.selectedCustomFieldSet.fields.map((f, idx) => {
@@ -370,7 +394,7 @@ createApp({
                 const customField = this.customFields[idx];
                 
                 if (customField) {
-                    if (f.type === 'checkbox') {
+                    if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
                         value = Array.isArray(customField.valueArr) ? customField.valueArr.join(',') : '';
                     } else {
                         value = customField.value || '';
@@ -1077,7 +1101,7 @@ createApp({
                     console.log(`Field ${field.label}:`, copiedField);
                     
                     if (copiedField && this.customFields[idx]) {
-                        if (field.type === 'checkbox') {
+                        if (field.type === 'checkbox' || field.type === 'checkbox_select_all') {
                             // Handle checkbox fields
                             if (Array.isArray(copiedField.valueArr)) {
                                 this.customFields[idx].valueArr = copiedField.valueArr;
@@ -1103,7 +1127,7 @@ createApp({
         initializeCustomFields() {
             if (this.selectedCustomFieldSet) {
                 this.customFields = this.selectedCustomFieldSet.fields.map(f => {
-                    if (f.type === 'checkbox') {
+                    if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
                         return { label: f.label, type: f.type, options: f.options, value: '', valueArr: [] };
                     } else {
                         return { label: f.label, type: f.type, options: f.options, value: '' };
@@ -1272,7 +1296,7 @@ createApp({
                 if (JSON.stringify(newVal) === JSON.stringify(oldVal)) return;
                 
                 this.selectedCustomFieldSet.fields.forEach((f, idx) => {
-                    if (f.type === 'checkbox' && this.customFields[idx]) {
+                    if ((f.type === 'checkbox' || f.type === 'checkbox_select_all') && this.customFields[idx]) {
                         if (Array.isArray(this.customFields[idx].valueArr)) {
                             this.customFields[idx].value = this.customFields[idx].valueArr.join(',');
                         } else if (typeof this.customFields[idx].value === 'string') {

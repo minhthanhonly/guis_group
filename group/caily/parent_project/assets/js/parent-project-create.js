@@ -199,10 +199,50 @@ createApp({
             }
             return key;
         },
+        escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        },
         getDuplicateCheckKey() {
             const construction = String(this.parentProject.construction_number || '').trim();
             const projectName = String(this.parentProject.project_name || '').trim();
             return construction + '|' + projectName;
+        },
+        getDuplicateMatchedLabels(duplicate) {
+            const labels = [];
+            const inputConstruction = String(this.parentProject.construction_number || '').trim();
+            const inputName = String(this.parentProject.project_name || '').trim();
+            const matchedBy = Array.isArray(duplicate?.matched_by) ? duplicate.matched_by : [];
+            const matchedConstruction = matchedBy.includes('construction_number')
+                || (inputConstruction && String(duplicate?.construction_number || '').trim() === inputConstruction);
+            const matchedName = matchedBy.includes('project_name')
+                || (inputName && String(duplicate?.project_name || '').trim() === inputName);
+            if (matchedName) {
+                labels.push(this.tText('お施主様名'));
+            }
+            if (matchedConstruction) {
+                labels.push(this.tText('工事番号'));
+            }
+            return labels;
+        },
+        buildDuplicateWarningHtml(duplicate) {
+            const matchedLabels = this.getDuplicateMatchedLabels(duplicate);
+            const rows = [
+                matchedLabels.length
+                    ? `<div><strong>${this.escapeHtml(this.tText('一致項目'))}:</strong> ${this.escapeHtml(matchedLabels.join(' / '))}</div>`
+                    : '',
+                `<div><strong>${this.escapeHtml(this.tText('お施主様名'))}:</strong> ${this.escapeHtml(duplicate?.project_name || '-')}</div>`,
+                `<div><strong>${this.escapeHtml(this.tText('工事番号'))}:</strong> ${this.escapeHtml(duplicate?.construction_number || '-')}</div>`,
+                `<div><strong>${this.escapeHtml(this.tText('管理番号'))}:</strong> ${this.escapeHtml(duplicate?.project_number || '-')}</div>`
+            ].filter(Boolean).join('');
+            return `
+                <p class="mb-2">${this.escapeHtml(this.tText('既に同じ建物があります。その建物を使用しますか？'))}</p>
+                <div class="text-start small">${rows}</div>
+            `;
         },
         async findDuplicateBuilding() {
             const construction = String(this.parentProject.construction_number || '').trim();
@@ -221,6 +261,9 @@ createApp({
                 });
                 const data = response && response.data ? response.data : {};
                 if (data.status === 'success' && data.duplicate && data.duplicate.id) {
+                    if (!Array.isArray(data.duplicate.matched_by) && Array.isArray(data.matched_by)) {
+                        data.duplicate.matched_by = data.matched_by;
+                    }
                     return data.duplicate;
                 }
             } catch (error) {
@@ -228,14 +271,15 @@ createApp({
             }
             return null;
         },
-        async confirmUseExistingBuilding() {
+        async confirmUseExistingBuilding(duplicate) {
+            const message = this.tText('既に同じ建物があります。その建物を使用しますか？');
             if (typeof Swal === 'undefined' || !Swal.fire) {
-                return window.confirm(this.tText('既に同じ建物があります。その建物を使用しますか？'));
+                return window.confirm(message);
             }
             const result = await Swal.fire({
                 icon: 'warning',
                 title: this.tText('確認'),
-                text: this.tText('既に同じ建物があります。その建物を使用しますか？'),
+                html: this.buildDuplicateWarningHtml(duplicate || {}),
                 showCancelButton: true,
                 confirmButtonText: this.tText('はい'),
                 cancelButtonText: this.tText('いいえ'),
@@ -258,7 +302,7 @@ createApp({
                 if (!duplicate || !duplicate.id) {
                     return { duplicate: null, useExisting: false };
                 }
-                const useExisting = await this.confirmUseExistingBuilding();
+                const useExisting = await this.confirmUseExistingBuilding(duplicate);
                 if (useExisting) {
                     return { duplicate: duplicate, useExisting: true };
                 }

@@ -635,7 +635,15 @@ if($_SESSION['show_project'] == 0){
                                                     <textarea class="form-control" v-model="field.value"></textarea>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
-                                                    <div class="form-label">{{ translateLabel(field.label) }}</div>
+                                                    <div class="form-label d-flex align-items-center justify-content-between gap-2">
+                                                        <span>{{ translateLabel(field.label) }}</span>
+                                                        <button v-if="field.type === 'checkbox_select_all'"
+                                                                type="button"
+                                                                class="btn btn-sm btn-outline-secondary py-0"
+                                                                @click="toggleAllCustomCheckbox(field)">
+                                                            {{ isAllCustomCheckboxSelected(field) ? translateLabel('すべて解除') : translateLabel('すべて選択') }}
+                                                        </button>
+                                                    </div>
                                                     <template v-if="field.type === 'radio'">
                                                         <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
                                                             <input class="form-check-input" type="radio" :name="'custom_radio_' + idx" :value="opt.trim()" v-model="field.value">
@@ -648,7 +656,7 @@ if($_SESSION['show_project'] == 0){
                                                             <option v-for="opt in field.options.split(',')" :key="opt.trim()" :value="opt.trim()">{{ opt.trim() }}</option>
                                                         </select>
                                                     </template>
-                                                    <template v-else-if="field.type === 'checkbox'">
+                                                    <template v-else-if="field.type === 'checkbox' || field.type === 'checkbox_select_all'">
                                                         <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
                                                             <input class="form-check-input" type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="field.valueArr">
                                                             <label class="form-check-label">{{ opt.trim() }}</label>
@@ -681,8 +689,16 @@ if($_SESSION['show_project'] == 0){
                                                     <div class="form-control" style="min-height:80px;white-space:pre-line;">{{ field.value || '-' }}</div>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
-                                                    <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <template v-if="canEditProject && (field.type === 'select' || field.type === 'radio' || field.type === 'checkbox')">
+                                                    <div class="form-label d-flex align-items-center justify-content-between gap-2">
+                                                        <span>{{ translateLabel(field.label) }}</span>
+                                                        <button v-if="canEditProject && field.type === 'checkbox_select_all'"
+                                                                type="button"
+                                                                class="btn btn-sm btn-outline-secondary py-0"
+                                                                @click="onCustomFieldSelectAllToggle(field)">
+                                                            {{ isAllCustomFieldCheckboxSelected(field) ? translateLabel('すべて解除') : translateLabel('すべて選択') }}
+                                                        </button>
+                                                    </div>
+                                                    <template v-if="canEditProject && (field.type === 'select' || field.type === 'radio' || field.type === 'checkbox' || field.type === 'checkbox_select_all')">
                                                         <select v-if="field.type === 'select'" class="form-select form-select-sm" :value="field.value" @change="updateCustomFieldValue(field.label, $event.target.value)">
                                                             <option value="">選択してください</option>
                                                             <option v-for="opt in (field.options || '').split(',').map(o=>o.trim()).filter(Boolean)" :key="opt" :value="opt">{{ translateLabel(opt) }}</option>
@@ -695,7 +711,7 @@ if($_SESSION['show_project'] == 0){
                                                                 </div>
                                                             </div>
                                                         </template>
-                                                        <template v-else-if="field.type === 'checkbox'">
+                                                        <template v-else-if="field.type === 'checkbox' || field.type === 'checkbox_select_all'">
                                                             <div class="d-flex flex-wrap gap-2">
                                                                 <div v-for="opt in (field.options || '').split(',').map(o=>o.trim()).filter(Boolean)" :key="opt" class="form-check">
                                                                     <input class="form-check-input" type="checkbox" :value="opt" :checked="isCustomFieldCheckboxChecked(field.label, opt)" @change="onCustomFieldCheckboxChange(field, opt, $event.target.checked)">
@@ -705,7 +721,7 @@ if($_SESSION['show_project'] == 0){
                                                         </template>
                                                     </template>
                                                     <template v-else>
-                                                        <template v-if="field.type === 'checkbox' || field.type === 'radio' || field.type === 'select'">
+                                                        <template v-if="field.type === 'checkbox' || field.type === 'checkbox_select_all' || field.type === 'radio' || field.type === 'select'">
                                                             <div>
                                                                 <span v-if="field.value">
                                                                     <span v-for="val in field.value.split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ translateLabel(val.trim()) }}</span>
@@ -1119,19 +1135,49 @@ if($_SESSION['show_project'] == 0){
                         </button>
                     </div>
                     <div class="card-body">
-                        <div v-if="notes.length > 0" class="list-group">
-                            <div v-for="note in notes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
+                        <div v-if="notes.length > 0" class="row g-2 mb-3 align-items-end note-list-filters">
+                            <div class="col-sm-6 col-md-4">
+                                <label class="form-label small mb-1">ラベル</label>
+                                <select class="form-select form-select-sm" v-model="noteFilterLabel">
+                                    <option value="">すべて</option>
+                                    <option value="__none__">ラベルなし</option>
+                                    <option v-for="lbl in noteFilterLabelOptions" :key="lbl" :value="lbl">{{ lbl }}</option>
+                                </select>
+                            </div>
+                            <div class="col-sm-6 col-md-4">
+                                <label class="form-label small mb-1">区分</label>
+                                <select class="form-select form-select-sm" v-model="noteFilterType">
+                                    <option value="">すべて</option>
+                                    <option value="1">CAILYメモ</option>
+                                    <option value="2">GUISメモ</option>
+                                    <option value="0">未分類</option>
+                                </select>
+                            </div>
+                            <div class="col-sm-12 col-md-4 d-flex align-items-center gap-2">
+                                <span class="small text-muted">{{ filteredNotes.length }} / {{ notes.length }}</span>
+                                <button v-if="noteFilterLabel || noteFilterType !== ''"
+                                        type="button"
+                                        class="btn btn-sm btn-outline-secondary"
+                                        @click="clearNoteFilters">
+                                    クリア
+                                </button>
+                            </div>
+                        </div>
+                        <div v-if="notes.length > 0 && filteredNotes.length > 0" class="list-group">
+                            <div v-for="note in filteredNotes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
                                 <div class="flex-grow-1" style="cursor: pointer;" @click="openNoteModal(note)">
-                                    <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <div class="d-flex align-items-center mb-1">
+                                        <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
                                         <small class="text-secondary">
                                             {{ formatShortDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}
                                         </small>
-                                        <div class="ms-2">
-                                            <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
-                                            <span v-if="note.needs_confirmation == 1" class="badge bg-primary me-1">CAILYメモ</span>
-                                            <span v-else-if="note.needs_confirmation == 2" class="badge bg-dark me-1">GUISメモ</span>
-                                            <span v-if="note.display_column" class="badge bg-secondary">関連項目: {{ getNoteDisplayColumnLabel(note.display_column) }}</span>
-                                        </div>
+                                    </div>
+                                    <div v-if="note.label || note.needs_confirmation == 1 || note.needs_confirmation == 2 || note.display_column"
+                                         class="d-flex flex-wrap align-items-center gap-1 mb-2">
+                                        <span v-if="note.label" class="note-label-chip" :style="getNoteLabelStyle(note.label)"><i class="fa fa-tag note-label-chip-icon" aria-hidden="true"></i><span class="note-label-chip-text">{{ note.label }}</span></span>
+                                        <span v-if="note.needs_confirmation == 1" class="badge bg-primary">CAILYメモ</span>
+                                        <span v-else-if="note.needs_confirmation == 2" class="badge bg-dark">GUISメモ</span>
+                                        <span v-if="note.display_column" class="badge bg-secondary">関連項目: {{ getNoteDisplayColumnLabel(note.display_column) }}</span>
                                     </div>
                                     <div v-if="note.content" class="text-muted small ql-editor" style="word-break: break-word;" v-html="decodeNoteHtml(note.content)"></div>
                                 </div>
@@ -1142,6 +1188,11 @@ if($_SESSION['show_project'] == 0){
                                     <i class="fa fa-trash"></i>
                                 </button>
                             </div>
+                        </div>
+                        <div v-else-if="notes.length > 0" class="text-center text-muted py-3">
+                            <i class="fa fa-filter fa-2x mb-2"></i>
+                            <p class="mb-2">条件に一致するメモがありません</p>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @click="clearNoteFilters">フィルターをクリア</button>
                         </div>
                         <div v-else class="text-center text-muted py-3">
                             <i class="fa fa-sticky-note fa-2x mb-2"></i>
@@ -1397,6 +1448,12 @@ if($_SESSION['show_project'] == 0){
                                     <span class="badge bg-primary" v-else>確認必要</span>
                                 </div>
                             </div>
+                            <div class="mb-3" v-if="editingNote.label">
+                                <label class="form-label"><span>ラベル</span></label>
+                                <div>
+                                    <span class="note-label-chip" :style="getNoteLabelStyle(editingNote.label)"><i class="fa fa-tag note-label-chip-icon" aria-hidden="true"></i><span class="note-label-chip-text">{{ editingNote.label }}</span></span>
+                                </div>
+                            </div>
                             <div class="mb-3" v-if="editingNote.display_column">
                                 <label class="form-label"><span>表示列</span></label>
                                 <div>{{ getNoteDisplayColumnLabel(editingNote.display_column) }}</div>
@@ -1418,6 +1475,20 @@ if($_SESSION['show_project'] == 0){
                                         <i class="fa fa-exclamation-circle text-danger me-2"></i> <span data-i18n="重要メモ">重要メモ</span>
                                     </label>
                                 </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label"><span>ラベル</span></label>
+                                <select class="form-select" v-model="editingNote.labelSelect" @change="onNoteLabelSelectChange">
+                                    <option value="">— 選択 —</option>
+                                    <option v-for="lbl in noteLabelSelectOptions" :key="lbl.name" :value="lbl.name">{{ lbl.name }}</option>
+                                    <option :value="NOTE_LABEL_OTHER">その他</option>
+                                </select>
+                                <input v-if="editingNote.labelSelect === NOTE_LABEL_OTHER"
+                                       type="text"
+                                       class="form-control mt-2"
+                                       v-model="editingNote.labelOther"
+                                       maxlength="100"
+                                       placeholder="ラベルを入力">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label d-block"><span>区分</span></label>
@@ -1467,6 +1538,40 @@ $view->footing();
 ?>
 
 <style>
+
+/* Memo label chip — distinct from Bootstrap .badge */
+.note-label-chip {
+    --note-label-color: #6c757d;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    max-width: 12rem;
+    padding: 0.12rem 0.55rem 0.12rem 0.4rem;
+    border: 1px dashed color-mix(in srgb, var(--note-label-color) 70%, transparent);
+    border-left: 3px solid var(--note-label-color);
+    border-radius: 0.15rem 999px 999px 0.15rem;
+    background: color-mix(in srgb, var(--note-label-color) 12%, transparent);
+    color: var(--note-label-color);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    line-height: 1.25;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.note-label-chip-icon {
+    font-size: 0.65rem;
+    opacity: 0.85;
+    flex-shrink: 0;
+}
+.note-label-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+[data-bs-theme="dark"] .note-label-chip {
+    background: color-mix(in srgb, var(--note-label-color) 22%, transparent);
+    border-color: color-mix(in srgb, var(--note-label-color) 55%, transparent);
+}
 
 /* Edit mode styles */
 .edit-mode .select2-selection,

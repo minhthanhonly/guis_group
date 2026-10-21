@@ -8,12 +8,14 @@ class Department extends ApplicationModel {
             'name' => array(),
             'description' => array(),
             'can_project' => array(),
+            'note_labels' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search')),
             'is_active' => array()
         );
         $this->connect();
         $this->ensureProjectViewEndDateColumn();
+        $this->ensureNoteLabelsColumn();
     }
 
     /**
@@ -38,6 +40,92 @@ class Department extends ApplicationModel {
             "ALTER TABLE `{$table}` ADD COLUMN `project_view_end_date` tinyint(1) NOT NULL DEFAULT 0 "
             . "COMMENT 'プロジェクト権限: 期限日閲覧' AFTER `project_comment`"
         );
+    }
+
+    /**
+     * メモラベル (note_labels) — JSON array of {name, color}
+     */
+    private function ensureNoteLabelsColumn() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = $this->table;
+        $row = $this->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+            . "AND COLUMN_NAME = 'note_labels'"
+        );
+        if (!empty($row['cnt'])) {
+            return;
+        }
+        $this->query(
+            "ALTER TABLE `{$table}` ADD COLUMN `note_labels` TEXT NULL DEFAULT NULL "
+            . "COMMENT 'メモラベル JSON [{name,color}]' AFTER `can_project`"
+        );
+    }
+
+    /**
+     * Normalize note_labels to [{name, color}, ...]
+     */
+    private function normalizeNoteLabels($raw) {
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : [];
+        }
+        if (!is_array($raw)) {
+            return [];
+        }
+        $out = [];
+        $seen = [];
+        foreach ($raw as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $name = isset($item['name']) ? trim((string)$item['name']) : '';
+            if ($name === '' || mb_strlen($name) > 100) {
+                continue;
+            }
+            if (isset($seen[$name])) {
+                continue;
+            }
+            $seen[$name] = true;
+            $color = isset($item['color']) ? trim((string)$item['color']) : '#6c757d';
+            if (!preg_match('/^#[0-9A-Fa-f]{6}$/', $color)) {
+                $color = '#6c757d';
+            }
+            $out[] = ['name' => $name, 'color' => $color];
+        }
+        return $out;
+    }
+
+    private function encodeNoteLabels($raw) {
+        $normalized = $this->normalizeNoteLabels($raw);
+        if (empty($normalized)) {
+            return null;
+        }
+        return json_encode($normalized, JSON_UNESCAPED_UNICODE);
+    }
+
+    private function decodeNoteLabelsForResponse($value) {
+        return $this->normalizeNoteLabels($value);
+    }
+
+    private function parseNoteLabelsFromRequest() {
+        if (isset($_POST['note_labels'])) {
+            $raw = $_POST['note_labels'];
+            if (is_string($raw)) {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) {
+                    return $this->encodeNoteLabels($decoded);
+                }
+            }
+            if (is_array($raw)) {
+                return $this->encodeNoteLabels($raw);
+            }
+        }
+        return null;
     }
 
     function list() {
@@ -88,6 +176,9 @@ class Department extends ApplicationModel {
             $deptId = (int)$row['id'];
             $row['project_count'] = $projectMap[$deptId] ?? 0;
             $row['num_employees'] = $employeeMap[$deptId] ?? 0;
+            $row['note_labels'] = $this->decodeNoteLabelsForResponse(
+                isset($row['note_labels']) ? $row['note_labels'] : null
+            );
         }
         unset($row);
     }
@@ -111,7 +202,14 @@ class Department extends ApplicationModel {
             );
         }
         
-        return $this->fetchAll($query);
+        $rows = $this->fetchAll($query);
+        foreach ($rows as &$row) {
+            $row['note_labels'] = $this->decodeNoteLabelsForResponse(
+                isset($row['note_labels']) ? $row['note_labels'] : null
+            );
+        }
+        unset($row);
+        return $rows;
     }
 
     function list_department() {
@@ -203,6 +301,7 @@ class Department extends ApplicationModel {
             'name' => $_POST['name'],
             'description' => $_POST['description'],
             'can_project' => $_POST['can_project'],
+            'note_labels' => $this->parseNoteLabelsFromRequest(),
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -237,6 +336,7 @@ class Department extends ApplicationModel {
             'name' => $_POST['name'],
             'description' => $_POST['description'],
             'can_project' => $_POST['can_project'],
+            'note_labels' => $this->parseNoteLabelsFromRequest(),
             'updated_at' => date('Y-m-d H:i:s')
         );
         
@@ -309,6 +409,9 @@ class Department extends ApplicationModel {
                 intval($id)
             );
             $department['members'] = $this->fetchAll($query);
+            $department['note_labels'] = $this->decodeNoteLabelsForResponse(
+                isset($department['note_labels']) ? $department['note_labels'] : null
+            );
         }
         
         return $department;

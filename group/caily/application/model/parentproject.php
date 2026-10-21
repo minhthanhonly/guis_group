@@ -1224,13 +1224,15 @@ class ParentProject extends ApplicationModel {
     /**
      * Find an existing building by 工事番号 or お施主様名 (exact, trimmed).
      * Prefers a construction_number match when both fields are provided.
+     * Optional exclude_id skips the current building (for edit checks).
      */
     function findDuplicate($params = null) {
         $params = is_array($params) ? $params : array();
         $construction = isset($params['construction_number']) ? trim((string)$params['construction_number']) : '';
         $projectName = isset($params['project_name']) ? trim((string)$params['project_name']) : '';
+        $excludeId = isset($params['exclude_id']) ? intval($params['exclude_id']) : 0;
         if ($construction === '' && $projectName === '') {
-            return array('status' => 'success', 'duplicate' => null);
+            return array('status' => 'success', 'duplicate' => null, 'matched_by' => array());
         }
 
         $conds = array();
@@ -1241,6 +1243,8 @@ class ParentProject extends ApplicationModel {
             $conds[] = "TRIM(p.project_name) = '" . $this->quote($projectName) . "'";
         }
 
+        $excludeSql = $excludeId > 0 ? (' AND p.id <> ' . $excludeId) : '';
+
         $order = 'p.id DESC';
         if ($construction !== '') {
             $order = "CASE WHEN TRIM(p.construction_number) = '" . $this->quote($construction) . "' THEN 0 ELSE 1 END, p.id DESC";
@@ -1249,17 +1253,29 @@ class ParentProject extends ApplicationModel {
         $query = sprintf(
             "SELECT p.id, p.project_name, p.construction_number, p.project_number
              FROM %s p
-             WHERE p.status != 'deleted' AND (%s)
+             WHERE p.status != 'deleted' AND (%s)%s
              ORDER BY %s
              LIMIT 1",
             $this->table,
             implode(' OR ', $conds),
+            $excludeSql,
             $order
         );
         $row = $this->fetchOne($query);
+        $matchedBy = array();
+        if ($row) {
+            if ($construction !== '' && trim((string)($row['construction_number'] ?? '')) === $construction) {
+                $matchedBy[] = 'construction_number';
+            }
+            if ($projectName !== '' && trim((string)($row['project_name'] ?? '')) === $projectName) {
+                $matchedBy[] = 'project_name';
+            }
+            $row['matched_by'] = $matchedBy;
+        }
         return array(
             'status' => 'success',
-            'duplicate' => $row ? $row : null
+            'duplicate' => $row ? $row : null,
+            'matched_by' => $matchedBy
         );
     }
 

@@ -474,6 +474,8 @@ createApp({
                 company_name: '',
                 project_name: ''
             },
+            duplicateDismissedKey: '',
+            duplicatePromptPromise: null,
             statuses: [
                 { value: 'draft', label: '下書き', color: 'secondary' },
                 { value: 'under_contract', label: '契約中', color: 'info' },
@@ -1880,6 +1882,7 @@ createApp({
         },
         toggleEditMode() {
             this.isEditMode = true;
+            this.duplicateDismissedKey = '';
             this.addBeforeUnloadWarning();
             this.originalParentProject = JSON.parse(JSON.stringify(this.parentProject));
             this.loadInitialData();
@@ -1895,6 +1898,7 @@ createApp({
         },
         cancelEdit() {
             this.isEditMode = false;
+            this.duplicateDismissedKey = '';
             this.removeBeforeUnloadWarning();
             this.parentProject = JSON.parse(JSON.stringify(this.originalParentProject));
             this.validationErrors = {
@@ -2588,8 +2592,175 @@ createApp({
             
             return valid;
         },
+        tText(key) {
+            if (typeof i18next !== 'undefined' && typeof i18next.t === 'function') {
+                return i18next.t(key) || key;
+            }
+            return key;
+        },
+        escapeHtml(value) {
+            return String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        },
+        getDuplicateCheckKey() {
+            if (!this.parentProject) {
+                return '|';
+            }
+            const construction = String(this.parentProject.construction_number || '').trim();
+            const projectName = String(this.parentProject.project_name || '').trim();
+            return construction + '|' + projectName;
+        },
+        getDuplicateMatchedLabels(duplicate) {
+            const labels = [];
+            const inputConstruction = String(this.parentProject?.construction_number || '').trim();
+            const inputName = String(this.parentProject?.project_name || '').trim();
+            const matchedBy = Array.isArray(duplicate?.matched_by) ? duplicate.matched_by : [];
+            const matchedConstruction = matchedBy.includes('construction_number')
+                || (inputConstruction && String(duplicate?.construction_number || '').trim() === inputConstruction);
+            const matchedName = matchedBy.includes('project_name')
+                || (inputName && String(duplicate?.project_name || '').trim() === inputName);
+            if (matchedName) {
+                labels.push(this.tText('お施主様名'));
+            }
+            if (matchedConstruction) {
+                labels.push(this.tText('工事番号'));
+            }
+            return labels;
+        },
+        buildDuplicateWarningHtml(duplicate, questionKey) {
+            const matchedLabels = this.getDuplicateMatchedLabels(duplicate);
+            const rows = [
+                matchedLabels.length
+                    ? `<div><strong>${this.escapeHtml(this.tText('一致項目'))}:</strong> ${this.escapeHtml(matchedLabels.join(' / '))}</div>`
+                    : '',
+                `<div><strong>${this.escapeHtml(this.tText('お施主様名'))}:</strong> ${this.escapeHtml(duplicate?.project_name || '-')}</div>`,
+                `<div><strong>${this.escapeHtml(this.tText('工事番号'))}:</strong> ${this.escapeHtml(duplicate?.construction_number || '-')}</div>`,
+                `<div><strong>${this.escapeHtml(this.tText('管理番号'))}:</strong> ${this.escapeHtml(duplicate?.project_number || '-')}</div>`
+            ].filter(Boolean).join('');
+            return `
+                <p class="mb-2">${this.escapeHtml(this.tText(questionKey))}</p>
+                <div class="text-start small">${rows}</div>
+            `;
+        },
+        async findDuplicateBuilding() {
+            if (!this.parentProject) {
+                return null;
+            }
+            const construction = String(this.parentProject.construction_number || '').trim();
+            const projectName = String(this.parentProject.project_name || '').trim();
+            if (!construction && !projectName) {
+                return null;
+            }
+            try {
+                const response = await axios.get('/api/index.php', {
+                    params: {
+                        model: 'parentproject',
+                        method: 'findDuplicate',
+                        construction_number: construction,
+                        project_name: projectName,
+                        exclude_id: this.parentProject.id || ''
+                    }
+                });
+                const data = response && response.data ? response.data : {};
+                if (data.status === 'success' && data.duplicate && data.duplicate.id) {
+                    if (!Array.isArray(data.duplicate.matched_by) && Array.isArray(data.matched_by)) {
+                        data.duplicate.matched_by = data.matched_by;
+                    }
+                    return data.duplicate;
+                }
+            } catch (error) {
+                console.error('Error checking duplicate parent project:', error);
+            }
+            return null;
+        },
+        async confirmDuplicateBuilding(duplicate, questionKey) {
+            const message = this.tText(questionKey);
+            if (typeof Swal === 'undefined' || !Swal.fire) {
+                return window.confirm(message);
+            }
+            const result = await Swal.fire({
+                icon: 'warning',
+                title: this.tText('確認'),
+                html: this.buildDuplicateWarningHtml(duplicate || {}, questionKey),
+                showCancelButton: true,
+                confirmButtonText: this.tText('はい'),
+                cancelButtonText: this.tText('いいえ'),
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#6c757d',
+                reverseButtons: true
+            });
+            return !!(result && result.isConfirmed);
+        },
+        async promptDuplicateBuildingIfNeeded(questionKey) {
+            if (!this.isEditMode) {
+                return { duplicate: null, proceed: true };
+            }
+            if (this.duplicatePromptPromise) {
+                return this.duplicatePromptPromise;
+            }
+            this.duplicatePromptPromise = (async () => {
+                const checkKey = this.getDuplicateCheckKey();
+                if (checkKey === '|' || checkKey === this.duplicateDismissedKey) {
+                    return { duplicate: null, proceed: true };
+                }
+                const duplicate = await this.findDuplicateBuilding();
+                if (!duplicate || !duplicate.id) {
+                    return { duplicate: null, proceed: true };
+                }
+                const proceed = await this.confirmDuplicateBuilding(
+                    duplicate,
+                    questionKey || '既に同じ建物があります。このまま保存しますか？'
+                );
+                if (!proceed) {
+                    return { duplicate: duplicate, proceed: false };
+                }
+                this.duplicateDismissedKey = checkKey;
+                return { duplicate: duplicate, proceed: true };
+            })();
+            try {
+                return await this.duplicatePromptPromise;
+            } finally {
+                this.duplicatePromptPromise = null;
+            }
+        },
+        async onDuplicateFieldBlur() {
+            if (!this.isEditMode || this.duplicatePromptPromise) {
+                return;
+            }
+            const checkKey = this.getDuplicateCheckKey();
+            if (checkKey === '|' || checkKey === this.duplicateDismissedKey) {
+                return;
+            }
+            const duplicate = await this.findDuplicateBuilding();
+            if (!duplicate || !duplicate.id) {
+                return;
+            }
+            const infoKey = 'お施主様名または工事番号が既に登録されています。';
+            const message = this.tText(infoKey);
+            if (typeof Swal !== 'undefined' && Swal.fire) {
+                await Swal.fire({
+                    icon: 'warning',
+                    title: this.tText('確認'),
+                    html: this.buildDuplicateWarningHtml(duplicate, infoKey),
+                    confirmButtonText: this.tText('OK'),
+                    confirmButtonColor: '#3085d6'
+                });
+            } else {
+                window.alert(message);
+            }
+            this.duplicateDismissedKey = checkKey;
+        },
         async saveParentProject() {
             if (!this.validateParentProjectForm()) {
+                return;
+            }
+
+            const duplicateResult = await this.promptDuplicateBuildingIfNeeded('既に同じ建物があります。このまま保存しますか？');
+            if (!duplicateResult.proceed) {
                 return;
             }
 
@@ -3766,7 +3937,21 @@ createApp({
                 div.className = colClass + ' mb-3 ' + fieldClass;
                 div.setAttribute('data-custom-label', safeLabel);
                 div.setAttribute('data-custom-type', type);
-                let inner = '<label class="form-label">' + safeLabel + '</label>';
+                let inner = '';
+                if (type === 'checkbox_select_all') {
+                    const arrForLabel = val ? String(val).split(',').map(s => s.trim()).filter(Boolean) : [];
+                    const allCheckedLabel = opts.length > 0 && opts.every(opt => arrForLabel.indexOf(opt) !== -1);
+                    const selectAllBtnLabel = allCheckedLabel
+                        ? (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('すべて解除') : 'すべて解除')
+                        : (typeof i18next !== 'undefined' && i18next.isInitialized ? i18next.t('すべて選択') : 'すべて選択');
+                    inner += '<div class="form-label d-flex align-items-center justify-content-between gap-2">'
+                        + '<span>' + safeLabel + '</span>'
+                        + '<button type="button" class="btn btn-sm btn-outline-secondary py-0 ' + checkboxClass + 'SelectAll">'
+                        + selectAllBtnLabel
+                        + '</button></div>';
+                } else {
+                    inner += '<label class="form-label">' + safeLabel + '</label>';
+                }
                 if (type === 'textarea') {
                     inner += '<textarea class="form-control ' + inputClass + '" data-custom-label="' + safeLabel + '" rows="3">' + (val ? String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '') + '</textarea>';
                 } else if (type === 'select') {
@@ -3777,7 +3962,7 @@ createApp({
                     opts.forEach(opt => {
                         inner += '<div class="form-check"><input class="form-check-input ' + radioClass + '" type="radio" name="' + radioClass + '_' + idx + '" data-custom-label="' + safeLabel + '" value="' + String(opt).replace(/"/g, '&quot;') + '"' + (val === opt ? ' checked' : '') + '><label class="form-check-label">' + String(opt).replace(/</g, '&lt;') + '</label></div>';
                     });
-                } else if (type === 'checkbox') {
+                } else if (type === 'checkbox' || type === 'checkbox_select_all') {
                     const arr = val ? String(val).split(',').map(s => s.trim()).filter(Boolean) : [];
                     opts.forEach(opt => {
                         const checked = arr.indexOf(opt) !== -1;
@@ -3791,6 +3976,30 @@ createApp({
                 }
                 div.innerHTML = inner;
                 wrap.appendChild(div);
+            });
+            const selectAllClass = checkboxClass + 'SelectAll';
+            wrap.querySelectorAll('.' + selectAllClass).forEach(selectAllEl => {
+                selectAllEl.addEventListener('click', function() {
+                    const row = this.closest('.' + fieldClass);
+                    if (!row) return;
+                    const opts = row.querySelectorAll('.' + checkboxClass);
+                    const allChecked = opts.length > 0 && Array.from(opts).every(cb => cb.checked);
+                    opts.forEach(cb => { cb.checked = !allChecked; });
+                    const selectLabel = !allChecked ? 'すべて解除' : 'すべて選択';
+                    this.textContent = (typeof i18next !== 'undefined' && i18next.isInitialized) ? i18next.t(selectLabel) : selectLabel;
+                });
+            });
+            wrap.querySelectorAll('.' + checkboxClass).forEach(cbEl => {
+                cbEl.addEventListener('change', function() {
+                    const row = this.closest('.' + fieldClass);
+                    if (!row) return;
+                    const selectAll = row.querySelector('.' + selectAllClass);
+                    if (!selectAll) return;
+                    const opts = row.querySelectorAll('.' + checkboxClass);
+                    const allChecked = opts.length > 0 && Array.from(opts).every(cb => cb.checked);
+                    const selectLabel = allChecked ? 'すべて解除' : 'すべて選択';
+                    selectAll.textContent = (typeof i18next !== 'undefined' && i18next.isInitialized) ? i18next.t(selectLabel) : selectLabel;
+                });
             });
         },
 
@@ -3819,7 +4028,7 @@ createApp({
                 const type = row.getAttribute('data-custom-type');
                 if (!label) return;
                 let value = '';
-                if (type === 'checkbox') {
+                if (type === 'checkbox' || type === 'checkbox_select_all') {
                     const checked = row.querySelectorAll('.' + checkboxClass + ':checked');
                     value = Array.from(checked).map(el => el.value).join(',');
                 } else if (type === 'radio') {

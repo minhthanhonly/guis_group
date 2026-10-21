@@ -186,7 +186,7 @@ $view->heading('建物詳細');
                                         class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="parentProject.project_name"
-                                        placeholder="案件名を入力" required>
+                                        placeholder="案件名を入力" required @blur="onDuplicateFieldBlur">
                                     <div v-if="validationErrors.project_name" class="invalid-feedback d-block">
                                         {{ validationErrors.project_name }}
                                     </div>
@@ -230,7 +230,7 @@ $view->heading('建物詳細');
                                 <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="parentProject.construction_number"
-                                        placeholder="工事番号を入力">
+                                        placeholder="工事番号を入力" @blur="onDuplicateFieldBlur">
                                 </template>
                                 <template v-else>
                                     <input type="text" class="form-control"
