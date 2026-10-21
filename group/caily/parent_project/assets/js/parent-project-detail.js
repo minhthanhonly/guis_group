@@ -1880,6 +1880,46 @@ createApp({
                 this._boundBeforeUnload = null;
             }
         },
+        buildCopyParentProjectPayload(src) {
+            const source = src || this.parentProject || {};
+            const requests = String(source.requests || '').trim();
+            const materials = String(source.materials || '').trim();
+            return {
+                company_name: source.company_name || '',
+                branch_name: source.branch_name || '',
+                contact_name: source.contact_name || '',
+                customer_id: source.customer_id || '',
+                construction_number: source.construction_number || '',
+                project_name: source.project_name || '',
+                construction_branch: source.construction_branch || '',
+                scale: source.scale || '',
+                type1: source.type1 || '',
+                type2: source.type2 || '',
+                request_type: source.request_type || '',
+                structural_office: source.structural_office || '',
+                notes: source.notes || '',
+                requests: requests,
+                materials: materials,
+                status: 'draft'
+            };
+        },
+        copyParentProject() {
+            if (!this.parentProject || !this.parentProject.id) {
+                return;
+            }
+            if (!this.canAddProject) {
+                showMessage(this.tText('権限がありません。'), true);
+                return;
+            }
+            try {
+                const payload = this.buildCopyParentProjectPayload(this.parentProject);
+                sessionStorage.setItem('copyParentProjectData', JSON.stringify(payload));
+                window.location.href = 'create.php';
+            } catch (error) {
+                console.error('Error copying parent project:', error);
+                showMessage(this.tText('建物のコピーに失敗しました。'), true);
+            }
+        },
         toggleEditMode() {
             this.isEditMode = true;
             this.duplicateDismissedKey = '';

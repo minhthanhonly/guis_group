@@ -271,6 +271,14 @@ $view->heading('建物一覧');
                                                    title="詳細を表示">
                                                     <i class="fa fa-eye"></i>
                                                 </a>
+                                                <button v-if="canCreateParentProject"
+                                                        type="button"
+                                                        class="btn btn-outline-info"
+                                                        @click="copyParentProject(project)"
+                                                        title="建物をコピー"
+                                                        :disabled="copyingParentProjectId === project.id">
+                                                    <i class="fa fa-copy"></i>
+                                                </button>
                                                 <button v-if="isAdministrator"
                                                         type="button"
                                                         class="btn btn-outline-danger"

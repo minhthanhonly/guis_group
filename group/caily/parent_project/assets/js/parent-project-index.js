@@ -38,6 +38,7 @@ createApp({
             isProjectManager: typeof IS_PROJECT_MANAGER !== 'undefined' ? IS_PROJECT_MANAGER : false,
             isAdministrator: typeof IS_ADMIN !== 'undefined' ? !!IS_ADMIN : false,
             deletingParentProjectId: null,
+            copyingParentProjectId: null,
             permission: [],
             sortColumn: 'created_at',
             sortDirection: 'DESC', // 'ASC' or 'DESC'
@@ -1405,6 +1406,55 @@ createApp({
             } catch (error) {
                 console.error('Error loading permission:', error);
                 this.permission = [];
+            }
+        },
+        buildCopyParentProjectPayload(src) {
+            const source = src || {};
+            return {
+                company_name: source.company_name || '',
+                branch_name: source.branch_name || '',
+                contact_name: source.contact_name || '',
+                customer_id: source.customer_id || '',
+                construction_number: source.construction_number || '',
+                project_name: source.project_name || '',
+                construction_branch: source.construction_branch || '',
+                scale: source.scale || '',
+                type1: source.type1 || '',
+                type2: source.type2 || '',
+                request_type: source.request_type || '',
+                structural_office: source.structural_office || '',
+                notes: source.notes || '',
+                requests: String(source.requests || '').trim(),
+                materials: String(source.materials || '').trim(),
+                status: 'draft'
+            };
+        },
+        async copyParentProject(project) {
+            if (!project || !project.id) {
+                return;
+            }
+            if (!this.canCreateParentProject) {
+                showMessage('権限がありません。', true);
+                return;
+            }
+            this.copyingParentProjectId = project.id;
+            try {
+                const response = await axios.get('/api/index.php', {
+                    params: {
+                        model: 'parentproject',
+                        method: 'getById',
+                        id: project.id
+                    }
+                });
+                const source = response && response.data && response.data.id ? response.data : project;
+                const payload = this.buildCopyParentProjectPayload(source);
+                sessionStorage.setItem('copyParentProjectData', JSON.stringify(payload));
+                window.location.href = 'create.php';
+            } catch (error) {
+                console.error('Error copying parent project:', error);
+                showMessage('建物のコピーに失敗しました。', true);
+            } finally {
+                this.copyingParentProjectId = null;
             }
         }
     },

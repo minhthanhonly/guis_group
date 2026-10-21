@@ -68,27 +68,33 @@ $view->heading('建物詳細');
                                :title="parentProject && parentProject.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
                             <h5 class="card-title mb-0"><span data-i18n="建物詳細">建物詳細</span></h5>
                         </div>
-                        <div v-if="isProjectManager">
-                            <button v-if="!isEditMode" class="btn btn-outline-warning btn-sm me-2"
-                                @click="toggleEditMode" title="編集">
-                                <i class="fa fa-pencil-alt me-1"></i><span data-i18n="編集">編集</span>
+                        <div>
+                            <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2"
+                                @click="copyParentProject" title="建物をコピー">
+                                <i class="fa fa-copy me-1"></i><span data-i18n="建物をコピー">建物をコピー</span>
                             </button>
-                            <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveParentProject"
-                                title="保存">
-                                <i class="fa fa-save me-1"></i><span data-i18n="保存">保存</span>
-                            </button>
-                            <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit"
-                                title="キャンセル">
-                                <i class="fa fa-times me-1"></i><span data-i18n="キャンセル">キャンセル</span>
-                            </button>
-                            <button v-if="!isEditMode" class="btn btn-outline-info btn-sm me-2"
-                                @click="showLogs" title="アクティビティログ">
-                                <i class="fa fa-history me-1"></i><span data-i18n="アクティビティログ">アクティビティログ</span>
-                            </button>
-                            <!-- <button v-if="!isEditMode && childProjects.length == 0" class="btn btn-outline-danger btn-sm"
-                                @click="deleteParentProject" title="削除">
-                                <i class="fa fa-trash me-1"></i><span data-i18n="削除">削除</span>
-                            </button> -->
+                            <template v-if="isProjectManager">
+                                <button v-if="!isEditMode" class="btn btn-outline-warning btn-sm me-2"
+                                    @click="toggleEditMode" title="編集">
+                                    <i class="fa fa-pencil-alt me-1"></i><span data-i18n="編集">編集</span>
+                                </button>
+                                <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveParentProject"
+                                    title="保存">
+                                    <i class="fa fa-save me-1"></i><span data-i18n="保存">保存</span>
+                                </button>
+                                <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit"
+                                    title="キャンセル">
+                                    <i class="fa fa-times me-1"></i><span data-i18n="キャンセル">キャンセル</span>
+                                </button>
+                                <button v-if="!isEditMode" class="btn btn-outline-secondary btn-sm me-2"
+                                    @click="showLogs" title="アクティビティログ">
+                                    <i class="fa fa-history me-1"></i><span data-i18n="アクティビティログ">アクティビティログ</span>
+                                </button>
+                                <!-- <button v-if="!isEditMode && childProjects.length == 0" class="btn btn-outline-danger btn-sm"
+                                    @click="deleteParentProject" title="削除">
+                                    <i class="fa fa-trash me-1"></i><span data-i18n="削除">削除</span>
+                                </button> -->
+                            </template>
                         </div>
                     </div>
                     <div v-if="parentProject" class="row g-3">

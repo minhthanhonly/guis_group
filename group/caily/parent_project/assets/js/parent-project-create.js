@@ -96,6 +96,7 @@ createApp({
             customerSearchLoaded: false,
             duplicateDismissedKey: '',
             duplicatePromptPromise: null,
+            isApplyingCopiedData: false,
         }
     },
     methods: {
@@ -489,6 +490,9 @@ createApp({
             }
         },
         onCompanyChange() {
+            if (this.isApplyingCopiedData) {
+                return;
+            }
             // Clear branch and contact when company changes
             this.parentProject.branch_name = '';
             this.parentProject.contact_name = '';
@@ -512,6 +516,9 @@ createApp({
             }
         },
         onBranchChange() {
+            if (this.isApplyingCopiedData) {
+                return;
+            }
             // Clear contact when branch changes
             this.parentProject.contact_name = '';
             this.parentProject.customer_id = '';
@@ -1409,6 +1416,9 @@ createApp({
         },
 
         onCompanyNameChange() {
+            if (this.isApplyingCopiedData) {
+                return;
+            }
             // Clear branch and contact when company changes
             this.parentProject.branch_name = '';
             this.parentProject.contact_name = '';
@@ -1430,6 +1440,9 @@ createApp({
         },
 
         onBranchNameChange() {
+            if (this.isApplyingCopiedData) {
+                return;
+            }
             // Clear contact when branch changes
             this.parentProject.contact_name = '';
             this.parentProject.customer_id = '';
@@ -1472,6 +1485,161 @@ createApp({
             }
         },
 
+        parseCopiedRequests(requests) {
+            const list = String(requests || '').split(',').map((r) => r.trim()).filter(Boolean);
+            this.parentProject.request_design = list.includes('意匠');
+            this.parentProject.request_equipment = list.includes('設備');
+            this.parentProject.request_3d_equipment = list.includes('3D設備');
+            this.parentProject.request_energy_saving = list.includes('省エネ');
+            this.parentProject.request_3d = list.includes('3D');
+        },
+        parseCopiedMaterials(materials) {
+            const list = String(materials || '').split(',').map((m) => m.trim()).filter(Boolean);
+            this.parentProject.materials_layout = list.includes('配置図');
+            this.parentProject.materials_rental = list.includes('家賃審査書');
+            this.parentProject.materials_contract = list.includes('契約図');
+            this.parentProject.materials_tac = list.includes('TAC図');
+            this.parentProject.materials_other = list.includes('その他');
+        },
+        applyTagifyValuesFromParentProject() {
+            const apply = (tagify, value) => {
+                if (!tagify) {
+                    return;
+                }
+                try {
+                    tagify.removeAllTags();
+                    const tags = String(value || '').split(',').map((s) => s.trim()).filter(Boolean);
+                    if (tags.length) {
+                        tagify.addTags(tags);
+                    }
+                } catch (error) {
+                    console.error('Error applying Tagify values:', error);
+                }
+            };
+            apply(this.scaleTagify, this.parentProject.scale);
+            apply(this.type1Tagify, this.parentProject.type1);
+            apply(this.type2Tagify, this.parentProject.type2);
+            apply(this.constructionBranchTagify, this.parentProject.construction_branch);
+        },
+        setSelect2Value($select, value, text) {
+            if (!$select || !$select.length || value === undefined || value === null || value === '') {
+                return;
+            }
+            const stringValue = String(value);
+            if (!$select.find('option').filter(function () { return String($(this).val()) === stringValue; }).length) {
+                $select.append(new Option(text || stringValue, stringValue, true, true));
+            }
+            $select.val(stringValue);
+            if ($select.data('select2')) {
+                $select.trigger('change');
+            }
+        },
+        async applyCopiedCustomerSelects(data) {
+            const company = data.company_name || '';
+            const branch = data.branch_name || '';
+            const contact = data.contact_name || '';
+            const customerId = data.customer_id || '';
+
+            this.isApplyingCopiedData = true;
+            try {
+                this.parentProject.company_name = company;
+                this.parentProject.branch_name = branch;
+                this.parentProject.contact_name = contact;
+                this.parentProject.customer_id = customerId;
+
+                this.setSelect2Value($('#company_name'), company, company);
+                await new Promise((resolve) => setTimeout(resolve, 100));
+
+                this.setSelect2Value($('#branch_name'), branch, branch);
+                await new Promise((resolve) => setTimeout(resolve, 100));
+
+                try {
+                    await this.loadCustomers();
+                } catch (error) {
+                    console.error('Error loading customers for copied building:', error);
+                }
+
+                const $contact = $('#contact_name');
+                if ($contact.length) {
+                    $contact.prop('disabled', false);
+                    $contact.find('option:not(:first)').remove();
+                    (this.customers || []).forEach((customer) => {
+                        const option = new Option(customer.name, customer.name, false, false);
+                        option.setAttribute('data-customer-id', customer.id);
+                        $contact.append(option);
+                    });
+                    if (contact && !$contact.find('option').filter(function () { return String($(this).val()) === contact; }).length) {
+                        const option = new Option(contact, contact, true, true);
+                        if (customerId) {
+                            option.setAttribute('data-customer-id', customerId);
+                        }
+                        $contact.append(option);
+                    }
+                    this.setSelect2Value($contact, contact, contact);
+                }
+
+                this.parentProject.company_name = company;
+                this.parentProject.branch_name = branch;
+                this.parentProject.contact_name = contact;
+                this.parentProject.customer_id = customerId;
+            } finally {
+                this.isApplyingCopiedData = false;
+            }
+        },
+        async loadCopiedParentProjectData() {
+            const raw = sessionStorage.getItem('copyParentProjectData');
+            if (!raw) {
+                return false;
+            }
+            try {
+                const data = JSON.parse(raw);
+                sessionStorage.removeItem('copyParentProjectData');
+
+                this.parentProject.construction_number = data.construction_number || '';
+                this.parentProject.project_name = data.project_name || '';
+                this.parentProject.construction_branch = data.construction_branch || '';
+                this.parentProject.scale = data.scale || '';
+                this.parentProject.type1 = data.type1 || '';
+                this.parentProject.type2 = data.type2 || '';
+                this.parentProject.request_type = data.request_type || '';
+                this.parentProject.structural_office = data.structural_office || '';
+                this.parentProject.notes = data.notes || '';
+                this.parentProject.status = data.status || 'draft';
+                this.parentProject.desired_delivery_date = '';
+                this.parentProject.guis_receiver = window.currentUser?.id || this.parentProject.guis_receiver || '';
+
+                this.parseCopiedRequests(data.requests);
+                this.parseCopiedMaterials(data.materials);
+                this.clearRequestsValidation();
+
+                await new Promise((resolve) => setTimeout(resolve, 300));
+                await this.applyCopiedCustomerSelects(data);
+
+                this.setCurrentDateTime();
+                this.applyTagifyValuesFromParentProject();
+
+                const $guisReceiver = $('#guis_receiver');
+                if ($guisReceiver.length && this.parentProject.guis_receiver) {
+                    this.setSelect2Value(
+                        $guisReceiver,
+                        this.parentProject.guis_receiver,
+                        window.currentUser?.name || this.parentProject.guis_receiver
+                    );
+                }
+
+                if (typeof showMessage === 'function') {
+                    showMessage(this.tText('コピーした建物データを読み込みました。'));
+                }
+                return true;
+            } catch (error) {
+                console.error('Error loading copied parent project data:', error);
+                sessionStorage.removeItem('copyParentProjectData');
+                if (typeof showMessage === 'function') {
+                    showMessage(this.tText('コピーした建物データの読み込みに失敗しました。'), true);
+                }
+                return false;
+            }
+        },
         updateAllSelect2WithCustomer(customerData) {
             // Update company name Select2
             const $company = $('#company_name');
@@ -1559,6 +1727,16 @@ createApp({
             type2: '',
             request_type: '',
             desired_delivery_date: '',
+            request_design: false,
+            request_equipment: false,
+            request_3d_equipment: false,
+            request_energy_saving: false,
+            request_3d: false,
+            materials_layout: false,
+            materials_rental: false,
+            materials_contract: false,
+            materials_tac: false,
+            materials_other: false,
             materials: '',
             structural_office: '',
             notes: '',
@@ -1574,7 +1752,7 @@ createApp({
         // Don't load customers initially - only when company and branch are selected
         
         // Initialize Select2 after Vue is mounted
-        this.$nextTick(() => {
+        this.$nextTick(async () => {
             this.initSelect2();
             
             // Initialize select2 for guis_department in customer modal
@@ -1586,6 +1764,8 @@ createApp({
                     this.newCustomer.guis_department = val ? val : [];
                 });
             }
+
+            await this.loadCopiedParentProjectData();
         });
         
         // Add event listener for modal hide
