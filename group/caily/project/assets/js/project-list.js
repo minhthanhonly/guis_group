@@ -6758,7 +6758,6 @@ var projectTable;
             }
         );
 
-        initProjectFilterBoxCollapseState();
         syncQuickEditStatusOptions();
         var savedScrollOnLoad = getSavedProjectListScroll();
         if (savedScrollOnLoad) {
@@ -8775,6 +8774,11 @@ var projectTable;
         }).mount('#app');
 
         window.app = app;
+        // Must run AFTER Vue mount: createApp().mount() replaces #app children, so
+        // pre-mount getElementById refs / listeners would point at detached nodes
+        // (float filter offcanvas opened empty).
+        initProjectFilterBoxCollapseState();
+        initProjectListFloatActions();
     }
 
     (window.__bdMixinReady || Promise.resolve()).then(function() {
@@ -8784,8 +8788,13 @@ var projectTable;
         bootProjectListVueApp();
     });
 
-    // Fixed action buttons: show when scroll reaches #projectTableCard; offcanvas shows #projectFilterBox content
-    (function() {
+    /**
+     * Fixed action buttons: show when scroll reaches #projectTableCard;
+     * offcanvas shows #projectFilterBox .card content.
+     * Call only after Vue has mounted #app.
+     */
+    function initProjectListFloatActions() {
+        if (window.__projectListFloatActionsBound) return;
         var floatActions = document.getElementById('projectFloatActions');
         var floatBtn = document.getElementById('projectFilterFloatBtn');
         var reloadFloatBtn = document.getElementById('projectReloadFloatBtn');
@@ -8794,10 +8803,15 @@ var projectTable;
         var offcanvasBody = document.getElementById('projectFilterOffcanvasBody');
         var offcanvasEl = document.getElementById('offcanvasProjectFilter');
         if (!floatActions || !floatBtn || !projectTableCard || !projectFilterBox || !offcanvasBody || !offcanvasEl) return;
+        window.__projectListFloatActionsBound = true;
 
         var filterCard = null; // ref to moved .card
 
         function updateFloatButtonVisibility() {
+            if (offcanvasEl.classList.contains('show')) {
+                floatActions.classList.add('d-none');
+                return;
+            }
             var rect = projectTableCard.getBoundingClientRect();
             if (rect.top <= 120) {
                 floatActions.classList.remove('d-none');
@@ -8817,8 +8831,15 @@ var projectTable;
         updateFloatButtonVisibility();
 
         offcanvasEl.addEventListener('show.bs.offcanvas', function() {
-            if (!projectFilterBox.firstElementChild) return;
-            filterCard = projectFilterBox.firstElementChild;
+            floatActions.classList.add('d-none');
+            if (filterCard && offcanvasBody.contains(filterCard)) return;
+            var card = projectFilterBox.querySelector(':scope > .card');
+            if (!card) {
+                card = offcanvasBody.querySelector(':scope > .card');
+                if (card) filterCard = card;
+                return;
+            }
+            filterCard = card;
             var cardHeight = filterCard.offsetHeight;
             projectFilterBox.removeChild(filterCard);
             offcanvasBody.appendChild(filterCard);
@@ -8840,8 +8861,9 @@ var projectTable;
                 projectFilterBox.insertBefore(filterCard, projectFilterBox.firstChild);
             }
             filterCard = null;
+            updateFloatButtonVisibility();
         });
-    })();
+    }
 
     // Global function for toggling favorite from DataTable render
     window.toggleProjectFavorite = async function(projectId, element) {
