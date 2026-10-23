@@ -89,16 +89,17 @@ $view->heading('建物一覧');
                     </div>
 
                     <!-- Parent Projects Table -->
-                    <div class="table-responsive">
-                        <!-- Loading indicator -->
-                        <div v-if="loading" class="text-center py-4">
-                            <div class="spinner-border" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <p class="mt-2"><span data-i18n="読み込み中">読み込み中</span>...</p>
+                    <p class="small text-muted mb-2" id="parentProjectTableScrollHint">
+                        <i class="fa fa-info-circle me-1 text-info"></i><span data-i18n="Spaceを押したままドラッグで表を横スクロール">Spaceを押したままドラッグで表を横スクロール</span>
+                    </p>
+                    <div v-if="loading" class="text-center py-4">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">Loading...</span>
                         </div>
-                        
-                        <table v-else class="table table-hover">
+                        <p class="mt-2"><span data-i18n="読み込み中">読み込み中</span>...</p>
+                    </div>
+                    <div v-else class="table-responsive parent-projects-table-scroll" id="parentProjectsTableScroll">
+                        <table class="table table-hover parent-projects-table">
                             <thead>
                                 <tr>
                                     <th class="text-center"><span data-i18n="お気に入り">お気に入り</span></th>
@@ -106,7 +107,7 @@ $view->heading('建物一覧');
                                         <span data-i18n="管理番号">管理番号</span>
                                         <i class="fa fa-fw" :class="getSortIcon('project_number')"></i>
                                     </th>
-                                    <th v-if="isColumnVisible('project_name')" @click="sortBy('project_name')" style="cursor: pointer;" class="user-select-none">
+                                    <th v-if="isColumnVisible('project_name')" @click="sortBy('project_name')" style="cursor: pointer;" class="user-select-none parent-project-name-column">
                                         <span data-i18n="お施主様名">お施主様名</span>
                                         <i class="fa fa-fw" :class="getSortIcon('project_name')"></i>
                                     </th>
@@ -118,7 +119,7 @@ $view->heading('建物一覧');
                                         <span data-i18n="会社名">会社名</span>
                                         <i class="fa fa-fw" :class="getSortIcon('company_name')"></i>
                                     </th>
-                                    <th v-if="isColumnVisible('branch_name')" @click="sortBy('branch_name')" style="cursor: pointer;" class="user-select-none">
+                                    <th v-if="isColumnVisible('branch_name')" @click="sortBy('branch_name')" style="cursor: pointer;" class="user-select-none parent-branch-name-column">
                                         <span data-i18n="支店名">支店名</span>
                                         <i class="fa fa-fw" :class="getSortIcon('branch_name')"></i>
                                     </th>
@@ -135,16 +136,20 @@ $view->heading('建物一覧');
                                         <i class="fa fa-fw" :class="getSortIcon('type1')"></i>
                                     </th>
                                     <th v-if="isColumnVisible('type2')" @click="sortBy('type2')" style="cursor: pointer;" class="user-select-none">
-                                        <span data-i18n="種類2">種類2</span>
+                                        <span data-i18n="住宅種類">住宅種類</span>
                                         <i class="fa fa-fw" :class="getSortIcon('type2')"></i>
                                     </th>
-                                    <th v-if="isColumnVisible('requests')" @click="sortBy('requests')" style="cursor: pointer;" class="user-select-none">
+                                    <th v-if="isColumnVisible('requests')" @click="sortBy('requests')" style="cursor: pointer;" class="user-select-none parent-requests-column">
                                         <span data-i18n="依頼">依頼</span>
                                         <i class="fa fa-fw" :class="getSortIcon('requests')"></i>
                                     </th>
                                     <th v-if="isColumnVisible('child_project_count')" @click="sortBy('child_project_count')" style="cursor: pointer;" class="user-select-none">
                                         <span data-i18n="件数">件数</span>
                                         <i class="fa fa-fw" :class="getSortIcon('child_project_count')"></i>
+                                    </th>
+                                    <th v-if="isColumnVisible('nearest_nouki')" @click="sortBy('nearest_nouki')" style="cursor: pointer;" class="user-select-none">
+                                        <span data-i18n="納期">納期</span>
+                                        <i class="fa fa-fw" :class="getSortIcon('nearest_nouki')"></i>
                                     </th>
                                     <th v-if="isColumnVisible('created_by_name')" @click="sortBy('created_by_name')" style="cursor: pointer;" class="user-select-none">
                                         <span data-i18n="作成者">作成者</span>
@@ -184,17 +189,15 @@ $view->heading('建物一覧');
                                         <td v-if="isColumnVisible('project_number')">
                                             <span class="badge bg-label-info">{{ project.project_number || '-' }}</span>
                                         </td>
-                                        <td v-if="isColumnVisible('project_name')">
-                                            <div style="max-width: 200px;">
-                                                <a :href="'detail.php?id=' + project.id" class="text-decoration-none" 
-                                                :title="'詳細を表示: ' + project.project_name">
-                                                    {{ project.project_name }}
-                                                </a>
-                                            </div>            
+                                        <td v-if="isColumnVisible('project_name')" class="parent-project-name-column">
+                                            <a :href="'detail.php?id=' + project.id" class="text-decoration-none parent-project-name-link"
+                                               :title="'詳細を表示: ' + project.project_name">
+                                                {{ project.project_name }}
+                                            </a>
                                         </td>
                                         <td v-if="isColumnVisible('construction_number')">{{ project.construction_number || '-' }}</td>
                                         <td v-if="isColumnVisible('company_name')">{{ project.company_name }}</td>
-                                        <td v-if="isColumnVisible('branch_name')">{{ project.branch_name || '-' }}</td>
+                                        <td v-if="isColumnVisible('branch_name')" class="parent-branch-name-column">{{ project.branch_name || '-' }}</td>
                                         <td v-if="isColumnVisible('contact_name')">{{ project.contact_name || '-' }}</td>
                                         <td v-if="isColumnVisible('scale')">{{ project.scale || '-' }}</td>
                                         <td v-if="isColumnVisible('type1')">
@@ -217,7 +220,7 @@ $view->heading('建物一覧');
                                             </span>
                                             <span v-else>-</span>
                                         </td>
-                                        <td v-if="isColumnVisible('requests')">
+                                        <td v-if="isColumnVisible('requests')" class="parent-requests-column">
                                             <span v-if="project.requests">
                                                 <span v-for="item in project.requests.split(',').map(v => v.trim()).filter(v => v)"
                                                       :key="item"
@@ -243,6 +246,20 @@ $view->heading('建物一覧');
                                                 </button>
                                             </span>
                                             <span v-else class="text-muted">0</span>
+                                        </td>
+                                        <td v-if="isColumnVisible('nearest_nouki')">
+                                            <template v-if="project.nearest_nouki_list && project.nearest_nouki_list.length">
+                                                <div v-for="(item, nIdx) in project.nearest_nouki_list"
+                                                     :key="(item.department_name || '') + '-' + (item.project_order_type || '') + '-' + (item.deadline || '') + '-' + nIdx"
+                                                     class="d-flex align-items-center gap-1 mb-1"
+                                                     style="white-space: nowrap;">
+                                                    <span class="badge"
+                                                          :class="getDepartmentNoukiBadgeClass(item.department_name)"
+                                                          :title="item.department_name || ''">{{ getNearestNoukiCombinedLabel(item) }}</span>
+                                                    <span>{{ formatDate(item.deadline) }}</span>
+                                                </div>
+                                            </template>
+                                            <span v-else class="text-muted">-</span>
                                         </td>
                                         <td v-if="isColumnVisible('created_by_name')">{{ project.created_by_name || '-' }}</td>
                                         <td v-if="isColumnVisible('notes')" class="confirmation-notes-column">
@@ -569,13 +586,24 @@ $view->heading('建物一覧');
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="種類2">種類2</span></label>
+                                <label class="form-label"><span data-i18n="住宅種類">住宅種類</span></label>
                                 <div class="d-flex align-items-center gap-2">
                                     <input type="text" class="form-control tagify" id="edit_pp_type2_tags" name="edit_pp_type2_tags">
                                     <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditParentTagifyTags('type2')" title="すべて削除">
                                         <i class="fa fa-times"></i>
                                     </button>
                                 </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3" v-if="editHasNonResidentialType">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="非住宅の主要用途">非住宅の主要用途</span></label>
+                                <select class="form-select" v-model="editingParentProject.type3">
+                                    <option value="">選択してください</option>
+                                    <option v-for="opt in nonResidentialMainUseOptions" :key="opt.value" :value="opt.value">
+                                        {{ opt.label }}
+                                    </option>
+                                </select>
                             </div>
                         </div>
                         <div class="col-12">
@@ -650,6 +678,42 @@ $view->heading('建物一覧');
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="特徴">特徴</span></label>
+                                <div class="row">
+                                    <div class="col-md-4" v-for="opt in editVisibleFeatureOptions" :key="opt">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                :id="'edit_pp_features_' + opt"
+                                                v-model="editParentFeatureFlags[opt]">
+                                            <label class="form-check-label" :for="'edit_pp_features_' + opt">{{ opt }}</label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6" v-if="editHasEnergySavingRequest">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" id="edit_pp_application_review_agency_tags" name="edit_pp_application_review_agency_tags">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditParentTagifyTags('application_review_agency')" title="すべて削除">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6" v-if="editHasEnergySavingRequest">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
+                                <select class="form-select" v-model="editingParentProject.bels_zeh_grade">
+                                    <option v-for="opt in belsZehGradeOptions" :key="opt.value" :value="opt.value">
+                                        {{ opt.label }}
+                                    </option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -744,19 +808,37 @@ $view->footing();
 ?>
 
 <style>
-.table th {
+/* 建物一覧 table theme — match project list (grid borders, compact header) */
+.parent-projects-table {
+    border: 0 !important;
+    border-collapse: collapse;
+}
+.parent-projects-table > :not(caption) > * > * {
+    border: 1px solid #aaa;
+    padding: 0.4rem 0.5rem !important;
+    color: #333;
+}
+.parent-projects-table thead th {
     background-color: #f8f9fa;
-    border-top: none;
     font-weight: 600;
     color: #495057;
+    vertical-align: middle;
+    white-space: nowrap;
 }
-
-.table th[style*="cursor: pointer"]:hover {
+.parent-projects-table thead th[style*="cursor: pointer"]:hover,
+.parent-projects-table thead th.user-select-none:hover {
     background-color: #e9ecef;
 }
-
-.table td {
-    vertical-align: middle;
+.parent-projects-table tbody td {
+    vertical-align: top;
+}
+[data-bs-theme="dark"] .parent-projects-table > :not(caption) > * > * {
+    color: #eee !important;
+    border-color: #666;
+}
+[data-bs-theme="dark"] .parent-projects-table thead th {
+    background-color: #333 !important;
+    color: #eee !important;
 }
 
 .badge {
@@ -769,17 +851,106 @@ $view->footing();
     font-size: 0.875rem;
 }
 
-.table-responsive {
+/* Horizontal scroll like project list (do not use overflow:hidden) */
+.parent-projects-table-scroll {
     border-radius: 0.375rem;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+}
+.parent-projects-table-scroll.parent-projects-space-pan {
+    cursor: grab;
+}
+.parent-projects-table-scroll.parent-projects-space-pan.is-dragging {
+    cursor: grabbing;
+    user-select: none;
+}
+/* Fixed clone of table header while page scrolls (project list UX) */
+.parent-projects-sticky-head {
+    display: none;
+    position: fixed;
+    /* top/z-index set in JS from .layout-navbar bottom (clears navbar + blur) */
+    z-index: 1002;
+    overflow-x: auto;
+    overflow-y: hidden;
+    background: #fff;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    pointer-events: auto;
+    /* hide scrollbar; scrollLeft synced from main table */
+    scrollbar-width: none;
+}
+.parent-projects-sticky-head::-webkit-scrollbar {
+    display: none;
+}
+.parent-projects-sticky-head .parent-projects-sticky-table {
+    width: max-content;
+    margin-bottom: 0;
+    border: 0 !important;
+}
+.parent-projects-sticky-head .parent-projects-sticky-table thead th {
+    background-color: #f8f9fa;
+    cursor: pointer;
+}
+[data-bs-theme="dark"] .parent-projects-sticky-head {
+    background: #333;
+}
+[data-bs-theme="dark"] .parent-projects-sticky-head .parent-projects-sticky-table thead th {
+    background-color: #333 !important;
+    color: #eee !important;
+}
+.parent-projects-table-scroll .parent-projects-table {
+    width: max-content;
+    min-width: 100%;
+    margin-bottom: 0;
+}
+.parent-projects-table-scroll .parent-projects-table th,
+.parent-projects-table-scroll .parent-projects-table td {
+    white-space: nowrap;
+}
+/* Allow memo column to wrap / scroll internally */
+.parent-projects-table-scroll .parent-projects-table td.confirmation-notes-column {
+    white-space: normal;
+    min-width: 12rem;
+    max-width: 18rem;
+}
+/* お施主様名: wrap when long */
+.parent-projects-table-scroll .parent-projects-table th.parent-project-name-column,
+.parent-projects-table-scroll .parent-projects-table td.parent-project-name-column {
+    white-space: normal;
+    min-width: 8rem;
+    max-width: 12rem;
+    vertical-align: top;
+}
+.parent-projects-table-scroll .parent-projects-table .parent-project-name-link {
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    white-space: normal;
+}
+/* 支店名: narrower */
+.parent-projects-table-scroll .parent-projects-table th.parent-branch-name-column,
+.parent-projects-table-scroll .parent-projects-table td.parent-branch-name-column {
+    white-space: normal;
+    max-width: 5.5rem;
+    min-width: 3.5rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+}
+/* 依頼: narrower, badges can wrap */
+.parent-projects-table-scroll .parent-projects-table th.parent-requests-column,
+.parent-projects-table-scroll .parent-projects-table td.parent-requests-column {
+    white-space: normal;
+    max-width: 6.5rem;
+    min-width: 4rem;
 }
 
-.table-hover tbody tr:hover {
+.parent-projects-table.table-hover tbody tr:hover {
     background-color: rgba(0, 123, 255, 0.05);
 }
 
-.table-hover tbody tr.parent-project-row-saved,
-.table-hover tbody tr.parent-project-row-saved:hover {
+.parent-projects-table.table-hover tbody tr.parent-project-row-saved,
+.parent-projects-table.table-hover tbody tr.parent-project-row-saved:hover {
     background-color: #d4edda;
 }
 

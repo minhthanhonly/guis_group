@@ -452,6 +452,30 @@ createApp({
             },
             type1Tagify: null,
             type2Tagify: null,
+            applicationReviewAgencyTagify: null,
+            applicationReviewAgencyWhitelist: [
+                '日本ERI',
+                'ERIソリューション',
+                'ビューローベリタスジャパン',
+                '日本住宅保証検査機構（JIO）',
+                'ハウスプラス住宅保証',
+                '東京建築検査機構（TBTC）',
+                'ユーディーアイ確認検査',
+                '日本確認検査センター',
+                'JCI'
+            ],
+            nonResidentialMainUseOptions: [
+                { value: '08340', label: '08340 工場' },
+                { value: '08440', label: '08440 物品販売店舗' },
+                { value: '08450', label: '08450 飲食店' },
+                { value: '08470', label: '08470 事務所' },
+                { value: '08510', label: '08510 倉庫業を営む倉庫' },
+                { value: '08520', label: '08520 倉庫業を営まない倉庫' },
+                { value: '08400', label: '08400 ホテル・旅館' },
+                { value: '08260', label: '08260 病院' },
+                { value: '08550', label: '08550 集会場・公会堂' },
+                { value: '08990', label: '08990 その他' }
+            ],
             constructionBranchTagify: null,
             childProjectOrderTypeTagify: null,
             createChildProjectManagerTagify: null,
@@ -470,6 +494,38 @@ createApp({
             materials_contract: false,
             materials_tac: false,
             materials_other: false,
+            sharedHousingFeatureLabel: '共同住宅（共用部計算なし）',
+            featureOptions: [
+                '施主宅付き',
+                'マルチルームあり',
+                '店舗併用住宅',
+                '事務所併用住宅',
+                '複合用途',
+                '共同住宅（共用部計算なし）',
+                '補助金案件',
+                '増築',
+                '用途変更'
+            ],
+            featureFlags: {
+                '施主宅付き': false,
+                'マルチルームあり': false,
+                '店舗併用住宅': false,
+                '事務所併用住宅': false,
+                '複合用途': false,
+                '共同住宅（共用部計算なし）': false,
+                '補助金案件': false,
+                '増築': false,
+                '用途変更': false
+            },
+            belsZehGradeOptions: [
+                { value: '0', label: '0 : 該当なし（非ZEH）' },
+                { value: '1', label: '1 : ZEH' },
+                { value: '2', label: '2 : Nearly ZEH' },
+                { value: '3', label: '3 : ZEH Oriented' },
+                { value: '4', label: '4 : ZEH-M' },
+                { value: '5', label: '5 : Nearly ZEH-M' },
+                { value: '6', label: '6 : ZEH-M Oriented' }
+            ],
             validationErrors: {
                 company_name: '',
                 project_name: ''
@@ -758,6 +814,20 @@ createApp({
         }
     },
     watch: {
+        'parentProject.type2'() {
+            if (!this.hasSharedHousingType && this.featureFlags) {
+                this.featureFlags[this.sharedHousingFeatureLabel] = false;
+            }
+        },
+        request_energy_saving(enabled) {
+            if (!enabled && this.parentProject) {
+                this.parentProject.application_review_agency = '';
+                this.parentProject.bels_zeh_grade = '0';
+                this.destroyApplicationReviewAgencyTagify();
+            } else if (enabled && this.isEditMode) {
+                this.$nextTick(() => this.initApplicationReviewAgencyTagify());
+            }
+        },
         'newQuotation.items': {
             handler(newItems, oldItems) {
                 // Allow product_code to be freely entered even for set products
@@ -894,6 +964,75 @@ createApp({
         }
     },
     computed: {
+        hasNonResidentialType() {
+            const type2 = this.parentProject && this.parentProject.type2
+                ? String(this.parentProject.type2)
+                : '';
+            return type2
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('非住宅');
+        },
+        hasSharedHousingType() {
+            const type2 = this.parentProject && this.parentProject.type2
+                ? String(this.parentProject.type2)
+                : '';
+            return type2
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('共同');
+        },
+        visibleFeatureOptions() {
+            const self = this;
+            return this.featureOptions.filter(function(opt) {
+                if (opt === self.sharedHousingFeatureLabel) {
+                    return self.hasSharedHousingType;
+                }
+                return true;
+            });
+        },
+        nonResidentialMainUseLabel() {
+            if (!this.parentProject || !this.parentProject.type3) {
+                return '';
+            }
+            const code = String(this.parentProject.type3);
+            const found = this.nonResidentialMainUseOptions.find(function(opt) {
+                return opt.value === code;
+            });
+            return found ? found.label : code;
+        },
+        belsZehGradeLabel() {
+            if (!this.parentProject) {
+                return '';
+            }
+            const code = String(this.parentProject.bels_zeh_grade != null ? this.parentProject.bels_zeh_grade : '');
+            if (code === '') {
+                return '';
+            }
+            const found = this.belsZehGradeOptions.find(function(opt) {
+                return opt.value === code;
+            });
+            return found ? found.label : code;
+        },
+        hasEnergySavingRequest() {
+            if (this.isEditMode) {
+                return !!this.request_energy_saving;
+            }
+            return String(this.parentProject && this.parentProject.requests ? this.parentProject.requests : '')
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('省エネ');
+        },
+        selectedFeatureLabels() {
+            const features = String(this.parentProject && this.parentProject.features ? this.parentProject.features : '');
+            const selected = features.split(',').map(function(v) { return v.trim(); }).filter(Boolean);
+            return this.visibleFeatureOptions.filter(function(opt) {
+                return selected.indexOf(opt) !== -1;
+            });
+        },
         yoteiPartOptions() {
             this.yoteiPartOptionsTick;
             if (typeof window.YoteiField !== 'undefined' && window.YoteiField.getPartOptions) {
@@ -1177,6 +1316,12 @@ createApp({
                 const response = await axios.get(`/api/index.php?model=parentproject&method=getById&id=${PARENT_PROJECT_ID}`);
                 if (response.data) {
                     this.parentProject = response.data;
+                    if (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '') {
+                        this.parentProject.bels_zeh_grade = '0';
+                    } else {
+                        this.parentProject.bels_zeh_grade = String(this.parentProject.bels_zeh_grade);
+                    }
+                    this.parseFeatures();
                     
                     // Load GUIS receiver display name if exists
                     if (this.parentProject.guis_receiver) {
@@ -1895,8 +2040,14 @@ createApp({
                 scale: source.scale || '',
                 type1: source.type1 || '',
                 type2: source.type2 || '',
+                type3: source.type3 || '',
                 request_type: source.request_type || '',
                 structural_office: source.structural_office || '',
+                features: source.features || '',
+                application_review_agency: source.application_review_agency || '',
+                bels_zeh_grade: (source.bels_zeh_grade != null && source.bels_zeh_grade !== '')
+                    ? String(source.bels_zeh_grade)
+                    : '0',
                 notes: source.notes || '',
                 requests: requests,
                 materials: materials,
@@ -1928,6 +2079,12 @@ createApp({
             this.loadInitialData();
             this.parseRequests();
             this.parseMaterials();
+            this.parseFeatures();
+            if (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '') {
+                this.parentProject.bels_zeh_grade = '0';
+            } else {
+                this.parentProject.bels_zeh_grade = String(this.parentProject.bels_zeh_grade);
+            }
             this.$nextTick(async () => {
                 await this.loadBranches();
                 await this.loadContacts();
@@ -2438,6 +2595,48 @@ createApp({
                 }
             }
         },
+        destroyApplicationReviewAgencyTagify() {
+            if (this.applicationReviewAgencyTagify) {
+                try { this.applicationReviewAgencyTagify.destroy(); } catch (e) { /* ignore */ }
+                this.applicationReviewAgencyTagify = null;
+            }
+            const input = document.querySelector('#application_review_agency_tags');
+            if (input) {
+                input.value = '';
+                if (input._tagify) {
+                    try { input._tagify.destroy(); } catch (e) { /* ignore */ }
+                    input._tagify = null;
+                }
+            }
+        },
+        initApplicationReviewAgencyTagify() {
+            const input = document.querySelector('#application_review_agency_tags');
+            if (!input || !window.Tagify) return;
+            this.destroyApplicationReviewAgencyTagify();
+            input.value = '';
+            this.applicationReviewAgencyTagify = new Tagify(input, {
+                whitelist: this.applicationReviewAgencyWhitelist.slice(),
+                enforceWhitelist: false,
+                maxTags: 1,
+                dropdown: {
+                    maxItems: 20,
+                    classname: 'tags-look-review-agency',
+                    enabled: 0,
+                    closeOnSelect: true
+                }
+            });
+            const updateAgency = () => {
+                this.parentProject.application_review_agency = this.applicationReviewAgencyTagify.value
+                    .map(tag => tag.value)
+                    .join(',');
+            };
+            this.applicationReviewAgencyTagify.on('add', updateAgency);
+            this.applicationReviewAgencyTagify.on('remove', updateAgency);
+            const current = String(this.parentProject.application_review_agency || '').trim();
+            if (current) {
+                this.applicationReviewAgencyTagify.addTags(current);
+            }
+        },
         initTagify() {
             // Initialize Tagify after Vue is mounted
             this.$nextTick(() => {
@@ -2474,7 +2673,7 @@ createApp({
                     }
                 }
                 
-                // --- Tagify for Type2 (種類2) ---
+                // --- Tagify for Type2 (住宅種類) ---
                 const type2Input = document.querySelector('#type2_tags');
                 if (type2Input && window.Tagify && !type2Input._tagify) {
                     if (this.type2Tagify) {
@@ -2485,8 +2684,8 @@ createApp({
                         }
                     }
                     this.type2Tagify = new Tagify(type2Input, {
-                        whitelist: ['共同', '集合'],
-                        maxTags: 5,
+                        whitelist: ['長屋', '共同', '戸建', '非住宅', '集合'],
+                        maxTags: 1,
                         dropdown: {
                             maxItems: 20,
                             classname: "tags-look-type2",
@@ -2496,6 +2695,9 @@ createApp({
                     });
                     const updateType2 = () => {
                         this.parentProject.type2 = this.type2Tagify.value.map(tag => tag.value).join(',');
+                        if (!this.hasNonResidentialType) {
+                            this.parentProject.type3 = '';
+                        }
                     };
                     this.type2Tagify.on('add', updateType2);
                     this.type2Tagify.on('remove', updateType2);
@@ -2545,6 +2747,10 @@ createApp({
                         //this.constructionBranchTagify.addTags(tags);
                     }
                 }
+
+                if (this.hasEnergySavingRequest) {
+                    this.initApplicationReviewAgencyTagify();
+                }
             });
         },
         clearTagifyTags(fieldName) {
@@ -2554,6 +2760,8 @@ createApp({
                 this.type2Tagify.removeAllTags();
             } else if (fieldName === 'construction_branch' && this.constructionBranchTagify) {
                 this.constructionBranchTagify.removeAllTags();
+            } else if (fieldName === 'application_review_agency' && this.applicationReviewAgencyTagify) {
+                this.applicationReviewAgencyTagify.removeAllTags();
             }
         },
         destroySelect2Instances() {
@@ -2612,6 +2820,22 @@ createApp({
             this.materials_contract = materials.includes('契約図');
             this.materials_tac = materials.includes('TAC図');
             this.materials_other = materials.includes('その他');
+        },
+        createEmptyFeatureFlags() {
+            const flags = {};
+            this.featureOptions.forEach((opt) => { flags[opt] = false; });
+            return flags;
+        },
+        parseFeatures() {
+            const flags = this.createEmptyFeatureFlags();
+            if (this.parentProject && this.parentProject.features) {
+                this.parentProject.features.split(',').map(f => f.trim()).filter(Boolean).forEach((item) => {
+                    if (Object.prototype.hasOwnProperty.call(flags, item)) {
+                        flags[item] = true;
+                    }
+                });
+            }
+            this.featureFlags = flags;
         },
         validateParentProjectForm() {
             this.validationErrors = {
@@ -2822,6 +3046,10 @@ createApp({
             if (this.materials_other) materialsArray.push('その他');
             this.parentProject.materials = materialsArray.join(',');
 
+            this.parentProject.features = this.visibleFeatureOptions
+                .filter((opt) => this.featureFlags[opt])
+                .join(',');
+
             try {
                 const formData = new FormData();
                 formData.append('id', this.parentProject.id);
@@ -2838,9 +3066,19 @@ createApp({
                 formData.append('scale', this.parentProject.scale || '');
                 formData.append('type1', this.parentProject.type1 || '');
                 formData.append('type2', this.parentProject.type2 || '');
+                formData.append('type3', this.hasNonResidentialType ? (this.parentProject.type3 || '') : '');
                 formData.append('request_type', this.parentProject.request_type || '');
                 formData.append('desired_delivery_date', this.parentProject.desired_delivery_date || '');
                 formData.append('materials', this.parentProject.materials);
+                formData.append('features', this.parentProject.features || '');
+                formData.append(
+                    'application_review_agency',
+                    this.hasEnergySavingRequest ? (this.parentProject.application_review_agency || '') : ''
+                );
+                formData.append(
+                    'bels_zeh_grade',
+                    this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '0') : '0'
+                );
                 formData.append('structural_office', this.parentProject.structural_office || '');
                 formData.append('notes', this.parentProject.notes || '');
                 formData.append('status', this.parentProject.status || 'draft');
@@ -3913,7 +4151,9 @@ createApp({
                         });
                     }
                 });
-                this._renderChildProjectCustomFields(wrap, mergedFields, [], 'createChildProject');
+                const Cfc = window.ProjectCustomFieldComposite;
+                const fields = (Cfc && Cfc.normalizeMergedFields) ? Cfc.normalizeMergedFields(mergedFields) : mergedFields;
+                this._renderChildProjectCustomFields(wrap, fields, {}, 'createChildProject');
                 this._initChildProjectCustomFieldsFlatpickr(wrap, 'createChildProjectCustomDatetime');
             } catch (err) {
                 console.error('Error loading create child project custom fields:', err);
@@ -3950,7 +4190,9 @@ createApp({
                         });
                     }
                 });
-                this._renderChildProjectCustomFields(wrap, mergedFields, savedValueMap, 'editChildProject');
+                const Cfc = window.ProjectCustomFieldComposite;
+                const fields = (Cfc && Cfc.normalizeMergedFields) ? Cfc.normalizeMergedFields(mergedFields) : mergedFields;
+                this._renderChildProjectCustomFields(wrap, fields, savedValueMap, 'editChildProject');
                 this._initChildProjectCustomFieldsFlatpickr(wrap, 'editChildProjectCustomDatetime');
             } catch (err) {
                 console.error('Error loading edit child project custom fields:', err);
@@ -3963,22 +4205,42 @@ createApp({
             const checkboxClass = prefix + 'CustomCheckbox';
             const radioClass = prefix + 'CustomRadio';
             const datetimeClass = prefix + 'CustomDatetime';
+            const memoInputClass = prefix + 'CompositeMemo';
             const datetimePlaceholder = getProjectDateTimePlaceholder().replace(/"/g, '&quot;');
+            const Cfc = window.ProjectCustomFieldComposite;
+            const valueMap = savedValueMap || {};
             mergedFields.forEach((f, idx) => {
                 const label = f.label;
                 const type = f.type;
                 const options = (f.options != null ? String(f.options) : '').trim();
                 const opts = options ? options.split(',').map(s => s.trim()).filter(Boolean) : [];
-                const val = savedValueMap[String(label).trim()] || '';
+                const val = valueMap[String(label).trim()] || '';
                 const safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const isOneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
+                const isComposite = !!(Cfc && Cfc.isBaseLabel(label));
                 const colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6';
                 const div = document.createElement('div');
                 div.className = colClass + ' mb-3 ' + fieldClass;
                 div.setAttribute('data-custom-label', safeLabel);
                 div.setAttribute('data-custom-type', type);
+                div.setAttribute('data-custom-options', options);
+                if (isComposite) div.setAttribute('data-custom-composite', '1');
                 let inner = '';
-                if (type === 'checkbox_select_all') {
+                if (isComposite && Cfc) {
+                    const memoVal = valueMap[Cfc.memoLabel(label)] || '';
+                    inner = Cfc.buildCompositeInnerHtml({
+                        label: label,
+                        type: type,
+                        options: options,
+                        val: val,
+                        memoVal: memoVal,
+                        radioName: radioClass + '_' + idx,
+                        radioClass: radioClass,
+                        checkboxClass: checkboxClass,
+                        memoInputClass: inputClass + ' ' + memoInputClass,
+                        safeLabel: safeLabel
+                    });
+                } else if (type === 'checkbox_select_all') {
                     const arrForLabel = val ? String(val).split(',').map(s => s.trim()).filter(Boolean) : [];
                     const allCheckedLabel = opts.length > 0 && opts.every(opt => arrForLabel.indexOf(opt) !== -1);
                     const selectAllBtnLabel = allCheckedLabel
@@ -3992,6 +4254,7 @@ createApp({
                 } else {
                     inner += '<label class="form-label">' + safeLabel + '</label>';
                 }
+                if (!isComposite) {
                 if (type === 'textarea') {
                     inner += '<textarea class="form-control ' + inputClass + '" data-custom-label="' + safeLabel + '" rows="3">' + (val ? String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '') + '</textarea>';
                 } else if (type === 'select') {
@@ -4014,9 +4277,14 @@ createApp({
                 } else {
                     inner += '<input type="text" class="form-control ' + inputClass + '" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '">';
                 }
+                }
                 div.innerHTML = inner;
                 wrap.appendChild(div);
             });
+            if (Cfc && typeof Cfc.bindEvents === 'function') {
+                wrap.__compositeBound = false;
+                Cfc.bindEvents(wrap, radioClass, checkboxClass);
+            }
             const selectAllClass = checkboxClass + 'SelectAll';
             wrap.querySelectorAll('.' + selectAllClass).forEach(selectAllEl => {
                 selectAllEl.addEventListener('click', function() {
@@ -4063,10 +4331,16 @@ createApp({
             if (!wrap) return [];
             const rows = wrap.querySelectorAll('.' + rowClass);
             const result = [];
+            const Cfc = window.ProjectCustomFieldComposite;
+            const memoInputClass = rowClass.replace(/CustomField$/, 'CompositeMemo');
             rows.forEach(row => {
                 const label = row.getAttribute('data-custom-label');
                 const type = row.getAttribute('data-custom-type');
                 if (!label) return;
+                if (Cfc && row.getAttribute('data-custom-composite') === '1') {
+                    Cfc.collectFromRow(row, radioClass, memoInputClass, checkboxClass).forEach(item => result.push(item));
+                    return;
+                }
                 let value = '';
                 if (type === 'checkbox' || type === 'checkbox_select_all') {
                     const checked = row.querySelectorAll('.' + checkboxClass + ':checked');
@@ -4075,7 +4349,7 @@ createApp({
                     const checkedEl = row.querySelector('.' + radioClass + ':checked');
                     value = checkedEl ? checkedEl.value : '';
                 } else {
-                    const input = row.querySelector('.' + inputClass);
+                    const input = row.querySelector('.' + inputClass + ':not(.' + memoInputClass + ')');
                     value = input ? (input.value || '').trim() : '';
                     if (type === 'datetime' && value) {
                         value = fromProjectDateTimeInputValue(value);

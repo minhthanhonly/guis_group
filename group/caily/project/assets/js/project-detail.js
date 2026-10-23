@@ -73,6 +73,50 @@ function ensureProjectDetailCommentAssets() {
     return window.__projectDetailCommentLoading;
 }
 
+/** 設備図 / 意匠図 / 配置図: セットの選択肢のまま、値選択時に【メモ】を表示 */
+var CUSTOM_FIELD_COMPOSITE_BASE_LABELS = { '設備図': true, '意匠図': true, '配置図': true };
+function isCustomFieldCompositeBaseLabel(label) {
+    return !!CUSTOM_FIELD_COMPOSITE_BASE_LABELS[String(label || '').trim()];
+}
+function isCustomFieldCompositeCompanionLabel(label) {
+    return /【(?:メモ|〇|○)】$/.test(String(label || '').trim());
+}
+function getCustomFieldCompositeMemoLabel(base) {
+    return String(base || '').trim() + '【メモ】';
+}
+function isCustomFieldCompositeValueSelected(value) {
+    return String(value == null ? '' : value).trim() !== '';
+}
+function getCustomFieldCompositeOptions(field) {
+    return String((field && field.options) != null ? field.options : '')
+        .split(',')
+        .map(function(s) { return s.trim(); })
+        .filter(Boolean);
+}
+function isCustomFieldCompositeCheckboxType(type) {
+    return type === 'checkbox' || type === 'checkbox_select_all';
+}
+/** Keep only values that exist in the field's current set options (drops legacy orphans). */
+function sanitizeCustomFieldCompositeMainValue(value, options, type) {
+    if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.sanitizeMainValue === 'function') {
+        return window.ProjectCustomFieldComposite.sanitizeMainValue(value, options, type);
+    }
+    var opts = getCustomFieldCompositeOptions({ options: options });
+    if (!opts.length) return String(value == null ? '' : value).trim();
+    var allowed = {};
+    opts.forEach(function(o) { allowed[o] = true; });
+    var parts = String(value == null ? '' : value).split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+    if (isCustomFieldCompositeCheckboxType(type)) {
+        return parts.filter(function(v) { return !!allowed[v]; }).join(',');
+    }
+    var raw = String(value == null ? '' : value).trim();
+    if (raw && allowed[raw]) return raw;
+    for (var i = 0; i < parts.length; i++) {
+        if (allowed[parts[i]]) return parts[i];
+    }
+    return '';
+}
+
 // Cột danh sách project (trùng với COLUMN_DEFINITIONS trong project-list.js) + custom_fields bổ sung ở computed
 var NOTE_DISPLAY_COLUMNS = [
     { key: 'status', label: '案件状況' },
@@ -86,11 +130,16 @@ var NOTE_DISPLAY_COLUMNS = [
     { key: 'name', label: 'お施主様名' },
     { key: 'parent_scale', label: '規模' },
     { key: 'parent_type1', label: '種類1' },
-    { key: 'parent_type2', label: '種類2' },
+    { key: 'parent_type2', label: '住宅種類' },
+    { key: 'parent_type3', label: '非住宅の主要用途' },
+    { key: 'parent_features', label: '特徴' },
+    { key: 'parent_application_review_agency', label: '申請提出先の審査機関' },
+    { key: 'parent_bels_zeh_grade', label: 'BELSのZEH等級' },
     { key: 'start_date', label: '開始日' },
     { key: 'caily_nouki', label: 'CAILY納期' },
     { key: 'guis_nouki', label: 'GUIS納期' },
     { key: 'end_date', label: '終了日' },
+    { key: 'other_dept_nouki', label: '他部署の納期' },
     { key: 'project_order_type', label: '受注形態' },
     { key: 'priority', label: '優先度' },
     { key: 'amount', label: '総額' },
@@ -641,6 +690,86 @@ const vueApp = createApp({
         }
     },
     computed: {
+        hasNonResidentialType() {
+            const type2 = this.project && this.project.type2 ? String(this.project.type2) : '';
+            return type2
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('非住宅');
+        },
+        hasSharedHousingType() {
+            const type2 = this.project && this.project.type2 ? String(this.project.type2) : '';
+            return type2
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('共同');
+        },
+        hasEnergySavingRequest() {
+            return this.parentRequestTypes.indexOf('省エネ') !== -1;
+        },
+        nonResidentialMainUseLabel() {
+            if (!this.project || !this.project.type3) {
+                return '';
+            }
+            const code = String(this.project.type3);
+            const options = [
+                { value: '08340', label: '08340 工場' },
+                { value: '08440', label: '08440 物品販売店舗' },
+                { value: '08450', label: '08450 飲食店' },
+                { value: '08470', label: '08470 事務所' },
+                { value: '08510', label: '08510 倉庫業を営む倉庫' },
+                { value: '08520', label: '08520 倉庫業を営まない倉庫' },
+                { value: '08400', label: '08400 ホテル・旅館' },
+                { value: '08260', label: '08260 病院' },
+                { value: '08550', label: '08550 集会場・公会堂' },
+                { value: '08990', label: '08990 その他' }
+            ];
+            const found = options.find(function(opt) { return opt.value === code; });
+            return found ? found.label : code;
+        },
+        selectedFeatureLabels() {
+            const featureOptions = [
+                '施主宅付き',
+                'マルチルームあり',
+                '店舗併用住宅',
+                '事務所併用住宅',
+                '複合用途',
+                '共同住宅（共用部計算なし）',
+                '補助金案件',
+                '増築',
+                '用途変更'
+            ];
+            const sharedLabel = '共同住宅（共用部計算なし）';
+            const selected = String(this.project && this.project.features ? this.project.features : '')
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean);
+            const self = this;
+            return featureOptions.filter(function(opt) {
+                if (selected.indexOf(opt) === -1) return false;
+                if (opt === sharedLabel && !self.hasSharedHousingType) return false;
+                return true;
+            });
+        },
+        belsZehGradeLabel() {
+            if (!this.project || this.project.bels_zeh_grade == null || this.project.bels_zeh_grade === '') {
+                return '';
+            }
+            const code = String(this.project.bels_zeh_grade);
+            const options = [
+                { value: '0', label: '0 : 該当なし（非ZEH）' },
+                { value: '1', label: '1 : ZEH' },
+                { value: '2', label: '2 : Nearly ZEH' },
+                { value: '3', label: '3 : ZEH Oriented' },
+                { value: '4', label: '4 : ZEH-M' },
+                { value: '5', label: '5 : Nearly ZEH-M' },
+                { value: '6', label: '6 : ZEH-M Oriented' }
+            ];
+            const found = options.find(function(opt) { return opt.value === code; });
+            return found ? found.label : code;
+        },
         isCailyBranchUser() {
             return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
         },
@@ -823,6 +952,7 @@ const vueApp = createApp({
                     set.fields.forEach(function(f) {
                         if (f && f.label && f.label.trim()) {
                             var label = f.label.trim();
+                            if (isCustomFieldCompositeCompanionLabel(label)) return;
                             var val = 'custom:' + label;
                             var n = normLabel(label);
                             if (!seen[val] && !seenNorm[n]) {
@@ -1180,8 +1310,16 @@ const vueApp = createApp({
                 this.project.building_size = parentProject.scale;
                 this.project.building_type = parentProject.type1;
                 this.project.building_branch = parentProject.construction_branch;
+                this.project.parent_request_date = parentProject.request_date || '';
+                this.project.parent_project_number = parentProject.project_number || '';
                 this.project.type1 = parentProject.type1;
                 this.project.type2 = parentProject.type2;
+                this.project.type3 = parentProject.type3 || '';
+                this.project.features = parentProject.features || '';
+                this.project.application_review_agency = parentProject.application_review_agency || '';
+                this.project.bels_zeh_grade = (parentProject.bels_zeh_grade != null && parentProject.bels_zeh_grade !== '')
+                    ? String(parentProject.bels_zeh_grade)
+                    : '0';
 
                 // Additional fields from parent project
                 this.project.guis_receiver = parentProject.guis_receiver; // GUIS　受付者
@@ -3234,7 +3372,19 @@ const vueApp = createApp({
             const valueMap = {};
             this.customFields.forEach(field => {
                     if (field.label) {
-                    if (field.type === 'checkbox' || field.type === 'checkbox_select_all') {
+                    if (field.isComposite) {
+                        var compositeRaw = isCustomFieldCompositeCheckboxType(field.type)
+                            ? (Array.isArray(field.valueArr) ? field.valueArr.join(',') : (field.value || ''))
+                            : (field.value || '');
+                        var compositeVal = sanitizeCustomFieldCompositeMainValue(
+                            compositeRaw,
+                            field.options,
+                            field.type
+                        );
+                        valueMap[field.label.trim()] = compositeVal;
+                        valueMap[getCustomFieldCompositeMemoLabel(field.label)] =
+                            isCustomFieldCompositeValueSelected(compositeVal) ? (field.memoValue || '') : '';
+                    } else if (field.type === 'checkbox' || field.type === 'checkbox_select_all') {
                         valueMap[field.label.trim()] = Array.isArray(field.valueArr) ? field.valueArr.join(',') : '';
                     } else if (field.type === 'datetime') {
                         valueMap[field.label.trim()] = fromProjectDateTimeInputValue(field.value || '');
@@ -3246,24 +3396,158 @@ const vueApp = createApp({
             
             // Collect all fields from all sets
             const allFields = [];
+            const seen = {};
+            const pushField = (label, type, options, oneRow) => {
+                const key = String(label || '').trim();
+                if (!key || seen[key]) return;
+                seen[key] = true;
+                allFields.push({
+                    label: key,
+                    type: type || 'text',
+                    options: options != null ? options : '',
+                    one_row: oneRow ? 1 : 0,
+                    value: valueMap[key] != null ? valueMap[key] : ''
+                });
+            };
             this.allDepartmentCustomFieldSets.forEach(set => {
                 if (set.fields && Array.isArray(set.fields)) {
                     set.fields.forEach(f => {
-                        // Avoid duplicates by label
-                        if (!allFields.find(existing => existing.label && existing.label.trim() === f.label.trim())) {
-                            allFields.push({
-                                label: f.label,
-                                type: f.type,
-                                options: f.options,
-                                one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true),
-                                value: valueMap[f.label.trim()] || ''
-                            });
+                        if (isCustomFieldCompositeCompanionLabel(f.label)) return;
+                        if (isCustomFieldCompositeBaseLabel(f.label)) {
+                            pushField(f.label, f.type || 'text', f.options, f.one_row);
+                            pushField(getCustomFieldCompositeMemoLabel(f.label), 'text', '', false);
+                            return;
                         }
+                        pushField(
+                            f.label,
+                            f.type,
+                            f.options,
+                            (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
+                        );
                     });
                 }
             });
+            // Composite companions may exist only in UI state (not in set definition)
+            this.customFields.forEach(field => {
+                if (!field || !field.isComposite) return;
+                pushField(field.label, field.type || 'text', field.options, field.one_row);
+                pushField(getCustomFieldCompositeMemoLabel(field.label), 'text', '', false);
+            });
             
             return allFields;
+        },
+        parseSavedCustomFieldList(raw) {
+            let saved = [];
+            let data = raw;
+            if (typeof data === 'string' && data.includes('&quot;')) {
+                data = data.replace(/&quot;/g, '"');
+            }
+            if (typeof data === 'string') {
+                try { saved = JSON.parse(data || '[]'); } catch (e) { saved = []; }
+            } else if (Array.isArray(data)) {
+                saved = data;
+            }
+            return Array.isArray(saved) ? saved : [];
+        },
+        buildSavedCustomFieldValueMap(saved) {
+            const savedValueMap = {};
+            (saved || []).forEach(f => {
+                if (f && f.label) {
+                    savedValueMap[String(f.label).trim()] = f;
+                }
+            });
+            return savedValueMap;
+        },
+        collectCustomFieldsFromSets(sets) {
+            const allFieldsFromSets = [];
+            (sets || []).forEach(set => {
+                if (!set || !Array.isArray(set.fields)) return;
+                set.fields.forEach(f => {
+                    if (!f || !f.label) return;
+                    const label = String(f.label).trim();
+                    if (!label) return;
+                    if (allFieldsFromSets.find(existing => existing.label && String(existing.label).trim() === label)) return;
+                    allFieldsFromSets.push({
+                        label: label,
+                        type: f.type || 'text',
+                        options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : ''),
+                        one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
+                    });
+                });
+            });
+            return allFieldsFromSets;
+        },
+        mapSetFieldsToCustomFields(allFieldsFromSets, saved) {
+            const savedValueMap = this.buildSavedCustomFieldValueMap(saved);
+            const rows = [];
+            (allFieldsFromSets || []).forEach(f => {
+                if (!f || !f.label) return;
+                const label = String(f.label).trim();
+                if (isCustomFieldCompositeCompanionLabel(label)) return;
+
+                const oneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
+                const savedField = savedValueMap[label];
+
+                if (isCustomFieldCompositeBaseLabel(label)) {
+                    const memoLabel = getCustomFieldCompositeMemoLabel(label);
+                    const memoSaved = savedValueMap[memoLabel];
+                    const fieldType = f.type || 'text';
+                    const fieldOptions = Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : '');
+                    let mainValue = sanitizeCustomFieldCompositeMainValue(
+                        savedField && savedField.value != null ? savedField.value : '',
+                        fieldOptions,
+                        fieldType
+                    );
+                    let valueArr = [];
+                    if (isCustomFieldCompositeCheckboxType(fieldType)) {
+                        valueArr = mainValue ? mainValue.split(',').map(s => s.trim()).filter(Boolean) : [];
+                        mainValue = valueArr.join(',');
+                    }
+                    rows.push({
+                        label: label,
+                        type: fieldType,
+                        options: fieldOptions,
+                        one_row: oneRow,
+                        value: mainValue,
+                        valueArr: valueArr,
+                        isComposite: true,
+                        memoLabel: memoLabel,
+                        memoValue: isCustomFieldCompositeValueSelected(mainValue) && memoSaved && memoSaved.value != null
+                            ? String(memoSaved.value)
+                            : ''
+                    });
+                    return;
+                }
+
+                if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
+                    let arr = [];
+                    if (savedField && savedField.value) {
+                        arr = String(savedField.value).split(',').map(s => s.trim()).filter(Boolean);
+                    }
+                    rows.push({
+                        label: label,
+                        type: f.type,
+                        options: f.options,
+                        one_row: oneRow,
+                        value: arr.join(','),
+                        valueArr: arr
+                    });
+                    return;
+                }
+
+                const row = {
+                    label: label,
+                    type: f.type,
+                    options: f.options,
+                    one_row: oneRow,
+                    value: savedField ? (savedField.value || '') : ''
+                };
+                if (f.type === 'datetime' && savedField && savedField.value) {
+                    row._serverDatetime = savedField.value;
+                }
+                rows.push(row);
+            });
+            return rows;
         },
         async quickUpdateNoukiStatus(kind) {
             if (!this.project || !this.project.id) return;
@@ -4323,78 +4607,96 @@ const vueApp = createApp({
             return found ? found.value : '';
         },
         getCustomFieldsForView() {
-            // Merge all fields from all department custom field sets with saved values
-            const allFieldsFromSets = [];
-            if (this.allDepartmentCustomFieldSets && this.allDepartmentCustomFieldSets.length > 0) {
-                this.allDepartmentCustomFieldSets.forEach(set => {
-                    if (set.fields && Array.isArray(set.fields)) {
-                        set.fields.forEach(f => {
-                            // Avoid duplicates by label
-                            if (!allFieldsFromSets.find(existing => existing.label && existing.label.trim() === f.label.trim())) {
-                                allFieldsFromSets.push({
-                                    label: f.label,
-                                    type: f.type,
-                                    // Chuẩn hóa options thành string để template có thể gọi .split(',')
-                                    options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : ''),
-                                    // one_row từ backend: 0/1, '0'/'1', boolean → chuẩn hóa boolean
-                                    one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
-                                });
-                            }
-                        });
-                    }
-                });
+            const allFieldsFromSets = this.collectCustomFieldsFromSets(this.allDepartmentCustomFieldSets);
+            const saved = this.parseSavedCustomFieldList(this.project?.custom_fields);
+            return this.mapSetFieldsToCustomFields(allFieldsFromSets, saved);
+        },
+        onCompositeRadioChange(field, value) {
+            if (!field || !field.isComposite) return;
+            field.value = sanitizeCustomFieldCompositeMainValue(value, field.options, field.type);
+            const patches = [{ label: field.label, value: field.value }];
+            if (!isCustomFieldCompositeValueSelected(field.value)) {
+                field.memoValue = '';
+                patches.push({ label: field.memoLabel, value: '' });
             }
-            
-            // Parse saved values
-            let saved = [];
-            let raw = this.project?.custom_fields;
-            if (typeof raw === 'string' && raw.includes('&quot;')) {
-                raw = raw.replace(/&quot;/g, '"');
+            this.updateCustomFieldValues(patches);
+        },
+        onCompositeCheckboxChange(field, opt, checked) {
+            if (!field || !field.isComposite) return;
+            const allowed = getCustomFieldCompositeOptions(field);
+            let arr = Array.isArray(field.valueArr) ? field.valueArr.slice() : [];
+            // Drop orphans not in current options before applying the toggle
+            arr = arr.filter(v => allowed.indexOf(v) !== -1);
+            const i = arr.indexOf(opt);
+            if (checked && i === -1 && allowed.indexOf(opt) !== -1) arr.push(opt);
+            if (!checked && i !== -1) arr.splice(i, 1);
+            field.valueArr = arr;
+            field.value = arr.join(',');
+            const patches = [{ label: field.label, value: field.value }];
+            if (!isCustomFieldCompositeValueSelected(field.value)) {
+                field.memoValue = '';
+                patches.push({ label: field.memoLabel, value: '' });
             }
-            if (typeof raw === 'string') {
-                try { saved = JSON.parse(raw); } catch (e) { saved = []; }
-            } else if (Array.isArray(raw)) {
-                saved = raw;
+            this.updateCustomFieldValues(patches);
+        },
+        onCompositeMemoChange(field, value) {
+            if (!field || !field.isComposite) return;
+            const mainVal = sanitizeCustomFieldCompositeMainValue(
+                isCustomFieldCompositeCheckboxType(field.type)
+                    ? (Array.isArray(field.valueArr) ? field.valueArr.join(',') : (field.value || ''))
+                    : (field.value || ''),
+                field.options,
+                field.type
+            );
+            if (!isCustomFieldCompositeValueSelected(mainVal)) return;
+            field.memoValue = value != null ? String(value) : '';
+            this.updateCustomFieldValues([{ label: field.memoLabel, value: field.memoValue }]);
+        },
+        isCompositeValueSelected(field) {
+            if (!field) return false;
+            if (isCustomFieldCompositeCheckboxType(field.type)) {
+                return Array.isArray(field.valueArr) && field.valueArr.length > 0;
             }
-            
-            // Create value map from saved data
-            const savedValueMap = {};
-            saved.forEach(f => {
-                if (f.label) {
-                    savedValueMap[f.label.trim()] = f;
-                }
-            });
-            
-            // Merge: use fields from sets, fill values from saved data
-            return allFieldsFromSets.map(f => {
-                const savedField = savedValueMap[f.label.trim()];
-                return {
-                    label: f.label,
-                    type: f.type,
-                    options: f.options,
-                    one_row: f.one_row === true,
-                    value: savedField ? savedField.value : ''
-                };
-            });
+            return isCustomFieldCompositeValueSelected(field.value);
+        },
+        getCompositeOptions(field) {
+            return getCustomFieldCompositeOptions(field);
+        },
+        isCompositeCheckboxType(field) {
+            return !!(field && isCustomFieldCompositeCheckboxType(field.type));
         },
         async updateCustomFieldValue(label, value) {
-            if (!this.project || !label) return;
-            const newValue = (value != null) ? String(value).trim() : '';
+            return this.updateCustomFieldValues([{ label: label, value: value }]);
+        },
+        async updateCustomFieldValues(patches) {
+            if (!this.project || !Array.isArray(patches) || !patches.length) return;
+            const validPatches = patches.filter(p => p && p.label);
+            if (!validPatches.length) return;
+            const lockKey = validPatches.map(p => String(p.label).trim()).sort().join('|');
+            if (this.savingCustomFieldLabel === lockKey) return;
             let saved = [];
             let raw = this.project.custom_fields;
             if (typeof raw === 'string' && raw.includes('&quot;')) raw = raw.replace(/&quot;/g, '"');
             try {
                 saved = typeof raw === 'string' ? JSON.parse(raw || '[]') : (Array.isArray(raw) ? raw : []);
             } catch (e) { saved = []; }
-            const updated = saved.map(f => {
-                if (!f || String(f.label || '').trim() !== String(label).trim()) return f;
-                return Object.assign({}, f, { value: newValue });
+            // Drop legacy 【〇】 companions so they are not re-saved / logged
+            let updated = saved.filter(f => {
+                const lbl = f && f.label != null ? String(f.label).trim() : '';
+                return lbl && !/【(?:〇|○)】$/.test(lbl);
             });
-            if (!updated.some(f => f && String(f.label || '').trim() === String(label).trim())) {
-                updated.push({ label: label, value: newValue });
-            }
-            if (this.savingCustomFieldLabel === label) return;
-            this.savingCustomFieldLabel = label;
+            validPatches.forEach(patch => {
+                const label = String(patch.label).trim();
+                const newValue = (patch.value != null) ? String(patch.value).trim() : '';
+                let found = false;
+                updated = updated.map(f => {
+                    if (!f || String(f.label || '').trim() !== label) return f;
+                    found = true;
+                    return Object.assign({}, f, { value: newValue });
+                });
+                if (!found) updated.push({ label: label, value: newValue });
+            });
+            this.savingCustomFieldLabel = lockKey;
             try {
                 const formData = new FormData();
                 formData.append('id', this.project.id);
@@ -4846,96 +5148,15 @@ const vueApp = createApp({
             if (newVal) {
                 this.$nextTick(() => {
                     this.initYoteiMonthPickers();
-                    // Sync customFields from project.custom_fields or set
-                    let saved = [];
-                    let raw = this.project.custom_fields;
-                    if (typeof raw === 'string' && raw.includes('&quot;')) {
-                        raw = raw.replace(/&quot;/g, '"');
-                    }
-                    if (typeof raw === 'string') {
-                        try { saved = JSON.parse(raw); } catch (e) { saved = []; }
-                    } else if (Array.isArray(raw)) {
-                        saved = raw;
-                    }
-                    // Merge all fields from all department custom field sets
-                    const allFieldsFromSets = [];
-                    if (this.allDepartmentCustomFieldSets && this.allDepartmentCustomFieldSets.length > 0) {
-                        this.allDepartmentCustomFieldSets.forEach(set => {
-                            if (set.fields && Array.isArray(set.fields)) {
-                                set.fields.forEach(f => {
-                                    // Avoid duplicates by label
-                                    if (!allFieldsFromSets.find(existing => existing.label && existing.label.trim() === f.label.trim())) {
-                                        allFieldsFromSets.push({
-                                            label: f.label,
-                                            type: f.type,
-                                            options: Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : ''),
-                                            one_row: (f.one_row === 1 || f.one_row === '1' || f.one_row === true)
-                                        });
-                                    }
-                                });
-                            }
-                        });
-                    }
-                    // Nếu có dữ liệu custom_fields với cấu trúc đầy đủ (có type), merge với saved values
-                    if (saved.length && saved[0]) {
-                        // Create value map from saved data
-                        const savedValueMap = {};
-                        saved.forEach(f => {
-                            if (f.label) {
-                                savedValueMap[f.label.trim()] = f;
-                            }
-                        });
-                        
-                        // Merge: use fields from sets, fill values from saved data
-                        this.customFields = allFieldsFromSets.map(f => {
-                            const savedField = savedValueMap[f.label.trim()];
-                            const oneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
-                            if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
-                                let arr = [];
-                                if (savedField && savedField.value) {
-                                    arr = savedField.value.split(',').map(s => s.trim()).filter(Boolean);
-                                }
-                                return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: arr.join(','), valueArr: arr };
-                            } else {
-                                const row = {
-                                    label: f.label,
-                                    type: f.type,
-                                    options: f.options,
-                                    one_row: oneRow,
-                                    value: savedField ? savedField.value : ''
-                                };
-                                if (f.type === 'datetime' && savedField && savedField.value) {
-                                    row._serverDatetime = savedField.value;
-                                }
-                                return row;
-                            }
-                        });
-                        
-                        // Initialize datetime pickers after customFields is set
+                    const saved = this.parseSavedCustomFieldList(this.project.custom_fields);
+                    const allFieldsFromSets = this.collectCustomFieldsFromSets(this.allDepartmentCustomFieldSets);
+                    this.customFields = this.mapSetFieldsToCustomFields(allFieldsFromSets, saved);
+                    if (this.customFields.length > 0) {
                         this.$nextTick(() => {
                             setTimeout(() => {
                                 this.initCustomFieldDatePickers();
                             }, 100);
                         });
-                    } else if (allFieldsFromSets.length > 0) {
-                        // No saved data, just use fields from all sets
-                        this.customFields = allFieldsFromSets.map(f => {
-                            const oneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
-                            if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
-                                return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: '', valueArr: [] };
-                            } else {
-                                return { label: f.label, type: f.type, options: f.options, one_row: oneRow, value: '' };
-                            }
-                        });
-                        
-                        // Initialize datetime pickers after customFields is set
-                        this.$nextTick(() => {
-                            setTimeout(() => {
-                                this.initCustomFieldDatePickers();
-                            }, 100);
-                        });
-                    } else {
-                        this.customFields = [];
                     }
                     // Initialize Select2 dropdowns
                     $('#category_id').select2({
@@ -5203,74 +5424,10 @@ const vueApp = createApp({
                 // When department custom field sets change, reload custom fields if in edit mode
                 if (this.isEditMode && newVal && newVal.length > 0) {
                     this.$nextTick(() => {
-                        // Re-sync custom fields by re-running the sync logic
-                        let saved = [];
-                        let raw = this.project.custom_fields;
-                        if (typeof raw === 'string' && raw.includes('&quot;')) {
-                            raw = raw.replace(/&quot;/g, '"');
-                        }
-                        if (typeof raw === 'string') {
-                            try { saved = JSON.parse(raw); } catch (e) { saved = []; }
-                        } else if (Array.isArray(raw)) {
-                            saved = raw;
-                        }
-                        
-                        const allFieldsFromSets = [];
-                        newVal.forEach(set => {
-                            if (set.fields && Array.isArray(set.fields)) {
-                                set.fields.forEach(f => {
-                                    if (!allFieldsFromSets.find(existing => existing.label && existing.label.trim() === f.label.trim())) {
-                                        allFieldsFromSets.push(f);
-                                    }
-                                });
-                            }
-                        });
-                        
+                        const saved = this.parseSavedCustomFieldList(this.project.custom_fields);
+                        const allFieldsFromSets = this.collectCustomFieldsFromSets(newVal);
                         if (allFieldsFromSets.length > 0) {
-                            const savedValueMap = {};
-                            saved.forEach(f => {
-                                if (f && f.label) {
-                                    // Handle both formats: {label, value} or {label, type, value}
-                                    savedValueMap[f.label.trim()] = f;
-                                }
-                            });
-                            
-                            console.log('allDepartmentCustomFieldSets watcher: setting customFields', {
-                                allFieldsFromSetsCount: allFieldsFromSets.length,
-                                savedCount: saved.length,
-                                savedValueMap: savedValueMap
-                            });
-                            
-                            this.customFields = allFieldsFromSets.map(f => {
-                                const savedField = savedValueMap[f.label.trim()];
-                                console.log('allDepartmentCustomFieldSets watcher: mapping field', {
-                                    label: f.label,
-                                    type: f.type,
-                                    savedField: savedField,
-                                    savedFieldValue: savedField ? savedField.value : null
-                                });
-                                
-                                if (f.type === 'checkbox' || f.type === 'checkbox_select_all') {
-                                    let arr = [];
-                                    if (savedField && savedField.value) {
-                                        arr = savedField.value.split(',').map(s => s.trim()).filter(Boolean);
-                                    }
-                                    return { label: f.label, type: f.type, options: f.options, value: arr.join(','), valueArr: arr };
-                                } else {
-                                    const row = {
-                                        label: f.label,
-                                        type: f.type,
-                                        options: f.options,
-                                        value: savedField ? savedField.value : ''
-                                    };
-                                    if (f.type === 'datetime' && savedField && savedField.value) {
-                                        row._serverDatetime = savedField.value;
-                                    }
-                                    return row;
-                                }
-                            });
-                            
-                            // Initialize datetime pickers after customFields is set
+                            this.customFields = this.mapSetFieldsToCustomFields(allFieldsFromSets, saved);
                             this.$nextTick(() => {
                                 setTimeout(() => {
                                     this.initCustomFieldDatePickers();

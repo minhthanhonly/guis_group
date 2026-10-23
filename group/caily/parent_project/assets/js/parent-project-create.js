@@ -17,6 +17,7 @@ createApp({
                 scale: '',
                 type1: '',
                 type2: '',
+                type3: '',
                 request_type: '',
                 desired_delivery_date: '',
                 request_design: false,
@@ -29,10 +30,56 @@ createApp({
                 materials_contract: false,
                 materials_tac: false,
                 materials_other: false,
+                application_review_agency: '',
+                bels_zeh_grade: '0',
                 structural_office: '',
                 notes: '',
                 status: 'draft'
             },
+            sharedHousingFeatureLabel: '共同住宅（共用部計算なし）',
+            featureOptions: [
+                '施主宅付き',
+                'マルチルームあり',
+                '店舗併用住宅',
+                '事務所併用住宅',
+                '複合用途',
+                '共同住宅（共用部計算なし）',
+                '補助金案件',
+                '増築',
+                '用途変更'
+            ],
+            featureFlags: {
+                '施主宅付き': false,
+                'マルチルームあり': false,
+                '店舗併用住宅': false,
+                '事務所併用住宅': false,
+                '複合用途': false,
+                '共同住宅（共用部計算なし）': false,
+                '補助金案件': false,
+                '増築': false,
+                '用途変更': false
+            },
+            belsZehGradeOptions: [
+                { value: '0', label: '0 : 該当なし（非ZEH）' },
+                { value: '1', label: '1 : ZEH' },
+                { value: '2', label: '2 : Nearly ZEH' },
+                { value: '3', label: '3 : ZEH Oriented' },
+                { value: '4', label: '4 : ZEH-M' },
+                { value: '5', label: '5 : Nearly ZEH-M' },
+                { value: '6', label: '6 : ZEH-M Oriented' }
+            ],
+            nonResidentialMainUseOptions: [
+                { value: '08340', label: '08340 工場' },
+                { value: '08440', label: '08440 物品販売店舗' },
+                { value: '08450', label: '08450 飲食店' },
+                { value: '08470', label: '08470 事務所' },
+                { value: '08510', label: '08510 倉庫業を営む倉庫' },
+                { value: '08520', label: '08520 倉庫業を営まない倉庫' },
+                { value: '08400', label: '08400 ホテル・旅館' },
+                { value: '08260', label: '08260 病院' },
+                { value: '08550', label: '08550 集会場・公会堂' },
+                { value: '08990', label: '08990 その他' }
+            ],
             statuses: [
                 { value: 'draft', label: '下書き', color: 'secondary' },
                 { value: 'under_contract', label: '契約中', color: 'info' },
@@ -53,8 +100,20 @@ createApp({
             },
             type1Tagify: null,
             type2Tagify: null,
+            applicationReviewAgencyTagify: null,
             constructionBranchTagify: null,
             scaleTagify: null,
+            applicationReviewAgencyWhitelist: [
+                '日本ERI',
+                'ERIソリューション',
+                'ビューローベリタスジャパン',
+                '日本住宅保証検査機構（JIO）',
+                'ハウスプラス住宅保証',
+                '東京建築検査機構（TBTC）',
+                'ユーディーアイ確認検査',
+                '日本確認検査センター',
+                'JCI'
+            ],
             // Customer modal data
             categories: [],
             departments: [],
@@ -97,6 +156,50 @@ createApp({
             duplicateDismissedKey: '',
             duplicatePromptPromise: null,
             isApplyingCopiedData: false,
+        }
+    },
+    computed: {
+        hasNonResidentialType() {
+            return String(this.parentProject.type2 || '')
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('非住宅');
+        },
+        hasSharedHousingType() {
+            return String(this.parentProject.type2 || '')
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('共同');
+        },
+        visibleFeatureOptions() {
+            const self = this;
+            return this.featureOptions.filter(function(opt) {
+                if (opt === self.sharedHousingFeatureLabel) {
+                    return self.hasSharedHousingType;
+                }
+                return true;
+            });
+        },
+        hasEnergySavingRequest() {
+            return !!this.parentProject.request_energy_saving;
+        }
+    },
+    watch: {
+        'parentProject.type2'() {
+            if (!this.hasSharedHousingType && this.featureFlags) {
+                this.featureFlags[this.sharedHousingFeatureLabel] = false;
+            }
+        },
+        'parentProject.request_energy_saving'(enabled) {
+            if (!enabled) {
+                this.parentProject.application_review_agency = '';
+                this.parentProject.bels_zeh_grade = '0';
+                this.destroyApplicationReviewAgencyTagify();
+            } else {
+                this.$nextTick(() => this.initApplicationReviewAgencyTagify());
+            }
         }
     },
     methods: {
@@ -347,6 +450,7 @@ createApp({
                 formData.append('scale', this.parentProject.scale || '');
                 formData.append('type1', this.parentProject.type1 || '');
                 formData.append('type2', this.parentProject.type2 || '');
+                formData.append('type3', this.hasNonResidentialType ? (this.parentProject.type3 || '') : '');
                 formData.append('request_type', this.parentProject.request_type || '');
                 formData.append('desired_delivery_date', this.parentProject.desired_delivery_date || '');
                 // Convert checkbox requests to comma-separated string
@@ -365,6 +469,15 @@ createApp({
                 if (this.parentProject.materials_tac) materialsArray.push('TAC図');
                 if (this.parentProject.materials_other) materialsArray.push('その他');
                 formData.append('materials', materialsArray.join(','));
+                formData.append('features', this.buildFeaturesString());
+                formData.append(
+                    'application_review_agency',
+                    this.hasEnergySavingRequest ? (this.parentProject.application_review_agency || '') : ''
+                );
+                formData.append(
+                    'bels_zeh_grade',
+                    this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '0') : '0'
+                );
                 formData.append('structural_office', this.parentProject.structural_office || '');
                 formData.append('notes', this.parentProject.notes || '');
                 formData.append('status', this.parentProject.status || 'in_progress');
@@ -398,11 +511,13 @@ createApp({
             // Initialize company name Select2 with default data
             const $company = $('#company_name');
             if ($company.length) {
+                const self = this;
                 $company.select2({
                     placeholder: '選択してください',
                     dropdownParent: $company.parent(),
                     allowClear: true,
                     minimumResultsForSearch: 0,
+                    templateResult: this.addCustomerResultTemplate,
                     ajax: {
                         url: '/api/index.php?model=customer&method=list_companies',
                         dataType: 'json',
@@ -414,7 +529,7 @@ createApp({
                             };
                         },
                         processResults: function(data) {
-                            const results = (data.data || []).map(function(item) {
+                            const results = (data && data.data ? data.data : []).map(function(item) {
                                 return {
                                     id: item.company_name,
                                     text: item.company_name
@@ -428,10 +543,13 @@ createApp({
                                 if (!aHas && bHas) return 1;
                                 return 0;
                             });
-                            return { results };
+                            return { results: self.appendAddCustomerResult(results) };
                         }
                     }
                 }).on('select2:select', (e) => {
+                    if (e.params.data.id === '__add_customer__' || e.params.data.isAddCustomer) {
+                        return;
+                    }
                     this.parentProject.company_name = e.params.data.id;
                     this.validationErrors.company_name = ''; // Clear validation error
                     this.onCompanyChange();
@@ -439,6 +557,7 @@ createApp({
                     this.parentProject.company_name = '';
                     this.onCompanyChange();
                 });
+                this.bindSelect2AddCustomerLink($company);
 
                 // Load initial companies data
                 this.loadInitialCompanies();
@@ -531,14 +650,55 @@ createApp({
                 this.initContactSelect2();
             }
         },
+        /**
+         * Always append「顧客情報を追加」as last Select2 result (works with/without AJAX hits).
+         */
+        appendAddCustomerResult(results) {
+            const list = Array.isArray(results) ? results.slice() : [];
+            const addId = '__add_customer__';
+            return list
+                .filter(function(item) { return item && item.id !== addId; })
+                .concat([{
+                    id: addId,
+                    text: '顧客情報を追加',
+                    isAddCustomer: true
+                }]);
+        },
+        addCustomerResultTemplate(item) {
+            if (item.loading) {
+                return item.text;
+            }
+            if (item.isAddCustomer || item.id === '__add_customer__') {
+                return $(
+                    '<span class="select2-add-customer-option text-primary d-inline-block w-100 py-1 border-top">'
+                    + '<i class="fa fa-plus me-1"></i>顧客情報を追加</span>'
+                );
+            }
+            return item.text;
+        },
+        bindSelect2AddCustomerLink($el) {
+            if (!$el || !$el.length) return;
+            const self = this;
+            $el.off('select2:selecting.addCustomer').on('select2:selecting.addCustomer', function(e) {
+                const data = e.params && e.params.args && e.params.args.data;
+                if (!data || (data.id !== '__add_customer__' && !data.isAddCustomer)) {
+                    return;
+                }
+                e.preventDefault();
+                try { $el.select2('close'); } catch (err) { /* ignore */ }
+                self.openNewCustomerModal();
+            });
+        },
         initBranchSelect2() {
             const $branch = $('#branch_name');
             if ($branch.length) {
+                const self = this;
                 $branch.select2({
                     placeholder: '選択してください',
                     dropdownParent: $branch.parent(),
                     allowClear: true,
                     minimumResultsForSearch: 0,
+                    templateResult: this.addCustomerResultTemplate,
                     ajax: {
                         url: '/api/index.php?model=customer&method=list_branches_by_company',
                         dataType: 'json',
@@ -551,17 +711,21 @@ createApp({
                             };
                         },
                         processResults: function(data) {
+                            const rows = (data && data.data) ? data.data : [];
                             return {
-                                results: data.data.map(function(item) {
+                                results: self.appendAddCustomerResult(rows.map(function(item) {
                                     return {
                                         id: item.branch,
                                         text: item.branch
                                     };
-                                })
+                                }))
                             };
                         }
                     }
                 }).on('select2:select', (e) => {
+                    if (e.params.data.id === '__add_customer__' || e.params.data.isAddCustomer) {
+                        return;
+                    }
                     this.parentProject.branch_name = e.params.data.id;
                     this.validationErrors.branch_name = ''; // Clear validation error
                     this.onBranchChange();
@@ -569,16 +733,19 @@ createApp({
                     this.parentProject.branch_name = '';
                     this.onBranchChange();
                 });
+                this.bindSelect2AddCustomerLink($branch);
             }
         },
         initContactSelect2() {
             const $contact = $('#contact_name');
             if ($contact.length) {
+                const self = this;
                 $contact.select2({
                     placeholder: '選択してください',
                     dropdownParent: $contact.parent(),
                     allowClear: true,
                     minimumResultsForSearch: 0,
+                    templateResult: this.addCustomerResultTemplate,
                     ajax: {
                         url: '/api/index.php?model=customer&method=list_contacts_by_company_branch',
                         dataType: 'json',
@@ -592,17 +759,21 @@ createApp({
                             };
                         },
                         processResults: function(data) {
+                            const rows = (data && data.data) ? data.data : [];
                             return {
-                                results: data.data.map(function(item) {
+                                results: self.appendAddCustomerResult(rows.map(function(item) {
                                     return {
                                         id: item.id,
                                         text: item.name
                                     };
-                                })
+                                }))
                             };
                         }
                     }
                 }).on('select2:select', (e) => {
+                    if (e.params.data.id === '__add_customer__' || e.params.data.isAddCustomer) {
+                        return;
+                    }
                     this.parentProject.contact_name = e.params.data.text;
                     this.parentProject.customer_id = e.params.data.id;
                     this.validationErrors.contact_name = ''; // Clear validation error
@@ -610,6 +781,7 @@ createApp({
                     this.parentProject.contact_name = '';
                     this.parentProject.customer_id = '';
                 });
+                this.bindSelect2AddCustomerLink($contact);
             }
         },
         initGuisReceiverSelect2() {
@@ -761,6 +933,48 @@ createApp({
                 showMessage('プロジェクト番号の生成に失敗しました', true);
             }
         },
+        destroyApplicationReviewAgencyTagify() {
+            if (this.applicationReviewAgencyTagify) {
+                try { this.applicationReviewAgencyTagify.destroy(); } catch (e) { /* ignore */ }
+                this.applicationReviewAgencyTagify = null;
+            }
+            const input = document.querySelector('#application_review_agency_tags');
+            if (input) {
+                input.value = '';
+                if (input._tagify) {
+                    try { input._tagify.destroy(); } catch (e) { /* ignore */ }
+                    input._tagify = null;
+                }
+            }
+        },
+        initApplicationReviewAgencyTagify() {
+            const input = document.querySelector('#application_review_agency_tags');
+            if (!input || !window.Tagify) return;
+            this.destroyApplicationReviewAgencyTagify();
+            input.value = '';
+            this.applicationReviewAgencyTagify = new Tagify(input, {
+                whitelist: this.applicationReviewAgencyWhitelist.slice(),
+                enforceWhitelist: false,
+                maxTags: 1,
+                dropdown: {
+                    maxItems: 20,
+                    classname: 'tags-look-review-agency',
+                    enabled: 0,
+                    closeOnSelect: true
+                }
+            });
+            const updateAgency = () => {
+                this.parentProject.application_review_agency = this.applicationReviewAgencyTagify.value
+                    .map(tag => tag.value)
+                    .join(',');
+            };
+            this.applicationReviewAgencyTagify.on('add', updateAgency);
+            this.applicationReviewAgencyTagify.on('remove', updateAgency);
+            const current = String(this.parentProject.application_review_agency || '').trim();
+            if (current) {
+                this.applicationReviewAgencyTagify.addTags(current);
+            }
+        },
         initTagify() {
             // Initialize Tagify after Vue is mounted
             this.$nextTick(() => {
@@ -791,7 +1005,7 @@ createApp({
                     this.type1Tagify.on('remove', updateType1);
                 }
                 
-                // --- Tagify for Type2 (種類2) ---
+                // --- Tagify for Type2 (住宅種類) ---
                 const type2Input = document.querySelector('#type2_tags');
                 if (type2Input && window.Tagify && !type2Input._tagify) {
                     if (this.type2Tagify) {
@@ -802,8 +1016,8 @@ createApp({
                         }
                     }
                     this.type2Tagify = new Tagify(type2Input, {
-                        whitelist: ['共同', '集合'],
-                        maxTags: 5,
+                        whitelist: ['長屋', '共同', '戸建', '非住宅', '集合'],
+                        maxTags: 1,
                         dropdown: {
                             maxItems: 20,
                             classname: "tags-look-type2",
@@ -813,6 +1027,9 @@ createApp({
                     });
                     const updateType2 = () => {
                         this.parentProject.type2 = this.type2Tagify.value.map(tag => tag.value).join(',');
+                        if (!this.hasNonResidentialType) {
+                            this.parentProject.type3 = '';
+                        }
                     };
                     this.type2Tagify.on('add', updateType2);
                     this.type2Tagify.on('remove', updateType2);
@@ -1501,6 +1718,24 @@ createApp({
             this.parentProject.materials_tac = list.includes('TAC図');
             this.parentProject.materials_other = list.includes('その他');
         },
+        createEmptyFeatureFlags() {
+            const flags = {};
+            this.featureOptions.forEach((opt) => { flags[opt] = false; });
+            return flags;
+        },
+        buildFeaturesString() {
+            return this.visibleFeatureOptions.filter((opt) => this.featureFlags[opt]).join(',');
+        },
+        parseCopiedFeatures(features) {
+            const list = String(features || '').split(',').map((f) => f.trim()).filter(Boolean);
+            const flags = this.createEmptyFeatureFlags();
+            list.forEach((item) => {
+                if (Object.prototype.hasOwnProperty.call(flags, item)) {
+                    flags[item] = true;
+                }
+            });
+            this.featureFlags = flags;
+        },
         applyTagifyValuesFromParentProject() {
             const apply = (tagify, value) => {
                 if (!tagify) {
@@ -1519,6 +1754,11 @@ createApp({
             apply(this.scaleTagify, this.parentProject.scale);
             apply(this.type1Tagify, this.parentProject.type1);
             apply(this.type2Tagify, this.parentProject.type2);
+            if (this.hasEnergySavingRequest) {
+                this.$nextTick(() => {
+                    this.initApplicationReviewAgencyTagify();
+                });
+            }
             apply(this.constructionBranchTagify, this.parentProject.construction_branch);
         },
         setSelect2Value($select, value, text) {
@@ -1601,8 +1841,13 @@ createApp({
                 this.parentProject.scale = data.scale || '';
                 this.parentProject.type1 = data.type1 || '';
                 this.parentProject.type2 = data.type2 || '';
+                this.parentProject.type3 = data.type3 || '';
                 this.parentProject.request_type = data.request_type || '';
                 this.parentProject.structural_office = data.structural_office || '';
+                this.parentProject.application_review_agency = data.application_review_agency || '';
+                this.parentProject.bels_zeh_grade = (data.bels_zeh_grade != null && data.bels_zeh_grade !== '')
+                    ? String(data.bels_zeh_grade)
+                    : '0';
                 this.parentProject.notes = data.notes || '';
                 this.parentProject.status = data.status || 'draft';
                 this.parentProject.desired_delivery_date = '';
@@ -1610,6 +1855,7 @@ createApp({
 
                 this.parseCopiedRequests(data.requests);
                 this.parseCopiedMaterials(data.materials);
+                this.parseCopiedFeatures(data.features);
                 this.clearRequestsValidation();
 
                 await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1725,6 +1971,7 @@ createApp({
             scale: '',
             type1: '',
             type2: '',
+            type3: '',
             request_type: '',
             desired_delivery_date: '',
             request_design: false,
@@ -1738,10 +1985,13 @@ createApp({
             materials_tac: false,
             materials_other: false,
             materials: '',
+            application_review_agency: '',
+            bels_zeh_grade: '0',
             structural_office: '',
             notes: '',
             status: 'draft'
         };
+        this.featureFlags = this.createEmptyFeatureFlags();
         
         // Auto-generate project number on page load
         await this.generateProjectNumber();

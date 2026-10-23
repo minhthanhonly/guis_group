@@ -348,6 +348,7 @@
                 axios.get('/api/index.php?model=department&method=getCustomFields').then(function(cfRes) {
                     var sets = cfRes.data || [];
                     var mergedFields = [];
+                    var Cfc = window.ProjectCustomFieldComposite;
                     // Filter sets by department_id (use strict comparison)
                     sets.filter(function(s) { 
                         return s && s.department_id != null && String(s.department_id) === String(depId); 
@@ -367,6 +368,9 @@
                             });
                         }
                     });
+                    if (Cfc && typeof Cfc.normalizeMergedFields === 'function') {
+                        mergedFields = Cfc.normalizeMergedFields(mergedFields);
+                    }
                     var $wrap = $('#quickEditCustomFieldsWrap');
                     $wrap.empty();
                     if (mergedFields.length === 0) {
@@ -383,10 +387,26 @@
                         var safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                         var labelText = (typeof translateText === 'function' ? translateText(safeLabel) : safeLabel);
                         var isOneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
+                        var isComposite = !!(Cfc && Cfc.isBaseLabel(label));
                         var colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6';
-                        var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '">';
-                
-                        if (type === 'checkbox_select_all') {
+                        var safeOptions = String(options).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '" data-custom-options="' + safeOptions + '"' + (isComposite ? ' data-custom-composite="1"' : '') + '>';
+
+                        if (isComposite && Cfc) {
+                            var memoVal = savedValueMap[Cfc.memoLabel(label)] || '';
+                            html += Cfc.buildCompositeInnerHtml({
+                                label: label,
+                                type: type,
+                                options: options,
+                                val: val,
+                                memoVal: memoVal,
+                                radioName: 'quickEditCustomRadio_' + idx,
+                                radioClass: 'quickEditCustomRadio',
+                                checkboxClass: 'quickEditCustomCheckbox',
+                                memoInputClass: 'quickEditCustomInput quickEditCompositeMemo',
+                                safeLabel: safeLabel
+                            });
+                        } else if (type === 'checkbox_select_all') {
                             var arrForLabel = val ? String(val).split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
                             var allCheckedLabel = opts.length > 0 && opts.every(function(opt) { return arrForLabel.indexOf(opt) !== -1; });
                             html += '<div class="form-label d-flex align-items-center justify-content-between gap-2">'
@@ -399,6 +419,7 @@
                         } else {
                             html += '<label class="form-label">' + labelText + '</label>';
                         }
+                        if (!isComposite) {
                         if (type === 'textarea') {
                             html += '<textarea class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" rows="3">' + (val ? String(val).replace(/</g, '&lt;').replace(/>/g, '&gt;') : '') + '</textarea>';
                         } else if (type === 'select') {
@@ -422,9 +443,14 @@
                         } else {
                             html += '<input type="text" class="form-control quickEditCustomInput" data-custom-label="' + safeLabel + '" value="' + (val ? String(val).replace(/"/g, '&quot;') : '') + '">';
                         }
+                        }
                         html += '</div>';
                         $wrap.append(html);
                     });
+                    if (Cfc && typeof Cfc.bindEvents === 'function' && $wrap[0]) {
+                        $wrap[0].__compositeBound = false;
+                        Cfc.bindEvents($wrap[0], 'quickEditCustomRadio', 'quickEditCustomCheckbox');
+                    }
                     if (typeof $().flatpickr === 'function') {
                         $wrap.find('.quickEditCustomDatetime').each(function() {
                             initQuickEditFlatpickr(this, { defaultHour: getCustomFieldDefaultHour(), defaultMinute: 0 });
@@ -723,6 +749,15 @@
                 var selectLabel = allChecked ? 'すべて解除' : 'すべて選択';
                 $selectAll.text(typeof translateText === 'function' ? translateText(selectLabel) : selectLabel);
             });
+        // Composite 設備図/意匠図/配置図: hide 【メモ】 when all options unchecked
+        $(document).off('change.quickeditcomposite', '.quick-edit-custom-field[data-custom-composite="1"] .quickEditCustomCheckbox, .quick-edit-custom-field[data-custom-composite="1"] .quickEditCustomRadio')
+            .on('change.quickeditcomposite', '.quick-edit-custom-field[data-custom-composite="1"] .quickEditCustomCheckbox, .quick-edit-custom-field[data-custom-composite="1"] .quickEditCustomRadio', function() {
+                var row = this.closest('[data-custom-composite="1"]');
+                var Cfc = window.ProjectCustomFieldComposite;
+                if (row && Cfc && typeof Cfc.syncMemoVisibility === 'function') {
+                    Cfc.syncMemoVisibility(row, 'quickEditCustomRadio', 'quickEditCustomCheckbox');
+                }
+            });
 
         $('#quickEditProjectSaveBtnHeader').off('click.quickedit').on('click.quickedit', function() { $('#quickEditProjectSaveBtn').trigger('click.quickedit'); });
 
@@ -908,11 +943,17 @@
             var descContent = (quickEditQuillInstance && typeof quickEditQuillInstance.getSemanticHTML === 'function') ? quickEditQuillInstance.getSemanticHTML() : ($('#quickEditQuillDescriptionTextarea').val() || '');
             formData.append('description', descContent);
             var customFieldsData = [];
+            var Cfc = window.ProjectCustomFieldComposite;
             $('#quickEditCustomFieldsWrap .quick-edit-custom-field').each(function() {
                 var $field = $(this);
                 var label = $field.attr('data-custom-label');
                 var type = $field.attr('data-custom-type');
                 if (!label) return;
+                if (Cfc && $field.attr('data-custom-composite') === '1') {
+                    var compositeRows = Cfc.collectFromRow(this, 'quickEditCustomRadio', 'quickEditCompositeMemo', 'quickEditCustomCheckbox');
+                    compositeRows.forEach(function(row) { customFieldsData.push(row); });
+                    return;
+                }
                 var value = '';
                 if (type === 'checkbox' || type === 'checkbox_select_all') {
                     var checked = $field.find('.quickEditCustomCheckbox:checked').map(function() { return $(this).val(); }).get();
@@ -921,7 +962,7 @@
                     var checkedEl = $field.find('.quickEditCustomRadio:checked');
                     value = checkedEl.length ? checkedEl.val() : '';
                 } else {
-                    var input = $field.find('.quickEditCustomInput');
+                    var input = $field.find('.quickEditCustomInput').not('.quickEditCompositeMemo');
                     value = input.length ? (input.val() || '').trim() : '';
                     if (type === 'datetime') {
                         var dtEl = input[0];

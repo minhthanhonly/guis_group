@@ -489,9 +489,11 @@ var projectTable;
         }
         var root = projectListAssetRoot();
         var pcv = projectListProjectCacheV();
-        window.__projectListQuickEditLoading = loader.loadScript(
-            root + 'project/assets/js/project-list-quick-edit.js' + (pcv ? ('?v=' + pcv) : '')
-        ).then(function() {
+        var q = function(path) { return root + path + (pcv ? ('?v=' + pcv) : ''); };
+        window.__projectListQuickEditLoading = loader.loadScripts([
+            q('project/assets/js/project-custom-field-composite.js'),
+            q('project/assets/js/project-list-quick-edit.js')
+        ]).then(function() {
             if (typeof window.installProjectListQuickEdit === 'function') {
                 window.installProjectListQuickEdit();
             }
@@ -2161,12 +2163,17 @@ var projectTable;
         { key: 'parent_scale', label: '規模' },
         { key: 'parent_type1', label: '種類1' },
         { key: 'project_order_type', label: '受注形態' },
-        { key: 'parent_type2', label: '種類2' },
+        { key: 'parent_type2', label: '住宅種類' },
+        { key: 'parent_type3', label: '非住宅の主要用途' },
+        { key: 'parent_features', label: '特徴' },
+        { key: 'parent_application_review_agency', label: '申請提出先の審査機関' },
+        { key: 'parent_bels_zeh_grade', label: 'BELSのZEH等級' },
         { key: 'yotei', label: '予定工程' },
         { key: 'start_date', label: '開始日' },
         { key: 'caily_nouki', label: 'CAILY納期' },
         { key: 'guis_nouki', label: 'GUIS納期' },
         { key: 'end_date', label: '期限日' },
+        { key: 'other_dept_nouki', label: '他部署の納期' },
         { key: 'priority', label: '優先度' },
         { key: 'estimate_date', label: '見積日' },
         { key: 'amount', label: '見積金額' },
@@ -2197,22 +2204,27 @@ var projectTable;
         { key: 'parent_scale', label: '規模', index: 13, defaultVisible: false },
         { key: 'parent_type1', label: '種類1', index: 14, defaultVisible: false },
         { key: 'project_order_type', label: '受注形態', index: 15, defaultVisible: true },
-        { key: 'parent_type2', label: '種類2', index: 16, defaultVisible: false },
-        { key: 'yotei', label: '予定工程', index: 17, defaultVisible: true },
-        { key: 'start_date', label: '開始日', index: 18, defaultVisible: true },
-        { key: 'caily_nouki', label: 'CAILY納期', index: 19, defaultVisible: true },
-        { key: 'guis_nouki', label: 'GUIS納期', index: 20, defaultVisible: true },
-        { key: 'end_date', label: '期限日', index: 21, defaultVisible: true },
-        { key: 'priority', label: '優先度', index: 22, defaultVisible: true },
-        { key: 'estimate_date', label: '見積日', index: 23, defaultVisible: false },
-        { key: 'amount', label: '見積金額', index: 24, defaultVisible: false },
-        { key: 'estimate_status', label: '見積状況', index: 25, defaultVisible: false },
-        { key: 'invoice_date', label: '請求日', index: 26, defaultVisible: false },
-        { key: 'invoice_status', label: '請求状況', index: 27, defaultVisible: false },
-        { key: 'invoice_amount', label: '請求金額', index: 28, defaultVisible: false },
-        { key: 'payment_note', label: '決済備考', index: 29, defaultVisible: false },
-        { key: 'customer_info', label: '顧客情報', index: 30, defaultVisible: true },
-        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 31, defaultVisible: false }
+        { key: 'parent_type2', label: '住宅種類', index: 16, defaultVisible: false },
+        { key: 'parent_type3', label: '非住宅の主要用途', index: 17, defaultVisible: false },
+        { key: 'parent_features', label: '特徴', index: 18, defaultVisible: false },
+        { key: 'parent_application_review_agency', label: '申請提出先の審査機関', index: 19, defaultVisible: false },
+        { key: 'parent_bels_zeh_grade', label: 'BELSのZEH等級', index: 20, defaultVisible: false },
+        { key: 'yotei', label: '予定工程', index: 21, defaultVisible: true },
+        { key: 'start_date', label: '開始日', index: 22, defaultVisible: true },
+        { key: 'caily_nouki', label: 'CAILY納期', index: 23, defaultVisible: true },
+        { key: 'guis_nouki', label: 'GUIS納期', index: 24, defaultVisible: true },
+        { key: 'end_date', label: '期限日', index: 25, defaultVisible: true },
+        { key: 'other_dept_nouki', label: '他部署の納期', index: 26, defaultVisible: true },
+        { key: 'priority', label: '優先度', index: 27, defaultVisible: true },
+        { key: 'estimate_date', label: '見積日', index: 28, defaultVisible: false },
+        { key: 'amount', label: '見積金額', index: 29, defaultVisible: false },
+        { key: 'estimate_status', label: '見積状況', index: 30, defaultVisible: false },
+        { key: 'invoice_date', label: '請求日', index: 31, defaultVisible: false },
+        { key: 'invoice_status', label: '請求状況', index: 32, defaultVisible: false },
+        { key: 'invoice_amount', label: '請求金額', index: 33, defaultVisible: false },
+        { key: 'payment_note', label: '決済備考', index: 34, defaultVisible: false },
+        { key: 'customer_info', label: '顧客情報', index: 35, defaultVisible: true },
+        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 36, defaultVisible: false }
     ];
     // Số cột base trước khi chèn các cột custom (bắt đầu từ CAILY納期)
     const BASE_CUSTOM_START_INDEX = COLUMN_DEFINITIONS.find(col => col.key === 'caily_nouki').index;
@@ -2228,12 +2240,172 @@ var projectTable;
         return id > 0 ? ('../parent_project/detail.php?id=' + id) : '';
     }
 
+    var NON_RESIDENTIAL_MAIN_USE_OPTIONS = [
+        { value: '08340', label: '08340 工場' },
+        { value: '08440', label: '08440 物品販売店舗' },
+        { value: '08450', label: '08450 飲食店' },
+        { value: '08470', label: '08470 事務所' },
+        { value: '08510', label: '08510 倉庫業を営む倉庫' },
+        { value: '08520', label: '08520 倉庫業を営まない倉庫' },
+        { value: '08400', label: '08400 ホテル・旅館' },
+        { value: '08260', label: '08260 病院' },
+        { value: '08550', label: '08550 集会場・公会堂' },
+        { value: '08990', label: '08990 その他' }
+    ];
+
+    function formatNonResidentialMainUseLabel(code) {
+        var value = String(code || '').trim();
+        if (!value) return '';
+        for (var i = 0; i < NON_RESIDENTIAL_MAIN_USE_OPTIONS.length; i++) {
+            if (NON_RESIDENTIAL_MAIN_USE_OPTIONS[i].value === value) {
+                return NON_RESIDENTIAL_MAIN_USE_OPTIONS[i].label;
+            }
+        }
+        return value;
+    }
+
+    function type2IncludesNonResidential(type2) {
+        return String(type2 || '')
+            .split(',')
+            .map(function(v) { return v.trim(); })
+            .filter(Boolean)
+            .indexOf('非住宅') !== -1;
+    }
+
+    function type2IncludesSharedHousing(type2) {
+        return String(type2 || '')
+            .split(',')
+            .map(function(v) { return v.trim(); })
+            .filter(Boolean)
+            .indexOf('共同') !== -1;
+    }
+
+    function parentRequestsIncludeEnergySaving(requests) {
+        return String(requests || '')
+            .split(',')
+            .map(function(v) { return v.trim(); })
+            .filter(Boolean)
+            .indexOf('省エネ') !== -1;
+    }
+
+    var PARENT_FEATURE_OPTIONS = [
+        '施主宅付き',
+        'マルチルームあり',
+        '店舗併用住宅',
+        '事務所併用住宅',
+        '複合用途',
+        '共同住宅（共用部計算なし）',
+        '補助金案件',
+        '増築',
+        '用途変更'
+    ];
+    var SHARED_HOUSING_FEATURE_LABEL = '共同住宅（共用部計算なし）';
+
+    var BELS_ZEH_GRADE_OPTIONS = [
+        { value: '0', label: '0 : 該当なし（非ZEH）' },
+        { value: '1', label: '1 : ZEH' },
+        { value: '2', label: '2 : Nearly ZEH' },
+        { value: '3', label: '3 : ZEH Oriented' },
+        { value: '4', label: '4 : ZEH-M' },
+        { value: '5', label: '5 : Nearly ZEH-M' },
+        { value: '6', label: '6 : ZEH-M Oriented' }
+    ];
+
+    function formatParentFeatureLabels(features, type2) {
+        var selected = String(features || '')
+            .split(',')
+            .map(function(v) { return v.trim(); })
+            .filter(Boolean);
+        var allowShared = type2IncludesSharedHousing(type2);
+        return PARENT_FEATURE_OPTIONS.filter(function(opt) {
+            if (selected.indexOf(opt) === -1) return false;
+            if (opt === SHARED_HOUSING_FEATURE_LABEL && !allowShared) return false;
+            return true;
+        });
+    }
+
+    function formatBelsZehGradeLabel(code) {
+        var value = String(code == null ? '' : code).trim();
+        if (value === '') return '';
+        for (var i = 0; i < BELS_ZEH_GRADE_OPTIONS.length; i++) {
+            if (BELS_ZEH_GRADE_OPTIONS[i].value === value) {
+                return BELS_ZEH_GRADE_OPTIONS[i].label;
+            }
+        }
+        return value;
+    }
+
     /** Format date-time for display (date and time on separate lines, no year; locale + timezone aware) */
     function formatDateTimeWithLineBreak(v) {
         if (typeof moment === 'undefined' || !v) return '';
         var m = toProjectDisplayMoment(v);
         if (!m) return '';
         return formatProjectDateOnly(m) + '<br>' + formatProjectTimeOnly(m);
+    }
+
+    /** Map department name → 依頼 type (same rules as parent-project nearest_nouki). */
+    function mapDepartmentNameToRequestTypeForList(departmentName) {
+        var name = String(departmentName || '').trim();
+        if (!name) return '';
+        var rules = [
+            ['3D設備', '3D設備'],
+            ['技術課設備', '3D設備'],
+            ['省エネ', '省エネ'],
+            ['意匠', '意匠'],
+            ['設備', '設備']
+        ];
+        for (var i = 0; i < rules.length; i++) {
+            if (name.indexOf(rules[i][0]) !== -1) return rules[i][1];
+        }
+        return 'その他';
+    }
+
+    function getOtherDeptNoukiBadgeClass(departmentName) {
+        var map = {
+            '意匠': 'bg-primary',
+            '設備': 'bg-info',
+            '3D設備': 'bg-success',
+            '省エネ': 'bg-lime',
+            '3D': 'bg-secondary',
+            'その他': 'bg-dark'
+        };
+        var key = mapDepartmentNameToRequestTypeForList(departmentName);
+        return map[key] || 'bg-secondary';
+    }
+
+    function getOtherDeptNoukiCombinedLabel(item) {
+        var dept = mapDepartmentNameToRequestTypeForList(item && item.department_name) || '-';
+        var orderRaw = item && item.project_order_type != null ? String(item.project_order_type) : '';
+        var orderTypes = orderRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        if (!orderTypes.length) return dept;
+        return dept + '- ' + orderTypes.join(',');
+    }
+
+    function formatOtherDeptNoukiDate(value) {
+        if (!value || (typeof value === 'string' && value.trim() === '')) return '-';
+        var m = typeof toProjectDisplayMoment === 'function' ? toProjectDisplayMoment(value) : null;
+        if (m && typeof formatProjectDateOnly === 'function') return formatProjectDateOnly(m);
+        return String(value).substring(0, 10);
+    }
+
+    function renderOtherDeptNoukiListCell(row) {
+        var list = row && Array.isArray(row.other_dept_nouki_list) ? row.other_dept_nouki_list : [];
+        if (!list.length) return '<span class="text-muted">-</span>';
+        var parts = [];
+        for (var i = 0; i < list.length; i++) {
+            var item = list[i] || {};
+            var label = escapeHtmlForNote(getOtherDeptNoukiCombinedLabel(item));
+            var badgeClass = getOtherDeptNoukiBadgeClass(item.department_name);
+            var dateHtml = escapeHtmlForNote(formatOtherDeptNoukiDate(item.deadline));
+            var title = escapeHtmlForNote(item.department_name || '');
+            parts.push(
+                '<div class="d-flex align-items-center gap-1 mb-1" style="white-space: nowrap;">' +
+                    '<span class="badge ' + badgeClass + '" title="' + title + '">' + label + '</span>' +
+                    '<span class="small">' + dateHtml + '</span>' +
+                '</div>'
+            );
+        }
+        return parts.join('');
     }
 
     function decodeHtmlForNote(s) {
@@ -2960,17 +3132,22 @@ var projectTable;
             return '<span class="small text-nowrap"' + attrs + '>' + v + '</span>';
         }
         if (type === 'checkbox' || type === 'checkbox_select_all' || type === 'radio' || type === 'select') {
-            var badgeClass = 'bg-label-secondary';
-            // Nếu giá trị chứa '問題' hoặc 'エラー' → đỏ
-            if (v.indexOf('問題') !== -1 || v.indexOf('エラー') !== -1) {
-                badgeClass = 'bg-label-danger';
-            } else if (v.indexOf('済み') !== -1) {
-                // Nếu chứa '済み' → xanh
-                badgeClass = 'bg-label-success';
-            }
             var isStatusCompanionField = label && String(label).trim().endsWith('状況');
             var excelSkipClass = isStatusCompanionField ? (' ' + REMOVE_FOR_EXCEL_CLASS) : '';
-            return '<span class="badge ' + badgeClass + ' small' + excelSkipClass + '">' + (typeof translateText === 'function' ? translateText(escapeHtmlForNote(v)) : escapeHtmlForNote(v)) + '</span>';
+            var badgeItems = (type === 'checkbox' || type === 'checkbox_select_all')
+                ? String(v).split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+                : [String(v).trim()].filter(Boolean);
+            if (!badgeItems.length) return '';
+            return badgeItems.map(function(item) {
+                var badgeClass = 'bg-label-secondary';
+                if (item.indexOf('問題') !== -1 || item.indexOf('エラー') !== -1) {
+                    badgeClass = 'bg-label-danger';
+                } else if (item.indexOf('済み') !== -1) {
+                    badgeClass = 'bg-label-success';
+                }
+                var text = typeof translateText === 'function' ? translateText(escapeHtmlForNote(item)) : escapeHtmlForNote(item);
+                return '<span class="badge ' + badgeClass + ' small me-1' + excelSkipClass + '">' + text + '</span>';
+            }).join('');
         }
         if (type === 'textarea' || type === 'text') {
             var short = v.length > 40 ? v.substring(0, 40) + '...' : v;
@@ -4004,6 +4181,7 @@ var projectTable;
             var statusMap = {};
 
             // Gom các trường custom theo label; nếu label kết thúc bằng '状況' thì coi là cột trạng thái cho base label
+            // 【メモ】 là companion của 設備図・意匠図 — không tạo cột riêng
             sets.filter(function(s) { return s.department_id == depId; }).forEach(function(s) {
                 if (s.fields && Array.isArray(s.fields)) {
                     s.fields.forEach(function(f) {
@@ -4012,6 +4190,9 @@ var projectTable;
                         var type = f.type || 'text';
                         var options = f.options || '';
 
+                        if (/【メモ】$/.test(label) || /【〇】$/.test(label)) {
+                            return;
+                        }
                         if (label.endsWith(statusSuffix)) {
                             // Ví dụ: '構造データ送付 (CAILY)状況' -> baseLabel = '構造データ送付 (CAILY)'
                             var baseLabel = label.replace(/状況\s*$/,'').trim();
@@ -4047,18 +4228,24 @@ var projectTable;
                         var val = getCustomFieldValueFromRow(row, fieldLabel);
                         var mainHtml = formatCustomFieldForList(val, fieldType, fieldOptions, row, fieldLabel);
 
-                        var statusDefs = (typeof customFieldStatusMap !== 'undefined' && customFieldStatusMap[fieldLabel]) || [];
-                        if (!statusDefs.length) return mainHtml;
-
                         var parts = [mainHtml];
-                        statusDefs.forEach(function(sf) {
-                            var sv = getCustomFieldValueFromRow(row, sf.label);
-                            if (sv !== undefined && String(sv).trim() !== '') {
-                                var statusHtml = formatCustomFieldForList(sv, sf.type, sf.options || '', row, sf.label);
-                                parts.push('<div class="mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '">' + statusHtml + '</div>');
+                        if (fieldLabel === '設備図' || fieldLabel === '意匠図' || fieldLabel === '配置図') {
+                            var memoVal = getCustomFieldValueFromRow(row, fieldLabel + '【メモ】');
+                            if (val && String(val).trim() !== '' && memoVal && String(memoVal).trim() !== '') {
+                                parts.push('<div class="mt-1 small text-muted ' + REMOVE_FOR_EXCEL_CLASS + '">' + $('<div>').text(String(memoVal)).html() + '</div>');
                             }
-                        });
-                        return parts.join('');
+                        }
+                        var statusDefs = (typeof customFieldStatusMap !== 'undefined' && customFieldStatusMap[fieldLabel]) || [];
+                        if (statusDefs.length) {
+                            statusDefs.forEach(function(sf) {
+                                var sv = getCustomFieldValueFromRow(row, sf.label);
+                                if (sv !== undefined && String(sv).trim() !== '') {
+                                    var statusHtml = formatCustomFieldForList(sv, sf.type, sf.options || '', row, sf.label);
+                                    parts.push('<div class="mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '">' + statusHtml + '</div>');
+                                }
+                            });
+                        }
+                        return parts.length === 1 ? mainHtml : parts.join('');
                     },
                     title: buildI18nHeaderTitle(fieldLabel),
                     orderable: false,
@@ -4591,10 +4778,91 @@ var projectTable;
                         }
                         return `<span class="badge bg-info small">${data}</span>`;
                     },
-                    title: '<span data-i18n="種類2">種類2</span>',
+                    title: '<span data-i18n="住宅種類">住宅種類</span>',
                     visible: false,
                     width: '60px'
 
+                },
+                {
+                    name: 'parent_type3',
+                    data: 'parent_type3',
+                    render: function(data, type, row) {
+                        if (!type2IncludesNonResidential(row && row.parent_type2)) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        const label = formatNonResidentialMainUseLabel(data);
+                        if (!label) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        if (type === 'sort' || type === 'type' || type === 'filter') {
+                            return label;
+                        }
+                        return `<span class="text-nowrap small">${escapeHtmlForNote(label)}</span>`;
+                    },
+                    title: '<span data-i18n="非住宅の主要用途">非住宅の主要用途</span>',
+                    visible: false,
+                    width: '140px'
+                },
+                {
+                    name: 'parent_features',
+                    data: 'parent_features',
+                    render: function(data, type, row) {
+                        var labels = formatParentFeatureLabels(data, row && row.parent_type2);
+                        if (!labels.length) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        if (type === 'sort' || type === 'type' || type === 'filter') {
+                            return labels.join(', ');
+                        }
+                        return labels.map(function(item) {
+                            return '<span class="badge badge-outline-primary small me-1">' + escapeHtmlForNote(item) + '</span>';
+                        }).join('');
+                    },
+                    title: '<span data-i18n="特徴">特徴</span>',
+                    visible: false,
+                    width: '160px'
+                },
+                {
+                    name: 'parent_application_review_agency',
+                    data: 'parent_application_review_agency',
+                    render: function(data, type, row) {
+                        if (!parentRequestsIncludeEnergySaving(row && row.parent_requests)) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        var value = String(data || '').trim();
+                        if (!value) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        if (type === 'sort' || type === 'type' || type === 'filter') {
+                            return value;
+                        }
+                        return value.split(',').map(function(item) { return item.trim(); }).filter(Boolean).map(function(item) {
+                            return '<span class="badge badge-outline-primary small me-1">' + escapeHtmlForNote(item) + '</span>';
+                        }).join('') || '<span class="text-muted">-</span>';
+                    },
+                    title: '<span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span>',
+                    visible: false,
+                    width: '160px'
+                },
+                {
+                    name: 'parent_bels_zeh_grade',
+                    data: 'parent_bels_zeh_grade',
+                    render: function(data, type, row) {
+                        if (!parentRequestsIncludeEnergySaving(row && row.parent_requests)) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        var label = formatBelsZehGradeLabel(data);
+                        if (!label) {
+                            return '<span class="text-muted">-</span>';
+                        }
+                        if (type === 'sort' || type === 'type' || type === 'filter') {
+                            return label;
+                        }
+                        return '<span class="text-nowrap small">' + escapeHtmlForNote(label) + '</span>';
+                    },
+                    title: '<span data-i18n="BELSのZEH等級">BELSのZEH等級</span>',
+                    visible: false,
+                    width: '140px'
                 },
                 {
                     name: 'yotei',
@@ -4792,6 +5060,26 @@ var projectTable;
                         return '-';
                     }
                 }, className: 'end-date-column'},
+                {
+                    name: 'other_dept_nouki',
+                    data: 'other_dept_nouki_list',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        if (type === 'sort' || type === 'type' || type === 'filter') {
+                            if (!Array.isArray(data) || !data.length) return '';
+                            return data.map(function(item) {
+                                var label = getOtherDeptNoukiCombinedLabel(item);
+                                var dateStr = formatOtherDeptNoukiDate(item && item.deadline);
+                                return label + ' ' + dateStr;
+                            }).join(' / ');
+                        }
+                        return renderOtherDeptNoukiListCell(row);
+                    },
+                    title: buildI18nHeaderTitle('他部署の納期'),
+                    className: 'other-dept-nouki-column',
+                    width: '120px',
+                    visible: true
+                },
                 {
                     name: 'priority',
                     data: 'priority',
@@ -5736,24 +6024,68 @@ var projectTable;
                     }
                     var parentUrl = getParentProjectDetailUrl(parent.id);
                     var html = '<div class="small fw-bold mb-1">' + escapeHtmlForNote(tLabel('建物詳細')) + '</div>';
-                    html += fieldRow('お施主様名', textOrEmpty(parent.project_name));
-                    html += fieldRow('工事番号', textOrEmpty(parent.construction_number));
-                    html += fieldRow('管理番号', textOrEmpty(parent.project_number));
                     html += fieldRow('会社名', textOrEmpty(parent.company_name));
                     html += fieldRow('支店名', textOrEmpty(parent.branch_name));
                     html += fieldRow('担当様', textOrEmpty(parent.contact_name));
-                    html += fieldRow('規模', textOrEmpty(parent.scale));
-                    var types = [parent.type1, parent.type2].map(function(v) { return String(v || '').trim(); }).filter(Boolean);
-                    if (types.length) {
-                        html += fieldRow('種類', types.map(function(item) {
+                    html += fieldRow('GUIS受付者', textOrEmpty(parent.guis_receiver_display_name || parent.guis_receiver));
+                    html += fieldRow('お施主様名', textOrEmpty(parent.project_name));
+                    html += fieldRow('依頼日', textOrEmpty(parent.request_date));
+                    html += fieldRow('管理番号', textOrEmpty(parent.project_number));
+                    html += fieldRow('工事番号', textOrEmpty(parent.construction_number));
+                    html += fieldRow('建物規模', textOrEmpty(parent.scale));
+                    html += fieldRow('構造事務所', textOrEmpty(parent.structural_office));
+                    var type1Items = String(parent.type1 || '').split(',').map(function(v) { return v.trim(); }).filter(Boolean);
+                    if (type1Items.length) {
+                        html += fieldRow('種類1', type1Items.map(function(item) {
                             return '<span class="badge bg-info me-1">' + escapeHtmlForNote(item) + '</span>';
                         }).join(''));
+                    } else {
+                        html += fieldRow('種類1', textOrEmpty(''));
+                    }
+                    var type2Items = String(parent.type2 || '').split(',').map(function(v) { return v.trim(); }).filter(Boolean);
+                    if (type2Items.length) {
+                        html += fieldRow('住宅種類', type2Items.map(function(item) {
+                            return '<span class="badge bg-info me-1">' + escapeHtmlForNote(item) + '</span>';
+                        }).join(''));
+                    } else {
+                        html += fieldRow('住宅種類', textOrEmpty(''));
+                    }
+                    if (type2IncludesNonResidential(parent.type2)) {
+                        var mainUseLabel = formatNonResidentialMainUseLabel(parent.type3);
+                        html += fieldRow('非住宅の主要用途', textOrEmpty(mainUseLabel));
                     }
                     var requests = String(parent.requests || '').split(',').map(function(r) { return r.trim(); }).filter(Boolean);
                     if (requests.length) {
                         html += fieldRow('依頼', requests.map(function(item) {
                             return '<span class="badge me-1 ' + getRequestBadgeClass(item) + '">' + escapeHtmlForNote(item) + '</span>';
                         }).join(''));
+                    } else {
+                        html += fieldRow('依頼', textOrEmpty(''));
+                    }
+                    var materials = String(parent.materials || '').split(',').map(function(m) { return m.trim(); }).filter(Boolean);
+                    if (materials.length) {
+                        html += fieldRow('資料', materials.map(function(item) {
+                            return '<span class="badge badge-outline-secondary me-1">' + escapeHtmlForNote(item) + '</span>';
+                        }).join(''));
+                    } else {
+                        html += fieldRow('資料', textOrEmpty(''));
+                    }
+                    var featureLabels = formatParentFeatureLabels(parent.features, parent.type2);
+                    if (featureLabels.length) {
+                        html += fieldRow('特徴', featureLabels.map(function(item) {
+                            return '<span class="badge badge-outline-primary me-1">' + escapeHtmlForNote(item) + '</span>';
+                        }).join(''));
+                    } else {
+                        html += fieldRow('特徴', textOrEmpty(''));
+                    }
+                    if (parentRequestsIncludeEnergySaving(parent.requests)) {
+                        var agency = String(parent.application_review_agency || '').trim();
+                        html += fieldRow('申請提出先の審査機関', agency
+                            ? agency.split(',').map(function(item) { return item.trim(); }).filter(Boolean).map(function(item) {
+                                return '<span class="badge badge-outline-primary me-1">' + escapeHtmlForNote(item) + '</span>';
+                            }).join('')
+                            : textOrEmpty(''));
+                        html += fieldRow('BELSのZEH等級', textOrEmpty(formatBelsZehGradeLabel(parent.bels_zeh_grade)));
                     }
                     var selectedDeptId = getSelectedDepartmentId();
                     var otherChildren = children.filter(function(c) {

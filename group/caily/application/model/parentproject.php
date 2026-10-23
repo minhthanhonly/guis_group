@@ -23,6 +23,9 @@ class ParentProject extends ApplicationModel {
             //'desired_delivery_date' => array(),
             'requests' => array(),
             'materials' => array(),
+            'features' => array(),
+            'application_review_agency' => array(),
+            'bels_zeh_grade' => array(),
             'structural_office' => array(),
             'notes' => array(),
             'status' => array(),
@@ -34,6 +37,38 @@ class ParentProject extends ApplicationModel {
         );
         $this->connect();
         $this->ensureParentProjectsUtf8mb4();
+        $this->ensureParentProjectFeatureColumns();
+    }
+
+    /**
+     * Ensure features / application_review_agency / bels_zeh_grade columns exist.
+     */
+    private function ensureParentProjectFeatureColumns() {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        $columns = array(
+            'features' => "TEXT NULL DEFAULT NULL COMMENT '特徴 (comma-separated)' AFTER `materials`",
+            'application_review_agency' => "VARCHAR(255) NULL DEFAULT NULL COMMENT '申請提出先の審査機関' AFTER `features`",
+            'bels_zeh_grade' => "VARCHAR(10) NULL DEFAULT '0' COMMENT 'BELSのZEH等級 (0-6)' AFTER `application_review_agency`",
+        );
+        try {
+            foreach ($columns as $name => $definition) {
+                $row = $this->fetchOne(
+                    "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                    . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($this->table) . "' "
+                    . "AND COLUMN_NAME = '" . $this->quote($name) . "'"
+                );
+                if (!empty($row['cnt'])) {
+                    continue;
+                }
+                $this->query("ALTER TABLE `{$this->table}` ADD COLUMN `{$name}` {$definition}");
+            }
+        } catch (Exception $e) {
+            error_log('ensureParentProjectFeatureColumns failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -79,9 +114,10 @@ class ParentProject extends ApplicationModel {
         
         // Validate and sanitize order_column to prevent SQL injection
         $allowed_columns = [
-            'id', 'project_number', 'project_name', 'construction_number', 
-            'company_name', 'scale', 'type1', 'type2', 'requests', 'request_date', 'created_at', 'updated_at',
-            'status', 'child_project_count', 'created_by_name'
+            'id', 'project_number', 'project_name', 'construction_number',
+            'company_name', 'branch_name', 'contact_name', 'scale', 'type1', 'type2', 'requests',
+            'request_date', 'created_at', 'updated_at',
+            'status', 'child_project_count', 'created_by_name', 'nearest_nouki'
         ];
         $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'created_at';
         if (!in_array($order_column, $allowed_columns)) {
@@ -150,6 +186,30 @@ class ParentProject extends ApplicationModel {
                 GROUP BY parent_project_id
             ) ppc ON ppc.parent_project_id = p.id ";
             $orderBy = "ORDER BY COALESCE(ppc.child_project_count, 0) $order_dir";
+        } elseif ($order_column === 'nearest_nouki') {
+            // Earliest among caily_nouki / guis_nouki / end_date of unfinished child projects
+            $childCountJoin = " LEFT JOIN (
+                SELECT parent_project_id, MIN(deadline) AS nearest_nouki
+                FROM (
+                    SELECT parent_project_id, caily_nouki AS deadline
+                    FROM " . DB_PREFIX . "projects
+                    WHERE status NOT IN ('completed', 'cancelled', 'deleted')
+                      AND caily_nouki IS NOT NULL AND caily_nouki > '1970-01-01'
+                    UNION ALL
+                    SELECT parent_project_id, guis_nouki AS deadline
+                    FROM " . DB_PREFIX . "projects
+                    WHERE status NOT IN ('completed', 'cancelled', 'deleted')
+                      AND guis_nouki IS NOT NULL AND guis_nouki > '1970-01-01'
+                    UNION ALL
+                    SELECT parent_project_id, end_date AS deadline
+                    FROM " . DB_PREFIX . "projects
+                    WHERE status NOT IN ('completed', 'cancelled', 'deleted')
+                      AND end_date IS NOT NULL AND end_date > '1970-01-01'
+                ) nd
+                GROUP BY parent_project_id
+            ) pnd ON pnd.parent_project_id = p.id ";
+            // NULL (no unfinished deadline) last for both directions
+            $orderBy = "ORDER BY (pnd.nearest_nouki IS NULL) ASC, pnd.nearest_nouki $order_dir";
         } elseif ($order_column === 'created_by_name') {
             $orderBy = "ORDER BY u.realname $order_dir";
         } else {
@@ -276,12 +336,65 @@ class ParentProject extends ApplicationModel {
             }
         }
 
+        // Per unfinished child: nearest of caily_nouki / guis_nouki / end_date + department name
+        $nearestNoukiListMap = [];
+        $nearestNoukiMap = [];
+        $sentinel = '9999-12-31 23:59:59';
+        $nearestRows = $this->fetchAll(sprintf(
+            "SELECT parent_project_id, department_name, project_order_type, nearest_nouki
+             FROM (
+                 SELECT
+                     p.parent_project_id,
+                     p.id AS child_project_id,
+                     COALESCE(d.name, '') AS department_name,
+                     COALESCE(p.project_order_type, '') AS project_order_type,
+                     LEAST(
+                         COALESCE(CASE WHEN p.caily_nouki IS NOT NULL AND p.caily_nouki > '1970-01-01' THEN p.caily_nouki END, '%s'),
+                         COALESCE(CASE WHEN p.guis_nouki IS NOT NULL AND p.guis_nouki > '1970-01-01' THEN p.guis_nouki END, '%s'),
+                         COALESCE(CASE WHEN p.end_date IS NOT NULL AND p.end_date > '1970-01-01' THEN p.end_date END, '%s')
+                     ) AS nearest_nouki
+                 FROM %sprojects p
+                 LEFT JOIN %sdepartments d ON d.id = p.department_id
+                 WHERE p.parent_project_id IN (%s)
+                   AND p.status NOT IN ('completed', 'cancelled', 'deleted')
+             ) t
+             WHERE t.nearest_nouki < '%s'
+             ORDER BY t.parent_project_id ASC, t.nearest_nouki ASC, t.child_project_id ASC",
+            $sentinel,
+            $sentinel,
+            $sentinel,
+            DB_PREFIX,
+            DB_PREFIX,
+            $idsList,
+            $sentinel
+        ));
+        foreach ($nearestRows as $row) {
+            $pid = (int)$row['parent_project_id'];
+            $deadline = $row['nearest_nouki'] ?? null;
+            if ($deadline === null || $deadline === '') {
+                continue;
+            }
+            if (!isset($nearestNoukiListMap[$pid])) {
+                $nearestNoukiListMap[$pid] = [];
+            }
+            $nearestNoukiListMap[$pid][] = [
+                'deadline' => $deadline,
+                'department_name' => trim((string)($row['department_name'] ?? '')),
+                'project_order_type' => trim((string)($row['project_order_type'] ?? '')),
+            ];
+            if (!isset($nearestNoukiMap[$pid]) || strcmp((string)$deadline, (string)$nearestNoukiMap[$pid]) < 0) {
+                $nearestNoukiMap[$pid] = $deadline;
+            }
+        }
+
         foreach ($data as &$row) {
             $pid = (int)$row['id'];
             $row['child_project_count'] = $childMap[$pid] ?? 0;
             $row['is_favorite'] = isset($favoriteSet[$pid]) ? 1 : 0;
             $row['notes_display'] = isset($notesMap[$pid]) ? implode(' | ', $notesMap[$pid]) : '';
             $row['fulfilled_request_types'] = isset($fulfilledMap[$pid]) ? array_values($fulfilledMap[$pid]) : [];
+            $row['nearest_nouki'] = $nearestNoukiMap[$pid] ?? null;
+            $row['nearest_nouki_list'] = $nearestNoukiListMap[$pid] ?? [];
         }
         unset($row);
     }
@@ -367,7 +480,12 @@ class ParentProject extends ApplicationModel {
         $project_name = isset($_POST['project_name']) ? $this->validateUTF8MB4($_POST['project_name']) : '';
         $requests = isset($_POST['requests']) ? $this->validateUTF8MB4($_POST['requests']) : '';
         $materials = isset($_POST['materials']) ? $this->validateUTF8MB4($_POST['materials']) : '';
+        $features = isset($_POST['features']) ? $this->validateUTF8MB4($_POST['features']) : '';
         $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : '';
+        $belsZehGrade = isset($_POST['bels_zeh_grade']) ? trim((string)$_POST['bels_zeh_grade']) : '0';
+        if (!in_array($belsZehGrade, array('0', '1', '2', '3', '4', '5', '6'), true)) {
+            $belsZehGrade = '0';
+        }
         
         $data = array(
             'company_name' => $company_name,
@@ -386,6 +504,9 @@ class ParentProject extends ApplicationModel {
             //'desired_delivery_date' => isset($_POST['desired_delivery_date']) ? $_POST['desired_delivery_date'] : null,
             'requests' => $requests,
             'materials' => $materials,
+            'features' => $features,
+            'application_review_agency' => isset($_POST['application_review_agency']) ? $this->validateUTF8MB4($_POST['application_review_agency']) : '',
+            'bels_zeh_grade' => $belsZehGrade,
             'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : '',
             'notes' => $notes,
             'status' => isset($_POST['status']) ? $_POST['status'] : 'draft',
@@ -472,7 +593,19 @@ class ParentProject extends ApplicationModel {
         $project_name = isset($_POST['project_name']) ? $this->validateUTF8MB4($_POST['project_name']) : (isset($old['project_name']) ? $old['project_name'] : '');
         $requests = isset($_POST['requests']) ? $this->validateUTF8MB4($_POST['requests']) : (isset($old['requests']) ? $old['requests'] : '');
         $materials = isset($_POST['materials']) ? $this->validateUTF8MB4($_POST['materials']) : (isset($old['materials']) ? $old['materials'] : '');
+        $features = isset($_POST['features']) ? $this->validateUTF8MB4($_POST['features']) : (isset($old['features']) ? $old['features'] : '');
         $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : (isset($old['notes']) ? $old['notes'] : '');
+        $applicationReviewAgency = isset($_POST['application_review_agency'])
+            ? $this->validateUTF8MB4($_POST['application_review_agency'])
+            : (isset($old['application_review_agency']) ? $old['application_review_agency'] : '');
+        if (isset($_POST['bels_zeh_grade'])) {
+            $belsZehGrade = trim((string)$_POST['bels_zeh_grade']);
+            if (!in_array($belsZehGrade, array('0', '1', '2', '3', '4', '5', '6'), true)) {
+                $belsZehGrade = isset($old['bels_zeh_grade']) ? (string)$old['bels_zeh_grade'] : '0';
+            }
+        } else {
+            $belsZehGrade = isset($old['bels_zeh_grade']) ? (string)$old['bels_zeh_grade'] : '0';
+        }
 
         $requestDate = null;
         if (isset($_POST['request_date']) && trim((string)$_POST['request_date']) !== '') {
@@ -496,6 +629,9 @@ class ParentProject extends ApplicationModel {
             'request_type' => isset($_POST['request_type']) ? $_POST['request_type'] : (isset($old['request_type']) ? $old['request_type'] : ''),
             'requests' => $requests,
             'materials' => $materials,
+            'features' => $features,
+            'application_review_agency' => $applicationReviewAgency,
+            'bels_zeh_grade' => $belsZehGrade,
             'structural_office' => isset($_POST['structural_office']) ? $_POST['structural_office'] : (isset($old['structural_office']) ? $old['structural_office'] : ''),
             'project_number' => isset($_POST['project_number']) ? $_POST['project_number'] : (isset($old['project_number']) ? $old['project_number'] : ''),
             'construction_branch' => isset($_POST['construction_branch']) ? $_POST['construction_branch'] : (isset($old['construction_branch']) ? $old['construction_branch'] : ''),
@@ -793,6 +929,9 @@ class ParentProject extends ApplicationModel {
             'type3' => '',
             'requests' => $requests,
             'materials' => '',
+            'features' => '',
+            'application_review_agency' => '',
+            'bels_zeh_grade' => '0',
             'structural_office' => '',
             'notes' => '',
             //'department_id' => $department_id,

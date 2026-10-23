@@ -234,6 +234,10 @@ class Project extends ApplicationModel {
             'parent_scale' => 'pp.scale',
             'parent_type1' => 'pp.type1',
             'parent_type2' => 'pp.type2',
+            'parent_type3' => 'pp.type3',
+            'parent_features' => 'pp.features',
+            'parent_application_review_agency' => 'pp.application_review_agency',
+            'parent_bels_zeh_grade' => 'pp.bels_zeh_grade',
         );
         if (isset($parentColumns[$order_column])) {
             return $parentColumns[$order_column];
@@ -524,6 +528,104 @@ class Project extends ApplicationModel {
                 $project['task_count'] = 0;
                 $project['completed_task_count'] = 0;
             }
+        }
+        unset($project);
+
+        $this->attachOtherDeptNoukiList($data);
+    }
+
+    /**
+     * For each list row: nearest deadlines of sibling projects under the same parent
+     * that belong to other departments (他部署の納期).
+     */
+    private function attachOtherDeptNoukiList(array &$data) {
+        if (empty($data)) {
+            return;
+        }
+        $parentIds = [];
+        foreach ($data as $project) {
+            $ppid = isset($project['parent_project_id']) ? (int)$project['parent_project_id'] : 0;
+            if ($ppid > 0) {
+                $parentIds[$ppid] = true;
+            }
+        }
+        if (empty($parentIds)) {
+            foreach ($data as &$project) {
+                $project['other_dept_nouki_list'] = [];
+            }
+            unset($project);
+            return;
+        }
+
+        $idsList = implode(',', array_map('intval', array_keys($parentIds)));
+        $sentinel = '9999-12-31 23:59:59';
+        $rows = $this->fetchAll(sprintf(
+            "SELECT parent_project_id, child_project_id, department_id, department_name, project_order_type, nearest_nouki
+             FROM (
+                 SELECT
+                     p.parent_project_id,
+                     p.id AS child_project_id,
+                     p.department_id,
+                     COALESCE(d.name, '') AS department_name,
+                     COALESCE(p.project_order_type, '') AS project_order_type,
+                     LEAST(
+                         COALESCE(CASE WHEN p.caily_nouki IS NOT NULL AND p.caily_nouki > '1970-01-01' THEN p.caily_nouki END, '%s'),
+                         COALESCE(CASE WHEN p.guis_nouki IS NOT NULL AND p.guis_nouki > '1970-01-01' THEN p.guis_nouki END, '%s'),
+                         COALESCE(CASE WHEN p.end_date IS NOT NULL AND p.end_date > '1970-01-01' THEN p.end_date END, '%s')
+                     ) AS nearest_nouki
+                 FROM %sprojects p
+                 LEFT JOIN %sdepartments d ON d.id = p.department_id
+                 WHERE p.parent_project_id IN (%s)
+                   AND p.status NOT IN ('completed', 'cancelled', 'deleted')
+             ) t
+             WHERE t.nearest_nouki < '%s'
+             ORDER BY t.parent_project_id ASC, t.nearest_nouki ASC, t.child_project_id ASC",
+            $sentinel,
+            $sentinel,
+            $sentinel,
+            DB_PREFIX,
+            DB_PREFIX,
+            $idsList,
+            $sentinel
+        ));
+
+        $byParent = [];
+        foreach ($rows as $row) {
+            $ppid = (int)$row['parent_project_id'];
+            if (!isset($byParent[$ppid])) {
+                $byParent[$ppid] = [];
+            }
+            $byParent[$ppid][] = [
+                'deadline' => $row['nearest_nouki'] ?? null,
+                'department_name' => trim((string)($row['department_name'] ?? '')),
+                'department_id' => (int)($row['department_id'] ?? 0),
+                'project_order_type' => trim((string)($row['project_order_type'] ?? '')),
+                'project_id' => (int)($row['child_project_id'] ?? 0),
+            ];
+        }
+
+        foreach ($data as &$project) {
+            $ppid = isset($project['parent_project_id']) ? (int)$project['parent_project_id'] : 0;
+            $deptId = isset($project['department_id']) ? (int)$project['department_id'] : 0;
+            $pid = (int)$project['id'];
+            $list = [];
+            if ($ppid > 0 && !empty($byParent[$ppid])) {
+                foreach ($byParent[$ppid] as $item) {
+                    if ((int)$item['project_id'] === $pid) {
+                        continue;
+                    }
+                    if ($deptId > 0 && (int)$item['department_id'] === $deptId) {
+                        continue;
+                    }
+                    $list[] = [
+                        'deadline' => $item['deadline'],
+                        'department_name' => $item['department_name'],
+                        'project_order_type' => $item['project_order_type'],
+                        'project_id' => $item['project_id'],
+                    ];
+                }
+            }
+            $project['other_dept_nouki_list'] = $list;
         }
         unset($project);
     }
@@ -929,7 +1031,10 @@ class Project extends ApplicationModel {
             %s as customer_name,
             CASE WHEN pc.id IS NOT NULL THEN pc.category_id ELSE pp_c.category_id END as category_id,
             pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number,
-            pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2,
+            pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2, pp.type3 as parent_type3,
+            pp.features as parent_features,
+            pp.application_review_agency as parent_application_review_agency,
+            pp.bels_zeh_grade as parent_bels_zeh_grade,
             pp.requests as parent_requests,
             gu.realname as parent_guis_receiver
             FROM {$this->table} p
@@ -3083,6 +3188,10 @@ class Project extends ApplicationModel {
 
                 $allLabels = array_unique(array_merge(array_keys($oldByLabel), array_keys($newByLabel)));
                 foreach ($allLabels as $fieldLabel) {
+                    // Legacy composite companion 【〇】/【○】 — no longer used; skip noisy history
+                    if (preg_match('/【(?:〇|○)】$/u', (string)$fieldLabel)) {
+                        continue;
+                    }
                     $o = array_key_exists($fieldLabel, $oldByLabel) ? $oldByLabel[$fieldLabel] : null;
                     $n = array_key_exists($fieldLabel, $newByLabel) ? $newByLabel[$fieldLabel] : null;
                     if (!$this->customFieldValuesEqual($o, $n)) {

@@ -160,8 +160,20 @@ if($_SESSION['show_project'] == 0){
                                                         <input type="text" class="form-control" :value="project.contact_name || '-'" readonly>
                                                     </div>
                                                     <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
+                                                        <input type="text" class="form-control" :value="project.guis_receiver_display_name || project.guis_receiver || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
                                                         <label class="form-label"><span data-i18n="お施主様名">お施主様名</span></label>
                                                         <input type="text" class="form-control" :value="project.building_name || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
+                                                        <input type="text" class="form-control" :value="formatDateTime(project.parent_request_date) || '-'" readonly>
+                                                    </div>
+                                                    <div class="col-md-4 mb-3">
+                                                        <label class="form-label"><span data-i18n="管理番号">管理番号</span></label>
+                                                        <input type="text" class="form-control" :value="project.parent_project_number || '-'" readonly>
                                                     </div>
                                                     <div class="col-md-4 mb-3">
                                                         <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
@@ -172,18 +184,9 @@ if($_SESSION['show_project'] == 0){
                                                         <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
                                                     </div>
                                                     <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="GUIS 受付者">GUIS 受付者</span></label>
-                                                        <input type="text" class="form-control" :value="project.guis_receiver_display_name || project.guis_receiver || '-'" readonly>
+                                                        <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
+                                                        <input type="text" class="form-control" :value="project.structural_office || '-'" readonly>
                                                     </div>
-                                                    <!--<div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="工事支店">工事支店</span></label>
-                                                        <div style="min-height:38px;">
-                                                            <span v-if="project.building_branch && project.building_branch.split(',').length > 0">
-                                                                <span v-for="item in project.building_branch.split(',')" :key="item.trim()" class="badge bg-primary me-1">{{ item.trim() }}</span>
-                                                            </span>
-                                                            <span v-else>-</span>
-                                                        </div>
-                                                    </div>-->
                                                     <div class="col-md-4 mb-3">
                                                         <label class="form-label"><span data-i18n="種類1">種類1</span></label>
                                                         <div style="min-height:38px;">
@@ -194,7 +197,7 @@ if($_SESSION['show_project'] == 0){
                                                         </div>
                                                     </div>
                                                     <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="種類2">種類2</span></label>
+                                                        <label class="form-label"><span data-i18n="住宅種類">住宅種類</span></label>
                                                         <div style="min-height:38px;">
                                                             <span v-if="project.type2 && project.type2.split(',').length > 0">
                                                                 <span v-for="item in project.type2.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
@@ -202,10 +205,27 @@ if($_SESSION['show_project'] == 0){
                                                             <span v-else>-</span>
                                                         </div>
                                                     </div>
-                                                    
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                                        <input type="text" class="form-control" :value="project.structural_office || '-'" readonly>
+                                                    <div class="col-md-4 mb-3" v-if="hasNonResidentialType">
+                                                        <label class="form-label"><span data-i18n="非住宅の主要用途">非住宅の主要用途</span></label>
+                                                        <div style="min-height:38px;">
+                                                            {{ nonResidentialMainUseLabel || '-' }}
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-12 mb-3">
+                                                        <label class="form-label"><span data-i18n="依頼">依頼</span></label>
+                                                        <div class="form-control-plaintext">
+                                                            <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
+                                                                <span v-for="item in parentRequestTypes" :key="item"
+                                                                      class="badge me-1 mb-1"
+                                                                      :class="isParentRequestFulfilled(item) ? getRequestBadgeClass(item) : getRequestUnfulfilledBadgeClass(item)"
+                                                                      :title="isParentRequestFulfilled(item) ? '' : '未作成'">
+                                                                    <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
+                                                                    <i v-else class="fa fa-check me-1"></i>
+                                                                    {{ item }}
+                                                                </span>
+                                                            </div>
+                                                            <span v-else class="text-muted">-</span>
+                                                        </div>
                                                     </div>
                                                     <div class="col-12 mb-3">
                                                         <label class="form-label"><span data-i18n="資料">資料</span></label>
@@ -233,19 +253,30 @@ if($_SESSION['show_project'] == 0){
                                                         </div>
                                                     </div>
                                                     <div class="col-12 mb-3">
-                                                        <label class="form-label"><span data-i18n="依頼">依頼</span></label>
+                                                        <label class="form-label"><span data-i18n="特徴">特徴</span></label>
                                                         <div class="form-control-plaintext">
-                                                            <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
-                                                                <span v-for="item in parentRequestTypes" :key="item"
-                                                                      class="badge me-1 mb-1"
-                                                                      :class="isParentRequestFulfilled(item) ? getRequestBadgeClass(item) : getRequestUnfulfilledBadgeClass(item)"
-                                                                      :title="isParentRequestFulfilled(item) ? '' : '未作成'">
-                                                                    <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
-                                                                    <i v-else class="fa fa-check me-1"></i>
-                                                                    {{ item }}
+                                                            <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedFeatureLabels.length">
+                                                                <span v-for="opt in selectedFeatureLabels" :key="opt" class="badge badge-outline-primary me-1">
+                                                                    {{ opt }}
                                                                 </span>
                                                             </div>
                                                             <span v-else class="text-muted">-</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6 mb-3" v-if="hasEnergySavingRequest">
+                                                        <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
+                                                        <div style="min-height:38px;">
+                                                            <span v-if="project.application_review_agency">
+                                                                <span v-for="item in project.application_review_agency.split(',').map(v => v.trim()).filter(v => v)"
+                                                                    :key="item" class="badge badge-outline-primary me-1">{{ item }}</span>
+                                                            </span>
+                                                            <span v-else class="text-muted">-</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-md-6 mb-3" v-if="hasEnergySavingRequest">
+                                                        <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
+                                                        <div style="min-height:38px;">
+                                                            {{ belsZehGradeLabel || '-' }}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -634,6 +665,27 @@ if($_SESSION['show_project'] == 0){
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <textarea class="form-control" v-model="field.value"></textarea>
                                                 </div>
+                                                <div v-else-if="field.isComposite" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
+                                                    <label class="form-label">{{ translateLabel(field.label) }}</label>
+                                                    <div class="d-flex flex-wrap align-items-center gap-3">
+                                                        <template v-if="isCompositeCheckboxType(field)">
+                                                            <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
+                                                                <input class="form-check-input" type="checkbox" :value="opt" v-model="field.valueArr">
+                                                                <label class="form-check-label">{{ opt }}</label>
+                                                            </div>
+                                                        </template>
+                                                        <template v-else>
+                                                            <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
+                                                                <input class="form-check-input" type="radio" :name="'custom_composite_radio_' + idx" :value="opt" v-model="field.value">
+                                                                <label class="form-check-label">{{ opt }}</label>
+                                                            </div>
+                                                        </template>
+                                                        <div v-if="isCompositeValueSelected(field)" class="d-flex align-items-center gap-1 flex-grow-1" style="min-width: 8rem;">
+                                                            <span class="text-nowrap small text-muted">【メモ】</span>
+                                                            <input type="text" class="form-control form-control-sm" v-model="field.memoValue" placeholder="メモ">
+                                                        </div>
+                                                    </div>
+                                                </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">
                                                         <span>{{ translateLabel(field.label) }}</span>
@@ -687,6 +739,34 @@ if($_SESSION['show_project'] == 0){
                                                 <div v-if="field.type === 'textarea'" class="col-12 mb-3">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <div class="form-control" style="min-height:80px;white-space:pre-line;">{{ field.value || '-' }}</div>
+                                                </div>
+                                                <div v-else-if="field.isComposite" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
+                                                    <label class="form-label">{{ translateLabel(field.label) }}</label>
+                                                    <div class="d-flex flex-wrap align-items-center gap-3">
+                                                        <template v-if="canEditProject">
+                                                            <template v-if="isCompositeCheckboxType(field)">
+                                                                <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
+                                                                    <input class="form-check-input" type="checkbox" :value="opt" :checked="(field.valueArr || []).includes(opt)" @change="onCompositeCheckboxChange(field, opt, $event.target.checked)">
+                                                                    <label class="form-check-label">{{ opt }}</label>
+                                                                </div>
+                                                            </template>
+                                                            <template v-else>
+                                                                <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
+                                                                    <input class="form-check-input" type="radio" :name="'cf_composite_'+field.label+'_'+idx" :value="opt" :checked="field.value === opt" @change="onCompositeRadioChange(field, opt)">
+                                                                    <label class="form-check-label">{{ opt }}</label>
+                                                                </div>
+                                                            </template>
+                                                            <div v-if="isCompositeValueSelected(field)" class="d-flex align-items-center gap-1 flex-grow-1" style="min-width: 8rem;">
+                                                                <span class="text-nowrap small text-muted">【メモ】</span>
+                                                                <input type="text" class="form-control form-control-sm" :value="field.memoValue" placeholder="メモ" @change="onCompositeMemoChange(field, $event.target.value)">
+                                                            </div>
+                                                        </template>
+                                                        <template v-else>
+                                                            <span v-if="field.value" v-for="val in String(field.value).split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ val.trim() }}</span>
+                                                            <span v-if="field.value && field.memoValue" class="text-muted small">{{ field.memoValue }}</span>
+                                                            <span v-if="!field.value">-</span>
+                                                        </template>
+                                                    </div>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">

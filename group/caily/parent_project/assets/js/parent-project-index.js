@@ -55,9 +55,10 @@ createApp({
                 { key: 'contact_name', label: '担当様', visible: true },
                 { key: 'scale', label: '規模', visible: false },
                 { key: 'type1', label: '種類1', visible: false },
-                { key: 'type2', label: '種類2', visible: false },
+                { key: 'type2', label: '住宅種類', visible: false },
                 { key: 'requests', label: '依頼', visible: true },
                 { key: 'child_project_count', label: '件数', visible: true },
+                { key: 'nearest_nouki', label: '納期', visible: true },
                 { key: 'created_by_name', label: '作成者', visible: true },
                 { key: 'notes', label: 'メモ', visible: true },
                 { key: 'request_date', label: '依頼日', visible: false },
@@ -102,10 +103,35 @@ createApp({
                 structural_office: '',
                 type1: '',
                 type2: '',
+                type3: '',
                 status: 'draft',
                 requests: '',
-                materials: ''
+                materials: '',
+                features: '',
+                application_review_agency: '',
+                bels_zeh_grade: '0'
             },
+            belsZehGradeOptions: [
+                { value: '0', label: '0 : 該当なし（非ZEH）' },
+                { value: '1', label: '1 : ZEH' },
+                { value: '2', label: '2 : Nearly ZEH' },
+                { value: '3', label: '3 : ZEH Oriented' },
+                { value: '4', label: '4 : ZEH-M' },
+                { value: '5', label: '5 : Nearly ZEH-M' },
+                { value: '6', label: '6 : ZEH-M Oriented' }
+            ],
+            nonResidentialMainUseOptions: [
+                { value: '08340', label: '08340 工場' },
+                { value: '08440', label: '08440 物品販売店舗' },
+                { value: '08450', label: '08450 飲食店' },
+                { value: '08470', label: '08470 事務所' },
+                { value: '08510', label: '08510 倉庫業を営む倉庫' },
+                { value: '08520', label: '08520 倉庫業を営まない倉庫' },
+                { value: '08400', label: '08400 ホテル・旅館' },
+                { value: '08260', label: '08260 病院' },
+                { value: '08550', label: '08550 集会場・公会堂' },
+                { value: '08990', label: '08990 その他' }
+            ],
             editParentRequestFlags: {
                 design: false,
                 equipment: false,
@@ -120,8 +146,43 @@ createApp({
                 tac: false,
                 other: false
             },
+            sharedHousingFeatureLabel: '共同住宅（共用部計算なし）',
+            featureOptions: [
+                '施主宅付き',
+                'マルチルームあり',
+                '店舗併用住宅',
+                '事務所併用住宅',
+                '複合用途',
+                '共同住宅（共用部計算なし）',
+                '補助金案件',
+                '増築',
+                '用途変更'
+            ],
+            editParentFeatureFlags: {
+                '施主宅付き': false,
+                'マルチルームあり': false,
+                '店舗併用住宅': false,
+                '事務所併用住宅': false,
+                '複合用途': false,
+                '共同住宅（共用部計算なし）': false,
+                '補助金案件': false,
+                '増築': false,
+                '用途変更': false
+            },
             editParentType1Tagify: null,
             editParentType2Tagify: null,
+            editParentReviewAgencyTagify: null,
+            applicationReviewAgencyWhitelist: [
+                '日本ERI',
+                'ERIソリューション',
+                'ビューローベリタスジャパン',
+                '日本住宅保証検査機構（JIO）',
+                'ハウスプラス住宅保証',
+                '東京建築検査機構（TBTC）',
+                'ユーディーアイ確認検査',
+                '日本確認検査センター',
+                'JCI'
+            ],
             columnVisibilityStorageKey: 'parent_project_column_visibility',
             filterStorageKey: 'parent_project_list_filters',
             searchTimer: null,
@@ -184,6 +245,48 @@ createApp({
         },
         canCreateParentProject() {
             return this.hasDepartmentPermission('project_add');
+        },
+        editHasNonResidentialType() {
+            return String(this.editingParentProject.type2 || '')
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('非住宅');
+        },
+        editHasSharedHousingType() {
+            return String(this.editingParentProject.type2 || '')
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean)
+                .includes('共同');
+        },
+        editVisibleFeatureOptions() {
+            const self = this;
+            return this.featureOptions.filter(function(opt) {
+                if (opt === self.sharedHousingFeatureLabel) {
+                    return self.editHasSharedHousingType;
+                }
+                return true;
+            });
+        },
+        editHasEnergySavingRequest() {
+            return !!this.editParentRequestFlags.energy;
+        }
+    },
+    watch: {
+        'editingParentProject.type2'() {
+            if (!this.editHasSharedHousingType && this.editParentFeatureFlags) {
+                this.editParentFeatureFlags[this.sharedHousingFeatureLabel] = false;
+            }
+        },
+        'editParentRequestFlags.energy'(enabled) {
+            if (!enabled && this.editingParentProject) {
+                this.editingParentProject.application_review_agency = '';
+                this.editingParentProject.bels_zeh_grade = '0';
+                this.destroyEditParentReviewAgencyTagify();
+            } else if (enabled) {
+                this.$nextTick(() => this.initEditParentReviewAgencyTagify());
+            }
         }
     },
     methods: {
@@ -235,6 +338,7 @@ createApp({
                 // Re-translate i18n elements after Vue updates DOM
                 this.$nextTick(() => {
                     this.translateI18n();
+                    this.updateStickyTableHeader(true);
                 });
             }
         },
@@ -272,6 +376,7 @@ createApp({
         },
         onColumnVisibilityChange() {
             this.saveColumnVisibilityToStorage();
+            this.$nextTick(() => this.updateStickyTableHeader(true));
         },
         loadFiltersFromStorage() {
             try {
@@ -392,6 +497,24 @@ createApp({
             if (this.editParentMaterialFlags.other) arr.push('その他');
             return arr.join(',');
         },
+        createEmptyFeatureFlags() {
+            const flags = {};
+            this.featureOptions.forEach((opt) => { flags[opt] = false; });
+            return flags;
+        },
+        parseEditParentFeatures(featuresStr) {
+            const list = String(featuresStr || '').split(',').map((f) => f.trim()).filter(Boolean);
+            const flags = this.createEmptyFeatureFlags();
+            list.forEach((item) => {
+                if (Object.prototype.hasOwnProperty.call(flags, item)) {
+                    flags[item] = true;
+                }
+            });
+            this.editParentFeatureFlags = flags;
+        },
+        buildEditParentFeaturesString() {
+            return this.editVisibleFeatureOptions.filter((opt) => this.editParentFeatureFlags[opt]).join(',');
+        },
         destroyEditParentWidgets() {
             ['#edit_pp_company_name', '#edit_pp_branch_name', '#edit_pp_contact_name', '#edit_pp_guis_receiver'].forEach((sel) => {
                 const $el = $(sel);
@@ -404,14 +527,15 @@ createApp({
             if (dateEl && dateEl._flatpickr) {
                 try { dateEl._flatpickr.destroy(); } catch (e) {}
             }
-            [this.editParentType1Tagify, this.editParentType2Tagify].forEach((t) => {
+            [this.editParentType1Tagify, this.editParentType2Tagify, this.editParentReviewAgencyTagify].forEach((t) => {
                 if (t && typeof t.destroy === 'function') {
                     try { t.destroy(); } catch (e) {}
                 }
             });
             this.editParentType1Tagify = null;
             this.editParentType2Tagify = null;
-            ['#edit_pp_type1_tags', '#edit_pp_type2_tags'].forEach((sel) => {
+            this.editParentReviewAgencyTagify = null;
+            ['#edit_pp_type1_tags', '#edit_pp_type2_tags', '#edit_pp_application_review_agency_tags'].forEach((sel) => {
                 const el = document.querySelector(sel);
                 if (el) el.value = '';
             });
@@ -435,6 +559,50 @@ createApp({
         clearEditParentTagifyTags(fieldName) {
             if (fieldName === 'type1' && this.editParentType1Tagify) this.editParentType1Tagify.removeAllTags();
             if (fieldName === 'type2' && this.editParentType2Tagify) this.editParentType2Tagify.removeAllTags();
+            if (fieldName === 'application_review_agency' && this.editParentReviewAgencyTagify) {
+                this.editParentReviewAgencyTagify.removeAllTags();
+            }
+        },
+        destroyEditParentReviewAgencyTagify() {
+            if (this.editParentReviewAgencyTagify) {
+                try { this.editParentReviewAgencyTagify.destroy(); } catch (e) { /* ignore */ }
+                this.editParentReviewAgencyTagify = null;
+            }
+            const input = document.querySelector('#edit_pp_application_review_agency_tags');
+            if (input) {
+                input.value = '';
+                if (input.tagify) {
+                    try { input.tagify.destroy(); } catch (e) { /* ignore */ }
+                }
+            }
+        },
+        initEditParentReviewAgencyTagify() {
+            const input = document.querySelector('#edit_pp_application_review_agency_tags');
+            if (!input || !window.Tagify) return;
+            this.destroyEditParentReviewAgencyTagify();
+            input.value = '';
+            this.editParentReviewAgencyTagify = new Tagify(input, {
+                whitelist: this.applicationReviewAgencyWhitelist.slice(),
+                enforceWhitelist: false,
+                maxTags: 1,
+                dropdown: {
+                    maxItems: 20,
+                    classname: 'tags-look-review-agency',
+                    enabled: 0,
+                    closeOnSelect: true
+                }
+            });
+            const updateAgency = () => {
+                this.editingParentProject.application_review_agency = this.editParentReviewAgencyTagify.value
+                    .map(t => t.value)
+                    .join(',');
+            };
+            this.editParentReviewAgencyTagify.on('add', updateAgency);
+            this.editParentReviewAgencyTagify.on('remove', updateAgency);
+            const current = String(this.editingParentProject.application_review_agency || '').trim();
+            if (current) {
+                this.editParentReviewAgencyTagify.addTags(current);
+            }
         },
         initEditParentDatePicker() {
             const dateEl = document.getElementById('edit_pp_request_date');
@@ -479,17 +647,23 @@ createApp({
                 if (type2Input.tagify) { try { type2Input.tagify.destroy(); } catch (e) {} }
                 type2Input.value = '';
                 this.editParentType2Tagify = new Tagify(type2Input, {
-                    whitelist: ['共同', '集合'],
-                    maxTags: 5,
+                    whitelist: ['長屋', '共同', '戸建', '非住宅', '集合'],
+                    maxTags: 1,
                     dropdown: { maxItems: 20, classname: 'tags-look-type2', enabled: 0, closeOnSelect: true }
                 });
                 const updateType2 = () => {
                     this.editingParentProject.type2 = this.editParentType2Tagify.value.map(t => t.value).join(',');
+                    if (!this.editHasNonResidentialType) {
+                        this.editingParentProject.type3 = '';
+                    }
                 };
                 this.editParentType2Tagify.on('add', updateType2);
                 this.editParentType2Tagify.on('remove', updateType2);
                 const type2Val = String(this.editingParentProject.type2 || '').trim();
                 if (type2Val) this.editParentType2Tagify.addTags(type2Val);
+            }
+            if (this.editHasEnergySavingRequest) {
+                this.initEditParentReviewAgencyTagify();
             }
         },
         initEditParentSelect2() {
@@ -699,12 +873,17 @@ createApp({
                 structural_office: '',
                 type1: '',
                 type2: '',
+                type3: '',
                 status: 'draft',
                 requests: '',
-                materials: ''
+                materials: '',
+                features: '',
+                application_review_agency: '',
+                bels_zeh_grade: '0'
             };
             this.parseEditParentRequests('');
             this.parseEditParentMaterials('');
+            this.parseEditParentFeatures('');
             const modalEl = document.getElementById('editParentProjectModal');
             if (modalEl) {
                 bootstrap.Modal.getOrCreateInstance(modalEl).show();
@@ -727,12 +906,19 @@ createApp({
                     structural_office: data.structural_office || '',
                     type1: data.type1 || '',
                     type2: data.type2 || '',
+                    type3: data.type3 || '',
                     status: data.status || 'draft',
                     requests: data.requests || '',
-                    materials: data.materials || ''
+                    materials: data.materials || '',
+                    features: data.features || '',
+                    application_review_agency: data.application_review_agency || '',
+                    bels_zeh_grade: (data.bels_zeh_grade != null && data.bels_zeh_grade !== '')
+                        ? String(data.bels_zeh_grade)
+                        : '0'
                 };
                 this.parseEditParentRequests(this.editingParentProject.requests);
                 this.parseEditParentMaterials(this.editingParentProject.materials);
+                this.parseEditParentFeatures(this.editingParentProject.features);
                 this.editParentProjectLoading = false;
                 await this.$nextTick();
                 this.initEditParentSelect2();
@@ -786,9 +972,19 @@ createApp({
                 formData.append('structural_office', this.editingParentProject.structural_office || '');
                 formData.append('type1', this.editingParentProject.type1 || '');
                 formData.append('type2', this.editingParentProject.type2 || '');
+                formData.append('type3', this.editHasNonResidentialType ? (this.editingParentProject.type3 || '') : '');
                 formData.append('status', this.editingParentProject.status || 'draft');
                 formData.append('requests', this.buildEditParentRequestsString());
                 formData.append('materials', this.buildEditParentMaterialsString());
+                formData.append('features', this.buildEditParentFeaturesString());
+                formData.append(
+                    'application_review_agency',
+                    this.editHasEnergySavingRequest ? (this.editingParentProject.application_review_agency || '') : ''
+                );
+                formData.append(
+                    'bels_zeh_grade',
+                    this.editHasEnergySavingRequest ? (this.editingParentProject.bels_zeh_grade || '0') : '0'
+                );
                 const response = await axios.post('/api/index.php?model=parentproject&method=update', formData);
                 if (response.data && response.data.status === 'success') {
                     const savedId = this.editingParentProject.id;
@@ -1044,6 +1240,35 @@ createApp({
         getRequestUnfulfilledBadgeClass(request) {
             return 'bg-warning text-dark';
         },
+        /** Map department name → 依頼 type (same rules as parentproject.php) */
+        mapDepartmentNameToRequestType(departmentName) {
+            const name = String(departmentName || '').trim();
+            if (!name) return '';
+            const rules = [
+                ['3D設備', '3D設備'],
+                ['技術課設備', '3D設備'],
+                ['省エネ', '省エネ'],
+                ['意匠', '意匠'],
+                ['設備', '設備']
+            ];
+            for (let i = 0; i < rules.length; i++) {
+                if (name.indexOf(rules[i][0]) !== -1) return rules[i][1];
+            }
+            return 'その他';
+        },
+        getDepartmentNoukiBadgeClass(departmentName) {
+            return this.getRequestBadgeClass(this.mapDepartmentNameToRequestType(departmentName));
+        },
+        getDepartmentNoukiBadgeLabel(departmentName) {
+            return this.mapDepartmentNameToRequestType(departmentName) || '-';
+        },
+        /** Combined badge text: e.g. 意匠- 修正 */
+        getNearestNoukiCombinedLabel(item) {
+            const dept = this.getDepartmentNoukiBadgeLabel(item && item.department_name);
+            const orderTypes = this.splitProjectOrderTypes(item && item.project_order_type);
+            if (!orderTypes.length) return dept;
+            return dept + '- ' + orderTypes.join(',');
+        },
         isParentRequestFulfilled(project, requestType) {
             const type = String(requestType || '').trim();
             if (!type || !project) return false;
@@ -1165,6 +1390,13 @@ createApp({
                 default:
                     return 'bg-info';
             }
+        },
+        splitProjectOrderTypes(raw) {
+            if (!raw) return [];
+            if (Array.isArray(raw)) {
+                return raw.map((v) => String(v).trim()).filter(Boolean);
+            }
+            return String(raw).split(',').map((v) => v.trim()).filter(Boolean);
         },
         getManagerName(managerString) {
             if (!managerString) return '';
@@ -1421,8 +1653,14 @@ createApp({
                 scale: source.scale || '',
                 type1: source.type1 || '',
                 type2: source.type2 || '',
+                type3: source.type3 || '',
                 request_type: source.request_type || '',
                 structural_office: source.structural_office || '',
+                features: source.features || '',
+                application_review_agency: source.application_review_agency || '',
+                bels_zeh_grade: (source.bels_zeh_grade != null && source.bels_zeh_grade !== '')
+                    ? String(source.bels_zeh_grade)
+                    : '0',
                 notes: source.notes || '',
                 requests: String(source.requests || '').trim(),
                 materials: String(source.materials || '').trim(),
@@ -1456,6 +1694,180 @@ createApp({
             } finally {
                 this.copyingParentProjectId = null;
             }
+        },
+        /** Space + drag to pan the table horizontally (same UX as project list) */
+        setupSpaceDragScroll() {
+            if (this._spaceDragScrollBound) return;
+            this._spaceDragScrollBound = true;
+            let spaceHeld = false;
+            let dragging = false;
+            let startX = 0;
+            let startScrollLeft = 0;
+            const getScrollContainer = () => document.getElementById('parentProjectsTableScroll');
+            const setPanClass = (on, draggingNow) => {
+                const el = getScrollContainer();
+                if (!el) return;
+                el.classList.toggle('parent-projects-space-pan', !!on);
+                el.classList.toggle('is-dragging', !!draggingNow);
+            };
+            document.addEventListener('keydown', (e) => {
+                if (e.key !== ' ' && e.which !== 32) return;
+                const target = e.target || e.srcElement;
+                if (!target) return;
+                const tag = (target.tagName || '').toLowerCase();
+                if (tag === 'input' || tag === 'textarea' || tag === 'select' ||
+                    target.isContentEditable || (target.closest && target.closest('.ql-editor'))) {
+                    return;
+                }
+                e.preventDefault();
+                spaceHeld = true;
+                setPanClass(true, false);
+            });
+            document.addEventListener('keyup', (e) => {
+                if (e.key !== ' ' && e.which !== 32) return;
+                spaceHeld = false;
+                dragging = false;
+                setPanClass(false, false);
+            });
+            document.addEventListener('mousedown', (e) => {
+                if (!spaceHeld || e.which !== 1) return;
+                const container = getScrollContainer();
+                if (!container || !container.contains(e.target)) return;
+                e.preventDefault();
+                dragging = true;
+                startX = e.clientX;
+                startScrollLeft = container.scrollLeft;
+                setPanClass(true, true);
+            });
+            document.addEventListener('mousemove', (e) => {
+                if (!dragging) return;
+                const container = getScrollContainer();
+                if (!container) return;
+                container.scrollLeft = startScrollLeft + (startX - e.clientX);
+                this.syncStickyHeaderScroll();
+            });
+            document.addEventListener('mouseup', () => {
+                dragging = false;
+                setPanClass(spaceHeld, false);
+            });
+        },
+        /** Fixed table header while page scrolls (same UX as project list) */
+        setupStickyTableHeader() {
+            if (this._stickyHeaderBound) return;
+            this._stickyHeaderBound = true;
+            this._stickyHeadWrap = null;
+            this._stickyHeadTable = null;
+            this._stickyHeadSignature = '';
+
+            // capture:true — layout often scrolls inside nested containers (same as project list)
+            const onScroll = (e) => {
+                if (e.target && e.target.id === 'parentProjectsTableScroll') {
+                    this.syncStickyHeaderScroll();
+                    return;
+                }
+                this.updateStickyTableHeader(false);
+            };
+            window.addEventListener('scroll', onScroll, true);
+            window.addEventListener('resize', () => this.updateStickyTableHeader(true));
+
+            this.$nextTick(() => this.updateStickyTableHeader(true));
+        },
+        ensureStickyHeaderElements() {
+            if (this._stickyHeadWrap) return;
+            const wrap = document.createElement('div');
+            wrap.id = 'parentProjectsStickyHead';
+            wrap.className = 'parent-projects-sticky-head';
+            wrap.setAttribute('aria-hidden', 'true');
+            const table = document.createElement('table');
+            table.className = 'table parent-projects-table parent-projects-sticky-table mb-0';
+            wrap.appendChild(table);
+            document.body.appendChild(wrap);
+            wrap.addEventListener('click', (e) => {
+                const th = e.target && e.target.closest ? e.target.closest('th') : null;
+                if (!th || !th.parentNode) return;
+                const idx = Array.prototype.indexOf.call(th.parentNode.children, th);
+                const container = document.getElementById('parentProjectsTableScroll');
+                const origThead = container && container.querySelector('thead');
+                const origTh = origThead && origThead.querySelectorAll('th')[idx];
+                if (origTh) origTh.click();
+            });
+            this._stickyHeadWrap = wrap;
+            this._stickyHeadTable = table;
+        },
+        getStickyHeaderSignature(thead, table) {
+            const ths = thead ? thead.querySelectorAll('th') : [];
+            const labels = Array.prototype.map.call(ths, (th) => (th.textContent || '').trim()).join('|');
+            return labels + '#' + (table ? table.offsetWidth : 0) + '#' + ths.length;
+        },
+        rebuildStickyHeaderClone(table, thead) {
+            this.ensureStickyHeaderElements();
+            const stickyTable = this._stickyHeadTable;
+            stickyTable.innerHTML = '';
+            stickyTable.appendChild(thead.cloneNode(true));
+            stickyTable.style.width = table.offsetWidth + 'px';
+            stickyTable.style.minWidth = table.offsetWidth + 'px';
+            const srcThs = thead.querySelectorAll('th');
+            const dstThs = stickyTable.querySelectorAll('th');
+            srcThs.forEach((th, i) => {
+                if (!dstThs[i]) return;
+                const w = th.getBoundingClientRect().width;
+                dstThs[i].style.width = w + 'px';
+                dstThs[i].style.minWidth = w + 'px';
+                dstThs[i].style.maxWidth = w + 'px';
+                dstThs[i].style.boxSizing = 'border-box';
+            });
+            this._stickyHeadSignature = this.getStickyHeaderSignature(thead, table);
+        },
+        syncStickyHeaderScroll() {
+            const container = document.getElementById('parentProjectsTableScroll');
+            if (!container || !this._stickyHeadWrap) return;
+            this._stickyHeadWrap.scrollLeft = container.scrollLeft;
+        },
+        /** Pixels below fixed navbar (and test banner) — same idea as project list 4.6rem */
+        getStickyHeaderTopOffset() {
+            const navbar = document.querySelector('.layout-navbar');
+            if (navbar) {
+                const bottom = navbar.getBoundingClientRect().bottom;
+                if (bottom > 0) return Math.ceil(bottom);
+            }
+            const banner = document.querySelector('.env-test-banner');
+            const bannerH = banner ? banner.getBoundingClientRect().height : 0;
+            const rootFs = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+            return Math.ceil(bannerH + 4.6 * rootFs);
+        },
+        updateStickyTableHeader(forceRebuild) {
+            const container = document.getElementById('parentProjectsTableScroll');
+            const table = container && container.querySelector('table.parent-projects-table');
+            const thead = table && table.tHead;
+            if (!container || !table || !thead || this.loading) {
+                if (this._stickyHeadWrap) this._stickyHeadWrap.style.display = 'none';
+                return;
+            }
+
+            this.ensureStickyHeaderElements();
+            const wrap = this._stickyHeadWrap;
+            const rect = container.getBoundingClientRect();
+            const headH = thead.offsetHeight || 40;
+            const navOffset = this.getStickyHeaderTopOffset();
+            // Stick once thead would go under the navbar (same timing idea as project list)
+            const shouldStick = rect.top < navOffset && rect.bottom > navOffset + headH;
+
+            if (!shouldStick) {
+                wrap.style.display = 'none';
+                return;
+            }
+
+            const signature = this.getStickyHeaderSignature(thead, table);
+            if (forceRebuild || signature !== this._stickyHeadSignature || !this._stickyHeadTable.tHead) {
+                this.rebuildStickyHeaderClone(table, thead);
+            }
+
+            wrap.style.display = 'block';
+            wrap.style.top = navOffset + 'px';
+            wrap.style.zIndex = '1002'; // above layout-page::before (1001), below modals
+            wrap.style.left = Math.round(rect.left) + 'px';
+            wrap.style.width = Math.round(rect.width) + 'px';
+            wrap.scrollLeft = container.scrollLeft;
         }
     },
     mounted() {
@@ -1463,6 +1875,8 @@ createApp({
         this.loadFiltersFromStorage();
         this.loadPermission();
         this.loadParentProjects();
+        this.setupSpaceDragScroll();
+        this.setupStickyTableHeader();
         document.addEventListener('click', () => {
             this.closeParentProjectContextMenu();
         });

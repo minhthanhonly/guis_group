@@ -297,7 +297,7 @@ $view->heading('建物詳細');
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="種類2">種類2</span></label>
+                                <label class="form-label"><span data-i18n="住宅種類">住宅種類</span></label>
                                 <template v-if="isEditMode">
                                     <div class="d-flex align-items-center gap-2">
                                         <input type="text" class="form-control tagify" v-model="parentProject.type2"
@@ -314,6 +314,24 @@ $view->heading('建物詳細');
                                                 class="badge bg-primary me-1">{{ item.trim() }}</span>
                                         </span>
                                         <span v-else>-</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3" v-if="hasNonResidentialType">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="非住宅の主要用途">非住宅の主要用途</span></label>
+                                <template v-if="isEditMode">
+                                    <select class="form-select" v-model="parentProject.type3">
+                                        <option value="">選択してください</option>
+                                        <option v-for="opt in nonResidentialMainUseOptions" :key="opt.value" :value="opt.value">
+                                            {{ opt.label }}
+                                        </option>
+                                    </select>
+                                </template>
+                                <template v-else>
+                                    <div style="min-height:38px;">
+                                        {{ nonResidentialMainUseLabel || '-' }}
                                     </div>
                                 </template>
                             </div>
@@ -465,6 +483,71 @@ $view->heading('建物詳細');
                                             </div>
                                         </div>
                                     </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="特徴">特徴</span></label>
+                                <template v-if="isEditMode">
+                                    <div class="row">
+                                        <div class="col-md-4" v-for="opt in visibleFeatureOptions" :key="opt">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                    :id="'features_' + opt"
+                                                    v-model="featureFlags[opt]">
+                                                <label class="form-check-label" :for="'features_' + opt">{{ opt }}</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div class="form-control-plaintext">
+                                        <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedFeatureLabels.length">
+                                            <span v-for="opt in selectedFeatureLabels" :key="opt" class="badge badge-outline-primary me-1">
+                                                {{ opt }}
+                                            </span>
+                                        </div>
+                                        <span v-else class="text-muted">-</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-md-6" v-if="hasEnergySavingRequest">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
+                                <template v-if="isEditMode">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control tagify" id="application_review_agency_tags" name="application_review_agency_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                            @click="clearTagifyTags('application_review_agency')" title="すべて削除">
+                                            <i class="fa fa-times"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div style="min-height:38px;">
+                                        <span v-if="parentProject.application_review_agency">
+                                            <span v-for="item in parentProject.application_review_agency.split(',').map(v => v.trim()).filter(v => v)"
+                                                :key="item" class="badge bg-primary me-1">{{ item }}</span>
+                                        </span>
+                                        <span v-else class="text-muted">-</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-md-6" v-if="hasEnergySavingRequest">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
+                                <template v-if="isEditMode">
+                                    <select class="form-select" v-model="parentProject.bels_zeh_grade">
+                                        <option v-for="opt in belsZehGradeOptions" :key="opt.value" :value="opt.value">
+                                            {{ opt.label }}
+                                        </option>
+                                    </select>
+                                </template>
+                                <template v-else>
+                                    <div class="form-control-plaintext">{{ belsZehGradeLabel || '-' }}</div>
                                 </template>
                             </div>
                         </div>
@@ -4439,4 +4522,5 @@ $view->footing();
 <script src="/project/assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../project/assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
