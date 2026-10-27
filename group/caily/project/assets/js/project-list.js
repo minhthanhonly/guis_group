@@ -307,7 +307,8 @@ var projectTable;
 
     function getProjectStatusLabel(key) {
         var status = statuses.find(function(s) { return s.key === key; });
-        return status ? status.name : key;
+        var name = status ? status.name : key;
+        return (typeof translateText === 'function') ? translateText(name) : name;
     }
 
     function normalizeProjectVersion(version) {
@@ -1595,13 +1596,339 @@ var projectTable;
         return out;
     }
 
+    function formatLocalYmd(d) {
+        if (!(d instanceof Date) || isNaN(d.getTime())) return '';
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return d.getFullYear() + '-' + m + '-' + day;
+    }
+
+    function getTodayYmdLocal() {
+        return formatLocalYmd(new Date());
+    }
+
+    /** Monday–Sunday week / calendar month presets (aligned with backend date_type). */
+    function getDateRangePresetRange(preset) {
+        var key = String(preset || '').trim();
+        var now = new Date();
+        now.setHours(0, 0, 0, 0);
+        var dow = now.getDay(); // 0=Sun … 6=Sat
+        var offsetToMon = dow === 0 ? -6 : (1 - dow);
+        var thisMon = new Date(now);
+        thisMon.setDate(now.getDate() + offsetToMon);
+        var thisSun = new Date(thisMon);
+        thisSun.setDate(thisMon.getDate() + 6);
+        if (key === 'today') {
+            var today = formatLocalYmd(now);
+            return { from: today, to: today };
+        }
+        if (key === 'this_week') {
+            return { from: formatLocalYmd(thisMon), to: formatLocalYmd(thisSun) };
+        }
+        if (key === 'last_week') {
+            var lastMon = new Date(thisMon);
+            lastMon.setDate(thisMon.getDate() - 7);
+            var lastSun = new Date(lastMon);
+            lastSun.setDate(lastMon.getDate() + 6);
+            return { from: formatLocalYmd(lastMon), to: formatLocalYmd(lastSun) };
+        }
+        if (key === 'next_week') {
+            var nextMon = new Date(thisMon);
+            nextMon.setDate(thisMon.getDate() + 7);
+            var nextSun = new Date(nextMon);
+            nextSun.setDate(nextMon.getDate() + 6);
+            return { from: formatLocalYmd(nextMon), to: formatLocalYmd(nextSun) };
+        }
+        if (key === 'this_month') {
+            var first = new Date(now.getFullYear(), now.getMonth(), 1);
+            var last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            return { from: formatLocalYmd(first), to: formatLocalYmd(last) };
+        }
+        return null;
+    }
+
+    function setDateRangeFilterModalDates(from, to) {
+        var fromYmd = normalizeFilterYmd(from) || '';
+        var toYmd = normalizeFilterYmd(to) || '';
+        return ensureDateRangeFilterFlatpickr().then(function() {
+            var setFp = function(sel, val) {
+                var $el = $(sel);
+                var fp = $el.data('flatpickr') || ($el[0] && $el[0]._flatpickr);
+                if (fp && typeof fp.setDate === 'function') {
+                    if (val) fp.setDate(val, true);
+                    else if (typeof fp.clear === 'function') fp.clear();
+                    else $el.val('');
+                } else {
+                    $el.val(val || '');
+                }
+            };
+            setFp('#dateRangeFilterFrom', fromYmd);
+            setFp('#dateRangeFilterTo', toYmd);
+        });
+    }
+
+    function normalizeFilterYmd(value) {
+        var s = String(value == null ? '' : value).trim().replace(/\//g, '-');
+        if (!s) return '';
+        var m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+        if (!m) return '';
+        var y = parseInt(m[1], 10);
+        var mo = parseInt(m[2], 10);
+        var d = parseInt(m[3], 10);
+        if (!y || mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+        return y + '-' + String(mo).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+    }
+
+    function migrateLegacyFilterTodayToDateRange(todayVal) {
+        var val = String(todayVal || '').trim();
+        if (!val) return null;
+        var today = getTodayYmdLocal();
+        var map = {
+            start_today: 'start_date',
+            caily_today: 'caily_nouki',
+            guis_today: 'guis_nouki',
+            end_today: 'end_date'
+        };
+        if (map[val]) {
+            return { field: map[val], from: today, to: today };
+        }
+        if (val.indexOf('cf:') === 0) {
+            return { field: val, from: today, to: today };
+        }
+        return null;
+    }
+
+    var projectListCustomDateFilterFields = [];
+
+    function getBuiltinDateFilterFields() {
+        var canViewEnd = typeof canViewEndDateColumn === 'function' ? canViewEndDateColumn() : true;
+        var canViewDirector = typeof canViewProjectDirectorColumns === 'function'
+            ? canViewProjectDirectorColumns()
+            : true;
+        var list = [
+            { value: 'start_date', label: '開始日' },
+            { value: 'end_date', label: '期限日' },
+            { value: 'caily_nouki', label: 'CAILY納期' },
+            { value: 'guis_nouki', label: 'GUIS納期', needsEndDatePerm: true },
+            { value: 'estimate_date', label: '見積日', directorOnly: true },
+            { value: 'invoice_date', label: '請求日', directorOnly: true }
+        ];
+        return list.filter(function(f) {
+            if (f.needsEndDatePerm && !canViewEnd) return false;
+            if (f.directorOnly && !canViewDirector) return false;
+            return true;
+        });
+    }
+
+    /** Convert legacy YYYY-MM month filter into inclusive date range. */
+    function monthValueToDateRange(ym) {
+        var s = String(ym || '').trim();
+        var m = s.match(/^(\d{4})-(\d{1,2})$/);
+        if (!m) return null;
+        var y = parseInt(m[1], 10);
+        var mo = parseInt(m[2], 10);
+        if (!y || mo < 1 || mo > 12) return null;
+        var lastDay = new Date(y, mo, 0).getDate();
+        var mm = String(mo).padStart(2, '0');
+        return {
+            from: y + '-' + mm + '-01',
+            to: y + '-' + mm + '-' + String(lastDay).padStart(2, '0')
+        };
+    }
+
+    function migrateLegacyMonthFiltersToDateRange(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        if (raw.filterDateField && String(raw.filterDateField).trim()
+            && (raw.filterDateFrom || raw.filterDateTo)) {
+            return null;
+        }
+        var pairs = [
+            { key: 'filterStartMonth', field: 'start_date' },
+            { key: 'filterEndMonth', field: 'end_date' },
+            { key: 'filterEstimateMonth', field: 'estimate_date' },
+            { key: 'filterInvoiceMonth', field: 'invoice_date' }
+        ];
+        for (var i = 0; i < pairs.length; i++) {
+            var p = pairs[i];
+            var range = monthValueToDateRange(raw[p.key]);
+            if (range) {
+                return { field: p.field, from: range.from, to: range.to };
+            }
+        }
+        return null;
+    }
+
+    function getDateFilterFieldOptions() {
+        return getBuiltinDateFilterFields().concat(projectListCustomDateFilterFields || []);
+    }
+
+    function getDateFilterFieldLabel(fieldValue) {
+        var val = String(fieldValue || '').trim();
+        if (!val) return '';
+        var found = getDateFilterFieldOptions().find(function(f) { return f.value === val; });
+        if (found) {
+            return (typeof translateText === 'function') ? translateText(found.label) : found.label;
+        }
+        if (val.indexOf('cf:') === 0) {
+            try { return decodeURIComponent(val.substring(3)); } catch (e) { return val.substring(3); }
+        }
+        return val;
+    }
+
+    function getDateRangeFilterFromUi() {
+        return {
+            field: String($('#filterDateField').val() || '').trim(),
+            from: normalizeFilterYmd($('#filterDateFrom').val()),
+            to: normalizeFilterYmd($('#filterDateTo').val())
+        };
+    }
+
+    function setDateRangeFilterToUi(field, from, to) {
+        $('#filterDateField').val(field || '');
+        $('#filterDateFrom').val(normalizeFilterYmd(from) || '');
+        $('#filterDateTo').val(normalizeFilterYmd(to) || '');
+        updateDateRangeFilterButtonLabel();
+    }
+
+    function clearDateRangeFilterUi() {
+        setDateRangeFilterToUi('', '', '');
+    }
+
+    function updateDateRangeFilterButtonLabel() {
+        var $btn = $('#filterDateRangeBtn');
+        var $label = $('#filterDateRangeBtnLabel');
+        if (!$btn.length || !$label.length) return;
+        var cur = getDateRangeFilterFromUi();
+        var t = function(s) {
+            return (typeof translateText === 'function') ? translateText(s) : s;
+        };
+        if (!cur.field || (!cur.from && !cur.to)) {
+            $label.text(t('日付を選択'));
+            $btn.removeClass('btn-primary').addClass('btn-outline-secondary');
+            return;
+        }
+        var fieldLabel = getDateFilterFieldLabel(cur.field) || cur.field;
+        var from = cur.from || '…';
+        var to = cur.to || '…';
+        var rangeText = (from === to) ? from : (from + ' ～ ' + to);
+        $label.text(fieldLabel + ': ' + rangeText);
+        $btn.removeClass('btn-outline-secondary').addClass('btn-primary');
+    }
+
+    function populateDateRangeFilterFieldSelect() {
+        var $sel = $('#dateRangeFilterField');
+        if (!$sel.length) return;
+        var current = $sel.val() || $('#filterDateField').val() || '';
+        var t = function(s) {
+            return (typeof translateText === 'function') ? translateText(s) : s;
+        };
+        $sel.empty();
+        $sel.append($('<option>').val('').text(t('選択してください')));
+        getDateFilterFieldOptions().forEach(function(f) {
+            $sel.append($('<option>').val(f.value).text(t(f.label)));
+        });
+        if (current) $sel.val(current);
+    }
+
+    function initDateRangeFilterFlatpickrInstances() {
+        if (typeof $().flatpickr !== 'function') return;
+        var locale = (typeof getProjectFlatpickrLocale === 'function')
+            ? getProjectFlatpickrLocale()
+            : 'default';
+        ['#dateRangeFilterFrom', '#dateRangeFilterTo'].forEach(function(sel) {
+            var $el = $(sel);
+            if (!$el.length) return;
+            if ($el.data('flatpickr') || ($el[0] && $el[0]._flatpickr)) return;
+            $el.flatpickr({
+                enableTime: false,
+                dateFormat: 'Y-m-d',
+                allowInput: true,
+                locale: locale
+            });
+        });
+    }
+
+    function ensureDateRangeFilterFlatpickr() {
+        if (typeof $().flatpickr === 'function') {
+            initDateRangeFilterFlatpickrInstances();
+            return Promise.resolve();
+        }
+        if (typeof window.ensureFlatpickr !== 'function') {
+            return Promise.resolve();
+        }
+        return window.ensureFlatpickr().then(function() {
+            initDateRangeFilterFlatpickrInstances();
+        }).catch(function(err) {
+            console.error('Failed to load Flatpickr for date range filter:', err);
+        });
+    }
+
+    function applyDateRangeFilterModalI18n() {
+        var modalEl = document.getElementById('dateRangeFilterModal');
+        if (modalEl && typeof window.applyDataI18n === 'function') {
+            window.applyDataI18n(modalEl);
+        }
+        var $btn = $('#filterDateRangeBtn');
+        if ($btn.length && typeof translateText === 'function') {
+            $btn.attr('title', translateText('日付検索'));
+        }
+        var $filterLabel = $('#projectFilterForm label[data-i18n="日付検索"]');
+        if ($filterLabel.length && typeof translateText === 'function') {
+            $filterLabel.text(translateText('日付検索'));
+        }
+        updateDateRangeFilterButtonLabel();
+    }
+
+    function openDateRangeFilterModalSync() {
+        applyDateRangeFilterModalI18n();
+        populateDateRangeFilterFieldSelect();
+        var cur = getDateRangeFilterFromUi();
+        $('#dateRangeFilterField').val(cur.field || '');
+        var applyValues = function() {
+            var setFp = function(sel, val) {
+                var $el = $(sel);
+                var fp = $el.data('flatpickr') || ($el[0] && $el[0]._flatpickr);
+                if (fp && typeof fp.setDate === 'function') {
+                    if (val) fp.setDate(val, false);
+                    else fp.clear();
+                } else {
+                    $el.val(val || '');
+                }
+            };
+            setFp('#dateRangeFilterFrom', cur.from);
+            setFp('#dateRangeFilterTo', cur.to);
+        };
+        ensureDateRangeFilterFlatpickr().then(applyValues);
+    }
+
+    function applyDateRangeFilterFromModal() {
+        var field = String($('#dateRangeFilterField').val() || '').trim();
+        var from = normalizeFilterYmd($('#dateRangeFilterFrom').val());
+        var to = normalizeFilterYmd($('#dateRangeFilterTo').val());
+        if (!field || (!from && !to)) {
+            if (typeof toastr !== 'undefined') {
+                toastr.warning(
+                    (typeof translateText === 'function')
+                        ? translateText('日付項目と期間を指定してください')
+                        : '日付項目と期間を指定してください'
+                );
+            }
+            return false;
+        }
+        if (from && to && from > to) {
+            var tmp = from; from = to; to = tmp;
+        }
+        setDateRangeFilterToUi(field, from || to, to || from);
+        return true;
+    }
+
     function normalizeProjectListFiltersImport(raw) {
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
         var out = {};
         var stringFields = [
-            'filterStartMonth', 'filterEndMonth', 'filterEstimateMonth', 'filterInvoiceMonth',
             'filterDeliveryStatus', 'filterYoteiMonth',
-            'filterPriority', 'filterProgress', 'filterTimeLeft', 'filterToday',
+            'filterPriority', 'filterProgress', 'filterTimeLeft',
+            'filterDateField', 'filterDateFrom', 'filterDateTo',
             'filterProjectOrderType', 'filterTantou', 'filterProjectId'
         ];
         stringFields.forEach(function(key) {
@@ -1609,6 +1936,24 @@ var projectTable;
                 out[key] = String(raw[key]);
             }
         });
+        // Migrate legacy 本日フィルター / 月フィルター into date-range fields
+        if ((!out.filterDateField || !String(out.filterDateField).trim()) && raw.filterToday) {
+            var migratedToday = migrateLegacyFilterTodayToDateRange(raw.filterToday);
+            if (migratedToday) {
+                out.filterDateField = migratedToday.field;
+                out.filterDateFrom = migratedToday.from;
+                out.filterDateTo = migratedToday.to;
+            }
+        }
+        if ((!out.filterDateField || !String(out.filterDateField).trim())
+            || (!out.filterDateFrom && !out.filterDateTo)) {
+            var migratedMonth = migrateLegacyMonthFiltersToDateRange(raw);
+            if (migratedMonth) {
+                out.filterDateField = migratedMonth.field;
+                out.filterDateFrom = migratedMonth.from;
+                out.filterDateTo = migratedMonth.to;
+            }
+        }
         if (raw.filterBusinessDocumentStatus !== undefined) {
             out.filterBusinessDocumentStatus = normalizeBusinessDocumentStatusFilterValue(
                 String(raw.filterBusinessDocumentStatus || '')
@@ -3030,9 +3375,7 @@ var projectTable;
                     }
                 };
             };
-            $('#filterStartMonth').flatpickr(monthOpts());
-            $('#filterEndMonth').flatpickr(monthOpts());
-            $('#filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth').flatpickr(monthOpts());
+            $('#filterYoteiMonth').flatpickr(monthOpts());
             window.__projectListFilterMonthPickersReady = true;
         }).catch(function(err) {
             delete window.__projectListFilterMonthPickersLoading;
@@ -3053,8 +3396,8 @@ var projectTable;
                 initProjectListFilterMonthPickers();
             }
         }
-        $(document).off('focus.projectListFilterFp', '#filterStartMonth, #filterEndMonth, #filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth')
-            .on('focus.projectListFilterFp', '#filterStartMonth, #filterEndMonth, #filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth', function() {
+        $(document).off('focus.projectListFilterFp', '#filterYoteiMonth')
+            .on('focus.projectListFilterFp', '#filterYoteiMonth', function() {
                 initProjectListFilterMonthPickers();
             });
         // Offcanvas filter path
@@ -3694,17 +4037,15 @@ var projectTable;
     var PROJECT_LIST_SORT_FILTER_KEYS = ['sortByStatus', 'listSortColumn', 'listSortDir'];
 
     var PROJECT_LIST_FILTER_REGISTRY = [
-        { key: 'filterStartMonth', labelKey: '開始月', group: 'date', defaultValue: '' },
-        { key: 'filterEndMonth', labelKey: '期限月', group: 'date', defaultValue: '' },
-        { key: 'filterEstimateMonth', labelKey: '見積月', group: 'date', defaultValue: '', directorOnly: true },
-        { key: 'filterInvoiceMonth', labelKey: '請求月', group: 'date', defaultValue: '', directorOnly: true },
+        { key: 'filterDateField', labelKey: '日付検索（項目）', group: 'date', defaultValue: '' },
+        { key: 'filterDateFrom', labelKey: '日付検索（開始）', group: 'date', defaultValue: '' },
+        { key: 'filterDateTo', labelKey: '日付検索（終了）', group: 'date', defaultValue: '' },
         { key: 'filterYoteiMonth', labelKey: '予定工程', group: 'date', defaultValue: '' },
         { key: 'filterBusinessDocumentStatus', labelKey: '見積・請求状況', group: 'project', defaultValue: '', directorOnly: true },
         { key: 'filterDeliveryStatus', labelKey: '納品状況', group: 'project', defaultValue: '' },
         { key: 'filterPriority', labelKey: '優先度', group: 'project', defaultValue: '' },
         { key: 'filterProgress', labelKey: '進捗率', group: 'project', defaultValue: '' },
         { key: 'filterTimeLeft', labelKey: '残り時間', group: 'project', defaultValue: '' },
-        { key: 'filterToday', labelKey: '本日フィルター', group: 'project', defaultValue: '' },
         { key: 'filterProjectOrderType', labelKey: '受注形態', group: 'project', defaultValue: '' },
         { key: 'filterTantou', labelKey: '担当', group: 'project', defaultValue: '' },
         { key: 'filterKeyword', labelKey: 'キーワード', group: 'project', defaultValue: '' },
@@ -3712,11 +4053,15 @@ var projectTable;
         { key: 'filterNoDates', labelKey: '開始日・期限日未設定', group: 'project', defaultValue: 0 },
         { key: 'filterTeam', labelKey: 'チーム', group: 'org', defaultValue: [] },
         { key: 'filterCompany', labelKey: '会社', group: 'org', defaultValue: [] },
-        { key: 'statusKeys', labelKey: '案件状況', group: 'status', defaultValue: [] },
+        { key: 'statusKeys', labelKey: '案件状況', group: 'status', defaultValue: [], defaultKept: true },
         { key: 'showInactive', labelKey: '完了・中止案件等も表示', group: 'status', defaultValue: 0 },
         { key: 'myProjects', labelKey: '私の案件', group: 'status', defaultValue: 0 },
         { key: 'favorites_only', labelKey: 'お気に入りのみ', group: 'status', defaultValue: 0 }
     ];
+
+    function getProjectListFilterRegistryDef(key) {
+        return PROJECT_LIST_FILTER_REGISTRY.find(function(def) { return def.key === key; }) || null;
+    }
 
     function cloneProjectListFilterValue(value) {
         if (Array.isArray(value)) {
@@ -3747,6 +4092,19 @@ var projectTable;
 
     function migrateProjectListFilterResetPrefs(prefs) {
         prefs = prefs && typeof prefs === 'object' ? prefs : {};
+        // Legacy month / 本日 filters → 日付検索 keep-on-reset prefs (always)
+        if (prefs.filterStartMonth || prefs.filterEndMonth
+            || prefs.filterEstimateMonth || prefs.filterInvoiceMonth
+            || prefs.filterToday) {
+            prefs.filterDateField = true;
+            prefs.filterDateFrom = true;
+            prefs.filterDateTo = true;
+            delete prefs.filterStartMonth;
+            delete prefs.filterEndMonth;
+            delete prefs.filterEstimateMonth;
+            delete prefs.filterInvoiceMonth;
+            delete prefs.filterToday;
+        }
         if (prefs._migrated) {
             return prefs;
         }
@@ -3767,6 +4125,11 @@ var projectTable;
         PROJECT_LIST_SORT_FILTER_KEYS.forEach(function(key) {
             delete prefs[key];
         });
+        delete prefs.filterStartMonth;
+        delete prefs.filterEndMonth;
+        delete prefs.filterEstimateMonth;
+        delete prefs.filterInvoiceMonth;
+        delete prefs.filterToday;
         return prefs;
     }
 
@@ -3793,7 +4156,11 @@ var projectTable;
 
     function isProjectListFilterKeptOnReset(key) {
         var prefs = loadProjectListFilterResetPrefs();
-        return !!prefs[key];
+        if (Object.prototype.hasOwnProperty.call(prefs, key)) {
+            return !!prefs[key];
+        }
+        var def = getProjectListFilterRegistryDef(key);
+        return !!(def && def.defaultKept);
     }
 
     function setProjectListFilterKeptOnReset(key, kept) {
@@ -3801,8 +4168,12 @@ var projectTable;
             return;
         }
         var prefs = loadProjectListFilterResetPrefs();
+        var def = getProjectListFilterRegistryDef(key);
         if (kept) {
             prefs[key] = true;
+        } else if (def && def.defaultKept) {
+            // Explicit opt-out so defaultKept does not re-enable after 「すべて解除」
+            prefs[key] = false;
         } else {
             delete prefs[key];
         }
@@ -3826,10 +4197,6 @@ var projectTable;
 
     function applyProjectListFiltersToUi(filters) {
         filters = filters || {};
-        if (filters.filterStartMonth !== undefined) applyMonthFilterInputToUi('#filterStartMonth', filters.filterStartMonth);
-        if (filters.filterEndMonth !== undefined) applyMonthFilterInputToUi('#filterEndMonth', filters.filterEndMonth);
-        if (filters.filterEstimateMonth !== undefined) applyMonthFilterInputToUi('#filterEstimateMonth', filters.filterEstimateMonth);
-        if (filters.filterInvoiceMonth !== undefined) applyMonthFilterInputToUi('#filterInvoiceMonth', filters.filterInvoiceMonth);
         if (filters.filterYoteiMonth !== undefined) applyMonthFilterInputToUi('#filterYoteiMonth', filters.filterYoteiMonth);
         if (filters.filterDeliveryStatus !== undefined) $('#filterDeliveryStatus').val(filters.filterDeliveryStatus);
         if (filters.filterBusinessDocumentStatus !== undefined) {
@@ -3838,7 +4205,31 @@ var projectTable;
         if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
         if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
-        if (filters.filterToday !== undefined) $('#filterToday').val(filters.filterToday);
+        if (filters.filterDateField !== undefined || filters.filterDateFrom !== undefined || filters.filterDateTo !== undefined
+            || filters.filterToday !== undefined
+            || filters.filterStartMonth !== undefined || filters.filterEndMonth !== undefined
+            || filters.filterEstimateMonth !== undefined || filters.filterInvoiceMonth !== undefined) {
+            var df = filters.filterDateField;
+            var dFrom = filters.filterDateFrom;
+            var dTo = filters.filterDateTo;
+            if ((!df || !String(df).trim()) && filters.filterToday) {
+                var mig = migrateLegacyFilterTodayToDateRange(filters.filterToday);
+                if (mig) {
+                    df = mig.field;
+                    dFrom = mig.from;
+                    dTo = mig.to;
+                }
+            }
+            if ((!df || !String(df).trim()) || (!dFrom && !dTo)) {
+                var migMonth = migrateLegacyMonthFiltersToDateRange(filters);
+                if (migMonth) {
+                    df = migMonth.field;
+                    dFrom = migMonth.from;
+                    dTo = migMonth.to;
+                }
+            }
+            setDateRangeFilterToUi(df || '', dFrom || '', dTo || '');
+        }
         if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
         if (filters.filterCompany !== undefined) {
             var companyValues = parseFilterCompanyValue(filters.filterCompany);
@@ -3883,7 +4274,6 @@ var projectTable;
 
     function buildProjectListFiltersAfterReset() {
         var current = collectProjectListFiltersFromUi();
-        var prefs = loadProjectListFilterResetPrefs();
         var defaults = getDefaultProjectListFilterValues();
         var next = {};
         PROJECT_LIST_FILTER_REGISTRY.forEach(function(def) {
@@ -3893,7 +4283,7 @@ var projectTable;
                 }
                 return;
             }
-            if (prefs[def.key]) {
+            if (isProjectListFilterKeptOnReset(def.key)) {
                 next[def.key] = cloneProjectListFilterValue(current[def.key]);
             } else {
                 next[def.key] = cloneProjectListFilterValue(defaults[def.key]);
@@ -3921,7 +4311,6 @@ var projectTable;
     function renderProjectListFilterResetPrefsOffcanvas() {
         var $root = $('#projectFilterResetPrefsList');
         if (!$root.length) return;
-        var prefs = loadProjectListFilterResetPrefs();
         var html = [];
         PROJECT_LIST_FILTER_RESET_GROUPS.forEach(function(group) {
             var items = getVisibleProjectListFilterResetItems().filter(function(def) {
@@ -3931,7 +4320,7 @@ var projectTable;
             html.push('<div class="mb-3">');
             html.push('<div class="text-muted small fw-semibold mb-2">' + escapeHtmlForNote(translateText(group.labelKey)) + '</div>');
             items.forEach(function(def) {
-                var checked = prefs[def.key] ? ' checked' : '';
+                var checked = isProjectListFilterKeptOnReset(def.key) ? ' checked' : '';
                 var inputId = 'filterResetKeep-' + def.key;
                 html.push(
                     '<div class="form-check form-switch mb-2">'
@@ -3971,7 +4360,11 @@ var projectTable;
         $('#projectFilterResetPrefsClearAll').off('click.projectFilterResetPref').on('click.projectFilterResetPref', function() {
             var prefs = loadProjectListFilterResetPrefs();
             getVisibleProjectListFilterResetItems().forEach(function(def) {
-                delete prefs[def.key];
+                if (def.defaultKept) {
+                    prefs[def.key] = false;
+                } else {
+                    delete prefs[def.key];
+                }
             });
             saveProjectListFilterResetPrefs(prefs);
             renderProjectListFilterResetPrefsOffcanvas();
@@ -3980,17 +4373,15 @@ var projectTable;
 
     function collectProjectListFiltersFromUi() {
         return {
-            filterStartMonth: $('#filterStartMonth').val() || '',
-            filterEndMonth: $('#filterEndMonth').val() || '',
-            filterEstimateMonth: $('#filterEstimateMonth').val() || '',
-            filterInvoiceMonth: $('#filterInvoiceMonth').val() || '',
             filterBusinessDocumentStatus: $('#filterBusinessDocumentStatus').val() || '',
             filterDeliveryStatus: $('#filterDeliveryStatus').val() || '',
             filterYoteiMonth: $('#filterYoteiMonth').val() || '',
             filterPriority: $('#filterPriority').val() || '',
             filterProgress: $('#filterProgress').val() || '',
             filterTimeLeft: $('#filterTimeLeft').val() || '',
-            filterToday: $('#filterToday').val() || '',
+            filterDateField: $('#filterDateField').val() || '',
+            filterDateFrom: normalizeFilterYmd($('#filterDateFrom').val()) || '',
+            filterDateTo: normalizeFilterYmd($('#filterDateTo').val()) || '',
             filterProjectOrderType: $('#filterProjectOrderType').val() || '',
             filterTeam: getFilterTeamValue(),
             filterCompany: getFilterCompanyValue(),
@@ -4046,10 +4437,6 @@ var projectTable;
             return params.get(name) === '1' ? 1 : 0;
         }
 
-        if (params.has('filterStartMonth')) merged.filterStartMonth = params.get('filterStartMonth') || '';
-        if (params.has('filterEndMonth')) merged.filterEndMonth = params.get('filterEndMonth') || '';
-        if (params.has('filterEstimateMonth')) merged.filterEstimateMonth = params.get('filterEstimateMonth') || '';
-        if (params.has('filterInvoiceMonth')) merged.filterInvoiceMonth = params.get('filterInvoiceMonth') || '';
         if (params.has('filterDeliveryStatus')) merged.filterDeliveryStatus = params.get('filterDeliveryStatus') || '';
         if (params.has('filterYoteiMonth')) merged.filterYoteiMonth = params.get('filterYoteiMonth') || '';
         if (params.has('filterBusinessDocumentStatus')) {
@@ -4058,7 +4445,30 @@ var projectTable;
         if (params.has('filterPriority')) merged.filterPriority = params.get('filterPriority') || '';
         if (params.has('filterProgress')) merged.filterProgress = params.get('filterProgress') || '';
         if (params.has('filterTimeLeft')) merged.filterTimeLeft = params.get('filterTimeLeft') || '';
-        if (params.has('filterToday')) merged.filterToday = params.get('filterToday') || '';
+        if (params.has('filterDateField')) merged.filterDateField = params.get('filterDateField') || '';
+        if (params.has('filterDateFrom')) merged.filterDateFrom = normalizeFilterYmd(params.get('filterDateFrom') || '') || '';
+        if (params.has('filterDateTo')) merged.filterDateTo = normalizeFilterYmd(params.get('filterDateTo') || '') || '';
+        if (params.has('filterToday') && !merged.filterDateField) {
+            var migUrl = migrateLegacyFilterTodayToDateRange(params.get('filterToday') || '');
+            if (migUrl) {
+                merged.filterDateField = migUrl.field;
+                merged.filterDateFrom = migUrl.from;
+                merged.filterDateTo = migUrl.to;
+            }
+        }
+        if ((!merged.filterDateField || (!merged.filterDateFrom && !merged.filterDateTo))) {
+            var migMonthUrl = migrateLegacyMonthFiltersToDateRange({
+                filterStartMonth: params.get('filterStartMonth') || '',
+                filterEndMonth: params.get('filterEndMonth') || '',
+                filterEstimateMonth: params.get('filterEstimateMonth') || '',
+                filterInvoiceMonth: params.get('filterInvoiceMonth') || ''
+            });
+            if (migMonthUrl) {
+                merged.filterDateField = migMonthUrl.field;
+                merged.filterDateFrom = migMonthUrl.from;
+                merged.filterDateTo = migMonthUrl.to;
+            }
+        }
         if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
         if (params.has('filterTeam')) merged.filterTeam = parseFilterTeamValue(params.get('filterTeam') || '');
         if (params.has('filterCompany')) merged.filterCompany = parseFilterCompanyValue(params.get('filterCompany') || '');
@@ -4124,18 +4534,35 @@ var projectTable;
             localStorage.removeItem(FILTER_STORAGE_KEY);
             filters = {};
         }
+        var dateField = filters.filterDateField || '';
+        var dateFrom = normalizeFilterYmd(filters.filterDateFrom || '') || '';
+        var dateTo = normalizeFilterYmd(filters.filterDateTo || '') || '';
+        if ((!dateField || (!dateFrom && !dateTo)) && filters.filterToday) {
+            var migStored = migrateLegacyFilterTodayToDateRange(filters.filterToday);
+            if (migStored) {
+                dateField = migStored.field;
+                dateFrom = migStored.from;
+                dateTo = migStored.to;
+            }
+        }
+        if ((!dateField || (!dateFrom && !dateTo))) {
+            var migMonthStored = migrateLegacyMonthFiltersToDateRange(filters);
+            if (migMonthStored) {
+                dateField = migMonthStored.field;
+                dateFrom = migMonthStored.from;
+                dateTo = migMonthStored.to;
+            }
+        }
         return {
-            startMonth: filters.filterStartMonth || '',
-            endMonth: filters.filterEndMonth || '',
-            estimateMonth: filters.filterEstimateMonth || '',
-            invoiceMonth: filters.filterInvoiceMonth || '',
             deliveryStatus: filters.filterDeliveryStatus || '',
             yoteiMonth: filters.filterYoteiMonth || '',
             businessDocumentStatus: filters.filterBusinessDocumentStatus || '',
             priority: filters.filterPriority || '',
             progress: filters.filterProgress || '',
             timeLeft: filters.filterTimeLeft || '',
-            today: filters.filterToday || '',
+            dateField: dateField,
+            dateFrom: dateFrom,
+            dateTo: dateTo,
             projectOrderType: filters.filterProjectOrderType || '',
             teamIds: parseFilterTeamValue(filters.filterTeam),
             companyKeys: parseFilterCompanyValue(filters.filterCompany),
@@ -4156,17 +4583,13 @@ var projectTable;
         const badges = [];
         // Nếu tất cả filter đều rỗng, không hiển thị gì
         if (
-            (!filters.startMonth || filters.startMonth.trim() === '') &&
-            (!filters.endMonth || filters.endMonth.trim() === '') &&
-            (!filters.estimateMonth || filters.estimateMonth.trim() === '') &&
-            (!filters.invoiceMonth || filters.invoiceMonth.trim() === '') &&
             (!filters.deliveryStatus || filters.deliveryStatus.trim() === '') &&
             (!filters.yoteiMonth || filters.yoteiMonth.trim() === '') &&
             (!filters.businessDocumentStatus || filters.businessDocumentStatus.trim() === '') &&
             (!filters.priority || filters.priority.trim() === '') &&
             (!filters.progress || filters.progress.trim() === '') &&
             (!filters.timeLeft || filters.timeLeft.trim() === '') &&
-            (!filters.today || filters.today.trim() === '') &&
+            !(filters.dateField && (filters.dateFrom || filters.dateTo)) &&
             (!filters.projectOrderType || filters.projectOrderType.trim() === '') &&
             teamIds.length === 0 &&
             filters.companyKeys.length === 0 &&
@@ -4181,42 +4604,12 @@ var projectTable;
             $('#activeFilters').html('');
             return;
         }
-        if (filters.today && filters.today.trim() !== '') {
-            const todayVal = filters.today.trim();
-            // Built-in today filters
-            if (todayVal === 'start_today' || todayVal === 'caily_today' || todayVal === 'guis_today' || todayVal === 'end_today') {
-                let labelKey = '';
-                switch (todayVal) {
-                    case 'start_today':
-                        labelKey = '開始日=本日';
-                        break;
-                    case 'caily_today':
-                        labelKey = 'CAILY納期=本日';
-                        break;
-                    case 'guis_today':
-                        labelKey = 'GUIS納期=本日';
-                        break;
-                    case 'end_today':
-                        labelKey = '期限日=本日';
-                        break;
-                }
-                if (labelKey) {
-                    const label = translateText(labelKey);
-                    badges.push(`<span class="badge bg-label-primary me-1">${label}</span>`);
-                }
-            } else if (todayVal.indexOf('cf:') === 0) {
-                // Custom datetime field today filter: value = 'cf:' + encodeURIComponent(label)
-                try {
-                    const encoded = todayVal.substring(3);
-                    const rawLabel = decodeURIComponent(encoded || '');
-                    if (rawLabel) {
-                        const text = escapeHtmlForNote(rawLabel + '=本日');
-                        badges.push(`<span class="badge bg-label-primary me-1">${text}</span>`);
-                    }
-                } catch (e) {
-                    // ignore decode error
-                }
-            }
+        if (filters.dateField && (filters.dateFrom || filters.dateTo)) {
+            const fieldLabel = escapeHtmlForNote(getDateFilterFieldLabel(filters.dateField) || filters.dateField);
+            const from = filters.dateFrom || '…';
+            const to = filters.dateTo || '…';
+            const rangeText = (from === to) ? from : (from + ' ～ ' + to);
+            badges.push(`<span class="badge bg-label-primary me-1">${fieldLabel}: ${escapeHtmlForNote(rangeText)}</span>`);
         }
         if (filters.keyword && filters.keyword.trim() !== '') {
             badges.push(`<span class="badge bg-label-info me-1" >キーワード: ${filters.keyword}</span>`);
@@ -4225,18 +4618,6 @@ var projectTable;
             if (statusKeys.length) {
                 const statusLabel = statusKeys.map(getProjectStatusLabel).join('、');
                 badges.push(`<span class="badge bg-label-info me-1">案件状況: ${statusLabel}</span>`);
-            }
-            if (filters.startMonth && filters.startMonth.trim() !== '') {
-                badges.push(`<span class="badge bg-label-info me-1" >開始月: ${filters.startMonth}</span>`);
-            }
-            if (filters.endMonth && filters.endMonth.trim() !== '') {
-                badges.push(`<span class="badge bg-label-info me-1" >期限月: ${filters.endMonth}</span>`);
-            }
-            if (filters.estimateMonth && filters.estimateMonth.trim() !== '') {
-                badges.push(`<span class="badge bg-label-info me-1" >見積月: ${filters.estimateMonth}</span>`);
-            }
-            if (filters.invoiceMonth && filters.invoiceMonth.trim() !== '') {
-                badges.push(`<span class="badge bg-label-info me-1" >請求月: ${filters.invoiceMonth}</span>`);
             }
             if (filters.deliveryStatus && filters.deliveryStatus.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1" >納品状況: ${filters.deliveryStatus}</span>`);
@@ -4345,17 +4726,20 @@ var projectTable;
                 params.set(key, String(val));
             }
         }
-        setOrDelete('filterStartMonth', filters.filterStartMonth);
-        setOrDelete('filterEndMonth', filters.filterEndMonth);
-        setOrDelete('filterEstimateMonth', filters.filterEstimateMonth);
-        setOrDelete('filterInvoiceMonth', filters.filterInvoiceMonth);
+        params.delete('filterStartMonth');
+        params.delete('filterEndMonth');
+        params.delete('filterEstimateMonth');
+        params.delete('filterInvoiceMonth');
         setOrDelete('filterDeliveryStatus', filters.filterDeliveryStatus);
         setOrDelete('filterYoteiMonth', filters.filterYoteiMonth);
         setOrDelete('filterBusinessDocumentStatus', filters.filterBusinessDocumentStatus);
         setOrDelete('filterPriority', filters.filterPriority);
         setOrDelete('filterProgress', filters.filterProgress);
         setOrDelete('filterTimeLeft', filters.filterTimeLeft);
-        setOrDelete('filterToday', filters.filterToday);
+        setOrDelete('filterDateField', filters.filterDateField);
+        setOrDelete('filterDateFrom', filters.filterDateFrom);
+        setOrDelete('filterDateTo', filters.filterDateTo);
+        params.delete('filterToday');
         setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
         setOrDelete('filterTeam', formatFilterTeamForApi(filters.filterTeam));
         setOrDelete('filterCompany', formatFilterCompanyForApi(filters.filterCompany));
@@ -4718,24 +5102,19 @@ var projectTable;
                 });
             });
 
-            // Bổ sung các custom datetime fields vào filter "本日フィルター"
-            var $today = $('#filterToday');
-            if ($today.length) {
-                // Xóa các option custom cũ (giữ lại option mặc định/built-in)
-                $today.find('option[data-custom-today="1"]').remove();
-                mergedFields.forEach(function(f) {
-                    if (!f || String(f.type || '').toLowerCase() !== 'datetime') return;
-                    var label = String(f.label || '').trim();
-                    if (!label) return;
-                    var value = 'cf:' + encodeURIComponent(label);
-                    var text = label + '=本日';
-                    var opt = $('<option>')
-                        .val(value)
-                        .attr('data-custom-today', '1')
-                        .text(text);
-                    $today.append(opt);
+            // Custom datetime fields for 日付検索 modal
+            projectListCustomDateFilterFields = [];
+            mergedFields.forEach(function(f) {
+                if (!f || String(f.type || '').toLowerCase() !== 'datetime') return;
+                var label = String(f.label || '').trim();
+                if (!label) return;
+                projectListCustomDateFilterFields.push({
+                    value: 'cf:' + encodeURIComponent(label),
+                    label: label
                 });
-            }
+            });
+            populateDateRangeFilterFieldSelect();
+            updateDateRangeFilterButtonLabel();
         } catch (e) {
             console.warn('Failed to build custom fields for list', e);
         }
@@ -5800,17 +6179,15 @@ var projectTable;
                 type: 'GET',
                 data: function(d) {
                     // Thu thập filter từ form
-                    const filterStartMonth = $('#filterStartMonth').val();
-                    const filterEndMonth = $('#filterEndMonth').val();
-                    const filterEstimateMonth = canViewProjectDirectorColumns() ? $('#filterEstimateMonth').val() : '';
-                    const filterInvoiceMonth = canViewProjectDirectorColumns() ? $('#filterInvoiceMonth').val() : '';
                     const filterBusinessDocumentStatus = canViewProjectDirectorColumns() ? $('#filterBusinessDocumentStatus').val() : '';
                     const filterDeliveryStatus = $('#filterDeliveryStatus').val();
                     const filterYoteiMonth = $('#filterYoteiMonth').val();
                     const filterPriority = $('#filterPriority').val();
                     const filterProgress = $('#filterProgress').val();
                     const filterTimeLeft = $('#filterTimeLeft').val();
-                    const filterToday = $('#filterToday').val();
+                    const filterDateField = $('#filterDateField').val() || '';
+                    const filterDateFrom = normalizeFilterYmd($('#filterDateFrom').val()) || '';
+                    const filterDateTo = normalizeFilterYmd($('#filterDateTo').val()) || '';
                     const filterProjectOrderType = $('#filterProjectOrderType').val();
                     const filterTeam = formatFilterTeamForApi(getFilterTeamValue());
                     const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
@@ -5836,17 +6213,15 @@ var projectTable;
                         search: d.search.value,
                         order_column: orderPayload.order_column,
                         order_dir: orderPayload.order_dir,
-                        filterStartMonth,
-                        filterEndMonth,
-                        filterEstimateMonth,
-                        filterInvoiceMonth,
                         filterBusinessDocumentStatus,
                         filterDeliveryStatus,
                         filterYoteiMonth,
                         filterPriority,
                         filterProgress,
                         filterTimeLeft,
-                        filterToday,
+                        filterDateField,
+                        filterDateFrom,
+                        filterDateTo,
                         filterProjectOrderType,
                         filterTeam,
                         filterCompany,
@@ -6015,6 +6390,10 @@ var projectTable;
             window.__projectListLanguageBound = true;
             i18next.on('languageChanged', function() {
                 applyI18nToProjectTableUI();
+                applyDateRangeFilterModalI18n();
+                if ($('#dateRangeFilterModal').hasClass('show')) {
+                    populateDateRangeFilterFieldSelect();
+                }
             });
         }
         
@@ -7517,7 +7896,7 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterStartMonth, #filterEndMonth, #filterEstimateMonth, #filterInvoiceMonth, #filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterToday, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
+        $('#filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterDateField, #filterDateFrom, #filterDateTo, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
            renderActiveFilters();
         });
         let timer = null;
@@ -7532,6 +7911,48 @@ var projectTable;
 
         $('#filterReset').on('click', function() {
             resetProjectListFilters();
+        });
+
+        // 日付検索 modal
+        applyDateRangeFilterModalI18n();
+        $('#dateRangeFilterModal').off('show.bs.modal.dateRangeFilter').on('show.bs.modal.dateRangeFilter', function() {
+            openDateRangeFilterModalSync();
+        });
+        $('#dateRangeFilterSetToday').off('click.dateRangeFilter').on('click.dateRangeFilter', function() {
+            var range = getDateRangePresetRange('today');
+            if (range) setDateRangeFilterModalDates(range.from, range.to);
+        });
+        $(document).off('click.dateRangeFilterPreset', '[data-date-range-preset]')
+            .on('click.dateRangeFilterPreset', '[data-date-range-preset]', function() {
+                var range = getDateRangePresetRange($(this).attr('data-date-range-preset'));
+                if (range) setDateRangeFilterModalDates(range.from, range.to);
+            });
+        $('#dateRangeFilterClearDates').off('click.dateRangeFilter').on('click.dateRangeFilter', function() {
+            setDateRangeFilterModalDates('', '');
+        });
+        $('#dateRangeFilterClearAll').off('click.dateRangeFilter').on('click.dateRangeFilter', function() {
+            clearDateRangeFilterUi();
+            $('#dateRangeFilterField').val('');
+            $('#dateRangeFilterClearDates').trigger('click');
+            var modalEl = document.getElementById('dateRangeFilterModal');
+            if (modalEl && window.bootstrap && bootstrap.Modal) {
+                var inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) inst.hide();
+            }
+            saveFiltersToLocalStorage();
+            renderActiveFilters();
+            reloadProjectTable(true);
+        });
+        $('#dateRangeFilterApply').off('click.dateRangeFilter').on('click.dateRangeFilter', function() {
+            if (!applyDateRangeFilterFromModal()) return;
+            var modalEl = document.getElementById('dateRangeFilterModal');
+            if (modalEl && window.bootstrap && bootstrap.Modal) {
+                var inst = bootstrap.Modal.getInstance(modalEl);
+                if (inst) inst.hide();
+            }
+            saveFiltersToLocalStorage();
+            renderActiveFilters();
+            reloadProjectTable(true);
         });
         
     }

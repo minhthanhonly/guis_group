@@ -208,6 +208,159 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * Build DATE patterns for custom_fields values (Y/m/d variants, with optional time suffix).
+     */
+    private function buildCustomFieldDateLikePatterns($ymd) {
+        $ts = strtotime($ymd);
+        if ($ts === false) {
+            return array();
+        }
+        $y = date('Y', $ts);
+        $mNum = (int) date('n', $ts);
+        $dNum = (int) date('j', $ts);
+        $mm = sprintf('%02d', $mNum);
+        $dd = sprintf('%02d', $dNum);
+        return array(
+            $y . '/' . $mm . '/' . $dd,
+            $y . '/' . $mNum . '/' . $dNum,
+            $y . '/' . $mm . '/' . $dNum,
+            $y . '/' . $mNum . '/' . $dd,
+            $y . '-' . $mm . '-' . $dd,
+        );
+    }
+
+    /**
+     * Normalize Y-m-d (or Y/m/d) input; empty string if invalid.
+     */
+    private function normalizeFilterYmd($raw) {
+        $s = trim((string)$raw);
+        if ($s === '') {
+            return '';
+        }
+        $s = str_replace('/', '-', $s);
+        if (!preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})$/', $s, $m)) {
+            return '';
+        }
+        $y = (int)$m[1];
+        $mo = (int)$m[2];
+        $d = (int)$m[3];
+        if (!checkdate($mo, $d, $y)) {
+            return '';
+        }
+        return sprintf('%04d-%02d-%02d', $y, $mo, $d);
+    }
+
+    /**
+     * Map legacy filterToday values to field + single-day range.
+     */
+    private function migrateLegacyFilterToday($val) {
+        $val = trim((string)$val);
+        if ($val === '') {
+            return null;
+        }
+        $today = date('Y-m-d');
+        $map = array(
+            'start_today' => 'start_date',
+            'caily_today' => 'caily_nouki',
+            'guis_today' => 'guis_nouki',
+            'end_today' => 'end_date',
+        );
+        if (isset($map[$val])) {
+            return array('field' => $map[$val], 'from' => $today, 'to' => $today);
+        }
+        if (strpos($val, 'cf:') === 0) {
+            return array('field' => $val, 'from' => $today, 'to' => $today);
+        }
+        return null;
+    }
+
+    /**
+     * Filter by date column / custom datetime field within [from, to] (inclusive).
+     * Params: filterDateField, filterDateFrom, filterDateTo (or legacy filterToday).
+     */
+    private function appendProjectDateFieldRangeFilter(array &$whereArr, array $get) {
+        $field = isset($get['filterDateField']) ? trim((string)$get['filterDateField']) : '';
+        $from = isset($get['filterDateFrom']) ? $this->normalizeFilterYmd($get['filterDateFrom']) : '';
+        $to = isset($get['filterDateTo']) ? $this->normalizeFilterYmd($get['filterDateTo']) : '';
+
+        if ($field === '' || ($from === '' && $to === '')) {
+            if (!empty($get['filterToday'])) {
+                $migrated = $this->migrateLegacyFilterToday($get['filterToday']);
+                if ($migrated) {
+                    $field = $migrated['field'];
+                    $from = $migrated['from'];
+                    $to = $migrated['to'];
+                }
+            }
+        }
+        if ($field === '' || ($from === '' && $to === '')) {
+            return;
+        }
+        if ($from === '') {
+            $from = $to;
+        }
+        if ($to === '') {
+            $to = $from;
+        }
+        if ($from > $to) {
+            $tmp = $from;
+            $from = $to;
+            $to = $tmp;
+        }
+
+        $builtin = array(
+            'start_date' => array('col' => 'p.start_date', 'excludeDone' => false),
+            'end_date' => array('col' => 'p.end_date', 'excludeDone' => true),
+            'caily_nouki' => array('col' => 'p.caily_nouki', 'excludeDone' => true),
+            'guis_nouki' => array('col' => 'p.guis_nouki', 'excludeDone' => true),
+            'estimate_date' => array('col' => 'p.estimate_date', 'excludeDone' => false),
+            'invoice_date' => array('col' => 'p.invoice_date', 'excludeDone' => false),
+        );
+
+        if (isset($builtin[$field])) {
+            $col = $builtin[$field]['col'];
+            $fromEsc = $this->escape($from);
+            $toEsc = $this->escape($to);
+            $sql = "DATE({$col}) BETWEEN '{$fromEsc}' AND '{$toEsc}'";
+            if (!empty($builtin[$field]['excludeDone'])) {
+                $sql .= " AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
+            }
+            $whereArr[] = $sql;
+            return;
+        }
+
+        if (strpos($field, 'cf:') !== 0) {
+            return;
+        }
+        $label = urldecode(substr($field, 3));
+        if ($label === '') {
+            return;
+        }
+        $labelEsc = $this->escape($label);
+        $likeParts = array();
+        $cursor = strtotime($from);
+        $endTs = strtotime($to);
+        if ($cursor === false || $endTs === false) {
+            return;
+        }
+        // Cap custom-field day expansion to ~1 year to avoid huge OR clauses
+        $maxDays = 366;
+        $dayCount = 0;
+        while ($cursor <= $endTs && $dayCount < $maxDays) {
+            $ymd = date('Y-m-d', $cursor);
+            foreach ($this->buildCustomFieldDateLikePatterns($ymd) as $patt) {
+                $pEsc = $this->escape($patt);
+                $likeParts[] = "(p.custom_fields LIKE '%\"label\":\"" . $labelEsc . "\",\"value\":\"" . $pEsc . "%')";
+            }
+            $cursor = strtotime('+1 day', $cursor);
+            $dayCount++;
+        }
+        if (!empty($likeParts)) {
+            $whereArr[] = "(p.custom_fields IS NOT NULL AND p.custom_fields != '' AND (" . implode(' OR ', $likeParts) . "))";
+        }
+    }
+
+    /**
      * ORDER BY expression for project list (computed columns are not p.* fields).
      */
     function resolveProjectListOrderExpression($order_column, $user_id) {
@@ -1108,49 +1261,8 @@ class Project extends ApplicationModel {
                     $whereArr[] = "p.end_date >= NOW() AND p.end_date <= DATE_ADD(NOW(), INTERVAL ".$this->quote($val)." DAY) AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
                 }
             }
-            // Filter by specific dates == today (start_date / CAILY納期 / GUIS納期 / end_date / custom datetime fields)
-            if (isset($_GET['filterToday']) && $_GET['filterToday'] !== '') {
-                $val = $_GET['filterToday'];
-                if ($val === 'start_today') {
-                    $whereArr[] = "DATE(p.start_date) = CURDATE()";
-                } elseif ($val === 'caily_today') {
-                    $whereArr[] = "DATE(p.caily_nouki) = CURDATE() AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
-                } elseif ($val === 'guis_today') {
-                    $whereArr[] = "DATE(p.guis_nouki) = CURDATE() AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
-                } elseif ($val === 'end_today') {
-                    $whereArr[] = "DATE(p.end_date) = CURDATE() AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
-                } elseif (strpos($val, 'cf:') === 0) {
-                    // Custom datetime field: value = 'cf:' + encodeURIComponent(label)
-                    $encoded = substr($val, 3);
-                    $label = urldecode($encoded);
-                    if ($label !== '') {
-                        $labelEsc = $this->escape($label);
-                        // custom_fields.value có thể dùng các format như 'Y/m/d' hoặc 'Y/n/j' → tạo nhiều pattern theo ngày hôm nay
-                        $y = date('Y');
-                        $mNum = date('n'); // 1-12
-                        $dNum = date('j'); // 1-31
-                        $mm = sprintf('%02d', $mNum);
-                        $dd = sprintf('%02d', $dNum);
-                        $patterns = array(
-                            $y . '/' . $mm . '/' . $dd, // Y/mm/dd
-                            $y . '/' . $mNum . '/' . $dNum, // Y/m/d
-                            $y . '/' . $mm . '/' . $dNum, // Y/mm/d
-                            $y . '/' . $mNum . '/' . $dd, // Y/m/dd
-                        );
-                        $likeParts = array();
-                        foreach ($patterns as $patt) {
-                            $pEsc = $this->escape($patt);
-                            // Tìm đúng object có label tương ứng VÀ value bắt đầu bằng ngày hôm nay (bất kể có giờ hay không)
-                            // Ví dụ: ..."label":"構造データ送付 (CAILY)","value":"2026/3/17"...
-                            // hoặc ..."value":"2026/03/17 09:00"...
-                            $likeParts[] = "(p.custom_fields LIKE '%\"label\":\"" . $labelEsc . "\",\"value\":\"" . $pEsc . "%')";
-                        }
-                        if (!empty($likeParts)) {
-                            $whereArr[] = "(p.custom_fields IS NOT NULL AND p.custom_fields != '' AND (" . implode(' OR ', $likeParts) . "))";
-                        }
-                    }
-                }
-            }
+            // Date field + range filter (replaces 本日フィルター; legacy filterToday still supported)
+            $this->appendProjectDateFieldRangeFilter($whereArr, $_GET);
             // Filter by project_order_type (契約図 / 新規 / 修正 / その他)
             if (isset($_GET['filterProjectOrderType']) && $_GET['filterProjectOrderType'] !== '') {
                 $type = $_GET['filterProjectOrderType'];

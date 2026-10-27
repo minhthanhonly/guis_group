@@ -58,20 +58,16 @@ if($_SESSION['show_project'] == 0){
             <div class="card-body pb-4 pt-3">
                 <form class="row g-3" id="projectFilterForm" autocomplete="off">
                     <div class="col-md-3 col-6">
-                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="開始月">開始月</label>
-                    <input type="text" class="form-control form-control-sm" id="filterStartMonth" autocomplete="off">
-                    </div>
-                    <div class="col-md-3 col-6">
-                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="期限月">期限月</label>
-                    <input type="text" class="form-control form-control-sm" id="filterEndMonth" autocomplete="off">
-                    </div>
-                    <div class="col-md-3 col-6" v-if="canViewProjectDirectorColumns()">
-                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="見積月">見積月</label>
-                    <input type="text" class="form-control form-control-sm" id="filterEstimateMonth" autocomplete="off">
-                    </div>
-                    <div class="col-md-3 col-6" v-if="canViewProjectDirectorColumns()">
-                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="請求月">請求月</label>
-                    <input type="text" class="form-control form-control-sm" id="filterInvoiceMonth" autocomplete="off">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="日付検索">日付検索</label>
+                    <input type="hidden" id="filterDateField" value="">
+                    <input type="hidden" id="filterDateFrom" value="">
+                    <input type="hidden" id="filterDateTo" value="">
+                    <button type="button" class="btn btn-sm btn-outline-secondary w-100 text-start text-truncate"
+                            id="filterDateRangeBtn" data-bs-toggle="modal" data-bs-target="#dateRangeFilterModal"
+                            title="日付検索">
+                        <i class="fa fa-calendar-alt me-1"></i>
+                        <span id="filterDateRangeBtnLabel" data-i18n="日付を選択">日付を選択</span>
+                    </button>
                     </div>
                     <div class="col-md-3 col-6" v-if="canViewProjectDirectorColumns()">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="見積・請求状況">見積・請求状況</label>
@@ -108,17 +104,6 @@ if($_SESSION['show_project'] == 0){
                         <option value="overdue" data-i18n="期限切れ">期限切れ</option>
                     </select>
                     </div>
-                    <div class="col-md-3 col-6">
-                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="本日フィルター">本日フィルター</label>
-                    <select class="form-select form-select-sm" id="filterToday">
-                        <option value="" data-i18n="すべて">すべて</option>
-                        <option value="start_today" data-i18n="開始日=本日">開始日=本日</option>
-                        <option value="caily_today" data-i18n="CAILY納期=本日">CAILY納期=本日</option>
-                        <option v-if="canViewEndDate" value="guis_today" data-i18n="GUIS納期=本日">GUIS納期=本日</option>
-                        <option v-if="canViewEndDate" value="end_today" data-i18n="期限日=本日">期限日=本日</option>
-                    </select>
-                    </div>
-                    
                     <div class="col-md-3 col-6">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="予定工程">予定工程</label>
                     <input type="text" class="form-control form-control-sm" id="filterYoteiMonth" autocomplete="off">
@@ -383,6 +368,68 @@ if($_SESSION['show_project'] == 0){
                 <button type="button" class="btn btn-sm btn-outline-secondary" id="projectFilterResetPrefsClearAll">
                     <span data-i18n="すべて解除">すべて解除</span>
                 </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date range filter modal (replaces 本日フィルター) -->
+    <div class="modal fade" id="dateRangeFilterModal" tabindex="-1" aria-labelledby="dateRangeFilterModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="dateRangeFilterModalLabel">
+                        <i class="fa fa-calendar-alt me-2"></i><span data-i18n="日付検索">日付検索</span>
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label" for="dateRangeFilterField" data-i18n="日付項目">日付項目</label>
+                        <select class="form-select" id="dateRangeFilterField">
+                            <option value="">選択してください</option>
+                        </select>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="form-label" for="dateRangeFilterFrom" data-i18n="開始日">開始日</label>
+                            <input type="text" class="form-control" id="dateRangeFilterFrom" autocomplete="off" placeholder="YYYY-MM-DD">
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label" for="dateRangeFilterTo" data-i18n="終了日">終了日</label>
+                            <input type="text" class="form-control" id="dateRangeFilterTo" autocomplete="off" placeholder="YYYY-MM-DD">
+                        </div>
+                    </div>
+                    <div class="mt-3 d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="dateRangeFilterSetToday">
+                            <span data-i18n="本日">本日</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="dateRangeFilterSetThisWeek" data-date-range-preset="this_week">
+                            <span data-i18n="今週">今週</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="dateRangeFilterSetLastWeek" data-date-range-preset="last_week">
+                            <span data-i18n="先週">先週</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="dateRangeFilterSetNextWeek" data-date-range-preset="next_week">
+                            <span data-i18n="来週">来週</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="dateRangeFilterSetThisMonth" data-date-range-preset="this_month">
+                            <span data-i18n="今月">今月</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="dateRangeFilterClearDates">
+                            <span data-i18n="日付をクリア">日付をクリア</span>
+                        </button>
+                    </div>
+                    <div class="form-text mt-2" id="dateRangeFilterHint" data-i18n="日付項目と期間を指定して検索します。">日付項目と期間を指定して検索します。</div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-danger me-auto" id="dateRangeFilterClearAll">
+                        <span data-i18n="条件解除">条件解除</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><span data-i18n="キャンセル">キャンセル</span></button>
+                    <button type="button" class="btn btn-primary" id="dateRangeFilterApply">
+                        <span data-i18n="適用">適用</span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>

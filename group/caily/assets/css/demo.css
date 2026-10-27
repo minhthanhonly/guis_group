@@ -417,7 +417,7 @@ html.has-test-env-banner.layout-navbar-fixed .layout-wrapper:not(.layout-horizon
 	position: fixed;
 	bottom: 10px;
 	left: 10px;
-	z-index: 2000;
+	z-index: 1000;
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;

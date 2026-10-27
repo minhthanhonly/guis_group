@@ -123,7 +123,7 @@
     "案件番号": "Mã dự án",
     "お施主様名": "Tên công trình",
     "操作": "Hành động",
-    "案件状況": "Trạng thái",
+    "案件状況": "Status dự án",
     "検索": "Tìm kiếm",
     "表示": "Hiển thị",
     "合計": "Tổng",
@@ -955,5 +955,17 @@
     "期限日を表示": "Hiển thị ngày hạn",
     "構造データ送付 (CAILY)を表示": "Hiển thị gửi kết cấu (CAILY)",
     "構造データ送付 (GUIS)を表示": "Hiển thị gửi kết cấu (GUIS)",
-    "設備 納期を表示": "Hiển thị kỳ hạn thiết bị"
+    "設備 納期を表示": "Hiển thị kỳ hạn thiết bị",
+    "日付検索": "Tìm theo ngày",
+    "日付を選択": "Chọn ngày",
+    "日付項目": "Trường ngày",
+    "日付をクリア": "Xóa ngày",
+    "条件解除": "Bỏ điều kiện",
+    "先週": "Tuần trước",
+    "来週": "Tuần sau",
+    "適用": "Áp dụng",
+    "日付項目と期間を指定して検索します。": "Chọn trường ngày và khoảng thời gian để tìm kiếm.",
+    "日付項目と期間を指定してください": "Vui lòng chọn trường ngày và khoảng thời gian",
+    "計算終了": "Kết thúc tính toán",
+    "申請作業中": "Đang làm đơn đăng ký"
 }
