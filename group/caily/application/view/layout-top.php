@@ -72,6 +72,11 @@
                       <div data-i18n="カスタムフィールド">カスタムフィールド</div>
                     </a>
                   </li>
+                  <li class="menu-item <?php if($directory == 'project' && $page == 'default_tasks') echo 'active'; ?>">
+                    <a href="<?=$root?>project/default_tasks.php" class="menu-link">
+                      <div data-i18n="既定タスク">既定タスク</div>
+                    </a>
+                  </li>
                   <!-- <li class="menu-item <?php if($directory == 'price_list') echo 'active'; ?>">
                     <a href="<?=$root?>price_list" class="menu-link">
                       <div data-i18n="価格表管理">価格表管理</div>

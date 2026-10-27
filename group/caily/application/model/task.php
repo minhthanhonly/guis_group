@@ -486,6 +486,22 @@ class Task extends ApplicationModel {
     }
 
     /**
+     * Resolve default task definitions for a department (config or builtin).
+     */
+    private function resolveDepartmentDefaultTaskDefinitions($departmentId) {
+        if (!class_exists('Department')) {
+            require_once DIR_MODEL . 'department.php';
+        }
+        $departmentModel = new Department();
+        if (method_exists($departmentModel, 'resolveDefaultTaskDefinitions')) {
+            return $departmentModel->resolveDefaultTaskDefinitions(intval($departmentId));
+        }
+        return method_exists($departmentModel, 'getBuiltinDefaultTaskDefinitions')
+            ? $departmentModel->getBuiltinDefaultTaskDefinitions()
+            : array();
+    }
+
+    /**
      * Bootstrap default tasks (and task-linked drawings) for a new child project.
      */
     function createDefaultTasksForProject($projectId, $options = array()) {
@@ -504,26 +520,44 @@ class Task extends ApplicationModel {
         $guisReceiverUserId = isset($options['guis_receiver_user_id']) ? intval($options['guis_receiver_user_id']) : 0;
         $contactTaskAssignee = $guisReceiverUserId > 0 ? $guisReceiverUserId : 0;
 
-        $defaults = array(
-            array(
-                'title' => 'お客様との連絡・調整・納品対応',
-                'task_kind' => '連絡',
-                'assigned_to' => $contactTaskAssignee > 0 ? (string) $contactTaskAssignee : null,
-                'status' => 'completed',
-                'progress' => 100,
-                'drawing_count' => 1,
-                'price_pct' => 0.15,
-            ),
-            array(
-                'title' => '全図面のチェック・確認作業',
-                'task_kind' => 'チェック',
-                'assigned_to' => null,
-                'status' => 'todo',
-                'progress' => 0,
-                'drawing_count' => 1,
-                'price_pct' => 0.20,
-            ),
-        );
+        $departmentId = isset($options['department_id']) ? intval($options['department_id']) : 0;
+        if ($departmentId <= 0) {
+            $projDept = $this->fetchOne(sprintf(
+                "SELECT department_id FROM %sprojects WHERE id = %d LIMIT 1",
+                DB_PREFIX,
+                $projectId
+            ));
+            $departmentId = $projDept ? intval($projDept['department_id']) : 0;
+        }
+
+        if (!class_exists('Department')) {
+            require_once DIR_MODEL . 'department.php';
+        }
+        $contactTitle = method_exists('Department', 'getDefaultContactTaskTitle')
+            ? Department::getDefaultContactTaskTitle()
+            : 'お客様との連絡・調整・納品対応';
+
+        $taskDefs = $this->resolveDepartmentDefaultTaskDefinitions($departmentId);
+        $defaults = array();
+        foreach ($taskDefs as $def) {
+            $title = isset($def['title']) ? trim((string) $def['title']) : '';
+            $isContact = ($title === $contactTitle);
+            $pricePctDisplay = isset($def['price_pct']) ? floatval($def['price_pct']) : 0;
+            $defaults[] = array(
+                'title' => $title,
+                'task_kind' => isset($def['task_kind']) ? (string) $def['task_kind'] : '',
+                // Only contact task gets default assignee + progress 100%
+                'assigned_to' => ($isContact && $contactTaskAssignee > 0) ? (string) $contactTaskAssignee : null,
+                'status' => $isContact ? 'completed' : 'todo',
+                'progress' => $isContact ? 100 : 0,
+                'drawing_count' => isset($def['drawing_count']) ? max(0, intval($def['drawing_count'])) : 1,
+                'price_pct' => $pricePctDisplay / 100.0,
+                'assign_guis_receiver' => $isContact ? 1 : 0,
+            );
+        }
+        $defaults = array_values(array_filter($defaults, function ($d) {
+            return $d['title'] !== '';
+        }));
 
         $created = array();
         $skipped = array();
@@ -590,15 +624,18 @@ class Task extends ApplicationModel {
 
             if (!empty($data['assigned_to'])) {
                 $this->syncTaskAssignees($taskId, $data['assigned_to']);
-                if ($def['title'] === 'お客様との連絡・調整・納品対応') {
+                if (!empty($def['assign_guis_receiver'])) {
                     $this->acknowledgeTaskAssignees($taskId, $data['assigned_to']);
                 }
             }
 
             $data['id'] = $taskId;
-            $drawingModel->syncFromTask($data, array('skip_price_recalc' => true));
+            if (intval($def['drawing_count']) > 0) {
+                $drawingModel->syncFromTask($data, array('skip_price_recalc' => true));
+            }
 
-            if ($amount > 0 && isset($def['price_pct']) && isset($def['status']) && $def['status'] === 'completed') {
+            if ($amount > 0 && isset($def['price_pct']) && isset($def['status']) && $def['status'] === 'completed'
+                && intval($def['drawing_count']) > 0) {
                 $price = round($amount * $def['price_pct'], 2);
                 $drawing = $this->fetchOne(sprintf(
                     "SELECT id FROM %sproject_drawings WHERE task_id = %d ORDER BY id ASC LIMIT 1",
@@ -641,7 +678,7 @@ class Task extends ApplicationModel {
         }
         $projectModel = new Project();
         $project = $this->fetchOne(sprintf(
-            "SELECT id, amount FROM %sprojects WHERE id = %d LIMIT 1",
+            "SELECT id, amount, department_id FROM %sprojects WHERE id = %d LIMIT 1",
             DB_PREFIX,
             $projectId
         ));
@@ -660,6 +697,7 @@ class Task extends ApplicationModel {
             'amount' => isset($project['amount']) ? floatval($project['amount']) : 0,
             'created_by' => $createdBy,
             'guis_receiver_user_id' => $projectModel->getGuisReceiverNumericUserId($projectId),
+            'department_id' => isset($project['department_id']) ? intval($project['department_id']) : 0,
         ));
 
         $created = isset($result['created']) ? $result['created'] : array();
@@ -683,7 +721,7 @@ class Task extends ApplicationModel {
     }
 
     /**
-     * Gán task mặc định「お客様との連絡・調整・納品対応」cho GUIS 受付者 (khi sửa dự án con).
+     * Gán task mặc định liên hệ (GUIS 受付者) cho user khi sửa dự án con.
      */
     function assignDefaultContactTaskToUser($projectId, $userId) {
         $projectId = intval($projectId);
@@ -692,12 +730,19 @@ class Task extends ApplicationModel {
             return false;
         }
 
-        $title = 'お客様との連絡・調整・納品対応';
+        $contactTitle = 'お客様との連絡・調整・納品対応';
+        if (!class_exists('Department')) {
+            require_once DIR_MODEL . 'department.php';
+        }
+        if (method_exists('Department', 'getDefaultContactTaskTitle')) {
+            $contactTitle = Department::getDefaultContactTaskTitle();
+        }
+
         $task = $this->fetchOne(sprintf(
             "SELECT id FROM %s WHERE project_id = %d AND title = '%s' LIMIT 1",
             $this->table,
             $projectId,
-            $this->quote($title)
+            $this->quote($contactTitle)
         ));
         if (!$task || empty($task['id'])) {
             return false;

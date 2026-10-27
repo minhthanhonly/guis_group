@@ -16,6 +16,7 @@ class Department extends ApplicationModel {
         $this->connect();
         $this->ensureProjectViewEndDateColumn();
         $this->ensureNoteLabelsColumn();
+        $this->ensureDefaultTasksTable();
     }
 
     /**
@@ -629,5 +630,292 @@ class Department extends ApplicationModel {
             $this->table
         );
         return $this->fetchAll($query);
+    }
+
+    // --- Default Tasks Management (per department) ---
+
+    private function defaultTasksTable() {
+        return 'department_default_tasks';
+    }
+
+    private function ensureDefaultTasksTable() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = $this->defaultTasksTable();
+        try {
+            $row = $this->fetchOne(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
+                . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "'"
+            );
+            if (!empty($row['cnt'])) {
+                return;
+            }
+            $this->query(
+                "CREATE TABLE IF NOT EXISTS `{$table}` ("
+                . "`id` INT NOT NULL AUTO_INCREMENT,"
+                . "`department_id` INT NOT NULL,"
+                . "`tasks` TEXT NOT NULL COMMENT 'JSON array of default task definitions',"
+                . "`updated_at` DATETIME NULL DEFAULT NULL,"
+                . "`created_at` DATETIME NULL DEFAULT NULL,"
+                . "PRIMARY KEY (`id`),"
+                . "UNIQUE KEY `uk_department_default_tasks_department` (`department_id`)"
+                . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
+        } catch (Exception $e) {
+            error_log('ensureDefaultTasksTable failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Built-in defaults used when a department has no saved config.
+     */
+    /** Only this title gets default GUIS assignee + progress 100%. */
+    public static function getDefaultContactTaskTitle() {
+        return 'お客様との連絡・調整・納品対応';
+    }
+
+    public function getBuiltinDefaultTaskDefinitions() {
+        $contactTitle = self::getDefaultContactTaskTitle();
+        return array(
+            array(
+                'title' => $contactTitle,
+                'price_pct' => 15,
+                'task_kind' => '連絡',
+                'assign_guis_receiver' => 1,
+                'status' => 'completed',
+                'progress' => 100,
+                'drawing_count' => 1,
+            ),
+            array(
+                'title' => '全図面のチェック・確認作業',
+                'price_pct' => 20,
+                'task_kind' => 'チェック',
+                'assign_guis_receiver' => 0,
+                'status' => 'todo',
+                'progress' => 0,
+                'drawing_count' => 1,
+            ),
+        );
+    }
+
+    private function normalizeDefaultTaskDefinitions($tasks) {
+        if (!is_array($tasks)) {
+            return array();
+        }
+        $contactTitle = self::getDefaultContactTaskTitle();
+        $normalized = array();
+        $seenTitles = array();
+        foreach ($tasks as $t) {
+            if (!is_array($t)) {
+                continue;
+            }
+            $title = isset($t['title']) ? trim((string) $t['title']) : '';
+            if ($title === '' || isset($seenTitles[$title])) {
+                continue;
+            }
+            $seenTitles[$title] = true;
+            $pricePct = isset($t['price_pct']) ? floatval($t['price_pct']) : 0;
+            if ($pricePct < 0) {
+                $pricePct = 0;
+            }
+            if ($pricePct > 100) {
+                $pricePct = 100;
+            }
+            $isContact = ($title === $contactTitle);
+            // Only contact task: default assignee + progress 100%. Others: no assignee, progress 0.
+            $status = $isContact ? 'completed' : 'todo';
+            $progress = $isContact ? 100 : 0;
+            $drawingCount = isset($t['drawing_count']) ? intval($t['drawing_count']) : 1;
+            if ($drawingCount < 0) {
+                $drawingCount = 0;
+            }
+            $normalized[] = array(
+                'title' => $title,
+                'price_pct' => round($pricePct, 2),
+                'task_kind' => isset($t['task_kind']) ? trim((string) $t['task_kind']) : '',
+                'assign_guis_receiver' => $isContact ? 1 : 0,
+                'status' => $status,
+                'progress' => $progress,
+                'drawing_count' => $drawingCount,
+            );
+        }
+        return $normalized;
+    }
+
+    /**
+     * Resolve default task definitions for a department (saved config or builtin).
+     */
+    public function resolveDefaultTaskDefinitions($departmentId) {
+        $departmentId = intval($departmentId);
+        if ($departmentId > 0) {
+            $this->ensureDefaultTasksTable();
+            $row = $this->fetchOne(sprintf(
+                "SELECT tasks FROM %s WHERE department_id = %d LIMIT 1",
+                $this->defaultTasksTable(),
+                $departmentId
+            ));
+            if ($row && isset($row['tasks']) && $row['tasks'] !== '') {
+                $decoded = json_decode($row['tasks'], true);
+                $normalized = $this->normalizeDefaultTaskDefinitions($decoded);
+                if (!empty($normalized)) {
+                    return $normalized;
+                }
+            }
+        }
+        return $this->getBuiltinDefaultTaskDefinitions();
+    }
+
+    /**
+     * List all department default-task configs (admin UI).
+     */
+    function getDefaultTasks() {
+        $this->ensureDefaultTasksTable();
+        $departmentId = 0;
+        if (isset($_GET['department_id'])) {
+            $departmentId = intval($_GET['department_id']);
+        } elseif (isset($_POST['department_id'])) {
+            $departmentId = intval($_POST['department_id']);
+        }
+        if ($departmentId > 0) {
+            return array(
+                'department_id' => $departmentId,
+                'tasks' => $this->resolveDefaultTaskDefinitions($departmentId),
+                'is_builtin' => !$this->hasSavedDefaultTasks($departmentId),
+            );
+        }
+
+        $rows = $this->fetchAll(
+            "SELECT d.id AS department_id, d.name AS department_name, t.id, t.tasks, t.updated_at "
+            . "FROM " . $this->table . " d "
+            . "LEFT JOIN " . $this->defaultTasksTable() . " t ON t.department_id = d.id "
+            . "WHERE d.is_active = 1 "
+            . "ORDER BY d.name ASC"
+        );
+        $result = array();
+        foreach ($rows as $row) {
+            $deptId = intval($row['department_id']);
+            $hasSaved = !empty($row['id']);
+            $tasks = $hasSaved
+                ? $this->normalizeDefaultTaskDefinitions(json_decode($row['tasks'], true))
+                : $this->getBuiltinDefaultTaskDefinitions();
+            if ($hasSaved && empty($tasks)) {
+                $tasks = $this->getBuiltinDefaultTaskDefinitions();
+                $hasSaved = false;
+            }
+            $result[] = array(
+                'id' => $hasSaved ? intval($row['id']) : null,
+                'department_id' => $deptId,
+                'department_name' => isset($row['department_name']) ? $row['department_name'] : '',
+                'tasks' => $tasks,
+                'task_count' => count($tasks),
+                'is_builtin' => !$hasSaved,
+                'updated_at' => $hasSaved ? ($row['updated_at'] ?? null) : null,
+            );
+        }
+        return $result;
+    }
+
+    private function hasSavedDefaultTasks($departmentId) {
+        $departmentId = intval($departmentId);
+        if ($departmentId <= 0) {
+            return false;
+        }
+        $this->ensureDefaultTasksTable();
+        $row = $this->fetchOne(sprintf(
+            "SELECT id FROM %s WHERE department_id = %d LIMIT 1",
+            $this->defaultTasksTable(),
+            $departmentId
+        ));
+        return $row && !empty($row['id']);
+    }
+
+    function saveDefaultTasks() {
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return array('success' => false, 'message' => 'Invalid JSON');
+        }
+        $departmentId = isset($data['department_id']) ? intval($data['department_id']) : 0;
+        if ($departmentId <= 0) {
+            return array('success' => false, 'message' => '部署を選択してください');
+        }
+        $tasks = $this->normalizeDefaultTaskDefinitions(isset($data['tasks']) ? $data['tasks'] : array());
+        if (empty($tasks)) {
+            return array('success' => false, 'message' => 'タスクを1件以上設定してください');
+        }
+        $sumPct = 0;
+        foreach ($tasks as $t) {
+            $sumPct += floatval($t['price_pct']);
+        }
+        if ($sumPct > 100.0001) {
+            return array('success' => false, 'message' => '比率の合計は100%以下にしてください');
+        }
+
+        $this->ensureDefaultTasksTable();
+        $table = $this->defaultTasksTable();
+        $now = date('Y-m-d H:i:s');
+        $payload = json_encode($tasks, JSON_UNESCAPED_UNICODE);
+        $existing = $this->fetchOne(sprintf(
+            "SELECT id FROM %s WHERE department_id = %d LIMIT 1",
+            $table,
+            $departmentId
+        ));
+        try {
+            if ($existing && !empty($existing['id'])) {
+                $ok = $this->query_update(
+                    array(
+                        'tasks' => $payload,
+                        'updated_at' => $now,
+                    ),
+                    array('id' => intval($existing['id'])),
+                    $table
+                );
+                if ($ok === false) {
+                    return array('success' => false, 'message' => '更新に失敗しました。');
+                }
+                return array('success' => true, 'id' => intval($existing['id']));
+            }
+            $insertId = $this->query_insert(
+                array(
+                    'department_id' => $departmentId,
+                    'tasks' => $payload,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ),
+                $table
+            );
+            if (!$insertId) {
+                return array('success' => false, 'message' => '登録に失敗しました。');
+            }
+            return array('success' => true, 'id' => $insertId);
+        } catch (Exception $e) {
+            return array('success' => false, 'message' => '保存に失敗しました。', 'error' => $e->getMessage());
+        }
+    }
+
+    function removeDefaultTasks() {
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return array('success' => false, 'message' => 'Invalid JSON');
+        }
+        $departmentId = isset($data['department_id']) ? intval($data['department_id']) : 0;
+        $id = isset($data['id']) ? intval($data['id']) : 0;
+        $this->ensureDefaultTasksTable();
+        try {
+            if ($id > 0) {
+                $this->query_delete(array('id' => $id), $this->defaultTasksTable());
+            } elseif ($departmentId > 0) {
+                $this->query_delete(array('department_id' => $departmentId), $this->defaultTasksTable());
+            } else {
+                return array('success' => false, 'message' => '対象が指定されていません');
+            }
+        } catch (Exception $e) {
+            return array('success' => false, 'message' => '削除に失敗しました。', 'error' => $e->getMessage());
+        }
+        return array('success' => true);
     }
 } 

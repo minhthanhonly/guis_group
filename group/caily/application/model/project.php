@@ -3845,13 +3845,14 @@ class Project extends ApplicationModel {
         if ($parentId <= 0 || $id <= 0) {
             return false;
         }
+        // Match 省エネ計算 / 省エネ計算2 etc. (same rule as 依頼 mapping)
         $row = $this->fetchOne(sprintf(
             "SELECT COUNT(*) AS cnt
              FROM %sprojects p
              INNER JOIN %sdepartments d ON d.id = p.department_id
              WHERE p.parent_project_id = %d
                AND p.id <> %d
-               AND d.name = '省エネ計算'
+               AND d.name LIKE '%%省エネ%%'
                AND p.status NOT IN ('cancelled', 'deleted')",
             DB_PREFIX,
             DB_PREFIX,
@@ -8060,6 +8061,7 @@ class Project extends ApplicationModel {
             'amount' => $amount,
             'created_by' => $createdBy,
             'guis_receiver_user_id' => $guisReceiverUserId,
+            'department_id' => isset($data['department_id']) ? intval($data['department_id']) : 0,
         ));
     }
 

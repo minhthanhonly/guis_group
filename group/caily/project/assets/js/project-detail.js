@@ -849,12 +849,15 @@ const vueApp = createApp({
                 return (Number(a.id) || 0) - (Number(b.id) || 0);
             });
         },
-        /** Current project belongs to 省エネ計算 */
+        /** Current project belongs to 省エネ計算 (or 省エネ計算2 etc.). */
         isEnergyDepartmentProject() {
-            const energyName = (window.EnergyDrawingShare && window.EnergyDrawingShare.ENERGY_DEPT_NAME) || '省エネ計算';
-            return String(this.project && this.project.department_name || '').trim() === energyName;
+            const name = String(this.project && this.project.department_name || '').trim();
+            if (window.EnergyDrawingShare && window.EnergyDrawingShare.isEnergyDepartmentName) {
+                return window.EnergyDrawingShare.isEnergyDepartmentName(name);
+            }
+            return name.indexOf('省エネ') !== -1;
         },
-        /** Same-parent has active 省エネ計算 sibling (or flag from API). */
+        /** Same-parent has active 省エネ sibling (or flag from API). */
         hasEnergyDrawingShareContext() {
             if (!this.project) return false;
             if (this.isEnergyDepartmentProject) return true;
@@ -863,10 +866,15 @@ const vueApp = createApp({
                 || this.project.has_energy_sibling === '1') {
                 return true;
             }
-            const energyName = (window.EnergyDrawingShare && window.EnergyDrawingShare.ENERGY_DEPT_NAME) || '省エネ計算';
+            if (window.EnergyDrawingShare && window.EnergyDrawingShare.hasEnergySavingSibling) {
+                return window.EnergyDrawingShare.hasEnergySavingSibling(
+                    this.parentSiblingProjects,
+                    this.project.id
+                );
+            }
             const siblings = Array.isArray(this.parentSiblingProjects) ? this.parentSiblingProjects : [];
             return siblings.some((p) => p
-                && String(p.department_name || '').trim() === energyName
+                && String(p.department_name || '').trim().indexOf('省エネ') !== -1
                 && String(p.status || '') !== 'cancelled'
                 && String(p.status || '').toLowerCase() !== 'deleted');
         },
@@ -1205,6 +1213,9 @@ const vueApp = createApp({
                 // Khởi tạo trạng thái CAILY納期状況 / GUIS納期状況 từ cột riêng trong DB
                 this.project.caily_nouki_status = this.project.caily_nouki_status || '';
                 this.project.guis_nouki_status = this.project.guis_nouki_status || '';
+                this.project.energy_drawing_share_status = this.project.energy_drawing_share_status || '';
+                this.project.energy_drawing_share_reason = this.project.energy_drawing_share_reason || '';
+                this.project.energy_drawing_share_note = this.project.energy_drawing_share_note || '';
                 this.syncYoteiDraftFromProject();
 
                 if (businessDocSnapshot) {

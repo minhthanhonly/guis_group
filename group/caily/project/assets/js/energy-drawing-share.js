@@ -26,6 +26,11 @@
         return !!SHARE_DEPT_NAMES[String(departmentName || '').trim()];
     }
 
+    /** Match 省エネ計算 / 省エネ計算2 etc. (same rule as 依頼 mapping). */
+    function isEnergyDepartmentName(departmentName) {
+        return String(departmentName || '').trim().indexOf('省エネ') !== -1;
+    }
+
     function isActiveProjectStatus(status) {
         var s = String(status || '').trim();
         return s !== 'cancelled' && s !== 'deleted';
@@ -38,7 +43,7 @@
             if (!p) return false;
             if (curId && String(p.id) === curId) return false;
             if (!isActiveProjectStatus(p.status)) return false;
-            return String(p.department_name || '').trim() === ENERGY_DEPT_NAME;
+            return isEnergyDepartmentName(p.department_name);
         });
     }
 
@@ -61,14 +66,9 @@
             : String(project.department_name || '').trim();
         if (!isShareSourceDepartment(dept)) return false;
 
-        // Prefer live sibling list when provided
-        if (Array.isArray(options.siblings)) {
-            if (hasEnergySavingSibling(options.siblings, project.id)) {
-                return true;
-            }
-            if (options.siblings.length > 0) {
-                return false;
-            }
+        // Prefer live sibling list when provided; fall back to API flag if list has no match
+        if (Array.isArray(options.siblings) && hasEnergySavingSibling(options.siblings, project.id)) {
+            return true;
         }
 
         if (coerceEnergySiblingFlag(options.hasEnergySibling)) {
@@ -228,6 +228,7 @@
         SHARE_DEPT_NAMES: SHARE_DEPT_NAMES,
         REASON_OPTIONS: REASON_OPTIONS,
         isShareSourceDepartment: isShareSourceDepartment,
+        isEnergyDepartmentName: isEnergyDepartmentName,
         hasEnergySavingSibling: hasEnergySavingSibling,
         needsEnergyDrawingShareConfirm: needsEnergyDrawingShareConfirm,
         promptEnergyDrawingShareConfirm: promptEnergyDrawingShareConfirm,

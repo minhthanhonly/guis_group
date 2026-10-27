@@ -29,6 +29,9 @@ if($_SESSION['show_project'] == 0){
                         <a class="nav-link" aria-current="page" href="/project/custom_fields.php">カスタムフィールド</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" aria-current="page" href="/project/default_tasks.php">既定タスク</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" aria-current="page" href="/project/specification.php">スペック</a>
                     </li>
                 </ul>

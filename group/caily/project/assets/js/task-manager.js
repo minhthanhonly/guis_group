@@ -17,20 +17,62 @@ const TASK_DATETIME_PARSE_FORMATS = [
     'YYYY/MM/DD H:mm'
 ];
 
-const DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = [
+const FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = [
     'お客様との連絡・調整・納品対応',
     '全図面のチェック・確認作業'
 ];
 
-const DEFAULT_TASK_KIND_BY_TITLE = {
+const FALLBACK_DEFAULT_TASK_KIND_BY_TITLE = {
     'お客様との連絡・調整・納品対応': '連絡',
     '全図面のチェック・確認作業': 'チェック'
 };
 
-const DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
+const FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
     'お客様との連絡・調整・納品対応': 15,
     '全図面のチェック・確認作業': 20
 };
+
+// Legacy aliases (mutated after department config load)
+let DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
+let DEFAULT_TASK_KIND_BY_TITLE = Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
+let DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
+
+function applyDepartmentDefaultTaskConfig(tasks) {
+    const list = Array.isArray(tasks) ? tasks : [];
+    if (!list.length) {
+        DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
+        DEFAULT_TASK_KIND_BY_TITLE = Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
+        DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
+        return;
+    }
+    const titles = [];
+    const kinds = {};
+    const percents = {};
+    list.forEach((t) => {
+        const title = String(t && t.title ? t.title : '').trim();
+        if (!title) return;
+        const drawingCount = t.drawing_count != null ? parseInt(t.drawing_count, 10) : 1;
+        if (!Number.isNaN(drawingCount) && drawingCount > 0) {
+            titles.push(title);
+        }
+        if (t.task_kind) {
+            kinds[title] = String(t.task_kind).trim();
+        }
+        const pct = Number(t.price_pct);
+        if (Number.isFinite(pct)) {
+            percents[title] = pct;
+        }
+    });
+    DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = titles.length
+        ? titles
+        : FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
+    DEFAULT_TASK_KIND_BY_TITLE = Object.keys(kinds).length
+        ? kinds
+        : Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
+    DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.keys(percents).length
+        ? percents
+        : Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
+}
 
 const TaskApp = createApp({
     components: {
@@ -192,7 +234,8 @@ const TaskApp = createApp({
             quillTaskNoteInstance: null,
             quillTaskNoteContent: '',
             quillTaskNoteInitTimer: null,
-            creatingDefaultTasks: false
+            creatingDefaultTasks: false,
+            departmentDefaultTasks: []
         }
     },
     
@@ -205,7 +248,10 @@ const TaskApp = createApp({
                 return false;
             }
             const existingTitles = new Set((this.tasks || []).map((t) => String(t.title || '').trim()));
-            return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.some((title) => !existingTitles.has(title));
+            const expected = DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.length
+                ? DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK
+                : FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK;
+            return expected.some((title) => !existingTitles.has(title));
         },
         canViewTaskList() {
             return this.permission.can_manage_project || this.permission.is_member;
@@ -623,8 +669,33 @@ const TaskApp = createApp({
                     }, 1000);
                     return;
                 }
+                await this.loadDepartmentDefaultTasks();
             } catch (error) {
                 console.error('Error loading project info:', error);
+            }
+        },
+
+        async loadDepartmentDefaultTasks() {
+            const deptId = this.projectInfo && this.projectInfo.department_id
+                ? parseInt(this.projectInfo.department_id, 10)
+                : 0;
+            if (!deptId) {
+                this.departmentDefaultTasks = [];
+                applyDepartmentDefaultTaskConfig([]);
+                return;
+            }
+            try {
+                const res = await axios.get(
+                    '/api/index.php?model=department&method=getDefaultTasks&department_id=' + encodeURIComponent(deptId)
+                );
+                const data = res && res.data ? res.data : {};
+                const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+                this.departmentDefaultTasks = tasks;
+                applyDepartmentDefaultTaskConfig(tasks);
+            } catch (e) {
+                console.error('Error loading department default tasks:', e);
+                this.departmentDefaultTasks = [];
+                applyDepartmentDefaultTaskConfig([]);
             }
         },
 
