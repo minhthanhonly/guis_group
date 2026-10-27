@@ -4381,7 +4381,7 @@ createApp({
                 if (isComposite && Cfc) {
                     const memoVal = valueMap[Cfc.memoLabel(label)] || '';
                     const receivedVal = (Cfc.receivedLabel && valueMap[Cfc.receivedLabel(label)]) || '';
-                    const receivedInputClass = rowClass.replace(/CustomField$/, 'CompositeReceived');
+                    const receivedInputClass = fieldClass.replace(/CustomField$/, 'CompositeReceived');
                     inner = Cfc.buildCompositeInnerHtml({
                         label: label,
                         type: type,
