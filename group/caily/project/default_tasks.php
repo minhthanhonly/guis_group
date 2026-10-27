@@ -11,7 +11,7 @@ if ($_SESSION['show_project'] == 0) {
         <div>
             <h2 class="mb-1"><span data-i18n="既定タスク管理">既定タスク管理</span></h2>
             <div class="text-muted small">
-                <span data-i18n="部署ごとに、案件作成時に自動追加するタスク名と比率（%）を設定します。">部署ごとに、案件作成時に自動追加するタスク名と比率（%）を設定します。</span>
+                <span data-i18n="部署ごとに、案件作成時に自動追加するタスク名と比率（%）を設定します。一覧・詳細に表示するタスクもここで選べます。">部署ごとに、案件作成時に自動追加するタスク名と比率（%）を設定します。一覧・詳細に表示するタスクもここで選べます。</span>
             </div>
         </div>
         <button class="btn btn-primary" @click="openModalForNew">
@@ -39,7 +39,9 @@ if ($_SESSION['show_project'] == 0) {
                             <span v-else class="badge bg-success" data-i18n="カスタム">カスタム</span>
                             <div class="small text-muted mt-1">
                                 <span v-for="(t, i) in row.tasks" :key="row.department_id + '_' + i">
-                                    {{ t.title }} ({{ formatPct(t.price_pct) }}%)<span v-if="i < row.tasks.length - 1">、</span>
+                                    {{ t.title }} ({{ formatPct(t.price_pct) }}%)
+                                    <span v-if="t.show_on_project" class="badge bg-label-info ms-1" data-i18n="表示">表示</span>
+                                    <span v-if="i < row.tasks.length - 1">、</span>
                                 </span>
                             </div>
                         </td>
@@ -91,6 +93,7 @@ if ($_SESSION['show_project'] == 0) {
                                 <th data-i18n="タスク名">タスク名</th>
                                 <th style="width:110px;" data-i18n="比率(%)">比率(%)</th>
                                 <th style="width:120px;" data-i18n="種別">種別</th>
+                                <th style="width:100px;" class="text-center" data-i18n="一覧・詳細">一覧・詳細</th>
                                 <th style="width:70px;" data-i18n="操作">操作</th>
                             </tr>
                         </thead>
@@ -118,6 +121,13 @@ if ($_SESSION['show_project'] == 0) {
                                 <td>
                                     <input class="form-control" v-model="task.task_kind" placeholder="例: 連絡">
                                 </td>
+                                <td class="text-center align-middle">
+                                    <input type="checkbox" class="form-check-input m-0"
+                                           v-model="task.show_on_project"
+                                           :true-value="1"
+                                           :false-value="0"
+                                           title="一覧・詳細に表示">
+                                </td>
                                 <td>
                                     <button class="btn btn-outline-danger btn-sm" @click="removeTask(idx)">
                                         <i class="fa fa-times"></i>
@@ -125,7 +135,7 @@ if ($_SESSION['show_project'] == 0) {
                                 </td>
                             </tr>
                             <tr v-if="!modalRow.tasks.length">
-                                <td colspan="5" class="text-center text-muted" data-i18n="タスクがありません">タスクがありません</td>
+                                <td colspan="6" class="text-center text-muted" data-i18n="タスクがありません">タスクがありません</td>
                             </tr>
                         </tbody>
                     </table>
@@ -134,6 +144,8 @@ if ($_SESSION['show_project'] == 0) {
                     </button>
                     <div class="form-text mt-2">
                         <span data-i18n="「お客様との連絡・調整・納品対応」のみ担当者（GUIS受付者）と進捗100%が自動設定されます。他タスクは担当者・進捗なしです。">「お客様との連絡・調整・納品対応」のみ担当者（GUIS受付者）と進捗100%が自動設定されます。他タスクは担当者・進捗なしです。</span>
+                        <br>
+                        <span data-i18n="「一覧・詳細」にチェックしたタスクは、案件一覧の列と案件詳細に担当・状況・メモを表示します。">「一覧・詳細」にチェックしたタスクは、案件一覧の列と案件詳細に担当・状況・メモを表示します。</span>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -186,6 +198,9 @@ const app = Vue.createApp({
             const rounded = Math.round(n * 10) / 10;
             return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
         },
+        coerceShowOnProject(v) {
+            return (v === true || v === 1 || v === '1') ? 1 : 0;
+        },
         blankTask() {
             return {
                 title: '',
@@ -194,11 +209,20 @@ const app = Vue.createApp({
                 assign_guis_receiver: 0,
                 status: 'todo',
                 progress: 0,
-                drawing_count: 1
+                drawing_count: 1,
+                show_on_project: 0
             };
         },
         cloneTasks(tasks) {
-            return JSON.parse(JSON.stringify(Array.isArray(tasks) ? tasks : []));
+            const list = Array.isArray(tasks) ? tasks : [];
+            return list.map((t) => {
+                const row = Object.assign({}, this.blankTask(), t || {});
+                row.title = String(row.title || '');
+                row.price_pct = Number(row.price_pct) || 0;
+                row.task_kind = String(row.task_kind || '');
+                row.show_on_project = this.coerceShowOnProject(row.show_on_project);
+                return row;
+            });
         },
         openModalForNew() {
             const first = this.availableDepartments[0];
@@ -206,8 +230,8 @@ const app = Vue.createApp({
                 department_id: first ? first.id : '',
                 department_name: first ? first.name : '',
                 tasks: this.cloneTasks(this.builtinTasks.length ? this.builtinTasks : [
-                    { title: 'お客様との連絡・調整・納品対応', price_pct: 15, task_kind: '連絡', assign_guis_receiver: 1, status: 'completed', progress: 100, drawing_count: 1 },
-                    { title: '全図面のチェック・確認作業', price_pct: 20, task_kind: 'チェック', assign_guis_receiver: 0, status: 'todo', progress: 0, drawing_count: 1 }
+                    { title: 'お客様との連絡・調整・納品対応', price_pct: 15, task_kind: '連絡', assign_guis_receiver: 1, status: 'completed', progress: 100, drawing_count: 1, show_on_project: 0 },
+                    { title: '全図面のチェック・確認作業', price_pct: 20, task_kind: 'チェック', assign_guis_receiver: 0, status: 'todo', progress: 0, drawing_count: 1, show_on_project: 0 }
                 ])
             };
             this.showModal = true;
@@ -298,11 +322,14 @@ const app = Vue.createApp({
                         assign_guis_receiver: isContact ? 1 : 0,
                         status: isContact ? 'completed' : 'todo',
                         progress: isContact ? 100 : 0,
-                        drawing_count: t.drawing_count != null ? Number(t.drawing_count) : 1
+                        drawing_count: t.drawing_count != null ? Number(t.drawing_count) : 1,
+                        show_on_project: this.coerceShowOnProject(t.show_on_project)
                     };
                 })
             };
-            axios.post('/api/index.php?model=department&method=saveDefaultTasks', payload)
+            axios.post('/api/index.php?model=department&method=saveDefaultTasks', payload, {
+                headers: { 'Content-Type': 'application/json' }
+            })
                 .then((res) => {
                     const data = res && res.data ? res.data : {};
                     if (data.success === false || data.error) {

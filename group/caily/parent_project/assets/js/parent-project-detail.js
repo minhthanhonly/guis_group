@@ -567,6 +567,8 @@ createApp({
                 { value: 'contract', label: '請負', color: 'info' },
                 { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'calculation_completed', label: '計算終了', color: 'success', energyOnly: true },
+                { value: 'application_in_progress', label: '申請作業中', color: 'primary', energyOnly: true },
                 { value: 'waiting_invoice', label: '請求待ち', color: 'dark' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
@@ -1103,11 +1105,30 @@ createApp({
                 return rule.project_view_end_date == 1 || rule.project_view_end_date === '1';
             });
         },
+        /** Create modal: always follow newChildProject.department_id (省エネ → 計算終了/申請作業中). */
+        createChildEditableStatuses() {
+            const p = this.newChildProject || {};
+            return this.getEditableProjectStatusesForDepartment(
+                p.department_id,
+                p.status || '',
+                this.getDepartmentNameById(p.department_id)
+            );
+        },
+        /** Edit modal: follow editingChildProject department. */
+        editChildEditableStatuses() {
+            const p = this.editingChildProject || {};
+            return this.getEditableProjectStatusesForDepartment(
+                p.department_id,
+                p.status || '',
+                p.department_name || this.getDepartmentNameById(p.department_id)
+            );
+        },
+        /** @deprecated use createChildEditableStatuses / editChildEditableStatuses */
         editableProjectStatuses() {
-            if (!this.isCailyBranchUser || this.canViewEndDate) {
-                return this.projectStatuses;
+            if (this.editingChildProject && this.editingChildProject.id) {
+                return this.editChildEditableStatuses;
             }
-            return this.projectStatuses.filter(function(s) { return s.value !== 'completed'; });
+            return this.createChildEditableStatuses;
         },
         parentRequestTypes() {
             const raw = (this.parentProject && this.parentProject.requests) ? String(this.parentProject.requests) : '';
@@ -1856,6 +1877,34 @@ createApp({
                 return this.translateLabel('ステータス変更');
             }
             return log.note;
+        },
+        isEnergyDepartmentName(name) {
+            if (window.EnergyDrawingShare && typeof window.EnergyDrawingShare.isEnergyDepartmentName === 'function') {
+                return window.EnergyDrawingShare.isEnergyDepartmentName(name);
+            }
+            return String(name || '').trim().indexOf('省エネ') !== -1;
+        },
+        getDepartmentNameById(departmentId) {
+            if (!departmentId) return '';
+            const dept = (this.departments || []).find(function(d) {
+                return String(d.id) === String(departmentId);
+            });
+            return dept ? (dept.name || '') : '';
+        },
+        getEditableProjectStatusesForDepartment(departmentId, currentStatus, departmentName) {
+            let list = this.projectStatuses || [];
+            const deptName = departmentName || this.getDepartmentNameById(departmentId);
+            const isEnergy = this.isEnergyDepartmentName(deptName);
+            const current = String(currentStatus || '');
+            if (!isEnergy) {
+                list = list.filter(function(s) {
+                    return !s.energyOnly || s.value === current;
+                });
+            }
+            if (!this.isCailyBranchUser || this.canViewEndDate) {
+                return list;
+            }
+            return list.filter(function(s) { return s.value !== 'completed'; });
         },
         getProjectStatusLabel(status) {
             const s = this.projectStatuses.find(s => s.value === status);
@@ -3780,12 +3829,37 @@ createApp({
             });
         },
 
+        clearEnergyOnlyStatusIfNeeded(target, departmentId, departmentName) {
+            if (!target) return;
+            const status = String(target.status || '');
+            if (status !== 'calculation_completed' && status !== 'application_in_progress') return;
+            const name = departmentName || this.getDepartmentNameById(departmentId);
+            if (!this.isEnergyDepartmentName(name)) {
+                target.status = '';
+            }
+        },
+
         onCreateChildProjectDepartmentChange() {
             this.loadCreateChildProjectCustomFields(this.newChildProject.department_id);
+            this.clearEnergyOnlyStatusIfNeeded(
+                this.newChildProject,
+                this.newChildProject.department_id
+            );
         },
 
         onEditChildProjectDepartmentChange() {
+            const dept = (this.departments || []).find((d) =>
+                String(d.id) === String(this.editingChildProject.department_id)
+            );
+            if (dept) {
+                this.editingChildProject.department_name = dept.name || '';
+            }
             this.loadEditChildProjectCustomFields(this.editingChildProject.department_id, []);
+            this.clearEnergyOnlyStatusIfNeeded(
+                this.editingChildProject,
+                this.editingChildProject.department_id,
+                this.editingChildProject.department_name
+            );
         },
 
         resetChildProjectForm() {
@@ -4306,16 +4380,20 @@ createApp({
                 let inner = '';
                 if (isComposite && Cfc) {
                     const memoVal = valueMap[Cfc.memoLabel(label)] || '';
+                    const receivedVal = (Cfc.receivedLabel && valueMap[Cfc.receivedLabel(label)]) || '';
+                    const receivedInputClass = rowClass.replace(/CustomField$/, 'CompositeReceived');
                     inner = Cfc.buildCompositeInnerHtml({
                         label: label,
                         type: type,
                         options: options,
                         val: val,
                         memoVal: memoVal,
+                        receivedVal: receivedVal,
                         radioName: radioClass + '_' + idx,
                         radioClass: radioClass,
                         checkboxClass: checkboxClass,
                         memoInputClass: inputClass + ' ' + memoInputClass,
+                        receivedClass: receivedInputClass,
                         safeLabel: safeLabel
                     });
                 } else if (type === 'checkbox_select_all') {
@@ -4411,12 +4489,14 @@ createApp({
             const result = [];
             const Cfc = window.ProjectCustomFieldComposite;
             const memoInputClass = rowClass.replace(/CustomField$/, 'CompositeMemo');
+            const receivedInputClass = rowClass.replace(/CustomField$/, 'CompositeReceived');
             rows.forEach(row => {
                 const label = row.getAttribute('data-custom-label');
                 const type = row.getAttribute('data-custom-type');
                 if (!label) return;
                 if (Cfc && row.getAttribute('data-custom-composite') === '1') {
-                    Cfc.collectFromRow(row, radioClass, memoInputClass, checkboxClass).forEach(item => result.push(item));
+                    Cfc.collectFromRow(row, radioClass, memoInputClass, checkboxClass, receivedInputClass)
+                        .forEach(item => result.push(item));
                     return;
                 }
                 let value = '';

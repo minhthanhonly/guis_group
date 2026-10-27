@@ -1,23 +1,77 @@
 /**
  * 設備図 / 意匠図 / 配置図: セットの選択肢をそのまま使い、値選択時に【メモ】を表示
+ * 設備図 / 意匠図: 追加で【受領済み】チェック（【メモ】の直前）
  * (案件詳細・一覧クイック編集・建物詳細の子案件モーダルで共用)
  */
 (function(global) {
     'use strict';
 
     var BASE_LABELS = { '設備図': true, '意匠図': true, '配置図': true };
+    /** 意匠図 uses the same type/options as 設備図 when both exist in the set */
+    var OPTIONS_SOURCE_LABEL = '設備図';
+    var OPTIONS_FOLLOW_LABELS = { '意匠図': true };
+    var DEFAULT_SETSUBI_OPTIONS = 'GUIS,他社';
+    /** Only these bases get 受領済み checkbox */
+    var RECEIVED_BASE_LABELS = { '設備図': true, '意匠図': true };
+    var RECEIVED_VALUE = '1';
 
     function isBaseLabel(label) {
         return !!BASE_LABELS[String(label || '').trim()];
     }
 
+    function supportsReceived(label) {
+        return !!RECEIVED_BASE_LABELS[String(label || '').trim()];
+    }
+
+    /**
+     * Make 意匠図 options/type match 設備図 (fallback GUIS,他社 if 設備図 missing).
+     */
+    function alignOptionsWithSetsubi(fields) {
+        var list = Array.isArray(fields) ? fields.slice() : [];
+        var source = null;
+        for (var i = 0; i < list.length; i++) {
+            if (list[i] && String(list[i].label || '').trim() === OPTIONS_SOURCE_LABEL) {
+                source = list[i];
+                break;
+            }
+        }
+        var srcOptions = source
+            ? (Array.isArray(source.options) ? source.options.join(',') : String(source.options != null ? source.options : ''))
+            : DEFAULT_SETSUBI_OPTIONS;
+        var srcType = source ? (source.type || 'radio') : 'radio';
+        for (var j = 0; j < list.length; j++) {
+            var f = list[j];
+            if (!f || !f.label) continue;
+            var label = String(f.label).trim();
+            if (!OPTIONS_FOLLOW_LABELS[label]) continue;
+            list[j] = Object.assign({}, f, {
+                options: srcOptions,
+                type: srcType
+            });
+        }
+        return list;
+    }
+
     function isCompanionLabel(label) {
-        // 【メモ】= current companion; 【〇】= legacy companion (no longer used)
-        return /【(?:メモ|〇|○)】$/.test(String(label || '').trim());
+        // 【メモ】/【受領済み】= companions; 【〇】= legacy
+        return /【(?:メモ|受領済み|〇|○)】$/.test(String(label || '').trim());
     }
 
     function memoLabel(base) {
         return String(base || '').trim() + '【メモ】';
+    }
+
+    function receivedLabel(base) {
+        return String(base || '').trim() + '【受領済み】';
+    }
+
+    function isReceivedChecked(value) {
+        var s = String(value == null ? '' : value).trim();
+        return s === RECEIVED_VALUE || s === '受領済み' || s === '1' || s === 'true' || s === 'on';
+    }
+
+    function normalizeReceivedValue(value) {
+        return isReceivedChecked(value) ? RECEIVED_VALUE : '';
     }
 
     function parseOptions(options) {
@@ -94,7 +148,7 @@
             }
             out.push(f);
         });
-        return out;
+        return alignOptionsWithSetsubi(out);
     }
 
     function isCheckboxType(type) {
@@ -102,7 +156,7 @@
     }
 
     /**
-     * Build inner HTML for a composite field (set options + conditional memo).
+     * Build inner HTML for a composite field (set options + optional 受領済み + conditional memo).
      * Caller should set data-custom-options on the row when using collectFromRow sanitize.
      */
     function buildCompositeInnerHtml(opts) {
@@ -111,15 +165,18 @@
         var optionList = parseOptions(opts.options);
         var val = sanitizeMainValue(opts.val, opts.options, type);
         var selectedArr = val ? val.split(',').map(function(s) { return s.trim(); }).filter(Boolean) : [];
-        var memoVal = isValueSelected(val) ? (opts.memoVal || '') : '';
+        var showExtras = selectedArr.length > 0;
+        var memoVal = showExtras ? (opts.memoVal || '') : '';
+        var receivedChecked = showExtras && supportsReceived(label) && isReceivedChecked(opts.receivedVal);
         var radioName = opts.radioName || ('composite_radio_' + label);
         var radioClass = opts.radioClass || 'customCompositeRadio';
         var checkboxClass = opts.checkboxClass || 'customCompositeCheckbox';
         var memoInputClass = opts.memoInputClass || 'customCompositeMemoInput';
+        var receivedClass = opts.receivedClass || 'customCompositeReceived';
         var safeLabel = opts.safeLabel != null ? opts.safeLabel : escapeAttr(label);
-        var showMemo = selectedArr.length > 0;
         var html = '<label class="form-label">' + escapeHtml(label) + '</label>';
-        html += '<div class="d-flex flex-wrap align-items-center gap-3">';
+        // Row 1: options (radio/checkbox) + 受領済み
+        html += '<div class="d-flex flex-wrap align-items-center gap-3 custom-composite-options-row">';
 
         if (isCheckboxType(type)) {
             optionList.forEach(function(opt) {
@@ -141,37 +198,62 @@
             });
         }
 
-        // Use d-none (not inline display:none) — .d-flex is !important and would ignore style.display
-        html += '<div class="d-flex align-items-center gap-1 flex-grow-1 custom-composite-memo-wrap'
-            + (showMemo ? '' : ' d-none') + '" style="min-width:8rem;">'
+        if (supportsReceived(label)) {
+            html += '<div class="form-check form-check-inline mb-0 custom-composite-received-wrap'
+                + (showExtras ? '' : ' d-none') + '">'
+                + '<input class="form-check-input ' + receivedClass + '" type="checkbox"'
+                + ' data-custom-label="' + escapeAttr(receivedLabel(label)) + '"'
+                + ' data-composite-base="' + safeLabel + '"'
+                + ' value="' + RECEIVED_VALUE + '"'
+                + (receivedChecked ? ' checked' : '') + '>'
+                + '<label class="form-check-label text-nowrap">受領済み</label></div>';
+        }
+        html += '</div>';
+
+        // Row 2: 【メモ】 only — Use d-none (not inline display:none); .d-flex is !important
+        html += '<div class="d-flex align-items-center gap-2 mt-2 custom-composite-memo-wrap'
+            + (showExtras ? '' : ' d-none') + '" style="min-width:8rem;">'
             + '<span class="text-nowrap small text-muted">【メモ】</span>'
             + '<input type="text" class="form-control form-control-sm ' + memoInputClass + '"'
             + ' data-custom-label="' + escapeAttr(memoLabel(label)) + '"'
             + ' data-composite-base="' + safeLabel + '"'
-            + ' value="' + escapeAttr(memoVal) + '" placeholder="メモ">'
+            + ' value="' + escapeAttr(memoVal) + '" placeholder="メモ" style="min-width:6rem;">'
             + '</div>';
-        html += '</div>';
         return html;
     }
 
-    /** Show/hide 【メモ】 for a composite row based on checked options */
+    /** Show/hide 受領済み + 【メモ】 for a composite row based on checked options */
     function syncMemoVisibility(row, radioClass, checkboxClass) {
         if (!row) return;
         var rCls = radioClass || 'customCompositeRadio';
         var cCls = checkboxClass || 'customCompositeCheckbox';
         var memoWrap = row.querySelector('.custom-composite-memo-wrap');
-        if (!memoWrap) return;
+        var receivedWrap = row.querySelector('.custom-composite-received-wrap');
         var anyChecked = row.querySelectorAll(
             '.' + rCls + ':checked, .' + cCls + ':checked'
         ).length > 0;
         if (anyChecked) {
-            memoWrap.classList.remove('d-none');
-            memoWrap.style.removeProperty('display');
+            if (memoWrap) {
+                memoWrap.classList.remove('d-none');
+                memoWrap.style.removeProperty('display');
+            }
+            if (receivedWrap) {
+                receivedWrap.classList.remove('d-none');
+                receivedWrap.style.removeProperty('display');
+            }
         } else {
-            memoWrap.classList.add('d-none');
-            memoWrap.style.removeProperty('display');
-            var memoInput = memoWrap.querySelector('input');
-            if (memoInput) memoInput.value = '';
+            if (memoWrap) {
+                memoWrap.classList.add('d-none');
+                memoWrap.style.removeProperty('display');
+                var memoInput = memoWrap.querySelector('input[type="text"]');
+                if (memoInput) memoInput.value = '';
+            }
+            if (receivedWrap) {
+                receivedWrap.classList.add('d-none');
+                receivedWrap.style.removeProperty('display');
+                var receivedInput = receivedWrap.querySelector('input[type="checkbox"]');
+                if (receivedInput) receivedInput.checked = false;
+            }
         }
     }
 
@@ -204,9 +286,9 @@
     }
 
     /**
-     * Collect main value + memo from a composite row.
+     * Collect main value + optional 受領済み + memo from a composite row.
      */
-    function collectFromRow(row, radioClass, memoInputClass, checkboxClass) {
+    function collectFromRow(row, radioClass, memoInputClass, checkboxClass, receivedClass) {
         if (!row) return [];
         var label = (row.getAttribute('data-custom-label') || '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
         if (!label || !isBaseLabel(label)) return [];
@@ -214,6 +296,7 @@
         var rCls = radioClass || 'customCompositeRadio';
         var cCls = checkboxClass || 'customCompositeCheckbox';
         var mCls = memoInputClass || 'customCompositeMemoInput';
+        var recvCls = receivedClass || 'customCompositeReceived';
         var mainVal = '';
         if (isCheckboxType(type)) {
             mainVal = Array.prototype.map.call(
@@ -225,20 +308,33 @@
             mainVal = checked ? checked.value : '';
         }
         var memoInput = row.querySelector('.' + mCls);
+        var receivedInput = row.querySelector('.' + recvCls);
         var optionsAttr = row.getAttribute('data-custom-options');
         mainVal = sanitizeMainValue(mainVal, optionsAttr != null ? optionsAttr : '', type);
-        var memoVal = (isValueSelected(mainVal) && memoInput) ? String(memoInput.value || '').trim() : '';
-        return [
+        var selected = isValueSelected(mainVal);
+        var memoVal = (selected && memoInput) ? String(memoInput.value || '').trim() : '';
+        var out = [
             { label: label, value: mainVal },
             { label: memoLabel(label), value: memoVal }
         ];
+        if (supportsReceived(label)) {
+            var receivedVal = (selected && receivedInput && receivedInput.checked) ? RECEIVED_VALUE : '';
+            out.splice(1, 0, { label: receivedLabel(label), value: receivedVal });
+        }
+        return out;
     }
 
     global.ProjectCustomFieldComposite = {
         BASE_LABELS: BASE_LABELS,
+        RECEIVED_BASE_LABELS: RECEIVED_BASE_LABELS,
+        RECEIVED_VALUE: RECEIVED_VALUE,
         isBaseLabel: isBaseLabel,
+        supportsReceived: supportsReceived,
         isCompanionLabel: isCompanionLabel,
         memoLabel: memoLabel,
+        receivedLabel: receivedLabel,
+        isReceivedChecked: isReceivedChecked,
+        normalizeReceivedValue: normalizeReceivedValue,
         parseOptions: parseOptions,
         isValueSelected: isValueSelected,
         isCheckboxType: isCheckboxType,
@@ -246,6 +342,7 @@
         /** @deprecated use isValueSelected */
         isRadioSelected: isValueSelected,
         normalizeMergedFields: normalizeMergedFields,
+        alignOptionsWithSetsubi: alignOptionsWithSetsubi,
         buildCompositeInnerHtml: buildCompositeInnerHtml,
         syncMemoVisibility: syncMemoVisibility,
         bindEvents: bindEvents,

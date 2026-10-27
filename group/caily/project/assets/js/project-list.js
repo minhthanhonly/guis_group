@@ -245,6 +245,8 @@ var projectTable;
         { key: 'contract', name: '請負', color: 'info' },
         { key: 'waiting_documents', name: '資料待ち', color: 'warning' },
         { key: 'in_progress', name: '進行中', color: 'primary' },
+        { key: 'calculation_completed', name: '計算終了', color: 'success', energyOnly: true },
+        { key: 'application_in_progress', name: '申請作業中', color: 'primary', energyOnly: true },
         { key: 'waiting_invoice', name: '請求待ち', color: 'dark' },
         { key: 'completed', name: '完了', color: 'success' },
         { key: 'paused', name: '一時停止', color: 'warning' },
@@ -252,6 +254,27 @@ var projectTable;
     ];
 
     var PROJECT_STATUS_KEYS = statuses.map(function(s) { return s.key; });
+    var ENERGY_ONLY_PROJECT_STATUS_KEYS = {
+        calculation_completed: true,
+        application_in_progress: true
+    };
+
+    function isEnergyDepartmentSelectedForStatus() {
+        var name = (window.app && window.app.selectedDepartment && window.app.selectedDepartment.name)
+            ? window.app.selectedDepartment.name
+            : '';
+        if (window.EnergyDrawingShare && typeof window.EnergyDrawingShare.isEnergyDepartmentName === 'function') {
+            return window.EnergyDrawingShare.isEnergyDepartmentName(name);
+        }
+        return String(name || '').trim().indexOf('省エネ') !== -1;
+    }
+
+    function getVisibleProjectStatuses() {
+        if (isEnergyDepartmentSelectedForStatus()) {
+            return statuses.slice();
+        }
+        return statuses.filter(function(s) { return !s.energyOnly; });
+    }
 
     function isValidProjectStatusKey(key) {
         return PROJECT_STATUS_KEYS.indexOf(String(key || '').trim()) !== -1;
@@ -1289,6 +1312,9 @@ var projectTable;
             if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
             visibility[col.key] = true;
         });
+        (namedDefaultTaskColumnDefinitions || []).forEach(function(col) {
+            visibility[col.key] = true;
+        });
         (customColDefs || []).forEach(col => {
             visibility[col.key] = true;
         });
@@ -1884,26 +1910,41 @@ var projectTable;
             quickEditCompletedStatusOption = $sel.find('option[value="completed"]').first().detach();
         }
         $sel.find('option[value="completed"]').remove();
+        var showEnergy = isEnergyDepartmentSelectedForStatus()
+            || !!(ENERGY_ONLY_PROJECT_STATUS_KEYS[String(currentStatus || '').trim()]);
+        $sel.find('option.js-energy-only-status').each(function() {
+            var $opt = $(this);
+            var val = String($opt.val() || '');
+            if (showEnergy || val === String(currentStatus || '')) {
+                $opt.prop('disabled', false).show();
+            } else {
+                $opt.prop('disabled', true).hide();
+            }
+        });
         var canSelectCompleted = !isCailyBranchUser() || canViewEndDateColumn();
+        function insertCompletedAfterWaitingInvoice($option) {
+            var $waitingInvoice = $sel.find('option[value="waiting_invoice"]');
+            if ($waitingInvoice.length) {
+                $waitingInvoice.after($option);
+                return;
+            }
+            var $paused = $sel.find('option[value="paused"]');
+            if ($paused.length) {
+                $paused.before($option);
+                return;
+            }
+            $sel.append($option);
+        }
         if (canSelectCompleted) {
             if (quickEditCompletedStatusOption && quickEditCompletedStatusOption.length) {
-                var $inProgress = $sel.find('option[value="in_progress"]');
-                if ($inProgress.length) {
-                    $inProgress.after(quickEditCompletedStatusOption);
-                } else {
-                    $sel.append(quickEditCompletedStatusOption);
-                }
+                insertCompletedAfterWaitingInvoice(quickEditCompletedStatusOption);
             }
             return;
         }
         if (currentStatus === 'completed' && quickEditCompletedStatusOption && quickEditCompletedStatusOption.length) {
-            var $displayOnly = quickEditCompletedStatusOption.clone().prop('disabled', true);
-            var $anchor = $sel.find('option[value="in_progress"]');
-            if ($anchor.length) {
-                $anchor.after($displayOnly);
-            } else {
-                $sel.append($displayOnly);
-            }
+            insertCompletedAfterWaitingInvoice(
+                quickEditCompletedStatusOption.clone().prop('disabled', true)
+            );
         }
     }
 
@@ -1933,6 +1974,21 @@ var projectTable;
         invoice_status: true,
         invoice_amount: true,
         payment_note: true
+    };
+    /** Per-department default-task summary columns (show_on_project). */
+    var namedDefaultTaskColumnDefinitions = [];
+    var namedDefaultTaskColumnConfigs = [];
+    var NAMED_DEFAULT_TASK_STATUSES = [
+        { value: 'todo', label: '未開始', color: 'secondary' },
+        { value: 'in-progress', label: '進行中', color: 'primary' },
+        { value: 'confirming', label: '確認中', color: 'warning' },
+        { value: 'paused', label: '一時停止', color: 'warning' },
+        { value: 'completed', label: '完了', color: 'success' },
+        { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+    ];
+    var LEGACY_NAMED_DEFAULT_TASK_COLUMN_KEYS = {
+        keisan_kakunin: '計算確認',
+        shinsei_daikou: '申請代行'
     };
     var BUSINESS_ESTIMATE_STATUSES = [
         { value: '未発行', label: '未発行', color: 'secondary' },
@@ -2026,6 +2082,39 @@ var projectTable;
         return !!PROJECT_DIRECTOR_COLUMN_KEYS[columnKey];
     }
 
+    function namedDefaultTaskColumnKey(title) {
+        // Match PHP Department::namedDefaultTaskColumnKey — no ":" (breaks DataTables name:name)
+        var encoded = encodeURIComponent(String(title || '').trim());
+        return 'ndt_' + encoded.replace(/[^A-Za-z0-9]/g, '_');
+    }
+
+    function isShowOnProjectEnabled(value) {
+        return value === true || value === 1 || value === '1';
+    }
+
+    function migrateNamedDefaultTaskColumnKey(columnKey) {
+        var key = String(columnKey || '');
+        if (LEGACY_NAMED_DEFAULT_TASK_COLUMN_KEYS[key]) {
+            return namedDefaultTaskColumnKey(LEGACY_NAMED_DEFAULT_TASK_COLUMN_KEYS[key]);
+        }
+        // Old keys used named_task:urlencoded
+        if (key.indexOf('named_task:') === 0) {
+            try {
+                return namedDefaultTaskColumnKey(decodeURIComponent(key.slice('named_task:'.length)));
+            } catch (e) {
+                return key;
+            }
+        }
+        return key;
+    }
+
+    function isNamedDefaultTaskColumn(columnKey) {
+        var key = String(columnKey || '');
+        if (key.indexOf('ndt_') === 0) return true;
+        if (key.indexOf('named_task:') === 0) return true;
+        return !!LEGACY_NAMED_DEFAULT_TASK_COLUMN_KEYS[key];
+    }
+
     function canViewProjectDirectorColumns() {
         if (typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator') return true;
         if (typeof window === 'undefined' || !window.app || !window.app.userPermissions) return false;
@@ -2034,6 +2123,64 @@ var projectTable;
             || p.project_director_stat == 1
             || p.project_director_view == 1
             || p.project_director_edit == 1;
+    }
+
+    function getNamedDefaultTaskStatusMeta(status) {
+        var s = String(status || '');
+        for (var i = 0; i < NAMED_DEFAULT_TASK_STATUSES.length; i++) {
+            if (NAMED_DEFAULT_TASK_STATUSES[i].value === s) {
+                return NAMED_DEFAULT_TASK_STATUSES[i];
+            }
+        }
+        return { value: s, label: s || '-', color: 'secondary' };
+    }
+
+    function formatNamedDefaultTaskDueDate(dueDate) {
+        if (!dueDate) return '';
+        var m = typeof toProjectDisplayMoment === 'function' ? toProjectDisplayMoment(dueDate) : null;
+        if (m && typeof formatProjectDateOnly === 'function') {
+            return formatProjectDateOnly(m);
+        }
+        var s = String(dueDate);
+        return s.length >= 10 ? s.substring(0, 10) : s;
+    }
+
+    function renderNamedDefaultTaskSummaryCell(task, type) {
+        if (!task || typeof task !== 'object') {
+            if (type === 'sort' || type === 'type' || type === 'filter') return '';
+            return '<span class="text-muted">-</span>';
+        }
+        var assignee = String(task.assignee_name || '').trim();
+        var statusMeta = getNamedDefaultTaskStatusMeta(task.status);
+        var note = String(task.note || '').trim();
+        var dueRaw = String(task.due_date || '').trim();
+        var dueStr = formatNamedDefaultTaskDueDate(dueRaw);
+        if (type === 'sort' || type === 'type' || type === 'filter') {
+            return [assignee, statusMeta.label, dueStr, note].filter(Boolean).join(' ');
+        }
+        var parts = [];
+        parts.push('<div class="small text-nowrap">' + escapeHtmlForNote(assignee || '-') + '</div>');
+        parts.push(
+            '<div><span class="badge bg-' + statusMeta.color + '" style="font-size:0.65rem;">'
+            + escapeHtmlForNote(statusMeta.label)
+            + '</span></div>'
+        );
+        parts.push(
+            '<div class="small text-nowrap text-muted" title="'
+            + escapeHtmlForNote(dueRaw || '').replace(/"/g, '&quot;')
+            + '">'
+            + escapeHtmlForNote(dueStr || '-')
+            + '</div>'
+        );
+        if (note) {
+            var tip = note.length > 80 ? note.substring(0, 80) + '…' : note;
+            parts.push(
+                '<div class="small text-muted text-truncate" style="max-width:140px;" title="'
+                + escapeHtmlForNote(note).replace(/"/g, '&quot;')
+                + '">' + escapeHtmlForNote(tip) + '</div>'
+            );
+        }
+        return '<div class="d-flex flex-column gap-1">' + parts.join('') + '</div>';
     }
 
     /** CAILY branch hides end_date unless department permission project_view_end_date is granted. */
@@ -2272,8 +2419,9 @@ var projectTable;
     }
 
     /** Thứ tự key cột mặc định (khớp fixed + custom + tail): trước CAILY納期 → custom → từ CAILY納期 trở đi. */
-    function getDefaultProjectColumnKeys(customColDefs) {
+    function getDefaultProjectColumnKeys(customColDefs, namedColDefs) {
         var customDefs = customColDefs || [];
+        var namedDefs = namedColDefs || namedDefaultTaskColumnDefinitions || [];
         var before = [];
         var after = [];
         var pastCaily = false;
@@ -2285,12 +2433,29 @@ var projectTable;
             else after.push(ck);
         }
         var keys = before.concat(customDefs.map(function(c) { return c.key; })).concat(after);
+        if (namedDefs.length) {
+            var namedKeys = namedDefs.map(function(c) { return c.key; });
+            var withNamed = [];
+            var inserted = false;
+            keys.forEach(function(k) {
+                withNamed.push(k);
+                if (k === 'other_dept_nouki') {
+                    namedKeys.forEach(function(nk) { withNamed.push(nk); });
+                    inserted = true;
+                }
+            });
+            if (!inserted) {
+                withNamed = withNamed.concat(namedKeys);
+            }
+            keys = withNamed;
+        }
         return filterColumnKeysForProjectDirector(filterColumnKeysForCailyBranch(keys));
     }
 
     function getMergedProjectColumnKeys(customColDefs, departmentId) {
+        var savedOrder = (loadProjectColumnOrder(departmentId) || []).map(migrateNamedDefaultTaskColumnKey);
         return filterColumnKeysForProjectDirector(filterColumnKeysForCailyBranch(
-            mergeColumnKeyOrder(loadProjectColumnOrder(departmentId), getDefaultProjectColumnKeys(customColDefs))
+            mergeColumnKeyOrder(savedOrder, getDefaultProjectColumnKeys(customColDefs))
         ));
     }
 
@@ -2300,6 +2465,7 @@ var projectTable;
         var labelMap = {};
         COLUMN_DEFINITIONS.forEach(function(c) { labelMap[c.key] = c.label; });
         (customColDefs || []).forEach(function(c) { labelMap[c.key] = c.label; });
+        (namedDefaultTaskColumnDefinitions || []).forEach(function(c) { labelMap[c.key] = c.label; });
         var keys = getMergedProjectColumnKeys(customColDefs, departmentId);
         return keys.map(function(k) {
             return {
@@ -3079,7 +3245,11 @@ var projectTable;
     }
     
     function loadColumnVisibilityFromLocalStorage(customColDefs) {
-        const saved = parseColumnVisibilityStorage(localStorage.getItem(COLUMN_VISIBILITY_KEY));
+        const savedRaw = parseColumnVisibilityStorage(localStorage.getItem(COLUMN_VISIBILITY_KEY));
+        const saved = {};
+        Object.keys(savedRaw || {}).forEach(function(key) {
+            saved[migrateNamedDefaultTaskColumnKey(key)] = savedRaw[key];
+        });
         const defaults = getDefaultColumnVisibility(customColDefs);
         const visibility = {};
         Object.keys(defaults).forEach(function(key) {
@@ -3162,13 +3332,20 @@ var projectTable;
         (customColDefs || []).forEach(col => {
             visibility[col.key] = col.defaultVisible !== undefined ? col.defaultVisible : false;
         });
+        (namedDefaultTaskColumnDefinitions || []).forEach(function(col) {
+            visibility[col.key] = col.defaultVisible !== undefined ? col.defaultVisible : true;
+        });
         var deptDef = getDepartmentColumnDefaults(getActiveProjectListDepartmentId());
         if (deptDef && deptDef.visibility && typeof deptDef.visibility === 'object') {
             Object.keys(deptDef.visibility).forEach(function(key) {
-                if (visibility[key] === undefined) return;
-                if (isColumnHiddenForCailyBranch(key)) return;
-                if (isProjectDirectorColumn(key) && !canViewProjectDirectorColumns()) return;
-                visibility[key] = normalizeColumnVisibilityBool(deptDef.visibility[key], visibility[key]);
+                var migratedKey = migrateNamedDefaultTaskColumnKey(key);
+                if (visibility[migratedKey] === undefined && visibility[key] === undefined) return;
+                if (isColumnHiddenForCailyBranch(migratedKey)) return;
+                if (isProjectDirectorColumn(migratedKey) && !canViewProjectDirectorColumns()) return;
+                visibility[migratedKey] = normalizeColumnVisibilityBool(
+                    deptDef.visibility[key],
+                    visibility[migratedKey] !== undefined ? visibility[migratedKey] : true
+                );
             });
         }
         if (isCailyBranchUser() && !canViewEndDateColumn()) {
@@ -3208,6 +3385,13 @@ var projectTable;
             }
         });
         customDefs.forEach((col) => {
+            const isVisible = normalizeColumnVisibilityBool(visibility[col.key], col.defaultVisible !== false);
+            const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
+            if (dtIndex !== null) {
+                table.column(dtIndex).visible(isVisible, false);
+            }
+        });
+        (namedDefaultTaskColumnDefinitions || []).forEach(function(col) {
             const isVisible = normalizeColumnVisibilityBool(visibility[col.key], col.defaultVisible !== false);
             const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
             if (dtIndex !== null) {
@@ -4267,6 +4451,8 @@ var projectTable;
         // Node may already be gone after destroy; always rebuild clean DOM
         resetProjectTableDom();
         customFieldColumnDefinitions = [];
+        namedDefaultTaskColumnDefinitions = [];
+        namedDefaultTaskColumnConfigs = [];
         $('#projectListColumnResetMount').empty();
         // Refresh dropdown 列の表示: chỉ còn cột cơ bản, bỏ hết custom field của department cũ
         if (typeof app !== 'undefined' && app) {
@@ -4332,11 +4518,14 @@ var projectTable;
         }
         projectData = [];
 
-        // team map + custom fields in parallel (was sequential await)
+        // team map + custom fields + named default-task columns in parallel
         customFieldColumnDefinitions = [];
         customFieldStatusMap = {};
+        namedDefaultTaskColumnDefinitions = [];
+        namedDefaultTaskColumnConfigs = [];
         var customColumnConfigs = [];
         var cfRes = { data: [] };
+        var defaultTasksRes = { data: null };
         try {
             var prefetchDepId = app.selectedDepartment && app.selectedDepartment.id;
             var prefetch = await Promise.all([
@@ -4345,13 +4534,76 @@ var projectTable;
                     console.warn('Failed to load custom fields for list', err);
                     return { data: [] };
                 }),
-                ensureDepartmentProjectListColumnDefaults(prefetchDepId)
+                ensureDepartmentProjectListColumnDefaults(prefetchDepId),
+                prefetchDepId
+                    ? axios.get(
+                        '/api/index.php?model=department&method=getDefaultTasks&department_id='
+                        + encodeURIComponent(prefetchDepId)
+                    ).catch(function(err) {
+                        console.warn('Failed to load default tasks for list columns', err);
+                        return { data: null };
+                    })
+                    : Promise.resolve({ data: null })
             ]);
             if (!isProjectTableInitStillValid(initId)) return;
             cfRes = prefetch[1] || { data: [] };
+            defaultTasksRes = prefetch[3] || { data: null };
         } catch (e) {
             console.warn('Failed to prefetch team map / custom fields for list', e);
             if (!isProjectTableInitStillValid(initId)) return;
+        }
+
+        try {
+            var dtPayload = defaultTasksRes && defaultTasksRes.data;
+            var dtTasks = [];
+            if (dtPayload && Array.isArray(dtPayload.tasks)) {
+                dtTasks = dtPayload.tasks;
+            } else if (Array.isArray(dtPayload)) {
+                var depMatch = dtPayload.find(function(r) {
+                    return r && String(r.department_id) === String(app.selectedDepartment && app.selectedDepartment.id);
+                });
+                dtTasks = depMatch && Array.isArray(depMatch.tasks) ? depMatch.tasks : [];
+            }
+            dtTasks.forEach(function(t) {
+                if (!t || !isShowOnProjectEnabled(t.show_on_project)) return;
+                var title = String(t.title || '').trim();
+                if (!title) return;
+                // Always derive key in JS so it matches name selectors (ignore sanitized API column_key)
+                var key = namedDefaultTaskColumnKey(title);
+                namedDefaultTaskColumnDefinitions.push({
+                    key: key,
+                    label: title,
+                    title: title,
+                    defaultVisible: true
+                });
+                namedDefaultTaskColumnConfigs.push({
+                    name: key,
+                    data: null,
+                    orderable: false,
+                    render: (function(taskTitle) {
+                        return function(data, type, row) {
+                            var map = (row && row.named_default_task_summaries) || {};
+                            var summary = map[taskTitle];
+                            if (!summary) {
+                                if (taskTitle === '計算確認' && row && row.keisan_kakunin_task) {
+                                    summary = row.keisan_kakunin_task;
+                                } else if (taskTitle === '申請代行' && row && row.shinsei_daikou_task) {
+                                    summary = row.shinsei_daikou_task;
+                                }
+                            }
+                            return renderNamedDefaultTaskSummaryCell(summary, type);
+                        };
+                    })(title),
+                    title: buildI18nHeaderTitle(title),
+                    className: 'named-default-task-column',
+                    width: '130px',
+                    visible: true
+                });
+            });
+        } catch (eNamed) {
+            console.warn('Failed to build named default-task columns', eNamed);
+            namedDefaultTaskColumnDefinitions = [];
+            namedDefaultTaskColumnConfigs = [];
         }
 
         try {
@@ -4371,7 +4623,7 @@ var projectTable;
                         var type = f.type || 'text';
                         var options = f.options || '';
 
-                        if (/【メモ】$/.test(label) || /【〇】$/.test(label)) {
+                        if (/【メモ】$/.test(label) || /【受領済み】$/.test(label) || /【〇】$/.test(label)) {
                             return;
                         }
                         if (label.endsWith(statusSuffix)) {
@@ -4393,6 +4645,27 @@ var projectTable;
                 }
             });
 
+            // 意匠図 options/type follow 設備図 (list columns + quick edit)
+            if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.alignOptionsWithSetsubi === 'function') {
+                mergedFields = window.ProjectCustomFieldComposite.alignOptionsWithSetsubi(mergedFields);
+            } else {
+                var setsubiField = null;
+                for (var si = 0; si < mergedFields.length; si++) {
+                    if (mergedFields[si] && String(mergedFields[si].label || '').trim() === '設備図') {
+                        setsubiField = mergedFields[si];
+                        break;
+                    }
+                }
+                var ishozuOptions = setsubiField
+                    ? String(setsubiField.options != null ? setsubiField.options : '')
+                    : 'GUIS,他社';
+                var ishozuType = setsubiField ? (setsubiField.type || 'radio') : 'radio';
+                mergedFields = mergedFields.map(function(f) {
+                    if (!f || String(f.label || '').trim() !== '意匠図') return f;
+                    return Object.assign({}, f, { options: ishozuOptions, type: ishozuType });
+                });
+            }
+
             customFieldStatusMap = statusMap;
 
             mergedFields.forEach(function(f, i) {
@@ -4411,6 +4684,16 @@ var projectTable;
 
                         var parts = [mainHtml];
                         if (fieldLabel === '設備図' || fieldLabel === '意匠図' || fieldLabel === '配置図') {
+                            if (val && String(val).trim() !== '' && (fieldLabel === '設備図' || fieldLabel === '意匠図')) {
+                                var receivedVal = getCustomFieldValueFromRow(row, fieldLabel + '【受領済み】');
+                                var receivedOn = receivedVal === '1' || receivedVal === '受領済み' || receivedVal === 'true' || receivedVal === 'on';
+                                if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.isReceivedChecked === 'function') {
+                                    receivedOn = window.ProjectCustomFieldComposite.isReceivedChecked(receivedVal);
+                                }
+                                if (receivedOn) {
+                                    parts.push('<div class="mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '"><span class="badge bg-label-success">受領済み</span></div>');
+                                }
+                            }
                             var memoVal = getCustomFieldValueFromRow(row, fieldLabel + '【メモ】');
                             if (val && String(val).trim() !== '' && memoVal && String(memoVal).trim() !== '') {
                                 parts.push('<div class="mt-1 small text-muted ' + REMOVE_FOR_EXCEL_CLASS + '">' + $('<div>').text(String(memoVal)).html() + '</div>');
@@ -5434,9 +5717,25 @@ var projectTable;
                 return !isProjectDirectorColumn(c.name);
             });
         }
+        if (namedDefaultTaskColumnConfigs && namedDefaultTaskColumnConfigs.length) {
+            var otherDeptIdx = -1;
+            for (var ndi = 0; ndi < fixedColumnConfigs.length; ndi++) {
+                if (fixedColumnConfigs[ndi].name === 'other_dept_nouki') {
+                    otherDeptIdx = ndi;
+                    break;
+                }
+            }
+            var insertAt = otherDeptIdx >= 0 ? otherDeptIdx + 1 : fixedColumnConfigs.length;
+            fixedColumnConfigs = fixedColumnConfigs.slice(0, insertAt)
+                .concat(namedDefaultTaskColumnConfigs)
+                .concat(fixedColumnConfigs.slice(insertAt));
+        }
         var defaultColumnKeys = fixedColumnConfigs.map(function(c) { return c.name; }).concat(customColumnConfigs.map(function(c) { return c.name; })).concat(tailForTable.map(function(c) { return c.name; }));
         var depIdForColumnOrder = app.selectedDepartment && app.selectedDepartment.id;
-        var mergedColumnKeys = mergeColumnKeyOrder(loadProjectColumnOrder(depIdForColumnOrder), defaultColumnKeys);
+        var mergedColumnKeys = mergeColumnKeyOrder(
+            (loadProjectColumnOrder(depIdForColumnOrder) || []).map(migrateNamedDefaultTaskColumnKey),
+            defaultColumnKeys
+        );
         var savedColumnWidths = loadProjectColumnWidths(depIdForColumnOrder);
         // Bake saved visibility into column defs so first serverSide ajax matches UI (no post-init draw)
         var columnVisibilityForInit = loadColumnVisibilityFromLocalStorage(customFieldColumnDefinitions);
@@ -5452,6 +5751,11 @@ var projectTable;
                 ? defaultVisibilityForInit[k]
                 : (col.visible !== false);
             var isVisible = normalizeColumnVisibilityBool(columnVisibilityForInit[k], defaultVis);
+            // Newly configured default-task columns: show unless user explicitly hid them
+            if (isNamedDefaultTaskColumn(k) && columnVisibilityForInit[k] === undefined
+                && (defaultVisibilityForInit[k] === undefined || defaultVisibilityForInit[k])) {
+                isVisible = true;
+            }
             if (isCailyBranchUser()
                 && (k === 'end_date' || k === 'guis_nouki')
                 && !canViewEndDateColumn()) {
@@ -5655,6 +5959,10 @@ var projectTable;
             customDefs.forEach(function(c) {
                 var idx = getDataTableColumnIndexByKey(c.key, customDefs);
                 if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: 'custom:' + (c.label || '').trim() });
+            });
+            (namedDefaultTaskColumnDefinitions || []).forEach(function(c) {
+                var idx = getDataTableColumnIndexByKey(c.key, customDefs);
+                if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });
             });
             projectTable.rows({ search: 'applied' }).every(function(rowIdx) {
                 var rowData = this.data();
@@ -7684,6 +7992,14 @@ var projectTable;
                 isCailyBranchUser() {
                     return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
                 },
+                visibleStatuses() {
+                    // Depend on selectedDepartment so filter buttons refresh when dept changes
+                    void this.selectedDepartment;
+                    if (typeof getVisibleProjectStatuses === 'function') {
+                        return getVisibleProjectStatuses();
+                    }
+                    return (this.statuses || []).filter(function(s) { return !s.energyOnly; });
+                },
                 visibleColumnOptions() {
                     if (!this.isCailyBranchUser) return this.availableColumns || [];
                     var self = this;
@@ -7719,7 +8035,10 @@ var projectTable;
                     const hiddenForDirector = this.canViewProjectDirectorColumns()
                         ? {}
                         : (typeof PROJECT_DIRECTOR_COLUMN_KEYS !== 'undefined' ? PROJECT_DIRECTOR_COLUMN_KEYS : {});
+                    const namedNoteCols = (typeof namedDefaultTaskColumnDefinitions !== 'undefined' ? namedDefaultTaskColumnDefinitions : [])
+                        .map(function(c) { return { key: c.key, label: c.label }; });
                     const list = (typeof NOTE_DISPLAY_COLUMNS !== 'undefined' ? NOTE_DISPLAY_COLUMNS : [])
+                        .concat(namedNoteCols)
                         .filter(function(c) {
                             return !hiddenForCaily[c.key] && !hiddenForDirector[c.key];
                         })
@@ -8636,6 +8955,12 @@ var projectTable;
                 
                     this.loading = true;
                     this.selectedDepartment = department;
+                    // Drop 省エネ-only status filters when leaving that department
+                    if (!isEnergyDepartmentSelectedForStatus() && Array.isArray(this.selectedStatusKeys) && this.selectedStatusKeys.length) {
+                        this.selectedStatusKeys = this.selectedStatusKeys.filter(function(k) {
+                            return !ENERGY_ONLY_PROJECT_STATUS_KEYS[String(k || '').trim()];
+                        });
+                    }
                     // Cập nhật context chat để AI biết đang xem danh sách dự án của department nào
                     if (typeof window !== 'undefined') {
                         window.__chatPageContext = window.__chatPageContext || {};

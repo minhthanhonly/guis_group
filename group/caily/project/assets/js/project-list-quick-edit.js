@@ -394,16 +394,19 @@
 
                         if (isComposite && Cfc) {
                             var memoVal = savedValueMap[Cfc.memoLabel(label)] || '';
+                            var receivedVal = (Cfc.receivedLabel && savedValueMap[Cfc.receivedLabel(label)]) || '';
                             html += Cfc.buildCompositeInnerHtml({
                                 label: label,
                                 type: type,
                                 options: options,
                                 val: val,
                                 memoVal: memoVal,
+                                receivedVal: receivedVal,
                                 radioName: 'quickEditCustomRadio_' + idx,
                                 radioClass: 'quickEditCustomRadio',
                                 checkboxClass: 'quickEditCustomCheckbox',
                                 memoInputClass: 'quickEditCustomInput quickEditCompositeMemo',
+                                receivedClass: 'quickEditCompositeReceived',
                                 safeLabel: safeLabel
                             });
                         } else if (type === 'checkbox_select_all') {
@@ -950,7 +953,7 @@
                 var type = $field.attr('data-custom-type');
                 if (!label) return;
                 if (Cfc && $field.attr('data-custom-composite') === '1') {
-                    var compositeRows = Cfc.collectFromRow(this, 'quickEditCustomRadio', 'quickEditCompositeMemo', 'quickEditCustomCheckbox');
+                    var compositeRows = Cfc.collectFromRow(this, 'quickEditCustomRadio', 'quickEditCompositeMemo', 'quickEditCustomCheckbox', 'quickEditCompositeReceived');
                     compositeRows.forEach(function(row) { customFieldsData.push(row); });
                     return;
                 }

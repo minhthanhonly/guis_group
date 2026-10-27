@@ -196,7 +196,7 @@ if($_SESSION['show_project'] == 0){
                 <div class="d-flex align-items-center gap-2 mb-2 mt-4">
                     <div class="btn-group flex-wrap">
                         <button 
-                            v-for="status in statuses" 
+                            v-for="status in visibleStatuses" 
                             :key="status.key"
                             class="btn btn-sm status-filter-btn"
                             :data-i18n="status.name"
@@ -876,6 +876,8 @@ if($_SESSION['show_project'] == 0){
                                 <option value="contract" data-i18n="請負">請負</option>
                                 <option value="waiting_documents" data-i18n="資料待ち">資料待ち</option>
                                 <option value="in_progress" data-i18n="進行中">進行中</option>
+                                <option value="calculation_completed" data-i18n="計算終了" class="js-energy-only-status">計算終了</option>
+                                <option value="application_in_progress" data-i18n="申請作業中" class="js-energy-only-status">申請作業中</option>
                                 <option value="waiting_invoice" data-i18n="請求待ち">請求待ち</option>
                                 <option value="completed" data-i18n="完了">完了</option>
                                 <option value="paused" data-i18n="一時停止">一時停止</option>
@@ -1657,4 +1659,5 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

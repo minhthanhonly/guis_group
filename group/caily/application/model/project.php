@@ -15,7 +15,7 @@ class Project extends ApplicationModel {
             'name' => array(),
             'description' => array(),
             'priority' => array(), //low, medium, high, urgent
-            'status' => array(), //draft, open, confirming, quotation, contract, waiting_documents, in_progress, waiting_invoice, completed, paused, cancelled, deleted
+            'status' => array(), //draft, open, confirming, quotation, contract, waiting_documents, in_progress, calculation_completed, application_in_progress, waiting_invoice, completed, paused, cancelled, deleted
             'previous_status' => array(), //stores the previous status before being cancelled
             'start_date' => array(), //timestamp
             'end_date' => array(), //timestamp
@@ -532,6 +532,263 @@ class Project extends ApplicationModel {
         unset($project);
 
         $this->attachOtherDeptNoukiList($data);
+        $this->attachNamedDefaultTaskSummaries($data);
+    }
+
+    /**
+     * Legacy field keys kept for older saved column layouts (省エネ 計算確認/申請代行).
+     */
+    private function getLegacyNamedDefaultTaskFieldMap() {
+        return array(
+            '計算確認' => 'keisan_kakunin_task',
+            '申請代行' => 'shinsei_daikou_task',
+        );
+    }
+
+    /**
+     * Attach assignee / status / note for department default tasks with show_on_project.
+     * Sets named_default_task_columns + named_default_task_summaries on each project.
+     *
+     * @param array $data List of project rows, or a single project assoc (has string key "id").
+     */
+    private function attachNamedDefaultTaskSummaries(array &$data) {
+        if (empty($data)) {
+            return;
+        }
+
+        $single = isset($data['id']) && !isset($data[0]);
+        if ($single) {
+            $list = array(&$data);
+        } else {
+            $list = array();
+            foreach ($data as $i => $_) {
+                $list[] = &$data[$i];
+            }
+            unset($_);
+        }
+
+        if (!class_exists('Department')) {
+            require_once DIR_MODEL . 'department.php';
+        }
+        $departmentModel = new Department();
+        $legacyFieldMap = $this->getLegacyNamedDefaultTaskFieldMap();
+
+        $departmentIds = array();
+        $projectIds = array();
+        foreach ($list as $project) {
+            $pid = isset($project['id']) ? (int)$project['id'] : 0;
+            if ($pid > 0) {
+                $projectIds[$pid] = true;
+            }
+            $did = isset($project['department_id']) ? (int)$project['department_id'] : 0;
+            if ($did > 0) {
+                $departmentIds[$did] = true;
+            }
+        }
+        $projectIds = array_keys($projectIds);
+
+        $columnsByDept = array();
+        $allTitles = array();
+        foreach (array_keys($departmentIds) as $did) {
+            $defs = $departmentModel->getProjectDisplayDefaultTasks($did);
+            $cols = array();
+            foreach ($defs as $def) {
+                $title = isset($def['title']) ? trim((string) $def['title']) : '';
+                if ($title === '') {
+                    continue;
+                }
+                $key = isset($def['column_key']) && $def['column_key'] !== ''
+                    ? (string) $def['column_key']
+                    : Department::namedDefaultTaskColumnKey($title);
+                $cols[] = array(
+                    'title' => $title,
+                    'key' => $key,
+                );
+                $allTitles[$title] = true;
+            }
+            $columnsByDept[$did] = $cols;
+        }
+
+        foreach ($list as &$project) {
+            $did = isset($project['department_id']) ? (int)$project['department_id'] : 0;
+            $project['named_default_task_columns'] = isset($columnsByDept[$did])
+                ? $columnsByDept[$did]
+                : array();
+            $project['named_default_task_summaries'] = array();
+            foreach ($legacyFieldMap as $field) {
+                if (!isset($project[$field])) {
+                    $project[$field] = null;
+                }
+            }
+        }
+        unset($project);
+
+        if (empty($projectIds) || empty($allTitles)) {
+            return;
+        }
+
+        $escapedTitles = array();
+        foreach (array_keys($allTitles) as $title) {
+            $escapedTitles[] = "'" . $this->escape($title) . "'";
+        }
+        $idsList = implode(',', array_map('intval', $projectIds));
+        $titleList = implode(',', $escapedTitles);
+
+        $rows = $this->fetchAll(sprintf(
+            "SELECT t.id, t.project_id, t.title, t.status, t.note, t.due_date, t.assigned_to
+             FROM %stasks t
+             WHERE t.project_id IN (%s)
+               AND t.title IN (%s)
+               AND (t.parent_id IS NULL OR t.parent_id = 0)
+             ORDER BY t.project_id ASC, t.id ASC",
+            DB_PREFIX,
+            $idsList,
+            $titleList
+        ));
+        if (empty($rows)) {
+            return;
+        }
+
+        $byProjectTitle = array();
+        $taskIds = array();
+        foreach ($rows as $row) {
+            $pid = (int)$row['project_id'];
+            $title = (string)$row['title'];
+            if (!isset($allTitles[$title])) {
+                continue;
+            }
+            if (isset($byProjectTitle[$pid][$title])) {
+                continue;
+            }
+            if (!isset($byProjectTitle[$pid])) {
+                $byProjectTitle[$pid] = array();
+            }
+            $byProjectTitle[$pid][$title] = $row;
+            $tid = (int)$row['id'];
+            if ($tid > 0) {
+                $taskIds[$tid] = true;
+            }
+        }
+
+        $assigneeNamesByTask = array();
+        $taskIdList = array_keys($taskIds);
+        if (!empty($taskIdList)) {
+            $ackRows = $this->fetchAll(sprintf(
+                "SELECT ta.task_id, u.realname
+                 FROM %stask_assignees ta
+                 INNER JOIN %suser u ON u.id = ta.user_id
+                 WHERE ta.task_id IN (%s)
+                 ORDER BY ta.task_id ASC, ta.user_id ASC",
+                DB_PREFIX,
+                DB_PREFIX,
+                implode(',', array_map('intval', $taskIdList))
+            ));
+            foreach ($ackRows as $ack) {
+                $tid = (int)$ack['task_id'];
+                $name = trim((string)($ack['realname'] ?? ''));
+                if ($name === '') {
+                    continue;
+                }
+                if (!isset($assigneeNamesByTask[$tid])) {
+                    $assigneeNamesByTask[$tid] = array();
+                }
+                $assigneeNamesByTask[$tid][] = $name;
+            }
+
+            $needFallback = array();
+            foreach ($taskIdList as $tid) {
+                if (empty($assigneeNamesByTask[$tid])) {
+                    $needFallback[$tid] = true;
+                }
+            }
+            if (!empty($needFallback)) {
+                $userIds = array();
+                foreach ($byProjectTitle as $titlesMap) {
+                    foreach ($titlesMap as $row) {
+                        $tid = (int)$row['id'];
+                        if (!isset($needFallback[$tid])) {
+                            continue;
+                        }
+                        $raw = isset($row['assigned_to']) ? (string)$row['assigned_to'] : '';
+                        foreach (preg_split('/\s*,\s*/', $raw) as $uid) {
+                            $uid = (int)$uid;
+                            if ($uid > 0) {
+                                $userIds[$uid] = true;
+                            }
+                        }
+                    }
+                }
+                $userNameById = array();
+                if (!empty($userIds)) {
+                    $userRows = $this->fetchAll(sprintf(
+                        "SELECT id, realname FROM %suser WHERE id IN (%s)",
+                        DB_PREFIX,
+                        implode(',', array_map('intval', array_keys($userIds)))
+                    ));
+                    foreach ($userRows as $u) {
+                        $userNameById[(int)$u['id']] = trim((string)($u['realname'] ?? ''));
+                    }
+                }
+                foreach ($byProjectTitle as $titlesMap) {
+                    foreach ($titlesMap as $row) {
+                        $tid = (int)$row['id'];
+                        if (!isset($needFallback[$tid])) {
+                            continue;
+                        }
+                        $names = array();
+                        $raw = isset($row['assigned_to']) ? (string)$row['assigned_to'] : '';
+                        foreach (preg_split('/\s*,\s*/', $raw) as $uid) {
+                            $uid = (int)$uid;
+                            if ($uid > 0 && !empty($userNameById[$uid])) {
+                                $names[] = $userNameById[$uid];
+                            }
+                        }
+                        if (!empty($names)) {
+                            $assigneeNamesByTask[$tid] = $names;
+                        }
+                    }
+                }
+            }
+        }
+
+        foreach ($list as &$project) {
+            $pid = isset($project['id']) ? (int)$project['id'] : 0;
+            $did = isset($project['department_id']) ? (int)$project['department_id'] : 0;
+            $allowedTitles = array();
+            if (isset($columnsByDept[$did])) {
+                foreach ($columnsByDept[$did] as $col) {
+                    $allowedTitles[$col['title']] = true;
+                }
+            }
+            $summaries = array();
+            if ($pid > 0 && !empty($byProjectTitle[$pid])) {
+                foreach ($byProjectTitle[$pid] as $title => $row) {
+                    if (!isset($allowedTitles[$title])) {
+                        continue;
+                    }
+                    $tid = (int)$row['id'];
+                    $names = isset($assigneeNamesByTask[$tid]) ? $assigneeNamesByTask[$tid] : array();
+                    $dueDate = isset($row['due_date']) ? trim((string) $row['due_date']) : '';
+                    if ($dueDate === '' || $dueDate === '0000-00-00' || $dueDate === '0000-00-00 00:00:00') {
+                        $dueDate = '';
+                    }
+                    $summary = array(
+                        'id' => $tid,
+                        'title' => $title,
+                        'status' => isset($row['status']) ? (string)$row['status'] : '',
+                        'note' => isset($row['note']) ? (string)$row['note'] : '',
+                        'due_date' => $dueDate,
+                        'assignee_name' => implode(', ', $names),
+                    );
+                    $summaries[$title] = $summary;
+                    if (isset($legacyFieldMap[$title])) {
+                        $project[$legacyFieldMap[$title]] = $summary;
+                    }
+                }
+            }
+            $project['named_default_task_summaries'] = $summaries;
+        }
+        unset($project);
     }
 
     /**
@@ -656,6 +913,7 @@ class Project extends ApplicationModel {
         $project['drawing_count'] = (int)($stats['drawing_count'] ?? 0);
         $project['member_count'] = (int)($stats['member_count'] ?? 0);
         $project['is_favorite'] = !empty($stats['is_favorite']) ? 1 : 0;
+        $this->attachNamedDefaultTaskSummaries($project);
     }
 
     private function attachProjectMemberAggregates(array &$data) {
@@ -699,7 +957,8 @@ class Project extends ApplicationModel {
             : [];
         $allowedStatusKeys = array(
             'draft', 'open', 'confirming', 'quotation', 'contract',
-            'waiting_documents', 'in_progress', 'waiting_invoice', 'completed', 'paused', 'cancelled'
+            'waiting_documents', 'in_progress', 'calculation_completed', 'application_in_progress',
+            'waiting_invoice', 'completed', 'paused', 'cancelled'
         );
         $statusKeys = array_values(array_intersect($statusKeys, $allowedStatusKeys));
         
@@ -982,11 +1241,13 @@ class Project extends ApplicationModel {
             WHEN 'contract' THEN 5 
             WHEN 'waiting_documents' THEN 6 
             WHEN 'in_progress' THEN 7 
-            WHEN 'waiting_invoice' THEN 8 
+            WHEN 'calculation_completed' THEN 8 
+            WHEN 'application_in_progress' THEN 9 
+            WHEN 'waiting_invoice' THEN 10 
             WHEN 'completed' THEN 11 
-            WHEN 'paused' THEN 9 
-            WHEN 'cancelled' THEN 10 
-            ELSE 12 
+            WHEN 'paused' THEN 12 
+            WHEN 'cancelled' THEN 13 
+            ELSE 14 
         END";
         
         $order_dir = strtoupper($order_dir) === 'DESC' ? 'DESC' : 'ASC';
@@ -1207,7 +1468,8 @@ class Project extends ApplicationModel {
                 : [];
             $allowedStatusKeys = array(
                 'draft', 'open', 'confirming', 'quotation', 'contract',
-                'waiting_documents', 'in_progress', 'waiting_invoice', 'completed', 'paused', 'cancelled'
+                'waiting_documents', 'in_progress', 'calculation_completed', 'application_in_progress',
+                'waiting_invoice', 'completed', 'paused', 'cancelled'
             );
             $statusKeys = array_values(array_intersect($statusKeys, $allowedStatusKeys));
 
@@ -1375,11 +1637,13 @@ class Project extends ApplicationModel {
             WHEN 'contract' THEN 5 
             WHEN 'waiting_documents' THEN 6 
             WHEN 'in_progress' THEN 7 
-            WHEN 'waiting_invoice' THEN 8 
+            WHEN 'calculation_completed' THEN 8 
+            WHEN 'application_in_progress' THEN 9 
+            WHEN 'waiting_invoice' THEN 10 
             WHEN 'completed' THEN 11 
-            WHEN 'paused' THEN 9 
-            WHEN 'cancelled' THEN 10 
-            ELSE 12 
+            WHEN 'paused' THEN 12 
+            WHEN 'cancelled' THEN 13 
+            ELSE 14 
         END";
         $order_dir = strtoupper($order_dir) === 'DESC' ? 'DESC' : 'ASC';
         $orderExpr = $this->resolveProjectListOrderExpression($order_column, $user_id);
@@ -3729,13 +3993,13 @@ class Project extends ApplicationModel {
     /**
      * Update project status from AI/API (checks canUserEditProject).
      * @param int $project_id
-     * @param string $status draft|open|confirming|quotation|contract|waiting_documents|in_progress|waiting_invoice|completed|paused|cancelled
+     * @param string $status draft|open|confirming|quotation|contract|waiting_documents|in_progress|calculation_completed|application_in_progress|waiting_invoice|completed|paused|cancelled
      * @return array ['status'=>'success'|'error', 'message'|'error'=>...]
      */
     public function updateStatusForAi($project_id, $status) {
         $project_id = intval($project_id);
         $status = trim((string) $status);
-        $allowed = ['draft', 'open', 'confirming', 'quotation', 'contract', 'waiting_documents', 'in_progress', 'waiting_invoice', 'completed', 'paused', 'cancelled'];
+        $allowed = ['draft', 'open', 'confirming', 'quotation', 'contract', 'waiting_documents', 'in_progress', 'calculation_completed', 'application_in_progress', 'waiting_invoice', 'completed', 'paused', 'cancelled'];
         if ($project_id <= 0 || !in_array($status, $allowed, true)) {
             return ['status' => 'error', 'error' => 'Invalid project_id or status'];
         }
@@ -6331,6 +6595,8 @@ class Project extends ApplicationModel {
             'contract' => '請負',
             'waiting_documents' => '資料待ち',
             'in_progress' => '進行中',
+            'calculation_completed' => '計算終了',
+            'application_in_progress' => '申請作業中',
             'waiting_invoice' => '請求待ち',
             'completed' => '完了',
             'paused' => '一時停止',
@@ -6360,6 +6626,8 @@ class Project extends ApplicationModel {
             'contract' => 'Hợp đồng',
             'waiting_documents' => 'Chờ tài liệu',
             'in_progress' => 'Đang tiến hành',
+            'calculation_completed' => 'Kết thúc tính toán',
+            'application_in_progress' => 'Đang làm đơn đăng ký',
             'waiting_invoice' => 'Chờ xuất hóa đơn',
             'completed' => 'Hoàn thành',
             'paused' => 'Tạm dừng',

@@ -75,14 +75,43 @@ function ensureProjectDetailCommentAssets() {
 
 /** 設備図 / 意匠図 / 配置図: セットの選択肢のまま、値選択時に【メモ】を表示 */
 var CUSTOM_FIELD_COMPOSITE_BASE_LABELS = { '設備図': true, '意匠図': true, '配置図': true };
+var CUSTOM_FIELD_COMPOSITE_RECEIVED_LABELS = { '設備図': true, '意匠図': true };
 function isCustomFieldCompositeBaseLabel(label) {
     return !!CUSTOM_FIELD_COMPOSITE_BASE_LABELS[String(label || '').trim()];
 }
+function isCustomFieldCompositeReceivedLabel(label) {
+    if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.supportsReceived === 'function') {
+        return window.ProjectCustomFieldComposite.supportsReceived(label);
+    }
+    return !!CUSTOM_FIELD_COMPOSITE_RECEIVED_LABELS[String(label || '').trim()];
+}
 function isCustomFieldCompositeCompanionLabel(label) {
-    return /【(?:メモ|〇|○)】$/.test(String(label || '').trim());
+    return /【(?:メモ|受領済み|〇|○)】$/.test(String(label || '').trim());
 }
 function getCustomFieldCompositeMemoLabel(base) {
+    if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.memoLabel === 'function') {
+        return window.ProjectCustomFieldComposite.memoLabel(base);
+    }
     return String(base || '').trim() + '【メモ】';
+}
+function getCustomFieldCompositeReceivedLabel(base) {
+    if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.receivedLabel === 'function') {
+        return window.ProjectCustomFieldComposite.receivedLabel(base);
+    }
+    return String(base || '').trim() + '【受領済み】';
+}
+function isCustomFieldCompositeReceivedChecked(value) {
+    if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.isReceivedChecked === 'function') {
+        return window.ProjectCustomFieldComposite.isReceivedChecked(value);
+    }
+    var s = String(value == null ? '' : value).trim();
+    return s === '1' || s === '受領済み' || s === 'true' || s === 'on';
+}
+function normalizeCustomFieldCompositeReceivedValue(value) {
+    if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.normalizeReceivedValue === 'function') {
+        return window.ProjectCustomFieldComposite.normalizeReceivedValue(value);
+    }
+    return isCustomFieldCompositeReceivedChecked(value) ? '1' : '';
 }
 function isCustomFieldCompositeValueSelected(value) {
     return String(value == null ? '' : value).trim() !== '';
@@ -115,6 +144,30 @@ function sanitizeCustomFieldCompositeMainValue(value, options, type) {
         if (allowed[parts[i]]) return parts[i];
     }
     return '';
+}
+/** 意匠図 type/options = 設備図 (fallback GUIS,他社). */
+function alignCustomFieldIshozuWithSetsubi(fields) {
+    if (window.ProjectCustomFieldComposite && typeof window.ProjectCustomFieldComposite.alignOptionsWithSetsubi === 'function') {
+        return window.ProjectCustomFieldComposite.alignOptionsWithSetsubi(fields);
+    }
+    var list = Array.isArray(fields) ? fields.slice() : [];
+    var source = null;
+    for (var i = 0; i < list.length; i++) {
+        if (list[i] && String(list[i].label || '').trim() === '設備図') {
+            source = list[i];
+            break;
+        }
+    }
+    var srcOptions = source
+        ? (Array.isArray(source.options) ? source.options.join(',') : String(source.options != null ? source.options : ''))
+        : 'GUIS,他社';
+    var srcType = source ? (source.type || 'radio') : 'radio';
+    for (var j = 0; j < list.length; j++) {
+        var f = list[j];
+        if (!f || String(f.label || '').trim() !== '意匠図') continue;
+        list[j] = Object.assign({}, f, { options: srcOptions, type: srcType });
+    }
+    return list;
 }
 
 // Cột danh sách project (trùng với COLUMN_DEFINITIONS trong project-list.js) + custom_fields bổ sung ở computed
@@ -542,6 +595,8 @@ const vueApp = createApp({
                 { value: 'contract', label: '請負', color: 'info' },
                 { value: 'waiting_documents', label: '資料待ち', color: 'warning' },
                 { value: 'in_progress', label: '進行中', color: 'primary' },
+                { value: 'calculation_completed', label: '計算終了', color: 'success', energyOnly: true },
+                { value: 'application_in_progress', label: '申請作業中', color: 'primary', energyOnly: true },
                 { value: 'waiting_invoice', label: '請求待ち', color: 'dark' },
                 { value: 'completed', label: '完了', color: 'success' },
                 { value: 'paused', label: '一時停止', color: 'warning' },
@@ -857,6 +912,36 @@ const vueApp = createApp({
             }
             return name.indexOf('省エネ') !== -1;
         },
+        /** Default tasks with show_on_project for this project's department. */
+        namedDefaultTaskRows() {
+            const p = this.project || {};
+            const cols = Array.isArray(p.named_default_task_columns) ? p.named_default_task_columns : [];
+            const map = (p.named_default_task_summaries && typeof p.named_default_task_summaries === 'object')
+                ? p.named_default_task_summaries
+                : {};
+            if (cols.length) {
+                return cols.map((c) => {
+                    const title = c && c.title ? String(c.title) : '';
+                    let task = title && map[title] ? map[title] : null;
+                    if (!task && title === '計算確認') task = p.keisan_kakunin_task || null;
+                    if (!task && title === '申請代行') task = p.shinsei_daikou_task || null;
+                    return {
+                        key: (c && c.key) || title,
+                        title: title,
+                        task: task
+                    };
+                }).filter((r) => r.title);
+            }
+            // Legacy fallback
+            const legacy = [];
+            if (p.keisan_kakunin_task) {
+                legacy.push({ key: 'keisan_kakunin', title: '計算確認', task: p.keisan_kakunin_task });
+            }
+            if (p.shinsei_daikou_task) {
+                legacy.push({ key: 'shinsei_daikou', title: '申請代行', task: p.shinsei_daikou_task });
+            }
+            return legacy;
+        },
         /** Same-parent has active 省エネ sibling (or flag from API). */
         hasEnergyDrawingShareContext() {
             if (!this.project) return false;
@@ -894,10 +979,17 @@ const vueApp = createApp({
                 : [];
         },
         editableStatuses() {
-            if (!this.isCailyBranchUser || this.canViewEndDate) {
-                return this.statuses;
+            var list = this.statuses || [];
+            if (!this.isEnergyDepartmentProject) {
+                var current = this.project && this.project.status ? String(this.project.status) : '';
+                list = list.filter(function(s) {
+                    return !s.energyOnly || s.value === current;
+                });
             }
-            return this.statuses.filter(function(s) { return s.value !== 'completed'; });
+            if (!this.isCailyBranchUser || this.canViewEndDate) {
+                return list;
+            }
+            return list.filter(function(s) { return s.value !== 'completed'; });
         },
         isManager() {
             if(USER_ROLE == `administrator`) return true;
@@ -1946,6 +2038,25 @@ const vueApp = createApp({
         getStatusBadgeClass(status) {
             const s = this.statuses.find(s => s.value === status);
             return `bg-${s?.color || 'secondary'}`;
+        },
+        getNamedDefaultTaskStatusMeta(status) {
+            const list = [
+                { value: 'todo', label: '未開始', color: 'secondary' },
+                { value: 'in-progress', label: '進行中', color: 'primary' },
+                { value: 'confirming', label: '確認中', color: 'warning' },
+                { value: 'paused', label: '一時停止', color: 'warning' },
+                { value: 'completed', label: '完了', color: 'success' },
+                { value: 'cancelled', label: 'キャンセル', color: 'danger' }
+            ];
+            const s = String(status || '');
+            return list.find((x) => x.value === s) || { value: s, label: s || '-', color: 'secondary' };
+        },
+        getNamedDefaultTaskStatusLabel(status) {
+            const meta = this.getNamedDefaultTaskStatusMeta(status);
+            return this.translateLabel ? this.translateLabel(meta.label) : meta.label;
+        },
+        getNamedDefaultTaskStatusBadgeClass(status) {
+            return 'bg-' + this.getNamedDefaultTaskStatusMeta(status).color;
         },
         getOrderTypeBadgeClass(orderType) {
             const type = String(orderType || '').trim();
@@ -3415,8 +3526,15 @@ const vueApp = createApp({
                             field.type
                         );
                         valueMap[field.label.trim()] = compositeVal;
+                        var selected = isCustomFieldCompositeValueSelected(compositeVal);
                         valueMap[getCustomFieldCompositeMemoLabel(field.label)] =
-                            isCustomFieldCompositeValueSelected(compositeVal) ? (field.memoValue || '') : '';
+                            selected ? (field.memoValue || '') : '';
+                        if (isCustomFieldCompositeReceivedLabel(field.label)) {
+                            valueMap[getCustomFieldCompositeReceivedLabel(field.label)] =
+                                selected && field.receivedChecked
+                                    ? normalizeCustomFieldCompositeReceivedValue('1')
+                                    : '';
+                        }
                     } else if (field.type === 'checkbox' || field.type === 'checkbox_select_all') {
                         valueMap[field.label.trim()] = Array.isArray(field.valueArr) ? field.valueArr.join(',') : '';
                     } else if (field.type === 'datetime') {
@@ -3448,6 +3566,9 @@ const vueApp = createApp({
                         if (isCustomFieldCompositeCompanionLabel(f.label)) return;
                         if (isCustomFieldCompositeBaseLabel(f.label)) {
                             pushField(f.label, f.type || 'text', f.options, f.one_row);
+                            if (isCustomFieldCompositeReceivedLabel(f.label)) {
+                                pushField(getCustomFieldCompositeReceivedLabel(f.label), 'checkbox', '1', false);
+                            }
                             pushField(getCustomFieldCompositeMemoLabel(f.label), 'text', '', false);
                             return;
                         }
@@ -3464,6 +3585,9 @@ const vueApp = createApp({
             this.customFields.forEach(field => {
                 if (!field || !field.isComposite) return;
                 pushField(field.label, field.type || 'text', field.options, field.one_row);
+                if (isCustomFieldCompositeReceivedLabel(field.label)) {
+                    pushField(getCustomFieldCompositeReceivedLabel(field.label), 'checkbox', '1', false);
+                }
                 pushField(getCustomFieldCompositeMemoLabel(field.label), 'text', '', false);
             });
             
@@ -3508,7 +3632,7 @@ const vueApp = createApp({
                     });
                 });
             });
-            return allFieldsFromSets;
+            return alignCustomFieldIshozuWithSetsubi(allFieldsFromSets);
         },
         mapSetFieldsToCustomFields(allFieldsFromSets, saved) {
             const savedValueMap = this.buildSavedCustomFieldValueMap(saved);
@@ -3524,6 +3648,9 @@ const vueApp = createApp({
                 if (isCustomFieldCompositeBaseLabel(label)) {
                     const memoLabel = getCustomFieldCompositeMemoLabel(label);
                     const memoSaved = savedValueMap[memoLabel];
+                    const supportsReceived = isCustomFieldCompositeReceivedLabel(label);
+                    const receivedLbl = supportsReceived ? getCustomFieldCompositeReceivedLabel(label) : '';
+                    const receivedSaved = supportsReceived ? savedValueMap[receivedLbl] : null;
                     const fieldType = f.type || 'text';
                     const fieldOptions = Array.isArray(f.options) ? f.options.join(',') : (f.options != null ? String(f.options) : '');
                     let mainValue = sanitizeCustomFieldCompositeMainValue(
@@ -3536,6 +3663,7 @@ const vueApp = createApp({
                         valueArr = mainValue ? mainValue.split(',').map(s => s.trim()).filter(Boolean) : [];
                         mainValue = valueArr.join(',');
                     }
+                    const selected = isCustomFieldCompositeValueSelected(mainValue);
                     rows.push({
                         label: label,
                         type: fieldType,
@@ -3544,8 +3672,13 @@ const vueApp = createApp({
                         value: mainValue,
                         valueArr: valueArr,
                         isComposite: true,
+                        supportsReceived: supportsReceived,
+                        receivedLabel: receivedLbl,
+                        receivedChecked: selected && receivedSaved
+                            ? isCustomFieldCompositeReceivedChecked(receivedSaved.value)
+                            : false,
                         memoLabel: memoLabel,
-                        memoValue: isCustomFieldCompositeValueSelected(mainValue) && memoSaved && memoSaved.value != null
+                        memoValue: selected && memoSaved && memoSaved.value != null
                             ? String(memoSaved.value)
                             : ''
                     });
@@ -4650,7 +4783,11 @@ const vueApp = createApp({
             const patches = [{ label: field.label, value: field.value }];
             if (!isCustomFieldCompositeValueSelected(field.value)) {
                 field.memoValue = '';
+                field.receivedChecked = false;
                 patches.push({ label: field.memoLabel, value: '' });
+                if (field.supportsReceived && field.receivedLabel) {
+                    patches.push({ label: field.receivedLabel, value: '' });
+                }
             }
             this.updateCustomFieldValues(patches);
         },
@@ -4668,9 +4805,25 @@ const vueApp = createApp({
             const patches = [{ label: field.label, value: field.value }];
             if (!isCustomFieldCompositeValueSelected(field.value)) {
                 field.memoValue = '';
+                field.receivedChecked = false;
                 patches.push({ label: field.memoLabel, value: '' });
+                if (field.supportsReceived && field.receivedLabel) {
+                    patches.push({ label: field.receivedLabel, value: '' });
+                }
             }
             this.updateCustomFieldValues(patches);
+        },
+        onCompositeReceivedChange(field, checked) {
+            if (!field || !field.isComposite || !field.supportsReceived || !field.receivedLabel) return;
+            if (!this.isCompositeValueSelected(field)) {
+                field.receivedChecked = false;
+                return;
+            }
+            field.receivedChecked = !!checked;
+            this.updateCustomFieldValues([{
+                label: field.receivedLabel,
+                value: field.receivedChecked ? normalizeCustomFieldCompositeReceivedValue('1') : ''
+            }]);
         },
         onCompositeMemoChange(field, value) {
             if (!field || !field.isComposite) return;

@@ -1686,7 +1686,7 @@ $view->heading('建物詳細');
                                             {{ newChildProject.status ? getProjectStatusLabel(newChildProject.status) : '選択してください' }}
                                         </button>
                                         <ul class="dropdown-menu" style="width: 100%;">
-                                            <li v-for="status in editableProjectStatuses" :key="status.value">
+                                            <li v-for="status in createChildEditableStatuses" :key="status.value">
                                                 <a class="dropdown-item waves-effect" href="javascript:void(0);" 
                                                 @click="selectProjectStatus(status.value, false)">
                                                     {{ status.label }}
@@ -2009,7 +2009,7 @@ $view->heading('建物詳細');
                                             {{ getProjectStatusLabel(editingChildProject.status) }}
                                         </button>
                                         <ul class="dropdown-menu" style="width: 100%;">
-                                            <li v-for="status in editableProjectStatuses" :key="status.value">
+                                            <li v-for="status in editChildEditableStatuses" :key="status.value">
                                                 <a class="dropdown-item waves-effect" href="javascript:void(0);" 
                                                 @click="selectProjectStatus(status.value, true)">
                                                     {{ status.label }}

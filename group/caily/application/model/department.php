@@ -689,6 +689,7 @@ class Department extends ApplicationModel {
                 'status' => 'completed',
                 'progress' => 100,
                 'drawing_count' => 1,
+                'show_on_project' => 0,
             ),
             array(
                 'title' => '全図面のチェック・確認作業',
@@ -698,7 +699,28 @@ class Department extends ApplicationModel {
                 'status' => 'todo',
                 'progress' => 0,
                 'drawing_count' => 1,
+                'show_on_project' => 0,
             ),
+        );
+    }
+
+    /**
+     * Stable DataTable / note-display column key for a default task title.
+     * Avoid ":" — DataTables column selectors use the "name:name" syntax.
+     */
+    public static function namedDefaultTaskColumnKey($title) {
+        $encoded = rawurlencode(trim((string) $title));
+        return 'ndt_' . preg_replace('/[^A-Za-z0-9]/', '_', $encoded);
+    }
+
+    /**
+     * Legacy titles that were hard-coded as 省エネ list/detail columns.
+     * When older saved JSON omits show_on_project, keep them visible.
+     */
+    private function getLegacyShowOnProjectTitles() {
+        return array(
+            '計算確認' => true,
+            '申請代行' => true,
         );
     }
 
@@ -707,6 +729,7 @@ class Department extends ApplicationModel {
             return array();
         }
         $contactTitle = self::getDefaultContactTaskTitle();
+        $legacyShowTitles = $this->getLegacyShowOnProjectTitles();
         $normalized = array();
         $seenTitles = array();
         foreach ($tasks as $t) {
@@ -733,6 +756,13 @@ class Department extends ApplicationModel {
             if ($drawingCount < 0) {
                 $drawingCount = 0;
             }
+            if (array_key_exists('show_on_project', $t)) {
+                $rawShow = $t['show_on_project'];
+                // Accept 1/true/"1" only; "0"/0/false/null → off (do not use empty() — empty("0") is true)
+                $showOnProject = ($rawShow === true || $rawShow === 1 || $rawShow === '1') ? 1 : 0;
+            } else {
+                $showOnProject = isset($legacyShowTitles[$title]) ? 1 : 0;
+            }
             $normalized[] = array(
                 'title' => $title,
                 'price_pct' => round($pricePct, 2),
@@ -741,9 +771,32 @@ class Department extends ApplicationModel {
                 'status' => $status,
                 'progress' => $progress,
                 'drawing_count' => $drawingCount,
+                'show_on_project' => $showOnProject,
+                'column_key' => self::namedDefaultTaskColumnKey($title),
             );
         }
         return $normalized;
+    }
+
+    /**
+     * Default tasks marked show_on_project for a department (list/detail columns).
+     *
+     * @return array[] each: title, column_key, price_pct, ...
+     */
+    public function getProjectDisplayDefaultTasks($departmentId) {
+        $defs = $this->resolveDefaultTaskDefinitions($departmentId);
+        $out = array();
+        foreach ($defs as $def) {
+            if (empty($def['show_on_project'])) {
+                continue;
+            }
+            $title = isset($def['title']) ? trim((string) $def['title']) : '';
+            if ($title === '') {
+                continue;
+            }
+            $out[] = $def;
+        }
+        return $out;
     }
 
     /**
@@ -772,10 +825,12 @@ class Department extends ApplicationModel {
     /**
      * List all department default-task configs (admin UI).
      */
-    function getDefaultTasks() {
+    function getDefaultTasks($params = null) {
         $this->ensureDefaultTasksTable();
         $departmentId = 0;
-        if (isset($_GET['department_id'])) {
+        if (is_array($params) && isset($params['department_id'])) {
+            $departmentId = intval($params['department_id']);
+        } elseif (isset($_GET['department_id'])) {
             $departmentId = intval($_GET['department_id']);
         } elseif (isset($_POST['department_id'])) {
             $departmentId = intval($_POST['department_id']);
@@ -784,7 +839,7 @@ class Department extends ApplicationModel {
             return array(
                 'department_id' => $departmentId,
                 'tasks' => $this->resolveDefaultTaskDefinitions($departmentId),
-                'is_builtin' => !$this->hasSavedDefaultTasks($departmentId),
+                'is_builtin' => !$this->hasSavedDefaultTasks($departmentId) ? 1 : 0,
             );
         }
 
@@ -836,6 +891,15 @@ class Department extends ApplicationModel {
     function saveDefaultTasks() {
         $json = file_get_contents('php://input');
         $data = json_decode($json, true);
+        if (!is_array($data) && !empty($_POST)) {
+            $data = $_POST;
+            if (isset($data['tasks']) && is_string($data['tasks'])) {
+                $decodedTasks = json_decode($data['tasks'], true);
+                if (is_array($decodedTasks)) {
+                    $data['tasks'] = $decodedTasks;
+                }
+            }
+        }
         if (!is_array($data)) {
             return array('success' => false, 'message' => 'Invalid JSON');
         }
@@ -858,7 +922,11 @@ class Department extends ApplicationModel {
         $this->ensureDefaultTasksTable();
         $table = $this->defaultTasksTable();
         $now = date('Y-m-d H:i:s');
+        // Keep show_on_project as int 0/1 in stored JSON
         $payload = json_encode($tasks, JSON_UNESCAPED_UNICODE);
+        if ($payload === false) {
+            return array('success' => false, 'message' => 'JSONエンコードに失敗しました');
+        }
         $existing = $this->fetchOne(sprintf(
             "SELECT id FROM %s WHERE department_id = %d LIMIT 1",
             $table,
@@ -877,7 +945,11 @@ class Department extends ApplicationModel {
                 if ($ok === false) {
                     return array('success' => false, 'message' => '更新に失敗しました。');
                 }
-                return array('success' => true, 'id' => intval($existing['id']));
+                return array(
+                    'success' => true,
+                    'id' => intval($existing['id']),
+                    'tasks' => $tasks,
+                );
             }
             $insertId = $this->query_insert(
                 array(
@@ -891,7 +963,11 @@ class Department extends ApplicationModel {
             if (!$insertId) {
                 return array('success' => false, 'message' => '登録に失敗しました。');
             }
-            return array('success' => true, 'id' => $insertId);
+            return array(
+                'success' => true,
+                'id' => $insertId,
+                'tasks' => $tasks,
+            );
         } catch (Exception $e) {
             return array('success' => false, 'message' => '保存に失敗しました。', 'error' => $e->getMessage());
         }

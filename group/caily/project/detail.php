@@ -700,10 +700,14 @@ if($_SESSION['show_project'] == 0){
                                                                 <label class="form-check-label">{{ opt }}</label>
                                                             </div>
                                                         </template>
-                                                        <div v-if="isCompositeValueSelected(field)" class="d-flex align-items-center gap-1 flex-grow-1" style="min-width: 8rem;">
-                                                            <span class="text-nowrap small text-muted">【メモ】</span>
-                                                            <input type="text" class="form-control form-control-sm" v-model="field.memoValue" placeholder="メモ">
+                                                        <div v-if="isCompositeValueSelected(field) && field.supportsReceived" class="form-check form-check-inline mb-0">
+                                                            <input class="form-check-input" type="checkbox" v-model="field.receivedChecked">
+                                                            <label class="form-check-label text-nowrap">受領済み</label>
                                                         </div>
+                                                    </div>
+                                                    <div v-if="isCompositeValueSelected(field)" class="d-flex align-items-center gap-2 mt-2" style="min-width: 8rem;">
+                                                        <span class="text-nowrap small text-muted">【メモ】</span>
+                                                        <input type="text" class="form-control form-control-sm" v-model="field.memoValue" placeholder="メモ" style="min-width:6rem;">
                                                     </div>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
@@ -762,8 +766,8 @@ if($_SESSION['show_project'] == 0){
                                                 </div>
                                                 <div v-else-if="field.isComposite" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <div class="d-flex flex-wrap align-items-center gap-3">
-                                                        <template v-if="canEditProject">
+                                                    <template v-if="canEditProject">
+                                                        <div class="d-flex flex-wrap align-items-center gap-3">
                                                             <template v-if="isCompositeCheckboxType(field)">
                                                                 <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
                                                                     <input class="form-check-input" type="checkbox" :value="opt" :checked="(field.valueArr || []).includes(opt)" @change="onCompositeCheckboxChange(field, opt, $event.target.checked)">
@@ -776,17 +780,24 @@ if($_SESSION['show_project'] == 0){
                                                                     <label class="form-check-label">{{ opt }}</label>
                                                                 </div>
                                                             </template>
-                                                            <div v-if="isCompositeValueSelected(field)" class="d-flex align-items-center gap-1 flex-grow-1" style="min-width: 8rem;">
-                                                                <span class="text-nowrap small text-muted">【メモ】</span>
-                                                                <input type="text" class="form-control form-control-sm" :value="field.memoValue" placeholder="メモ" @change="onCompositeMemoChange(field, $event.target.value)">
+                                                            <div v-if="isCompositeValueSelected(field) && field.supportsReceived" class="form-check form-check-inline mb-0">
+                                                                <input class="form-check-input" type="checkbox" :checked="field.receivedChecked" @change="onCompositeReceivedChange(field, $event.target.checked)">
+                                                                <label class="form-check-label text-nowrap">受領済み</label>
                                                             </div>
-                                                        </template>
-                                                        <template v-else>
+                                                        </div>
+                                                        <div v-if="isCompositeValueSelected(field)" class="d-flex align-items-center gap-2 mt-2" style="min-width: 8rem;">
+                                                            <span class="text-nowrap small text-muted">【メモ】</span>
+                                                            <input type="text" class="form-control form-control-sm" :value="field.memoValue" placeholder="メモ" style="min-width:6rem;" @change="onCompositeMemoChange(field, $event.target.value)">
+                                                        </div>
+                                                    </template>
+                                                    <template v-else>
+                                                        <div class="d-flex flex-wrap align-items-center gap-2">
                                                             <span v-if="field.value" v-for="val in String(field.value).split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ val.trim() }}</span>
-                                                            <span v-if="field.value && field.memoValue" class="text-muted small">{{ field.memoValue }}</span>
+                                                            <span v-if="field.value && field.receivedChecked" class="badge bg-success me-1">受領済み</span>
                                                             <span v-if="!field.value">-</span>
-                                                        </template>
-                                                    </div>
+                                                        </div>
+                                                        <div v-if="field.value && field.memoValue" class="mt-1 text-muted small">{{ field.memoValue }}</div>
+                                                    </template>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">
@@ -1057,6 +1068,56 @@ if($_SESSION['show_project'] == 0){
                     <div class="card-body text-center py-4" v-else>
                         <div class="spinner-border" role="status">
                             <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Default tasks marked show_on_project (per department) -->
+                <div class="card mb-4" v-if="namedDefaultTaskRows.length">
+                    <div class="card-header">
+                        <h5 class="card-title mb-0">
+                            <i class="fa fa-tasks me-1"></i>
+                            <span data-i18n="既定タスク状況">既定タスク状況</span>
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-6" v-for="row in namedDefaultTaskRows" :key="row.key">
+                                <div class="border rounded p-3 h-100">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span class="fw-semibold" :data-i18n="row.title">{{ row.title }}</span>
+                                        <a v-if="row.task && row.task.id"
+                                           class="small text-decoration-none"
+                                           :href="'task.php?project_id=' + project.id + '#task-' + row.task.id">
+                                            <span data-i18n="タスクへ">タスクへ</span>
+                                        </a>
+                                    </div>
+                                    <div class="small mb-1">
+                                        <span class="text-muted me-1" data-i18n="担当">担当</span>
+                                        <span>{{ (row.task && row.task.assignee_name) ? row.task.assignee_name : '-' }}</span>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span class="text-muted small me-1" data-i18n="状況">状況</span>
+                                        <span class="badge" :class="getNamedDefaultTaskStatusBadgeClass(row.task && row.task.status)">
+                                            {{ getNamedDefaultTaskStatusLabel(row.task && row.task.status) }}
+                                        </span>
+                                    </div>
+                                    <div class="small mb-1">
+                                        <span class="text-muted me-1" data-i18n="期限">期限</span>
+                                        <span v-if="row.task && row.task.due_date"
+                                              :data-time="row.task.due_date"
+                                              data-bs-toggle="tooltip"
+                                              :data-bs-title="getVietnamTimeTooltip(row.task.due_date)">
+                                            {{ formatDateTime(row.task.due_date) }}
+                                        </span>
+                                        <span v-else class="text-muted">-</span>
+                                    </div>
+                                    <div class="small">
+                                        <span class="text-muted me-1" data-i18n="メモ">メモ</span>
+                                        <span class="text-break">{{ (row.task && row.task.note) ? row.task.note : '-' }}</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1851,5 +1912,6 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 
