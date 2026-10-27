@@ -379,6 +379,141 @@ var projectTable;
     const SCROLL_RESTORE_KEY = 'projectListScrollY';
     const PROJECT_FILTER_BOX_OPEN_KEY = 'projectAdvancedFilterBoxOpen';
 
+    // Server-side per-department column defaults (visibility / order / widths)
+    var departmentProjectListColumnDefaults = {};
+    var departmentProjectListColumnDefaultsLoading = {};
+
+    function getActiveProjectListDepartmentId() {
+        return (window.app && window.app.selectedDepartment && window.app.selectedDepartment.id)
+            ? window.app.selectedDepartment.id
+            : null;
+    }
+
+    function isProjectListAdminUser() {
+        return typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator';
+    }
+
+    function getDepartmentColumnDefaults(departmentId) {
+        var id = departmentId != null ? String(departmentId) : '';
+        if (!id) return null;
+        return departmentProjectListColumnDefaults.hasOwnProperty(id)
+            ? departmentProjectListColumnDefaults[id]
+            : null;
+    }
+
+    function ensureDepartmentProjectListColumnDefaults(departmentId) {
+        var id = departmentId != null ? String(departmentId) : '';
+        if (!id) return Promise.resolve(null);
+        if (departmentProjectListColumnDefaults.hasOwnProperty(id)) {
+            return Promise.resolve(departmentProjectListColumnDefaults[id]);
+        }
+        if (departmentProjectListColumnDefaultsLoading[id]) {
+            return departmentProjectListColumnDefaultsLoading[id];
+        }
+        departmentProjectListColumnDefaultsLoading[id] = axios.get(
+            '/api/index.php?model=department&method=getProjectListColumnDefaults&department_id='
+            + encodeURIComponent(id)
+        ).then(function(res) {
+            var data = res && res.data ? res.data : {};
+            var config = null;
+            if (data && data.config && typeof data.config === 'object') {
+                config = {
+                    visibility: (data.config.visibility && typeof data.config.visibility === 'object')
+                        ? data.config.visibility : {},
+                    order: Array.isArray(data.config.order) ? data.config.order.slice() : [],
+                    widths: (data.config.widths && typeof data.config.widths === 'object')
+                        ? data.config.widths : {}
+                };
+                if (!Object.keys(config.visibility).length && !config.order.length && !Object.keys(config.widths).length) {
+                    config = null;
+                }
+            }
+            departmentProjectListColumnDefaults[id] = config;
+            return config;
+        }).catch(function(err) {
+            console.warn('Failed to load department column defaults', err);
+            departmentProjectListColumnDefaults[id] = null;
+            return null;
+        }).finally(function() {
+            delete departmentProjectListColumnDefaultsLoading[id];
+        });
+        return departmentProjectListColumnDefaultsLoading[id];
+    }
+
+    function buildCurrentDepartmentColumnDefaultsPayload(departmentId) {
+        var defs = customFieldColumnDefinitions || [];
+        var visibility = {};
+        if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
+            visibility = reconcileColumnVisibilityWithTable(
+                projectTable,
+                loadColumnVisibilityFromLocalStorage(defs),
+                defs
+            );
+        } else {
+            visibility = loadColumnVisibilityFromLocalStorage(defs);
+        }
+        var order = (projectTable && $.fn.DataTable.isDataTable('#projectTable'))
+            ? getCurrentProjectColumnOrderKeys(projectTable)
+            : (loadProjectColumnOrder(departmentId, true) || getDefaultProjectColumnKeys(defs));
+        return {
+            visibility: visibility,
+            order: order,
+            widths: getCurrentProjectColumnWidths(projectTable, departmentId)
+        };
+    }
+
+    function saveDepartmentProjectListColumnDefaults(departmentId) {
+        if (!isProjectListAdminUser()) {
+            if (typeof showMessage === 'function') {
+                showProjectListError(translateText('権限がありません'));
+            }
+            return;
+        }
+        if (!departmentId) {
+            if (typeof showMessage === 'function') {
+                showProjectListError(translateText('部署を選択してください'));
+            }
+            return;
+        }
+        var depName = (window.app && window.app.selectedDepartment && window.app.selectedDepartment.name)
+            ? window.app.selectedDepartment.name
+            : '';
+        var confirmMsg = depName
+            ? (translateText('現在の列設定を部署のデフォルトとして保存しますか？') + '\n(' + depName + ')')
+            : translateText('現在の列設定を部署のデフォルトとして保存しますか？');
+        if (!window.confirm(confirmMsg)) {
+            return;
+        }
+        var config = buildCurrentDepartmentColumnDefaultsPayload(departmentId);
+        axios.post('/api/index.php?model=department&method=saveProjectListColumnDefaults', {
+            department_id: departmentId,
+            config: config
+        }).then(function(res) {
+            var data = res && res.data ? res.data : {};
+            if (data.success === false || data.error) {
+                if (typeof showMessage === 'function') {
+                    showProjectListError(data.message || data.error || translateText('保存に失敗しました'));
+                }
+                return;
+            }
+            departmentProjectListColumnDefaults[String(departmentId)] = {
+                visibility: Object.assign({}, config.visibility || {}),
+                order: Array.isArray(config.order) ? config.order.slice() : [],
+                widths: Object.assign({}, config.widths || {})
+            };
+            if (typeof showMessage === 'function') {
+                showMessage(translateText('部署の列デフォルトを保存しました'));
+            }
+        }).catch(function(err) {
+            var msg = (err && err.response && err.response.data && (err.response.data.message || err.response.data.error))
+                || (err && err.message)
+                || translateText('保存に失敗しました');
+            if (typeof showMessage === 'function') {
+                showProjectListError(msg);
+            }
+        });
+    }
+
     function initProjectFilterBoxCollapseState() {
         var box = document.getElementById('projectFilterBox');
         if (!box) return;
@@ -728,22 +863,33 @@ var projectTable;
         return COLUMN_WIDTH_STORAGE_KEY + '_' + (departmentId != null ? String(departmentId) : '0');
     }
 
-    function loadProjectColumnWidths(departmentId) {
+    function loadProjectColumnWidths(departmentId, localOnly) {
+        var out = {};
         try {
             var raw = localStorage.getItem(getProjectColumnWidthStorageKey(departmentId));
-            if (!raw) return {};
-            var parsed = JSON.parse(raw);
-            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-            var out = {};
-            Object.keys(parsed).forEach(function(key) {
-                var w = parseInt(parsed[key], 10);
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                    Object.keys(parsed).forEach(function(key) {
+                        var w = parseInt(parsed[key], 10);
+                        if (!key || isNaN(w) || w < PROJECT_LIST_COL_MIN_WIDTH) return;
+                        out[key] = Math.min(PROJECT_LIST_COL_MAX_WIDTH, w);
+                    });
+                }
+            }
+        } catch (e) { /* ignore */ }
+        if (Object.keys(out).length || localOnly) {
+            return out;
+        }
+        var deptDef = getDepartmentColumnDefaults(departmentId);
+        if (deptDef && deptDef.widths && typeof deptDef.widths === 'object') {
+            Object.keys(deptDef.widths).forEach(function(key) {
+                var w = parseInt(deptDef.widths[key], 10);
                 if (!key || isNaN(w) || w < PROJECT_LIST_COL_MIN_WIDTH) return;
                 out[key] = Math.min(PROJECT_LIST_COL_MAX_WIDTH, w);
             });
-            return out;
-        } catch (e) {
-            return {};
         }
+        return out;
     }
 
     function saveProjectColumnWidth(departmentId, columnName, widthPx) {
@@ -1204,6 +1350,15 @@ var projectTable;
         } catch (e) { /* ignore */ }
         if (!table || !$.fn.DataTable.isDataTable('#projectTable')) return;
 
+        var deptWidths = loadProjectColumnWidths(departmentId);
+        if (Object.keys(deptWidths).length) {
+            clearProjectTableColumnInlineWidths(table);
+            forceProjectListFixedTableLayout();
+            applySavedProjectColumnWidths(table, departmentId);
+            injectProjectListColumnResizeHandles(table);
+            return;
+        }
+
         clearProjectTableColumnInlineWidths(table);
 
         // Measure each column's natural width directly from the DOM (header +
@@ -1241,7 +1396,10 @@ var projectTable;
         try {
             localStorage.removeItem(getProjectColumnOrderStorageKey(departmentId));
         } catch (e) { /* ignore */ }
-        var defaultKeys = getDefaultProjectColumnKeys(customColDefs);
+        var defaultKeys = mergeColumnKeyOrder(
+            loadProjectColumnOrder(departmentId),
+            getDefaultProjectColumnKeys(customColDefs)
+        );
         var newOrder = [];
         defaultKeys.forEach(function(key) {
             try {
@@ -1671,37 +1829,44 @@ var projectTable;
             '</div>';
         $mount.html(html);
         bindProjectListColumnConfigImportInput();
-        if (!window.__projectListColumnResetBound) {
-            window.__projectListColumnResetBound = true;
-            document.addEventListener('click', function(e) {
-                var btn = e.target && e.target.closest ? e.target.closest('[data-pl-reset]') : null;
-                if (!btn) return;
-                e.preventDefault();
-                var action = btn.getAttribute('data-pl-reset');
-                var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
-                var defs = customFieldColumnDefinitions || [];
-                if (action === 'export-config') {
-                    exportProjectColumnConfigFile(depId);
-                    return;
-                }
-                if (action === 'import-config') {
-                    var input = document.getElementById('projectListColumnConfigFileInput');
-                    if (input) input.click();
-                    return;
-                }
-                if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
-                if (action === 'show-all-columns') {
-                    showAllProjectColumns(projectTable, defs, depId);
-                } else if (action === 'visibility') {
-                    resetProjectColumnVisibilityToDefault(projectTable, defs, depId);
-                } else if (action === 'width') {
-                    resetProjectColumnWidthsToDefault(projectTable, depId);
-                } else if (action === 'order') {
-                    resetProjectColumnOrderToDefault(projectTable, defs, depId);
-                }
-            });
-        }
+        bindProjectListColumnResetActions();
         applyI18nToProjectTableUI();
+    }
+
+    function bindProjectListColumnResetActions() {
+        if (window.__projectListColumnResetBound) return;
+        window.__projectListColumnResetBound = true;
+        document.addEventListener('click', function(e) {
+            var btn = e.target && e.target.closest ? e.target.closest('[data-pl-reset]') : null;
+            if (!btn) return;
+            e.preventDefault();
+            var action = btn.getAttribute('data-pl-reset');
+            var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
+            var defs = customFieldColumnDefinitions || [];
+            if (action === 'export-config') {
+                exportProjectColumnConfigFile(depId);
+                return;
+            }
+            if (action === 'import-config') {
+                var input = document.getElementById('projectListColumnConfigFileInput');
+                if (input) input.click();
+                return;
+            }
+            if (action === 'save-dept-default') {
+                saveDepartmentProjectListColumnDefaults(depId);
+                return;
+            }
+            if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+            if (action === 'show-all-columns') {
+                showAllProjectColumns(projectTable, defs, depId);
+            } else if (action === 'visibility') {
+                resetProjectColumnVisibilityToDefault(projectTable, defs, depId);
+            } else if (action === 'width') {
+                resetProjectColumnWidthsToDefault(projectTable, depId);
+            } else if (action === 'order') {
+                resetProjectColumnOrderToDefault(projectTable, defs, depId);
+            }
+        });
     }
 
     function isCailyBranchUser() {
@@ -2084,15 +2249,20 @@ var projectTable;
         return out;
     }
 
-    function loadProjectColumnOrder(departmentId) {
+    function loadProjectColumnOrder(departmentId, localOnly) {
         try {
             var raw = localStorage.getItem(getProjectColumnOrderStorageKey(departmentId));
-            if (!raw) return null;
-            var parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : null;
-        } catch (e) {
-            return null;
+            if (raw) {
+                var parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) return parsed;
+            }
+        } catch (e) { /* fall through */ }
+        if (localOnly) return null;
+        var deptDef = getDepartmentColumnDefaults(departmentId);
+        if (deptDef && Array.isArray(deptDef.order) && deptDef.order.length) {
+            return deptDef.order.slice();
         }
+        return null;
     }
 
     function saveProjectColumnOrder(departmentId, keys) {
@@ -2992,6 +3162,15 @@ var projectTable;
         (customColDefs || []).forEach(col => {
             visibility[col.key] = col.defaultVisible !== undefined ? col.defaultVisible : false;
         });
+        var deptDef = getDepartmentColumnDefaults(getActiveProjectListDepartmentId());
+        if (deptDef && deptDef.visibility && typeof deptDef.visibility === 'object') {
+            Object.keys(deptDef.visibility).forEach(function(key) {
+                if (visibility[key] === undefined) return;
+                if (isColumnHiddenForCailyBranch(key)) return;
+                if (isProjectDirectorColumn(key) && !canViewProjectDirectorColumns()) return;
+                visibility[key] = normalizeColumnVisibilityBool(deptDef.visibility[key], visibility[key]);
+            });
+        }
         if (isCailyBranchUser() && !canViewEndDateColumn()) {
             visibility.end_date = false;
             visibility.guis_nouki = false;
@@ -4159,12 +4338,14 @@ var projectTable;
         var customColumnConfigs = [];
         var cfRes = { data: [] };
         try {
+            var prefetchDepId = app.selectedDepartment && app.selectedDepartment.id;
             var prefetch = await Promise.all([
                 loadTeamMap(),
                 axios.get('/api/index.php?model=department&method=getCustomFields').catch(function(err) {
                     console.warn('Failed to load custom fields for list', err);
                     return { data: [] };
-                })
+                }),
+                ensureDepartmentProjectListColumnDefaults(prefetchDepId)
             ]);
             if (!isProjectTableInitStillValid(initId)) return;
             cfRes = prefetch[1] || { data: [] };
@@ -9129,6 +9310,8 @@ var projectTable;
         // (float filter offcanvas opened empty).
         initProjectFilterBoxCollapseState();
         initProjectListFloatActions();
+        // Admin "部署のデフォルトとして保存" lives in index.php — bind even before DataTable tools inject
+        bindProjectListColumnResetActions();
     }
 
     (window.__bdMixinReady || Promise.resolve()).then(function() {

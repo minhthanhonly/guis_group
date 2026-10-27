@@ -17,6 +17,7 @@ class Department extends ApplicationModel {
         $this->ensureProjectViewEndDateColumn();
         $this->ensureNoteLabelsColumn();
         $this->ensureDefaultTasksTable();
+        $this->ensureProjectListColumnDefaultsTable();
     }
 
     /**
@@ -913,6 +914,219 @@ class Department extends ApplicationModel {
             } else {
                 return array('success' => false, 'message' => '対象が指定されていません');
             }
+        } catch (Exception $e) {
+            return array('success' => false, 'message' => '削除に失敗しました。', 'error' => $e->getMessage());
+        }
+        return array('success' => true);
+    }
+
+    // --- Project list column defaults (per department) ---
+
+    private function projectListColumnDefaultsTable() {
+        return 'department_project_list_columns';
+    }
+
+    private function ensureProjectListColumnDefaultsTable() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = $this->projectListColumnDefaultsTable();
+        try {
+            $row = $this->fetchOne(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
+                . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "'"
+            );
+            if (!empty($row['cnt'])) {
+                return;
+            }
+            $this->query(
+                "CREATE TABLE IF NOT EXISTS `{$table}` ("
+                . "`id` INT NOT NULL AUTO_INCREMENT,"
+                . "`department_id` INT NOT NULL,"
+                . "`config` MEDIUMTEXT NOT NULL COMMENT 'JSON: visibility/order/widths',"
+                . "`updated_by` VARCHAR(50) NULL DEFAULT NULL,"
+                . "`updated_at` DATETIME NULL DEFAULT NULL,"
+                . "`created_at` DATETIME NULL DEFAULT NULL,"
+                . "PRIMARY KEY (`id`),"
+                . "UNIQUE KEY `uk_dept_project_list_columns` (`department_id`)"
+                . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
+            );
+        } catch (Exception $e) {
+            error_log('ensureProjectListColumnDefaultsTable failed: ' . $e->getMessage());
+        }
+    }
+
+    private function normalizeProjectListColumnConfig($raw) {
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : array();
+        }
+        if (!is_array($raw)) {
+            return null;
+        }
+        $visibility = array();
+        if (isset($raw['visibility']) && is_array($raw['visibility'])) {
+            foreach ($raw['visibility'] as $key => $val) {
+                $k = trim((string) $key);
+                if ($k === '') {
+                    continue;
+                }
+                $visibility[$k] = !empty($val) ? 1 : 0;
+            }
+        }
+        $order = array();
+        if (isset($raw['order']) && is_array($raw['order'])) {
+            foreach ($raw['order'] as $key) {
+                $k = trim((string) $key);
+                if ($k === '' || in_array($k, $order, true)) {
+                    continue;
+                }
+                $order[] = $k;
+            }
+        }
+        $widths = array();
+        if (isset($raw['widths']) && is_array($raw['widths'])) {
+            foreach ($raw['widths'] as $key => $val) {
+                $k = trim((string) $key);
+                $w = intval($val);
+                if ($k === '' || $w < 40) {
+                    continue;
+                }
+                if ($w > 800) {
+                    $w = 800;
+                }
+                $widths[$k] = $w;
+            }
+        }
+        if (!$visibility && !$order && !$widths) {
+            return null;
+        }
+        return array(
+            'visibility' => $visibility,
+            'order' => $order,
+            'widths' => $widths,
+        );
+    }
+
+    function getProjectListColumnDefaults() {
+        $departmentId = 0;
+        if (isset($_GET['department_id'])) {
+            $departmentId = intval($_GET['department_id']);
+        } elseif (isset($_POST['department_id'])) {
+            $departmentId = intval($_POST['department_id']);
+        }
+        if ($departmentId <= 0) {
+            return array('success' => false, 'message' => 'department_id required', 'config' => null);
+        }
+        $this->ensureProjectListColumnDefaultsTable();
+        $row = $this->fetchOne(sprintf(
+            "SELECT id, config, updated_at, updated_by FROM %s WHERE department_id = %d LIMIT 1",
+            $this->projectListColumnDefaultsTable(),
+            $departmentId
+        ));
+        if (!$row || empty($row['config'])) {
+            return array(
+                'success' => true,
+                'department_id' => $departmentId,
+                'config' => null,
+                'is_set' => false,
+            );
+        }
+        $config = $this->normalizeProjectListColumnConfig($row['config']);
+        return array(
+            'success' => true,
+            'department_id' => $departmentId,
+            'id' => intval($row['id']),
+            'config' => $config,
+            'is_set' => $config !== null,
+            'updated_at' => isset($row['updated_at']) ? $row['updated_at'] : null,
+            'updated_by' => isset($row['updated_by']) ? $row['updated_by'] : null,
+        );
+    }
+
+    function saveProjectListColumnDefaults() {
+        if (!isset($_SESSION['authority']) || $_SESSION['authority'] !== 'administrator') {
+            return array('success' => false, 'message' => '権限がありません', 'http_status' => 403);
+        }
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return array('success' => false, 'message' => 'Invalid JSON');
+        }
+        $departmentId = isset($data['department_id']) ? intval($data['department_id']) : 0;
+        if ($departmentId <= 0) {
+            return array('success' => false, 'message' => '部署を選択してください');
+        }
+        $config = $this->normalizeProjectListColumnConfig(isset($data['config']) ? $data['config'] : $data);
+        if ($config === null) {
+            return array('success' => false, 'message' => '列設定が空です');
+        }
+        $this->ensureProjectListColumnDefaultsTable();
+        $table = $this->projectListColumnDefaultsTable();
+        $now = date('Y-m-d H:i:s');
+        $userid = isset($_SESSION['userid']) ? (string) $_SESSION['userid'] : '';
+        $payload = json_encode($config, JSON_UNESCAPED_UNICODE);
+        $existing = $this->fetchOne(sprintf(
+            "SELECT id FROM %s WHERE department_id = %d LIMIT 1",
+            $table,
+            $departmentId
+        ));
+        try {
+            if ($existing && !empty($existing['id'])) {
+                $ok = $this->query_update(
+                    array(
+                        'config' => $payload,
+                        'updated_at' => $now,
+                        'updated_by' => $userid,
+                    ),
+                    array('id' => intval($existing['id'])),
+                    $table
+                );
+                if ($ok === false) {
+                    return array('success' => false, 'message' => '更新に失敗しました。');
+                }
+                return array('success' => true, 'id' => intval($existing['id']));
+            }
+            $insertId = $this->query_insert(
+                array(
+                    'department_id' => $departmentId,
+                    'config' => $payload,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                    'updated_by' => $userid,
+                ),
+                $table
+            );
+            if (!$insertId) {
+                return array('success' => false, 'message' => '登録に失敗しました。');
+            }
+            return array('success' => true, 'id' => $insertId);
+        } catch (Exception $e) {
+            return array('success' => false, 'message' => '保存に失敗しました。', 'error' => $e->getMessage());
+        }
+    }
+
+    function removeProjectListColumnDefaults() {
+        if (!isset($_SESSION['authority']) || $_SESSION['authority'] !== 'administrator') {
+            return array('success' => false, 'message' => '権限がありません', 'http_status' => 403);
+        }
+        $json = file_get_contents('php://input');
+        $data = json_decode($json, true);
+        if (!is_array($data)) {
+            return array('success' => false, 'message' => 'Invalid JSON');
+        }
+        $departmentId = isset($data['department_id']) ? intval($data['department_id']) : 0;
+        if ($departmentId <= 0) {
+            return array('success' => false, 'message' => '部署を選択してください');
+        }
+        $this->ensureProjectListColumnDefaultsTable();
+        try {
+            $this->query_delete(
+                array('department_id' => $departmentId),
+                $this->projectListColumnDefaultsTable()
+            );
         } catch (Exception $e) {
             return array('success' => false, 'message' => '削除に失敗しました。', 'error' => $e->getMessage());
         }

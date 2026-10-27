@@ -319,6 +319,15 @@ if($_SESSION['show_project'] == 0){
                     </ul>
                 </div>
                 <div id="projectListColumnResetMount" class="project-list-column-reset-tour-target"></div>
+                <?php if (isset($_SESSION['authority']) && $_SESSION['authority'] === 'administrator'): ?>
+                <button type="button"
+                        class="btn btn-sm btn-outline-primary"
+                        id="saveDeptColumnDefaultBtn"
+                        data-pl-reset="save-dept-default"
+                        title="現在の列設定をこの部署のデフォルトとして保存">
+                    <i class="fa fa-save me-1"></i><span data-i18n="部署のデフォルトとして保存">部署のデフォルトとして保存</span>
+                </button>
+                <?php endif; ?>
             </div>
             <table id="projectTable" class="table table-striped">
                 
