@@ -729,6 +729,25 @@ const vueApp = createApp({
             const found = options.find(function(opt) { return opt.value === code; });
             return found ? found.label : code;
         },
+        selectedEnergyMaterialLabels() {
+            const options = [
+                '意匠図',
+                '設備図',
+                '配置図',
+                '案内図',
+                '敷地求積図',
+                '確認申請書',
+                '設備仕様書',
+                'その他'
+            ];
+            const selected = String(this.project && this.project.energy_materials ? this.project.energy_materials : '')
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean);
+            return options.filter(function(opt) {
+                return selected.indexOf(opt) !== -1;
+            });
+        },
         selectedFeatureLabels() {
             const featureOptions = [
                 '施主宅付き',
@@ -1324,7 +1343,10 @@ const vueApp = createApp({
                 // Additional fields from parent project
                 this.project.guis_receiver = parentProject.guis_receiver; // GUIS　受付者
                 this.project.structural_office = parentProject.structural_office; // 構造事務所
-                this.project.materials = parentProject.materials; // 資料
+                this.project.materials = parentProject.materials; // お客様提供資料
+                this.project.materials_memo = parentProject.materials_memo || '';
+                this.project.energy_materials = parentProject.energy_materials || '';
+                this.project.energy_materials_memo = parentProject.energy_materials_memo || '';
                 this.project.parent_requests = parentProject.requests || ''; // 依頼
 
                 this.parentSiblingProjects = Array.isArray(childrenRes.data) ? childrenRes.data : [];

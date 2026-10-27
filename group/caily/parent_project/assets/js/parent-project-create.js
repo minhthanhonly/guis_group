@@ -30,11 +30,33 @@ createApp({
                 materials_contract: false,
                 materials_tac: false,
                 materials_other: false,
+                materials_memo: '',
                 application_review_agency: '',
                 bels_zeh_grade: '0',
+                energy_materials_memo: '',
                 structural_office: '',
                 notes: '',
                 status: 'draft'
+            },
+            energyMaterialOptions: [
+                '意匠図',
+                '設備図',
+                '配置図',
+                '案内図',
+                '敷地求積図',
+                '確認申請書',
+                '設備仕様書',
+                'その他'
+            ],
+            energyMaterialFlags: {
+                '意匠図': false,
+                '設備図': false,
+                '配置図': false,
+                '案内図': false,
+                '敷地求積図': false,
+                '確認申請書': false,
+                '設備仕様書': false,
+                'その他': false
             },
             sharedHousingFeatureLabel: '共同住宅（共用部計算なし）',
             featureOptions: [
@@ -196,9 +218,21 @@ createApp({
             if (!enabled) {
                 this.parentProject.application_review_agency = '';
                 this.parentProject.bels_zeh_grade = '0';
+                this.parentProject.energy_materials_memo = '';
+                this.energyMaterialFlags = this.createEmptyEnergyMaterialFlags();
                 this.destroyApplicationReviewAgencyTagify();
             } else {
                 this.$nextTick(() => this.initApplicationReviewAgencyTagify());
+            }
+        },
+        'energyMaterialFlags.その他'(enabled) {
+            if (!enabled && this.parentProject) {
+                this.parentProject.energy_materials_memo = '';
+            }
+        },
+        'parentProject.materials_other'(enabled) {
+            if (!enabled && this.parentProject) {
+                this.parentProject.materials_memo = '';
             }
         }
     },
@@ -469,6 +503,10 @@ createApp({
                 if (this.parentProject.materials_tac) materialsArray.push('TAC図');
                 if (this.parentProject.materials_other) materialsArray.push('その他');
                 formData.append('materials', materialsArray.join(','));
+                formData.append(
+                    'materials_memo',
+                    this.parentProject.materials_other ? (this.parentProject.materials_memo || '') : ''
+                );
                 formData.append('features', this.buildFeaturesString());
                 formData.append(
                     'application_review_agency',
@@ -477,6 +515,16 @@ createApp({
                 formData.append(
                     'bels_zeh_grade',
                     this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '0') : '0'
+                );
+                formData.append(
+                    'energy_materials',
+                    this.hasEnergySavingRequest ? this.buildEnergyMaterialsString() : ''
+                );
+                formData.append(
+                    'energy_materials_memo',
+                    this.hasEnergySavingRequest && this.energyMaterialFlags['その他']
+                        ? (this.parentProject.energy_materials_memo || '')
+                        : ''
                 );
                 formData.append('structural_office', this.parentProject.structural_office || '');
                 formData.append('notes', this.parentProject.notes || '');
@@ -1736,6 +1784,24 @@ createApp({
             });
             this.featureFlags = flags;
         },
+        createEmptyEnergyMaterialFlags() {
+            const flags = {};
+            this.energyMaterialOptions.forEach((opt) => { flags[opt] = false; });
+            return flags;
+        },
+        buildEnergyMaterialsString() {
+            return this.energyMaterialOptions.filter((opt) => this.energyMaterialFlags[opt]).join(',');
+        },
+        parseCopiedEnergyMaterials(energyMaterials) {
+            const list = String(energyMaterials || '').split(',').map((m) => m.trim()).filter(Boolean);
+            const flags = this.createEmptyEnergyMaterialFlags();
+            list.forEach((item) => {
+                if (Object.prototype.hasOwnProperty.call(flags, item)) {
+                    flags[item] = true;
+                }
+            });
+            this.energyMaterialFlags = flags;
+        },
         applyTagifyValuesFromParentProject() {
             const apply = (tagify, value) => {
                 if (!tagify) {
@@ -1848,6 +1914,8 @@ createApp({
                 this.parentProject.bels_zeh_grade = (data.bels_zeh_grade != null && data.bels_zeh_grade !== '')
                     ? String(data.bels_zeh_grade)
                     : '0';
+                this.parentProject.materials_memo = data.materials_memo || '';
+                this.parentProject.energy_materials_memo = data.energy_materials_memo || '';
                 this.parentProject.notes = data.notes || '';
                 this.parentProject.status = data.status || 'draft';
                 this.parentProject.desired_delivery_date = '';
@@ -1856,6 +1924,7 @@ createApp({
                 this.parseCopiedRequests(data.requests);
                 this.parseCopiedMaterials(data.materials);
                 this.parseCopiedFeatures(data.features);
+                this.parseCopiedEnergyMaterials(data.energy_materials);
                 this.clearRequestsValidation();
 
                 await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1985,13 +2054,16 @@ createApp({
             materials_tac: false,
             materials_other: false,
             materials: '',
+            materials_memo: '',
             application_review_agency: '',
             bels_zeh_grade: '0',
+            energy_materials_memo: '',
             structural_office: '',
             notes: '',
             status: 'draft'
         };
         this.featureFlags = this.createEmptyFeatureFlags();
+        this.energyMaterialFlags = this.createEmptyEnergyMaterialFlags();
         
         // Auto-generate project number on page load
         await this.generateProjectNumber();

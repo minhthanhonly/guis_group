@@ -494,6 +494,26 @@ createApp({
             materials_contract: false,
             materials_tac: false,
             materials_other: false,
+            energyMaterialOptions: [
+                '意匠図',
+                '設備図',
+                '配置図',
+                '案内図',
+                '敷地求積図',
+                '確認申請書',
+                '設備仕様書',
+                'その他'
+            ],
+            energyMaterialFlags: {
+                '意匠図': false,
+                '設備図': false,
+                '配置図': false,
+                '案内図': false,
+                '敷地求積図': false,
+                '確認申請書': false,
+                '設備仕様書': false,
+                'その他': false
+            },
             sharedHousingFeatureLabel: '共同住宅（共用部計算なし）',
             featureOptions: [
                 '施主宅付き',
@@ -823,9 +843,22 @@ createApp({
             if (!enabled && this.parentProject) {
                 this.parentProject.application_review_agency = '';
                 this.parentProject.bels_zeh_grade = '0';
+                this.parentProject.energy_materials = '';
+                this.parentProject.energy_materials_memo = '';
+                this.energyMaterialFlags = this.createEmptyEnergyMaterialFlags();
                 this.destroyApplicationReviewAgencyTagify();
             } else if (enabled && this.isEditMode) {
                 this.$nextTick(() => this.initApplicationReviewAgencyTagify());
+            }
+        },
+        'energyMaterialFlags.その他'(enabled) {
+            if (!enabled && this.parentProject) {
+                this.parentProject.energy_materials_memo = '';
+            }
+        },
+        materials_other(enabled) {
+            if (!enabled && this.parentProject) {
+                this.parentProject.materials_memo = '';
             }
         },
         'newQuotation.items': {
@@ -1030,6 +1063,13 @@ createApp({
             const features = String(this.parentProject && this.parentProject.features ? this.parentProject.features : '');
             const selected = features.split(',').map(function(v) { return v.trim(); }).filter(Boolean);
             return this.visibleFeatureOptions.filter(function(opt) {
+                return selected.indexOf(opt) !== -1;
+            });
+        },
+        selectedEnergyMaterialLabels() {
+            const raw = String(this.parentProject && this.parentProject.energy_materials ? this.parentProject.energy_materials : '');
+            const selected = raw.split(',').map(function(v) { return v.trim(); }).filter(Boolean);
+            return this.energyMaterialOptions.filter(function(opt) {
                 return selected.indexOf(opt) !== -1;
             });
         },
@@ -2048,6 +2088,9 @@ createApp({
                 bels_zeh_grade: (source.bels_zeh_grade != null && source.bels_zeh_grade !== '')
                     ? String(source.bels_zeh_grade)
                     : '0',
+                energy_materials: source.energy_materials || '',
+                energy_materials_memo: source.energy_materials_memo || '',
+                materials_memo: source.materials_memo || '',
                 notes: source.notes || '',
                 requests: requests,
                 materials: materials,
@@ -2080,6 +2123,7 @@ createApp({
             this.parseRequests();
             this.parseMaterials();
             this.parseFeatures();
+            this.parseEnergyMaterials();
             if (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '') {
                 this.parentProject.bels_zeh_grade = '0';
             } else {
@@ -2837,6 +2881,28 @@ createApp({
             }
             this.featureFlags = flags;
         },
+        createEmptyEnergyMaterialFlags() {
+            const flags = {};
+            this.energyMaterialOptions.forEach((opt) => { flags[opt] = false; });
+            return flags;
+        },
+        buildEnergyMaterialsString() {
+            return this.energyMaterialOptions.filter((opt) => this.energyMaterialFlags[opt]).join(',');
+        },
+        parseEnergyMaterials() {
+            const flags = this.createEmptyEnergyMaterialFlags();
+            if (this.parentProject && this.parentProject.energy_materials) {
+                this.parentProject.energy_materials.split(',').map(m => m.trim()).filter(Boolean).forEach((item) => {
+                    if (Object.prototype.hasOwnProperty.call(flags, item)) {
+                        flags[item] = true;
+                    }
+                });
+            }
+            this.energyMaterialFlags = flags;
+            if (!flags['その他'] && this.parentProject) {
+                this.parentProject.energy_materials_memo = this.parentProject.energy_materials_memo || '';
+            }
+        },
         validateParentProjectForm() {
             this.validationErrors = {
                 company_name: '',
@@ -3045,10 +3111,19 @@ createApp({
             if (this.materials_tac) materialsArray.push('TAC図');
             if (this.materials_other) materialsArray.push('その他');
             this.parentProject.materials = materialsArray.join(',');
+            if (!this.materials_other) {
+                this.parentProject.materials_memo = '';
+            }
 
             this.parentProject.features = this.visibleFeatureOptions
                 .filter((opt) => this.featureFlags[opt])
                 .join(',');
+            this.parentProject.energy_materials = this.hasEnergySavingRequest
+                ? this.buildEnergyMaterialsString()
+                : '';
+            if (!this.hasEnergySavingRequest || !this.energyMaterialFlags['その他']) {
+                this.parentProject.energy_materials_memo = '';
+            }
 
             try {
                 const formData = new FormData();
@@ -3070,6 +3145,7 @@ createApp({
                 formData.append('request_type', this.parentProject.request_type || '');
                 formData.append('desired_delivery_date', this.parentProject.desired_delivery_date || '');
                 formData.append('materials', this.parentProject.materials);
+                formData.append('materials_memo', this.parentProject.materials_memo || '');
                 formData.append('features', this.parentProject.features || '');
                 formData.append(
                     'application_review_agency',
@@ -3079,6 +3155,8 @@ createApp({
                     'bels_zeh_grade',
                     this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '0') : '0'
                 );
+                formData.append('energy_materials', this.parentProject.energy_materials || '');
+                formData.append('energy_materials_memo', this.parentProject.energy_materials_memo || '');
                 formData.append('structural_office', this.parentProject.structural_office || '');
                 formData.append('notes', this.parentProject.notes || '');
                 formData.append('status', this.parentProject.status || 'draft');

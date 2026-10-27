@@ -281,7 +281,7 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                         </div>
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="資料">資料</span></label>
+                                <label class="form-label"><span data-i18n="お客様提供資料">お客様提供資料</span></label>
                                 <div class="row">
                                     <div class="col-md-4">
                                         <div class="form-check">
@@ -324,6 +324,12 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                         </div>
                                     </div>
                                 </div>
+                                <div class="mt-2" v-if="parentProject.materials_other">
+                                    <input type="text" class="form-control"
+                                        v-model="parentProject.materials_memo"
+                                        placeholder="その他メモ"
+                                        maxlength="500">
+                                </div>
                             </div>
                         </div>
                         <div class="col-12">
@@ -338,6 +344,27 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                             <label class="form-check-label" :for="'features_' + opt">{{ opt }}</label>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12" v-if="hasEnergySavingRequest">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
+                                <div class="row">
+                                    <div class="col-md-4" v-for="opt in energyMaterialOptions" :key="'em_' + opt">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox"
+                                                :id="'energy_materials_' + opt"
+                                                v-model="energyMaterialFlags[opt]">
+                                            <label class="form-check-label" :for="'energy_materials_' + opt">{{ opt }}</label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mt-2" v-if="energyMaterialFlags['その他']">
+                                    <input type="text" class="form-control"
+                                        v-model="parentProject.energy_materials_memo"
+                                        placeholder="その他メモ"
+                                        maxlength="500">
                                 </div>
                             </div>
                         </div>

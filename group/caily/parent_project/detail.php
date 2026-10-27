@@ -408,7 +408,7 @@ $view->heading('建物詳細');
                         </div>
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="資料">資料</span></label>
+                                <label class="form-label"><span data-i18n="お客様提供資料">お客様提供資料</span></label>
                                 <template v-if="isEditMode">
                                     <div class="row">
                                         <div class="col-md-4">
@@ -457,6 +457,12 @@ $view->heading('建物詳細');
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="mt-2" v-if="materials_other">
+                                        <input type="text" class="form-control"
+                                            v-model="parentProject.materials_memo"
+                                            placeholder="その他メモ"
+                                            maxlength="500">
+                                    </div>
                                 </template>
                                 <template v-else>
                                     <div class="form-control-plaintext">
@@ -480,6 +486,9 @@ $view->heading('建物詳細');
                                             <div class="col-md-4"
                                                 v-if="parentProject.materials && parentProject.materials.includes('その他')">
                                                 <i class="fa fa-check text-success me-2"></i>その他
+                                                <span v-if="parentProject.materials_memo" class="small text-muted ms-1">
+                                                    ({{ parentProject.materials_memo }})
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
@@ -506,6 +515,45 @@ $view->heading('建物詳細');
                                         <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedFeatureLabels.length">
                                             <span v-for="opt in selectedFeatureLabels" :key="opt" class="badge badge-outline-primary me-1">
                                                 {{ opt }}
+                                            </span>
+                                        </div>
+                                        <span v-else class="text-muted">-</span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-12" v-if="hasEnergySavingRequest">
+                            <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
+                                <template v-if="isEditMode">
+                                    <div class="row">
+                                        <div class="col-md-4" v-for="opt in energyMaterialOptions" :key="'em_' + opt">
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox"
+                                                    :id="'energy_materials_' + opt"
+                                                    v-model="energyMaterialFlags[opt]">
+                                                <label class="form-check-label" :for="'energy_materials_' + opt">{{ opt }}</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="mt-2" v-if="energyMaterialFlags['その他']">
+                                        <input type="text" class="form-control"
+                                            v-model="parentProject.energy_materials_memo"
+                                            placeholder="その他メモ"
+                                            maxlength="500">
+                                    </div>
+                                </template>
+                                <template v-else>
+                                    <div class="form-control-plaintext">
+                                        <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedEnergyMaterialLabels.length">
+                                            <span v-for="opt in selectedEnergyMaterialLabels" :key="'emv_' + opt"
+                                                  class="badge badge-outline-primary me-1">
+                                                {{ opt }}
+                                            </span>
+                                            <span v-if="parentProject.energy_materials_memo
+                                                && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
+                                                  class="small text-muted ms-1">
+                                                ({{ parentProject.energy_materials_memo }})
                                             </span>
                                         </div>
                                         <span v-else class="text-muted">-</span>

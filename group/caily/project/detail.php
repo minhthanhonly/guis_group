@@ -228,7 +228,7 @@ if($_SESSION['show_project'] == 0){
                                                         </div>
                                                     </div>
                                                     <div class="col-12 mb-3">
-                                                        <label class="form-label"><span data-i18n="資料">資料</span></label>
+                                                        <label class="form-label"><span data-i18n="お客様提供資料">お客様提供資料</span></label>
                                                         <div class="form-control-plaintext">
                                                             <div class="row">
                                                                 <div class="col-md-4" v-if="project.materials && project.materials.includes('配置図')">
@@ -245,6 +245,9 @@ if($_SESSION['show_project'] == 0){
                                                                 </div>
                                                                 <div class="col-md-4" v-if="project.materials && project.materials.includes('その他')">
                                                                     <i class="fa fa-check text-success me-2"></i>その他
+                                                                    <span v-if="project.materials_memo" class="small text-muted ms-1">
+                                                                        ({{ project.materials_memo }})
+                                                                    </span>
                                                                 </div>
                                                                 <div v-if="!project.materials || project.materials.length === 0" class="col-12">
                                                                     <span class="text-muted">-</span>
@@ -258,6 +261,23 @@ if($_SESSION['show_project'] == 0){
                                                             <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedFeatureLabels.length">
                                                                 <span v-for="opt in selectedFeatureLabels" :key="opt" class="badge badge-outline-primary me-1">
                                                                     {{ opt }}
+                                                                </span>
+                                                            </div>
+                                                            <span v-else class="text-muted">-</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="col-12 mb-3" v-if="hasEnergySavingRequest">
+                                                        <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
+                                                        <div class="form-control-plaintext">
+                                                            <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedEnergyMaterialLabels.length">
+                                                                <span v-for="opt in selectedEnergyMaterialLabels" :key="'em_' + opt"
+                                                                      class="badge badge-outline-primary me-1">
+                                                                    {{ opt }}
+                                                                </span>
+                                                                <span v-if="project.energy_materials_memo
+                                                                    && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
+                                                                      class="small text-muted ms-1">
+                                                                    ({{ project.energy_materials_memo }})
                                                                 </span>
                                                             </div>
                                                             <span v-else class="text-muted">-</span>

@@ -6064,11 +6064,16 @@ var projectTable;
                     }
                     var materials = String(parent.materials || '').split(',').map(function(m) { return m.trim(); }).filter(Boolean);
                     if (materials.length) {
-                        html += fieldRow('資料', materials.map(function(item) {
-                            return '<span class="badge badge-outline-secondary me-1">' + escapeHtmlForNote(item) + '</span>';
-                        }).join(''));
+                        var materialsHtml = materials.map(function(item) {
+                            var label = escapeHtmlForNote(item);
+                            if (item === 'その他' && parent.materials_memo) {
+                                label += ' <span class="small text-muted">(' + escapeHtmlForNote(parent.materials_memo) + ')</span>';
+                            }
+                            return '<span class="badge badge-outline-secondary me-1">' + label + '</span>';
+                        }).join('');
+                        html += fieldRow('お客様提供資料', materialsHtml);
                     } else {
-                        html += fieldRow('資料', textOrEmpty(''));
+                        html += fieldRow('お客様提供資料', textOrEmpty(''));
                     }
                     var featureLabels = formatParentFeatureLabels(parent.features, parent.type2);
                     if (featureLabels.length) {
@@ -6079,6 +6084,19 @@ var projectTable;
                         html += fieldRow('特徴', textOrEmpty(''));
                     }
                     if (parentRequestsIncludeEnergySaving(parent.requests)) {
+                        var energyMaterials = String(parent.energy_materials || '').split(',').map(function(m) { return m.trim(); }).filter(Boolean);
+                        if (energyMaterials.length) {
+                            var energyHtml = energyMaterials.map(function(item) {
+                                var label = escapeHtmlForNote(item);
+                                if (item === 'その他' && parent.energy_materials_memo) {
+                                    label += ' <span class="small text-muted">(' + escapeHtmlForNote(parent.energy_materials_memo) + ')</span>';
+                                }
+                                return '<span class="badge badge-outline-primary me-1">' + label + '</span>';
+                            }).join('');
+                            html += fieldRow('省エネ向け資料', energyHtml);
+                        } else {
+                            html += fieldRow('省エネ向け資料', textOrEmpty(''));
+                        }
                         var agency = String(parent.application_review_agency || '').trim();
                         html += fieldRow('申請提出先の審査機関', agency
                             ? agency.split(',').map(function(item) { return item.trim(); }).filter(Boolean).map(function(item) {

@@ -645,7 +645,7 @@ $view->heading('建物一覧');
                         </div>
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="資料">資料</span></label>
+                                <label class="form-label"><span data-i18n="お客様提供資料">お客様提供資料</span></label>
                                 <div class="row">
                                     <div class="col-md-4">
                                         <div class="form-check">
