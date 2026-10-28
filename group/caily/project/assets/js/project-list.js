@@ -403,6 +403,12 @@ var projectTable;
     const SCROLL_RESTORE_KEY = 'projectListScrollY';
     const PROJECT_FILTER_BOX_OPEN_KEY = 'projectAdvancedFilterBoxOpen';
 
+    // Header multi-select → temporary hide (session only, not 列の表示 prefs)
+    var projectListHeaderSelectedKeys = [];
+    var projectListHeaderAnchorKey = '';
+    var projectListHeaderPointer = { active: false, moved: false, startX: 0, startY: 0 };
+    var projectListTempHiddenKeys = {};
+
     // Server-side per-department column defaults (visibility / order / widths)
     var departmentProjectListColumnDefaults = {};
     var departmentProjectListColumnDefaultsLoading = {};
@@ -1293,17 +1299,399 @@ var projectTable;
         forceProjectListFixedTableLayout();
         applySavedProjectColumnWidths(table, departmentId);
         injectProjectListColumnResizeHandles(table);
+        applyProjectListTemporaryHiddenColumns(table);
+        refreshProjectListHeaderColumnUi(table);
     }
 
     function initProjectListColumnResize(table, departmentId) {
         if (!table) return;
         projectListResizeDepartmentId = departmentId;
         bindProjectListColumnResizeDocumentEvents();
+        bindProjectListHeaderColumnSelect();
         forceProjectListFixedTableLayout();
         try { table.columns.adjust(); } catch (e) { /* ignore */ }
         clearProjectTableColumnInlineWidths(table);
         applySavedProjectColumnWidths(table, departmentId);
         injectProjectListColumnResizeHandles(table);
+        refreshProjectListHeaderColumnUi(table);
+    }
+
+    function getProjectColumnLabelByKey(key) {
+        var k = String(key || '').trim();
+        if (!k) return '';
+        var found = COLUMN_DEFINITIONS.find(function(c) { return c.key === k; });
+        if (found) return found.label;
+        found = (namedDefaultTaskColumnDefinitions || []).find(function(c) { return c.key === k; });
+        if (found) return found.label;
+        found = (customFieldColumnDefinitions || []).find(function(c) { return c.key === k; });
+        if (found) return found.label;
+        return k;
+    }
+
+    function getHeaderColumnKeyFromTh(th) {
+        if (!th || !projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return '';
+        try {
+            var col = projectTable.column(th);
+            var nm = typeof col.name === 'function' ? col.name() : '';
+            if (nm) return String(nm);
+            var idx = typeof col.index === 'function' ? col.index() : null;
+            if (idx == null) return '';
+            var settings = projectTable.settings()[0];
+            var ac = settings && settings.aoColumns ? settings.aoColumns[idx] : null;
+            return (ac && ac.name) ? String(ac.name) : '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function getVisibleHeaderColumnKeysInOrder(table) {
+        var keys = [];
+        if (!table) return keys;
+        try {
+            table.columns(':visible').every(function() {
+                var nm = this.name();
+                if (nm) keys.push(String(nm));
+            });
+        } catch (e) { /* ignore */ }
+        return keys;
+    }
+
+    function getAllHeaderColumnKeysInOrder(table) {
+        var keys = [];
+        if (!table) return keys;
+        try {
+            table.columns().every(function() {
+                var nm = this.name();
+                if (nm) keys.push(String(nm));
+            });
+        } catch (e) { /* ignore */ }
+        return keys;
+    }
+
+    function isHeaderColumnVisibleInTable(table, key) {
+        if (!table || !key) return false;
+        var idx = getDataTableColumnIndexByKey(key, customFieldColumnDefinitions);
+        if (idx === null) return false;
+        try {
+            return !!table.column(idx).visible();
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function setProjectListHeaderColumnSelection(keys, anchorKey) {
+        var visible = getVisibleHeaderColumnKeysInOrder(projectTable);
+        var allowed = {};
+        visible.forEach(function(k) { allowed[k] = true; });
+        projectListHeaderSelectedKeys = (keys || []).filter(function(k) {
+            return !!allowed[k];
+        });
+        if (anchorKey && allowed[anchorKey]) {
+            projectListHeaderAnchorKey = anchorKey;
+        } else if (projectListHeaderSelectedKeys.length) {
+            projectListHeaderAnchorKey = projectListHeaderSelectedKeys[0];
+        } else {
+            projectListHeaderAnchorKey = '';
+        }
+        applyProjectListHeaderSelectionClasses();
+    }
+
+    function applyProjectListHeaderSelectionClasses() {
+        var selected = {};
+        projectListHeaderSelectedKeys.forEach(function(k) { selected[k] = true; });
+        var $ths = $('#projectTable_wrapper thead th, #projectTable thead th');
+        $ths.removeClass('pl-col-header-selected');
+        $ths.each(function() {
+            var key = getHeaderColumnKeyFromTh(this);
+            if (key && selected[key]) {
+                $(this).addClass('pl-col-header-selected');
+            }
+        });
+    }
+
+    function handleProjectListHeaderColumnClick(e) {
+        if ($(e.target).closest('.pl-col-resize-handle, .pl-col-unhide-gap').length) return;
+        if (projectListHeaderPointer.moved || projectListColumnResizeDrag) return;
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        var th = $(e.target).closest('th')[0];
+        if (!th) return;
+        var key = getHeaderColumnKeyFromTh(th);
+        if (!key || !isHeaderColumnVisibleInTable(projectTable, key)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var visibleKeys = getVisibleHeaderColumnKeysInOrder(projectTable);
+        var ctrl = !!(e.ctrlKey || e.metaKey);
+        var shift = !!e.shiftKey;
+        if (shift && projectListHeaderAnchorKey) {
+            var a = visibleKeys.indexOf(projectListHeaderAnchorKey);
+            var b = visibleKeys.indexOf(key);
+            if (a < 0) a = b;
+            if (b < 0) return;
+            var from = Math.min(a, b);
+            var to = Math.max(a, b);
+            setProjectListHeaderColumnSelection(visibleKeys.slice(from, to + 1), projectListHeaderAnchorKey);
+            return;
+        }
+        if (ctrl) {
+            var next = projectListHeaderSelectedKeys.slice();
+            var idx = next.indexOf(key);
+            if (idx >= 0) next.splice(idx, 1);
+            else next.push(key);
+            setProjectListHeaderColumnSelection(next, key);
+            return;
+        }
+        setProjectListHeaderColumnSelection([key], key);
+    }
+
+    function ensureProjectListHeaderContextMenu() {
+        var $menu = $('#projectHeaderContextMenu');
+        if ($menu.length) return $menu;
+        $menu = $('<div id="projectHeaderContextMenu" class="dropdown-menu" style="position:absolute; display:none; z-index:10000;"></div>');
+        $menu.append(
+            '<button class="dropdown-item" type="button" id="projectHeaderHideSelectedColsBtn">'
+            + '<i class="fa fa-eye-slash me-1"></i>'
+            + '<span data-i18n="選択した列を一時非表示">選択した列を一時非表示</span>'
+            + '</button>'
+        );
+        $('body').append($menu);
+        if (typeof window.applyDataI18n === 'function') {
+            window.applyDataI18n($menu[0]);
+        }
+        $menu.on('click', '#projectHeaderHideSelectedColsBtn', function(ev) {
+            ev.preventDefault();
+            $menu.hide();
+            hideSelectedProjectListHeaderColumns();
+        });
+        return $menu;
+    }
+
+    function hideProjectListHeaderContextMenu() {
+        $('#projectHeaderContextMenu').hide();
+    }
+
+    function clearProjectListTemporaryHiddenColumns() {
+        projectListTempHiddenKeys = {};
+    }
+
+    function isProjectListTemporarilyHiddenKey(key) {
+        return !!(key && projectListTempHiddenKeys[key]);
+    }
+
+    /** Apply session-only header hides on top of 列の表示 prefs (does not touch localStorage). */
+    function applyProjectListTemporaryHiddenColumns(table) {
+        var t = table || projectTable;
+        if (!t || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        var customDefs = customFieldColumnDefinitions || [];
+        var keys = Object.keys(projectListTempHiddenKeys);
+        if (!keys.length) return;
+        var changed = false;
+        keys.forEach(function(key) {
+            if (!projectListTempHiddenKeys[key]) return;
+            var idx = getDataTableColumnIndexByKey(key, customDefs);
+            if (idx === null) return;
+            try {
+                if (t.column(idx).visible()) {
+                    t.column(idx).visible(false, false);
+                    changed = true;
+                }
+            } catch (e) { /* ignore */ }
+        });
+        if (changed) {
+            try { t.columns.adjust(); } catch (e2) { /* ignore */ }
+        }
+    }
+
+    function hideSelectedProjectListHeaderColumns() {
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        var keys = projectListHeaderSelectedKeys.slice();
+        if (!keys.length) return;
+        var visibleKeys = getVisibleHeaderColumnKeysInOrder(projectTable);
+        var remaining = visibleKeys.filter(function(k) { return keys.indexOf(k) < 0; });
+        if (!remaining.length) {
+            var msg = (typeof translateText === 'function')
+                ? translateText('少なくとも1つの列を表示してください')
+                : '少なくとも1つの列を表示してください';
+            if (typeof toastr !== 'undefined') toastr.warning(msg);
+            else if (typeof showMessage === 'function') showMessage(msg, true);
+            return;
+        }
+        keys.forEach(function(k) { projectListTempHiddenKeys[k] = true; });
+        applyProjectListTemporaryHiddenColumns(projectTable);
+        setProjectListHeaderColumnSelection([], '');
+        reapplyProjectListColumnWidthsAfterLayout(
+            projectTable,
+            window.app && window.app.selectedDepartment && window.app.selectedDepartment.id
+        );
+    }
+
+    /** Gaps of temporary (header) hides only — not dropdown 列の表示 hides. */
+    function findProjectListHiddenColumnGaps(table) {
+        var gaps = [];
+        if (!table) return gaps;
+        var allKeys = getAllHeaderColumnKeysInOrder(table);
+        var i = 0;
+        while (i < allKeys.length) {
+            if (!isProjectListTemporarilyHiddenKey(allKeys[i])) {
+                i++;
+                continue;
+            }
+            var start = i;
+            while (i < allKeys.length && isProjectListTemporarilyHiddenKey(allKeys[i])) {
+                i++;
+            }
+            var hiddenKeys = allKeys.slice(start, i);
+            var leftVisibleKey = '';
+            for (var j = start - 1; j >= 0; j--) {
+                if (isHeaderColumnVisibleInTable(table, allKeys[j])) {
+                    leftVisibleKey = allKeys[j];
+                    break;
+                }
+            }
+            var anchorKey = leftVisibleKey;
+            var leading = !leftVisibleKey;
+            if (!anchorKey) {
+                for (var k = i; k < allKeys.length; k++) {
+                    if (isHeaderColumnVisibleInTable(table, allKeys[k])) {
+                        anchorKey = allKeys[k];
+                        break;
+                    }
+                }
+            }
+            if (anchorKey && hiddenKeys.length) {
+                gaps.push({
+                    anchorKey: anchorKey,
+                    hiddenKeys: hiddenKeys,
+                    leading: leading
+                });
+            }
+        }
+        return gaps;
+    }
+
+    function refreshProjectListHeaderUnhidePlusButtons(table) {
+        $('#projectTable_wrapper thead th .pl-col-unhide-gap, #projectTable thead th .pl-col-unhide-gap').remove();
+        if (!table || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        var gaps = findProjectListHiddenColumnGaps(table);
+        gaps.forEach(function(g) {
+            var idx = getDataTableColumnIndexByKey(g.anchorKey, customFieldColumnDefinitions);
+            if (idx === null) return;
+            var header = null;
+            try { header = table.column(idx).header(); } catch (e) { return; }
+            if (!header) return;
+            var $th = $(header);
+            var labels = g.hiddenKeys.map(function(k) {
+                var lab = getProjectColumnLabelByKey(k);
+                return (typeof translateText === 'function') ? translateText(lab) : lab;
+            });
+            var tip = labels.join(', ');
+            var unhideLabel = (typeof translateText === 'function')
+                ? translateText('一時非表示の列を再表示')
+                : '一時非表示の列を再表示';
+            var $btn = $(
+                '<button type="button" class="pl-col-unhide-gap" title="'
+                + escapeHtmlForNote(unhideLabel + ': ' + tip)
+                + '" aria-label="' + escapeHtmlForNote(unhideLabel) + '">+</button>'
+            );
+            $btn.attr('data-hidden-keys', g.hiddenKeys.join(','));
+            if (g.leading) {
+                $btn.addClass('pl-col-unhide-gap-leading');
+                $th.prepend($btn);
+            } else {
+                $btn.addClass('pl-col-unhide-gap-trailing');
+                $th.append($btn);
+            }
+        });
+    }
+
+    function unhideProjectListHeaderColumnGap(hiddenKeysCsv) {
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        var keys = String(hiddenKeysCsv || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        if (!keys.length) return;
+        var customDefs = customFieldColumnDefinitions || [];
+        var prefs = loadColumnVisibilityFromLocalStorage(customDefs);
+        keys.forEach(function(k) {
+            delete projectListTempHiddenKeys[k];
+            // Only re-show if 列の表示 still wants it visible
+            if (!normalizeColumnVisibilityBool(prefs[k], true)) return;
+            var idx = getDataTableColumnIndexByKey(k, customDefs);
+            if (idx === null) return;
+            try { projectTable.column(idx).visible(true, false); } catch (e) { /* ignore */ }
+        });
+        try { projectTable.columns.adjust(); } catch (e2) { /* ignore */ }
+        reapplyProjectListColumnWidthsAfterLayout(
+            projectTable,
+            window.app && window.app.selectedDepartment && window.app.selectedDepartment.id
+        );
+    }
+
+    function refreshProjectListHeaderColumnUi(table) {
+        bindProjectListHeaderColumnSelect();
+        var t = table || projectTable;
+        if (!t || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        // Drop selection for columns that are no longer visible
+        setProjectListHeaderColumnSelection(projectListHeaderSelectedKeys.slice(), projectListHeaderAnchorKey);
+        refreshProjectListHeaderUnhidePlusButtons(t);
+    }
+
+    function bindProjectListHeaderColumnSelect() {
+        if (window.__projectListHeaderColSelectBound) return;
+        window.__projectListHeaderColSelectBound = true;
+        ensureProjectListHeaderContextMenu();
+
+        $(document).on('mousedown.plHeaderColSelect', '#projectTable_wrapper thead th, #projectTable thead th', function(e) {
+            if ($(e.target).closest('.pl-col-resize-handle, .pl-col-unhide-gap').length) return;
+            if (e.button !== 0) return;
+            projectListHeaderPointer = {
+                active: true,
+                moved: false,
+                startX: e.pageX,
+                startY: e.pageY
+            };
+        });
+        $(document).on('mousemove.plHeaderColSelect', function(e) {
+            if (!projectListHeaderPointer.active) return;
+            if (Math.abs(e.pageX - projectListHeaderPointer.startX) > 4
+                || Math.abs(e.pageY - projectListHeaderPointer.startY) > 4) {
+                projectListHeaderPointer.moved = true;
+            }
+        });
+        $(document).on('mouseup.plHeaderColSelect', function() {
+            // defer clear so click handler can read moved flag
+            setTimeout(function() {
+                projectListHeaderPointer.active = false;
+                projectListHeaderPointer.moved = false;
+            }, 0);
+        });
+        $(document).on('click.plHeaderColSelect', '#projectTable_wrapper thead th, #projectTable thead th', function(e) {
+            handleProjectListHeaderColumnClick(e);
+        });
+        $(document).on('contextmenu.plHeaderColSelect', '#projectTable_wrapper thead th, #projectTable thead th', function(e) {
+            if ($(e.target).closest('.pl-col-resize-handle, .pl-col-unhide-gap').length) return;
+            if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+            var th = e.currentTarget;
+            var key = getHeaderColumnKeyFromTh(th);
+            if (!key || !isHeaderColumnVisibleInTable(projectTable, key)) return;
+            e.preventDefault();
+            e.stopPropagation();
+            if (projectListHeaderSelectedKeys.indexOf(key) < 0) {
+                setProjectListHeaderColumnSelection([key], key);
+            }
+            var $menu = ensureProjectListHeaderContextMenu();
+            if (typeof window.applyDataI18n === 'function') {
+                window.applyDataI18n($menu[0]);
+            }
+            $menu.css({ display: 'block', left: e.pageX + 'px', top: e.pageY + 'px' });
+        });
+        $(document).on('click.plHeaderColSelectHide', function(e) {
+            if ($(e.target).closest('#projectHeaderContextMenu').length) return;
+            hideProjectListHeaderContextMenu();
+        });
+        $(document).on('click.plHeaderColUnhide', '.pl-col-unhide-gap', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            hideProjectListHeaderContextMenu();
+            unhideProjectListHeaderColumnGap($(this).attr('data-hidden-keys'));
+        });
     }
 
     function getShowAllProjectColumnVisibility(customColDefs) {
@@ -3741,11 +4129,19 @@ var projectTable;
                 table.column(dtIndex).visible(isVisible, false);
             }
         });
+        // Drop temp-hide for columns already off in 列の表示 prefs
+        Object.keys(projectListTempHiddenKeys).forEach(function(key) {
+            if (!normalizeColumnVisibilityBool(visibility[key], true)) {
+                delete projectListTempHiddenKeys[key];
+            }
+        });
         // columns.adjust() only — .draw() on serverSide re-fetches identical list data
         table.columns.adjust();
+        // Reconcile prefs from DT before session temp-hides are re-applied
         var reconciled = reconcileColumnVisibilityWithTable(table, visibility, customDefs);
         var depId = window.app && window.app.selectedDepartment && window.app.selectedDepartment.id;
         syncAvailableColumnsFromVisibility(customDefs, depId, reconciled);
+        applyProjectListTemporaryHiddenColumns(table);
         return reconciled;
     }
 
@@ -4829,6 +5225,9 @@ var projectTable;
         destroyProjectListExcelButtons();
         projectTable = null;
         isInitializingTable = false;
+        clearProjectListTemporaryHiddenColumns();
+        projectListHeaderSelectedKeys = [];
+        projectListHeaderAnchorKey = '';
         if ($tbl.length) {
             $tbl.off('.dt');
         }
@@ -9986,6 +10385,8 @@ var projectTable;
             
                 toggleColumnVisibility(columnKey, event) {
                     const isVisible = !!event.target.checked;
+                    // Dropdown 列の表示 overrides session temp-hide for this column
+                    delete projectListTempHiddenKeys[columnKey];
                     const customDefs = customFieldColumnDefinitions || [];
                     const visibility = loadColumnVisibilityFromLocalStorage(customDefs);
                     if (Object.prototype.hasOwnProperty.call(visibility, columnKey)) {

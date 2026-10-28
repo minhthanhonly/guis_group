@@ -967,5 +967,10 @@
     "日付項目と期間を指定して検索します。": "Chọn trường ngày và khoảng thời gian để tìm kiếm.",
     "日付項目と期間を指定してください": "Vui lòng chọn trường ngày và khoảng thời gian",
     "計算終了": "Kết thúc tính toán",
-    "申請作業中": "Đang làm đơn đăng ký"
+    "申請作業中": "Đang làm đơn đăng ký",
+    "選択した列を非表示": "Ẩn cột đã chọn",
+    "選択した列を一時非表示": "Ẩn tạm cột đã chọn",
+    "列を再表示": "Hiện lại cột",
+    "一時非表示の列を再表示": "Hiện lại cột đã ẩn tạm",
+    "少なくとも1つの列を表示してください": "Vui lòng giữ ít nhất một cột đang hiển thị"
 }

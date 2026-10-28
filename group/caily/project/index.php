@@ -1128,6 +1128,47 @@ div.dt-scroll-head thead th {
     cursor: move;
 }
 
+/* Header multi-select (Ctrl/Shift+click) */
+#projectTable thead th.pl-col-header-selected,
+#projectTable_wrapper thead th.pl-col-header-selected,
+div.dt-scroll-head thead th.pl-col-header-selected {
+    background-color: rgba(105, 108, 255, 0.22) !important;
+    box-shadow: inset 0 0 0 2px rgba(105, 108, 255, 0.55);
+}
+
+/* "+" unhide contiguous hidden columns */
+.pl-col-unhide-gap {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 6;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    line-height: 14px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid #696cff;
+    border-radius: 3px;
+    background: #fff;
+    color: #696cff;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.pl-col-unhide-gap:hover {
+    background: #696cff;
+    color: #fff;
+}
+.pl-col-unhide-gap-trailing {
+    right: 10px;
+}
+.pl-col-unhide-gap-leading {
+    left: 2px;
+}
+
 /* Column resize handle (viền phải header) */
 #projectTable thead th.pl-col-resizable-th,
 #projectTable_wrapper .dt-scroll-head thead th.pl-col-resizable-th,
