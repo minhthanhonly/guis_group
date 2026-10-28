@@ -1,4 +1,5 @@
 .config/
 application/cache/
+application/storage/maintenance.json
 
 .env_public

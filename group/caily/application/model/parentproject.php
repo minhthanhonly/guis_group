@@ -16,6 +16,7 @@ class ParentProject extends ApplicationModel {
             'project_name' => array('notnull'),
             'construction_branch' => array(),
             'scale' => array(),
+            'city' => array(),
             'type1' => array(),
             'type2' => array(),
             'type3' => array(),
@@ -41,6 +42,34 @@ class ParentProject extends ApplicationModel {
         $this->connect();
         $this->ensureParentProjectsUtf8mb4();
         $this->ensureParentProjectFeatureColumns();
+        $this->ensureParentProjectCityColumn();
+    }
+
+    /**
+     * Ensure city (市区町村 / thành phố) column exists.
+     */
+    private function ensureParentProjectCityColumn() {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        try {
+            $row = $this->fetchOne(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($this->table) . "' "
+                . "AND COLUMN_NAME = 'city'"
+            );
+            if (!empty($row['cnt'])) {
+                return;
+            }
+            $this->query(
+                "ALTER TABLE `{$this->table}` ADD COLUMN `city` VARCHAR(255) NULL DEFAULT NULL "
+                . "COMMENT '市区町村' AFTER `scale`"
+            );
+        } catch (Exception $e) {
+            error_log('ensureParentProjectCityColumn failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -121,7 +150,7 @@ class ParentProject extends ApplicationModel {
         // Validate and sanitize order_column to prevent SQL injection
         $allowed_columns = [
             'id', 'project_number', 'project_name', 'construction_number',
-            'company_name', 'branch_name', 'contact_name', 'scale', 'type1', 'type2', 'requests',
+            'company_name', 'branch_name', 'contact_name', 'scale', 'city', 'type1', 'type2', 'requests',
             'request_date', 'created_at', 'updated_at',
             'status', 'child_project_count', 'created_by_name', 'nearest_nouki'
         ];
@@ -503,6 +532,7 @@ class ParentProject extends ApplicationModel {
             'construction_number' => isset($_POST['construction_number']) ? $_POST['construction_number'] : '',
             'project_name' => $project_name,
             'scale' => isset($_POST['scale']) ? $_POST['scale'] : '',
+            'city' => isset($_POST['city']) ? $this->validateUTF8MB4($_POST['city']) : '',
             'type1' => isset($_POST['type1']) ? $_POST['type1'] : '',
             'type2' => isset($_POST['type2']) ? $_POST['type2'] : '',
             'type3' => isset($_POST['type3']) ? $_POST['type3'] : '',
@@ -641,6 +671,9 @@ class ParentProject extends ApplicationModel {
             'construction_number' => isset($_POST['construction_number']) ? $_POST['construction_number'] : (isset($old['construction_number']) ? $old['construction_number'] : ''),
             'project_name' => $project_name,
             'scale' => isset($_POST['scale']) ? $_POST['scale'] : (isset($old['scale']) ? $old['scale'] : ''),
+            'city' => isset($_POST['city'])
+                ? $this->validateUTF8MB4($_POST['city'])
+                : (isset($old['city']) ? $old['city'] : ''),
             'type1' => isset($_POST['type1']) ? $_POST['type1'] : (isset($old['type1']) ? $old['type1'] : ''),
             'type2' => isset($_POST['type2']) ? $_POST['type2'] : (isset($old['type2']) ? $old['type2'] : ''),
             'type3' => isset($_POST['type3']) ? $_POST['type3'] : (isset($old['type3']) ? $old['type3'] : ''),

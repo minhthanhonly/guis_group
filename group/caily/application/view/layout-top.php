@@ -239,6 +239,7 @@
                 if($page == 'team') $active6 = 'active';
                 if($page == 'seal') $active7 = 'active';
                 if($page == 'backup') $active8 = 'active';
+                if($page == 'maintenance') $active9 = 'active';
               }
               if($directory == 'administration'){
                 $active = 'active open';
@@ -295,6 +296,11 @@
                 <li class="menu-item <?php echo $active5; ?>">
                   <a href="<?=$root?>timecard/config.php" class="menu-link">
                     <div data-i18n="タイムカード設定">タイムカード設定</div>
+                  </a>
+                </li>
+                <li class="menu-item <?php echo $active9; ?>">
+                  <a href="<?=$root?>setting/maintenance.php" class="menu-link">
+                    <div data-i18n="メンテナンス">メンテナンス</div>
                   </a>
                 </li>
                 <?php if (($_SESSION['userid'] ?? '') === 'admin') { ?>
@@ -765,6 +771,14 @@
           </nav>
 
           <!-- / Navbar -->
+          <?php if (class_exists('MaintenanceMode') && MaintenanceMode::isEnabled() && MaintenanceMode::canBypass()) { ?>
+          <div class="container-xxl mt-3">
+            <div class="alert alert-danger d-flex flex-wrap align-items-center justify-content-between gap-2 mb-0" role="status">
+              <span data-i18n="メンテナンスモードが有効です。管理者以外はシステムを利用できません。">メンテナンスモードが有効です。管理者以外はシステムを利用できません。</span>
+              <a href="<?=$root?>setting/maintenance.php" class="btn btn-sm btn-danger" data-i18n="設定を開く">設定を開く</a>
+            </div>
+          </div>
+          <?php } ?>
           <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/quill/typography.css" />
           <link rel="stylesheet" href="<?=$root?>assets/vendor/libs/quill/editor.css" />
           <!-- Todo Widget Offcanvas -->

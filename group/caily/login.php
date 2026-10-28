@@ -42,6 +42,11 @@ $view->heading('ログイン', 'login');
 		<div class="w-px-400 mx-auto mt-12 pt-5">
 		<h4 class="mb-1"><?=APP_NAME?>へようこそ！ 👋</h4>
 		<p class="mb-6"><span data-i18n="アカウントにサインインしてください。">アカウントにサインインしてください。</span></p>
+		<?php if (class_exists('MaintenanceMode') && MaintenanceMode::isEnabled()) { ?>
+		<div class="alert alert-warning" role="status">
+			<span data-i18n="現在メンテナンス中です。管理者のみログインできます。">現在メンテナンス中です。管理者のみログインできます。</span>
+		</div>
+		<?php } ?>
 
 		<form id="formAuthentication" class="mb-6" action="login.php<?= (isset($_GET['from']) && $_GET['from'] !== '') ? ('?from=' . rawurlencode((string) $_GET['from'])) : '' ?>" name="login" method="POST">
 			<?php

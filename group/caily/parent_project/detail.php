@@ -261,6 +261,19 @@ $view->heading('建物詳細');
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
+                                <template v-if="isEditMode">
+                                    <input type="text" class="form-control" v-model="parentProject.city"
+                                        placeholder="市区町村を入力">
+                                </template>
+                                <template v-else>
+                                    <input type="text" class="form-control" :value="parentProject.city || '-'"
+                                        readonly>
+                                </template>
+                            </div>
+                        </div>
+                        <div class="col-md-4 col-xl-3">
+                            <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="parentProject.structural_office"

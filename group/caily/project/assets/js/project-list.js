@@ -7300,6 +7300,7 @@ var projectTable;
                     html += fieldRow('管理番号', textOrEmpty(parent.project_number));
                     html += fieldRow('工事番号', textOrEmpty(parent.construction_number));
                     html += fieldRow('建物規模', textOrEmpty(parent.scale));
+                    html += fieldRow('市区町村', textOrEmpty(parent.city));
                     html += fieldRow('構造事務所', textOrEmpty(parent.structural_office));
                     var type1Items = String(parent.type1 || '').split(',').map(function(v) { return v.trim(); }).filter(Boolean);
                     if (type1Items.length) {

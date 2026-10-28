@@ -177,6 +177,13 @@ class Authority
 			unset($_SESSION['status']);
 		}
 		if ($authorized === true && count($error) <= 0) {
+			if (!class_exists('MaintenanceMode', false)) {
+				require_once dirname(__FILE__) . '/maintenance.php';
+			}
+			if (MaintenanceMode::isEnabled() && !MaintenanceMode::userCanBypass($data)) {
+				$error[] = '現在メンテナンス中のため、ログインできません。';
+				return $error;
+			}
 			session_regenerate_id(true);
 			$this->populateSessionFromUser($data);
 			// Persist session cookie (30d) so GUIS Plus ArchLib/Kanri windows share login

@@ -11,6 +11,9 @@ class Controller {
 
 		if (!$authority->ensureAuthenticated()) {
 			if ($script != 'login.php') {
+				if (MaintenanceMode::isEnabled() && $script !== 'logout.php') {
+					MaintenanceMode::deny(false);
+				}
 				$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
 				$loginUrl = ROOT . 'login.php';
 				if ($fromGuisPlus || $script === 'login-wait.php') {
@@ -30,6 +33,10 @@ class Controller {
 			header('Location: ' . $redirect);
 			exit();
 		}
+
+		if (MaintenanceMode::isEnabled() && !MaintenanceMode::canBypass() && $script !== 'logout.php' && $script !== 'login.php') {
+			MaintenanceMode::deny(false);
+		}
 		
 		return $this->execute();
 	}
@@ -40,6 +47,9 @@ class Controller {
 		if (!$authority->ensureAuthenticated()) {
 			die('認証に失敗しました。ログインし直してください。');
 		}
+		if (MaintenanceMode::isEnabled() && !MaintenanceMode::canBypass()) {
+			MaintenanceMode::deny(true);
+		}
 		$this->ensureUserActive();
 		return $this->execute();
 	}
@@ -49,6 +59,9 @@ class Controller {
 		$authority = new Authority;
 		if (!$authority->ensureAuthenticated()) {
 			die('認証に失敗しました。ログインし直してください。');
+		}
+		if (MaintenanceMode::isEnabled() && !MaintenanceMode::canBypass()) {
+			MaintenanceMode::deny(true);
 		}
 		$this->ensureUserActive();
 	}
@@ -159,6 +172,8 @@ class Controller {
 		require_once(DIR_VIEW.'applicationview.php');
 		require_once(DIR_VIEW.'calendar.php');
 		require_once(DIR_VIEW.'explanation.php');
+		require_once(DIR_LIBRARY.'maintenance.php');
+		MaintenanceMode::blockPublicApi();
 		$input = $_POST;
 		$input = array_map(function($value) {
 			if (is_array($value)) {

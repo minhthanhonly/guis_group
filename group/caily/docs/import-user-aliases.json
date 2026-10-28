@@ -1,0 +1,12 @@
+{
+  "_comment": "Excel 担当者 → groupware_user.id. Keys: exact Excel text and/or normalized (no spaces; Latin lowercased / no VN diacritics).",
+  "aliases": {
+    "小林": 13,
+    "Trường": 139,
+    "truong": 139,
+    "quoc": 153,
+    "QUOC": 153,
+    "bien": 137,
+    "Bien": 137
+  }
+}

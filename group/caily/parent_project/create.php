@@ -163,6 +163,12 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                         </div>
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
+                                <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
+                                <input type="text" class="form-control" v-model="parentProject.city" placeholder="市区町村を入力">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="種類1">種類1</span></label>
                                 <input type="text" class="form-control" v-model="parentProject.type1" id="type1_tags" name="type1_tags">
                             </div>

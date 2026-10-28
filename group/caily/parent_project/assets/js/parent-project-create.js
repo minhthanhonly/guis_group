@@ -15,6 +15,7 @@ createApp({
                 project_name: '',
                 construction_branch: '',
                 scale: '',
+                city: '',
                 type1: '',
                 type2: '',
                 type3: '',
@@ -482,6 +483,7 @@ createApp({
                 formData.append('project_name', this.parentProject.project_name || '');
                 formData.append('construction_branch', this.parentProject.construction_branch || '');
                 formData.append('scale', this.parentProject.scale || '');
+                formData.append('city', this.parentProject.city || '');
                 formData.append('type1', this.parentProject.type1 || '');
                 formData.append('type2', this.parentProject.type2 || '');
                 formData.append('type3', this.hasNonResidentialType ? (this.parentProject.type3 || '') : '');

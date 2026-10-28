@@ -1,0 +1,121 @@
+﻿id,userid,realname,firstname,lastname,user_ruby,user_email,authority,status,is_suspend,realname_norm
+1,admin,"管理 者",者,管理,admin,guis@guis.co.jp,administrator,,,管理者
+5,yamazaki,山崎あゆみ,,山崎あゆみ,,,member,,1,山崎あゆみ
+8,kobayashi,小林　翔,翔,小林,,,member,,1,小林翔
+11,saito,"齋藤 悟史",悟史,齋藤,,saito@guis.co.jp,administrator,,,齋藤悟史
+12,takasaki,"高﨑 亜生",亜生,高﨑,,takasaki@guis.co.jp,administrator,,,高﨑亜生
+13,kobayashi_h,"小林 宏和",宏和,小林,,kobayashi_h@guis.co.jp,member,,,小林宏和
+20,shimada,嶋田剛士,,嶋田剛士,,,member,,1,嶋田剛士
+22,minoura,"箕浦 麻衣",麻衣,箕浦,,minoura@guis.co.jp,member,,,箕浦麻衣
+23,hayashida,"林田 洋明",洋明,林田,,hayashida@guis.co.jp,member,,,林田洋明
+24,hosaka,保坂逢里,,保坂逢里,,,member,,1,保坂逢里
+26,kaneko,"金子 仁美",仁美,金子,,,administrator,,1,金子仁美
+27,yokosuka,横須賀一興,,横須賀一興,,,member,,1,横須賀一興
+29,akaishi,"赤石 法子",法子,赤石,,,member,,1,赤石法子
+30,miyazawa,宮澤里奈,,宮澤里奈,,,member,,1,宮澤里奈
+32,mochizuki,望月康剛,,望月康剛,,,member,,1,望月康剛
+34,yamamoto,山本茂樹,,山本茂樹,,,member,,1,山本茂樹
+36,nakamura,"中村 麻子",麻子,中村,,,member,,1,中村麻子
+37,thy,"Tran Giang Thy","Giang Thy",Tran,,,member,,1,trangiangthy
+38,ikeda,"池田 明裕",明裕,池田,,ikeda@guis.co.jp,member,,,池田明裕
+39,tokoro,"所 真由美",真由美,所,,,member,,1,所真由美
+40,furuzawa,"古澤 知巳",知巳,古澤,,furuzawa@guis.co.jp,member,,,古澤知巳
+41,nakano,中野真弓,,中野真弓,,,member,,1,中野真弓
+42,oguri,"小栗 正之",正之,小栗,,,member,,1,小栗正之
+43,fuse,"布施 亜由未",亜由未,布施,,fuse@guis.co.jp,member,,,布施亜由未
+44,ozeki,"尾関 文代",文代,尾関,,ozeki@guis.co.jp,member,,,尾関文代
+45,wang,王　淼,淼,王,,,member,,1,王淼
+46,hori,堀　真理子,真理子,堀,,,member,,1,堀真理子
+47,yoshikawa,"吉川 愛華",愛華,吉川,,yoshikawa@guis.co.jp,member,,,吉川愛華
+48,sugitani,"杉谷 尚彦",尚彦,杉谷,,,member,,1,杉谷尚彦
+49,takano,髙埜執行役,,髙埜執行役,,,member,,1,髙埜執行役
+50,yamada,"山田 駆",駆,山田,,,member,,1,山田駆
+51,okamoto,岡本莉佳,,岡本莉佳,,,member,,1,岡本莉佳
+52,oono,"大野 いづみ",いづみ,大野,,,member,,1,大野いづみ
+53,sugiyama,"杉山 奈々美",奈々美,杉山,,,member,,1,杉山奈々美
+54,akashi,"明石 絢実",絢実,明石,,akashi@guis.co.jp,member,,1,明石絢実
+55,saw.s,"ソウ シュウエ　モウ",シュウエ　モウ,ソウ,,,member,,1,ソウシュウエモウ
+56,nguyen,"グエン タン　チュン",タン　チュン,グエン,,,member,,1,グエンタンチュン
+57,ichikawa,市川モカ,,市川モカ,,,member,,1,市川モカ
+58,saruta,"猿田 俊雄",俊雄,猿田,,saruta@guis.co.jp,member,,,猿田俊雄
+59,shimi,"馬 思敏",思敏,馬,,,member,,1,馬思敏
+60,matsuki,"松木 未希",未希,松木,,matsuki@guis.co.jp,member,,,松木未希
+61,kusachi,草地　暁子,暁子,草地,,kusachi@guis.co.jp,member,,1,草地暁子
+62,kato,加藤　貴仁,貴仁,加藤,,,member,,1,加藤貴仁
+64,kanbara,蒲原　由紀,由紀,蒲原,,,member,,1,蒲原由紀
+66,eyamada,"山田 英愛",英愛,山田,,,member,,1,山田英愛
+67,sakurai,"櫻井 聖子",聖子,櫻井,,sakurai@guis.co.jp,member,,,櫻井聖子
+68,sekine,関根　栄子,栄子,関根,,,member,,1,関根栄子
+69,okada,"岡田 将吾",将吾,岡田,,,member,,1,岡田将吾
+70,higuchi,"樋口 友束",友束,樋口,,y.higuchi@guis.co.jp,member,,,樋口友束
+71,kamata,鎌田　悠源,悠源,鎌田,,,member,,1,鎌田悠源
+72,umezawa,"梅澤 一式",一式,梅澤,,umezawa@guis.co.jp,member,,1,梅澤一式
+73,yamashita,"山下 枝里子",枝里子,山下,,e.yamashita@guis.co.jp,member,,1,山下枝里子
+74,kawanishi,"川西 祥平",祥平,川西,,s.kawanishi@guis.co.jp,member,,,川西祥平
+75,msaito,"齋藤 みか",みか,齋藤,,m.saito@guis.co.jp,member,,1,齋藤みか
+76,akiyama,"秋山 さや",さや,秋山,,s.akiyama@guis.co.jp,member,,1,秋山さや
+77,makita,"牧田 梢",梢,牧田,,k.makita@guis.co.jp,member,,1,牧田梢
+78,takahashi,"高橋 美樹",美樹,高橋,,m.takahashi@guis.co.jp,member,,,高橋美樹
+79,washiashi,"鷲足 佳美",佳美,鷲足,,washiashi@guis.co.jp,member,,,鷲足佳美
+80,abesayaka,"阿部 明佳",明佳,阿部,,s.abe@guis.co.jp,member,,,阿部明佳
+127,tranvinh.loc,"Tran Vinh Loc",Loc,"Tran Vinh",ロック,,member,,,tranvinhloc
+128,minhthomonly,"Dinh Minh Thom",Thom,"Dinh Minh",トム,,member,,,dinhminhthom
+129,minhthanhonly,"Đinh Minh Thanh",Thanh,"Đinh Minh",タン,,member,,,dinhminhthanh
+130,dat,"Trần Vĩnh Đạt",Đạt,"Trần Vĩnh",ダット,dat@guis.co.jp,member,,,tranvinhdat
+131,lien,"Vu Thi Lien",Lien,"Vu Thi",リエン,,member,,,vuthilien
+132,duynguyen,"Lam Duy Nguyen",Nguyen,"Lam Duy",グエン,,member,,,lamduynguyen
+133,nhan,"Diep Thanh Nhan",Nhan,"Diep Thanh",ニャン,,member,,,diepthanhnhan
+134,khang,"Pham Nguyen Khang",Khang,"Pham Nguyen",カン,,member,,,phamnguyenkhang
+135,hoaibao,"Nguyen Hoai Bao",Bao,"Nguyen Hoai",バオ,,member,,,nguyenhoaibao
+136,hien,"Nguyen Thu Hien",Hien,"Nguyen Thu",ヒエン,,member,,,nguyenthuhien
+137,bien,"Huynh Trong Bien",Bien,"Huynh Trong",ビエン,,member,,,huynhtrongbien
+138,van.tu,"Huynh Van Tu",Tu,"Huynh Van",トゥ,,member,,,huynhvantu
+139,truong,"Hoang Van Truong",Truong,"Hoang Van",チュオン,,member,,,hoangvantruong
+140,huy,"Tran Thanh Huy",Huy,"Tran Thanh",フイ,,member,,,tranthanhhuy
+141,chautuan,"Le Chau Tuan",Tuan,"Le Chau",トア,,member,,,lechautuan
+142,thanh,"Doan Huu Thanh",Thanh,"Doan Huu",タイン,,member,,,doanhuuthanh
+143,tuyet2015,"Huynh Thi Anh Tuyet",Tuyet,"Huynh Thi Anh",,,member,,,huynhthianhtuyet
+144,tuyen,"Huynh Thi Thanh Tuyen",,,,,member,,,huynhthithanhtuyen
+145,hanhthach,"Thạch Thị Tuyết Hạnh",Hạnh,"Thạch Thị Tuyết",ハイン,,member,,,thachthituyethanh
+146,duya,"Do Van Duya",,,,,member,,,dovanduya
+147,khanh,"Diep H.Khanh",H.Khanh,Diep,カインA,,member,,,dieph.khanh
+148,dinh,"Tran Huu Dinh",Dinh,"Tran Huu",ディン,,member,,,tranhuudinh
+149,vankhanh,"Ha V.Khanh",V.Khanh,Ha,カインB,,member,,,hav.khanh
+150,vi,"Huynh Tuong Vi",Vi,"Huynh Tuong",ヴィ,,member,,,huynhtuongvi
+151,dai,"Nguyen Minh Dai",Dai,"Nguyen Minh",ダイ,,member,,,nguyenminhdai
+152,ngan,"Nguyen Thanh Ngan",Ngan,"Nguyen Thanh",ガン,,member,,,nguyenthanhngan
+153,quoc,"Tran The Quoc",Quoc,"Tran The",クオック,,member,,,tranthequoc
+154,ha,"Ho Thi Ha",Ha,"Ho Thi",ハー,,member,,,hothiha
+155,thoi,"Dang Dinh Thoi",Thoi,"Dang Dinh",,,member,,1,dangdinhthoi
+156,hoai,"Nguyen Thị Hoài",Hoài,"Nguyen Thị",ホアイ,,member,,,nguyenthihoai
+157,quyen,"Nguyen Thi Thu Quyen",Quyen,"Nguyen Thi Thu",クエン,,member,,,nguyenthithuquyen
+158,yen,"Bui Thi Hong Yen",Yen,"Bui Thi Hong",イエン,,member,,,buithihongyen
+159,huyhoang,"Nguyen Huy Hoang",Hoang,"Nguyen Huy",ホアン,,member,,,nguyenhuyhoang
+160,nhu,"Nguyen Thi Như",Như,"Nguyen Thi",ニュー,,member,,,nguyenthinhu
+161,bi,"Nguyen Van Bi",Bi,"Nguyen Van",ビ,,member,,,nguyenvanbi
+162,vutrang,"Tran Vu Trang",Trang,"Tran Vu",チャン,,member,,,tranvutrang
+163,tham,"Tran Thi Anh Thẩm",Thẩm,"Tran Thi Anh",タム,,member,,,tranthianhtham
+164,cong,"Nguyen Tien Công",Công,"Nguyen Tien",コン,,member,,,nguyentiencong
+165,bich,"Nguyen Thi Ngoc Bich",Bich,"Nguyen Thi Ngoc",ビック,,member,,,nguyenthingocbich
+166,thuylinh,"Nguyen Thi Thuy Linh",Linh,"Nguyen Thi Thuy",リン,,member,,,nguyenthithuylinh
+167,duykhanh,"Bui D.Khanh",D.Khanh,Bui,カイン,,member,,,buid.khanh
+168,van,"Le Ngoc Y Van",Van,"Le Ngoc Y",ヴァン,,member,,,lengocyvan
+169,duyhoang,"Vu D.Hoang",D.Hoang,Vu,D.ホアン,,member,,,vud.hoang
+170,tam,"Vu Thi Thanh Tam",Tam,"Vu Thi Thanh",タム,,member,,,vuthithanhtam
+171,ducanh,"Le Thi Duc Anh",Anh,"Le Thi Duc",アイン,,member,,,lethiducanh
+172,thiet,"Le Nguyen Quang Thiet",Thiet,"Le Nguyen Quang",,,member,,,lenguyenquangthiet
+173,vinh,"Dang Quang Vinh",Vinh,"Dang Quang",ヴィン,,member,,,dangquangvinh
+174,long,"Nguyen Thanh Long",Long,"Nguyen Thanh",,,member,,1,nguyenthanhlong
+175,ly,"Nguyen Thi Ly",Ly,"Nguyen Thi",リー,,member,,,nguyenthily
+176,ngoc,"Nguyen Tieu Ngoc",Ngoc,"Nguyen Tieu",ゴック,,member,,,nguyentieungoc
+177,trieu,"Phan Tan Trieu",Trieu,"Phan Tan",チエウ,,member,,,phantantrieu
+178,thienquan,"Pham Thien Quan",Quan,"Pham Thien",クアン,,member,,,phamthienquan
+179,luan,"Vo Minh Luan",Luan,"Vo Minh",ルアン,,member,,,vominhluan
+182,soumu,"GUIS 総務",総務,GUIS,,soumu@guis.co.jp,administrator,,,guis総務
+183,optus,"オプタス 様",様,オプタス,,,member,,,オプタス様
+184,testc,"タカサキ テスト",テスト,タカサキ,,,member,,,タカサキテスト
+185,diemai,"Dang Thi Diem Ai",Ai,"Dang Thi Diem",アイ,,member,,,dangthidiemai
+186,hanatsuka,"花塚 昌子",昌子,花塚,,m.hanatsuka@guis.co.jp,member,,,花塚昌子
+187,funahashi,"舟橋  隆彦"," 隆彦",舟橋,,funahashi@guis.co.jp,administrator,,,舟橋隆彦
+188,minhthang,"Nguyen Minh Thang",Thang,"Nguyen Minh",タン,,member,,,nguyenminhthang
+189,kita,"北 清佳",清佳,北,キタ　サヤカ,s.kita@guis.co.jp,member,,,北清佳
