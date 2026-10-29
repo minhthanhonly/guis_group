@@ -43,11 +43,40 @@ $sd = json_decode($stripped, true);
 $stripOk = ((int)$sd['data'][0]['is_favorite'] === 0) && ((int)$sd['data'][1]['is_favorite'] === 0);
 echo 'strip_favorites=' . ($stripOk ? 'yes' : 'no') . "\n";
 
+$uncache = !ApiCache::isCacheable('storage', 'folderadd')
+    && !ApiCache::isCacheable('forum', 'commentadd')
+    && !ApiCache::isCacheable('timecard', 'checkin')
+    && !ApiCache::isCacheable('project', 'upsert_project_public')
+    && !ApiCache::isCacheable('todo', 'api_reorder')
+    && ApiCache::isCacheable('project', 'list');
+echo 'denylist_writes=' . ($uncache ? 'yes' : 'no') . "\n";
+
+$bumpNonGet = ApiCache::shouldBumpAfterRequest(false, 'storage', 'folderadd');
+$bumpGetWrite = ApiCache::shouldBumpAfterRequest(true, 'storage', 'folderadd');
+$noBumpGetList = !ApiCache::shouldBumpAfterRequest(true, 'project', 'list');
+echo 'should_bump nonGET=' . ($bumpNonGet ? 'yes' : 'no')
+    . ' getWrite=' . ($bumpGetWrite ? 'yes' : 'no')
+    . ' getListSkip=' . ($noBumpGetList ? 'yes' : 'no') . "\n";
+
+$vProjBefore = (int) ApiCache::getScopeVersion('project');
+$vParentBefore = (int) ApiCache::getScopeVersion('parentproject');
+$vTaskBefore = (int) ApiCache::getScopeVersion('task');
+ApiCache::bumpOnWrite('project');
+$relatedOk = ((int) ApiCache::getScopeVersion('project') === $vProjBefore + 1)
+    && ((int) ApiCache::getScopeVersion('parentproject') === $vParentBefore + 1)
+    && ((int) ApiCache::getScopeVersion('task') === $vTaskBefore + 1);
+echo 'bumpOnWrite_related=' . ($relatedOk ? 'yes' : 'no') . "\n";
+
 $ok = ($sDept === ApiCache::SCOPE_SHARED)
     && ($sProj === ApiCache::SCOPE_PERMISSION)
     && ($sTask === ApiCache::SCOPE_USER)
     && ($sMy === ApiCache::SCOPE_USER)
     && $stripOk
-    && (strpos($oAlice, 'p') === 0);
+    && (strpos($oAlice, 'p') === 0)
+    && $uncache
+    && $bumpNonGet
+    && $bumpGetWrite
+    && $noBumpGetList
+    && $relatedOk;
 echo $ok ? "PASS\n" : "FAIL\n";
 exit($ok ? 0 : 1);

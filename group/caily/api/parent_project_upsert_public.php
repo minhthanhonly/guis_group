@@ -35,4 +35,9 @@ $parentProject->connect();
 $hash = $parentProject->upsert_parent_project_public($params);
 $parentProject->close();
 
+if (is_array($hash) && isset($hash['status']) && strtolower((string) $hash['status']) === 'success') {
+    require_once dirname(__DIR__) . '/application/library/ApiCache.php';
+    ApiCache::bumpOnWrite('parentproject');
+}
+
 echo json_encode($hash);

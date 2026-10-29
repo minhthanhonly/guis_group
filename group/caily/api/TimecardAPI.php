@@ -209,6 +209,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
     $api = new TimecardAPI();
     $result = $api->handleRequest();
 
+    $writeMethod = $_GET['method'] ?? $_POST['method'] ?? '';
+    if (
+        is_array($result)
+        && !empty($result['success'])
+        && in_array($writeMethod, ['checkin', 'checkout'], true)
+    ) {
+        require_once dirname(__DIR__) . '/application/library/ApiCache.php';
+        ApiCache::bumpOnWrite('timecard');
+    }
+
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($result, JSON_UNESCAPED_UNICODE);
 }

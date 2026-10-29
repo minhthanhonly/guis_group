@@ -10,7 +10,7 @@
  * - user       (u{userid}): dữ liệu gắn identity (task permission/membership,
  *                          permitWhere forum/storage, notification…)
  *
- * Freshness: bumpScopeVersion(model) khi write → key cũ tự miss.
+ * Freshness: bumpOnWrite(model) khi write → bump model + related scopes; key cũ tự miss.
  */
 class ApiCache {
 
@@ -32,6 +32,42 @@ class ApiCache {
         'run', 'execute', 'process', 'generate', 'rebuild', 'migrate', 'fix',
         'set_', 'post', 'put', 'patch', 'destroy', 'restore', 'approve', 'reject',
         'cancel', 'confirm', 'submit', 'attach', 'detach', 'reorder', 'sort_save',
+        'upsert', 'checkin', 'checkout',
+    ];
+
+    /**
+     * Method ghi có verb ở giữa tên (folderadd, commentadd, api_reorder…).
+     * Khớp substring — chỉ dùng chuỗi đủ dài/đặc thù để tránh false positive list*.
+     */
+    private static $uncacheableMethodNeedles = [
+        'folderadd', 'folderedit', 'folderdelete',
+        'commentadd', 'commentreply',
+        'api_reorder',
+        'markthread', 'mark_thread',
+        'marktaskcomments', 'mark_task_comments',
+    ];
+
+    /**
+     * Khi ghi model A cũng bump các scope liên quan (cross-model stale).
+     * Chỉ 1 cấp — không lan transitive.
+     */
+    private static $relatedScopesOnWrite = [
+        'project' => ['parentproject', 'task', 'drawing', 'projectnote'],
+        'parentproject' => ['project', 'parentprojectnote'],
+        'task' => ['project', 'drawing'],
+        'drawing' => ['task', 'project'],
+        'projectnote' => ['project'],
+        'parentprojectnote' => ['parentproject'],
+        'customer' => ['project', 'parentproject'],
+        'customer_category' => ['customer'],
+        'member' => ['user', 'department'],
+        'team' => ['user', 'department'],
+        'user' => ['department'],
+        'department' => ['user'],
+        'forum' => ['notification'],
+        'storage' => [],
+        'timecard' => [],
+        'todo' => [],
     ];
 
     /**
@@ -290,6 +326,51 @@ class ApiCache {
         return true;
     }
 
+    /**
+     * Bump model + related scopes (1 hop). Dùng sau mọi write thành công.
+     */
+    public static function bumpOnWrite($modelOrScope)
+    {
+        $primary = self::resolveScope($modelOrScope);
+        if ($primary === '') {
+            return true;
+        }
+        self::bumpScopeVersion($primary);
+
+        $key = strtolower(trim((string) $modelOrScope));
+        $related = [];
+        if (isset(self::$relatedScopesOnWrite[$key])) {
+            $related = self::$relatedScopesOnWrite[$key];
+        } elseif (isset(self::$relatedScopesOnWrite[$primary])) {
+            $related = self::$relatedScopesOnWrite[$primary];
+        }
+        $seen = [$primary => true];
+        foreach ($related as $rel) {
+            $relScope = self::resolveScope($rel);
+            if ($relScope === '' || isset($seen[$relScope])) {
+                continue;
+            }
+            $seen[$relScope] = true;
+            self::bumpScopeVersion($relScope);
+        }
+        return true;
+    }
+
+    /**
+     * Non-GET success, hoặc GET method nằm denylist → cần invalidate version.
+     */
+    public static function shouldBumpAfterRequest($isGet, $model, $method)
+    {
+        $model = trim((string) $model);
+        if ($model === '') {
+            return false;
+        }
+        if (!$isGet) {
+            return true;
+        }
+        return !self::isCacheable($model, $method);
+    }
+
     public static function isCacheable($model, $method)
     {
         $model = trim((string) $model);
@@ -301,6 +382,12 @@ class ApiCache {
         foreach (self::$uncacheableMethodPrefixes as $prefix) {
             $prefix = strtolower($prefix);
             if ($methodLower === $prefix || strpos($methodLower, $prefix) === 0) {
+                return false;
+            }
+        }
+        foreach (self::$uncacheableMethodNeedles as $needle) {
+            $needle = strtolower($needle);
+            if ($needle !== '' && strpos($methodLower, $needle) !== false) {
                 return false;
             }
         }

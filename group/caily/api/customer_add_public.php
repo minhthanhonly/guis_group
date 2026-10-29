@@ -29,4 +29,9 @@ $customer->connect();
 $hash = $customer->add_customer_public($params);
 $customer->close();
 
+if (is_array($hash) && isset($hash['status']) && strtolower((string) $hash['status']) === 'success') {
+    require_once dirname(__DIR__) . '/application/library/ApiCache.php';
+    ApiCache::bumpOnWrite('customer');
+}
+
 echo json_encode($hash);

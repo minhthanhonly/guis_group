@@ -987,15 +987,15 @@ class ApplicationModel extends Model {
     }
 
     /**
-     * Bump shared ApiCache scope version so all users miss stale list payloads.
-     * @param string $scope model or scope name (department|user|customer|customer_category)
+     * Bump ApiCache scope (+ related) so all users miss stale list payloads.
+     * @param string $scope model or scope name (department|user|customer|customer_category|…)
      */
     protected function bumpApiCacheScope($scope) {
         if (!defined('DIR_LIBRARY') || !file_exists(DIR_LIBRARY . 'ApiCache.php')) {
             return;
         }
         require_once DIR_LIBRARY . 'ApiCache.php';
-        ApiCache::bumpScopeVersion($scope);
+        ApiCache::bumpOnWrite($scope);
     }
 
     protected function invalidateApiCacheForNumericUserIds(array $numericIds) {

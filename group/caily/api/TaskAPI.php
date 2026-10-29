@@ -362,6 +362,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || $_SERVER['REQUEST_METHOD'] === 'GET
             'error' => $e->getMessage(),
         ];
     }
+    $writeMethod = $_GET['method'] ?? $_POST['method'] ?? '';
+    if (
+        is_array($result)
+        && !empty($result['success'])
+        && in_array($writeMethod, ['create', 'update'], true)
+    ) {
+        require_once dirname(__DIR__) . '/application/library/ApiCache.php';
+        ApiCache::bumpOnWrite('todo');
+    }
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode($result, JSON_UNESCAPED_UNICODE);
 }

@@ -36,4 +36,9 @@ $project->connect();
 $hash = $project->add_note_public($params);
 $project->close();
 
+if (is_array($hash) && isset($hash['status']) && strtolower((string) $hash['status']) === 'success') {
+    require_once dirname(__DIR__) . '/application/library/ApiCache.php';
+    ApiCache::bumpOnWrite('projectnote');
+}
+
 echo json_encode($hash);

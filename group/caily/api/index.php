@@ -40,8 +40,12 @@ try {
             }
             ApiCache::set($cacheKey, $owner, $toStore, ApiCache::DEFAULT_TTL);
         }
-    } elseif ($model !== '' && !ApiCache::isCacheable($model, $method) && ApiCache::isSuccessfulResponse($response)) {
-        ApiCache::bumpScopeVersion($model);
+    } elseif (
+        ApiCache::shouldBumpAfterRequest($isGet, $model, $method)
+        && ApiCache::isSuccessfulResponse($response)
+    ) {
+        // Non-GET success, hoặc GET write (denylist) → bump model + related scopes
+        ApiCache::bumpOnWrite($model);
     }
 
     echo $response;
