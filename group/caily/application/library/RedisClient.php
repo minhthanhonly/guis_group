@@ -27,8 +27,9 @@ class RedisClient
             return null;
         }
 
+        self::loadPredis();
         if (!class_exists('Predis\\Client')) {
-            self::logOnce('Predis\\Client not found (vendor/autoload missing?)');
+            self::logOnce('Predis\\Client not found (upload vendor/predis or run composer)');
             self::$client = false;
             return null;
         }
@@ -75,6 +76,30 @@ class RedisClient
     public static function prefix()
     {
         return defined('REDIS_PREFIX') ? REDIS_PREFIX : 'caily:apicache:';
+    }
+
+    /**
+     * Load Predis without bootstrapping the whole Composer vendor/autoload.php
+     * (avoids breaking the site when only part of vendor/ was uploaded).
+     */
+    private static function loadPredis()
+    {
+        if (class_exists('Predis\\Client', false)) {
+            return;
+        }
+        $candidates = array(
+            dirname(__DIR__, 2) . '/vendor/predis/predis/autoload.php',
+            dirname(dirname(__DIR__)) . '/vendor/predis/predis/autoload.php',
+        );
+        if (defined('DIR_PATH')) {
+            $candidates[] = rtrim(DIR_PATH, '/\\') . '/../vendor/predis/predis/autoload.php';
+        }
+        foreach ($candidates as $path) {
+            if (is_file($path)) {
+                require_once $path;
+                return;
+            }
+        }
     }
 
     private static function logOnce($message)

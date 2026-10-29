@@ -84,6 +84,10 @@ define('RETIRE_GROUP', '5');
 
 define('RETIRE_GROUP_NAME', '退職者');
 
+if (is_file(__DIR__ . '/config_redis.php')) {
+	require_once __DIR__ . '/config_redis.php';
+}
+
 require_once 'version.php';
 
 if (!defined('APP_ENV')) {
