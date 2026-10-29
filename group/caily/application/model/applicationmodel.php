@@ -986,6 +986,18 @@ class ApplicationModel extends Model {
         ApiCache::invalidateUsers($userids);
     }
 
+    /**
+     * Bump shared ApiCache scope version so all users miss stale list payloads.
+     * @param string $scope model or scope name (department|user|customer|customer_category)
+     */
+    protected function bumpApiCacheScope($scope) {
+        if (!defined('DIR_LIBRARY') || !file_exists(DIR_LIBRARY . 'ApiCache.php')) {
+            return;
+        }
+        require_once DIR_LIBRARY . 'ApiCache.php';
+        ApiCache::bumpScopeVersion($scope);
+    }
+
     protected function invalidateApiCacheForNumericUserIds(array $numericIds) {
         $ids = array_values(array_unique(array_filter(array_map('intval', $numericIds), function ($id) {
             return $id > 0;

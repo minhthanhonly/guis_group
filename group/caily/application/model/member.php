@@ -531,6 +531,8 @@ class Member extends ApplicationModel {
 		if (!empty($_POST['userid'])) {
 			$this->invalidateApiCacheForUserids([$_POST['userid']]);
 		}
+		$this->bumpApiCacheScope('user');
+		$this->bumpApiCacheScope('department');
 		
 		$hash['status'] = 'success';
 		$hash['message_code'] = 11;
@@ -609,6 +611,8 @@ class Member extends ApplicationModel {
 		if (!empty($_POST['userid'])) {
 			$this->invalidateUserLoginByUserid($_POST['userid']);
 		}
+		$this->bumpApiCacheScope('user');
+		$this->bumpApiCacheScope('department');
 		
 		$hash['status'] = 'success';
 		$hash['message_code'] = 11;
@@ -696,6 +700,8 @@ class Member extends ApplicationModel {
 		$response = $this->update_query($query);
 		if($response > 0){
 			$this->invalidateUserLoginById($id);
+			$this->bumpApiCacheScope('user');
+			$this->bumpApiCacheScope('department');
 			$hash['status'] = 'success';
 			$hash['message_code'] = $response;
 		} else{
@@ -731,6 +737,8 @@ class Member extends ApplicationModel {
 		);
 		$response = $this->update_query($query);
 		if($response > 0){
+			$this->bumpApiCacheScope('user');
+			$this->bumpApiCacheScope('department');
 			$hash['status'] = 'success';
 			$hash['message_code'] = $response;
 		} else{
@@ -872,6 +880,8 @@ class Member extends ApplicationModel {
 		$response = $this->update_query($query);
 		if($response > 0){
 			$this->invalidateUserLoginById($id);
+			$this->bumpApiCacheScope('user');
+			$this->bumpApiCacheScope('department');
 			$hash['status'] = 'success';
 			$hash['message_code'] = $response;
 		} else{

@@ -96,6 +96,7 @@ class Customer extends ApplicationModel {
             );
             $result = $this->query_insert($data, $this->table_category);
             if ($result) {
+                $this->bumpApiCacheScope('customer');
                 $hash['status'] = 'success';
                 $hash['message_code'] = 'success';
             } else {
@@ -121,6 +122,7 @@ class Customer extends ApplicationModel {
             );
             $result = $this->query_update($data, ['id' => $_GET['id']], $this->table_category);
             if ($result) {
+                $this->bumpApiCacheScope('customer');
                 $hash['status'] = 'success';
                 $hash['message_code'] = 'success';
             } else {
@@ -151,6 +153,7 @@ class Customer extends ApplicationModel {
             }
             $result = $this->query_delete(['id' => $id], $this->table_category);
             if ($result) {
+                $this->bumpApiCacheScope('customer');
                 $hash['status'] = 'success';
                 $hash['message_code'] = 'success';
             } else {

@@ -154,6 +154,10 @@ class Controller {
 	
 		mb_internal_encoding('UTF-8');
 		require_once(dirname(__FILE__).'/config.php');
+		$autoload = dirname(__DIR__) . '/vendor/autoload.php';
+		if (is_file($autoload)) {
+			require_once $autoload;
+		}
 		if (DB_STORAGE == 'mysql') {
 			require_once(DIR_LIBRARY.'connection'.DB_STORAGE.'.php');
 		} else {

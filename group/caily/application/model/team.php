@@ -93,6 +93,8 @@ class Team extends ApplicationModel {
 		if (isset($_POST['members']) && is_array($_POST['members'])) {
 			$this->invalidateApiCacheForNumericUserIds($_POST['members']);
 		}
+		$this->bumpApiCacheScope('user');
+		$this->bumpApiCacheScope('department');
 		
 		return $team_id;
 	}
@@ -128,12 +130,16 @@ class Team extends ApplicationModel {
 		if (isset($_POST['members']) && is_array($_POST['members'])) {
 			$this->invalidateApiCacheForNumericUserIds($_POST['members']);
 		}
+		$this->bumpApiCacheScope('user');
+		$this->bumpApiCacheScope('department');
 		
 		return true;
 	}
 
 	function delete() {
 		$id = $_GET['id'];
+		$this->bumpApiCacheScope('user');
+		$this->bumpApiCacheScope('department');
 		return $this->query_update(['is_active' => 0], ['id' => $id]);
 	}
 

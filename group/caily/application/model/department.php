@@ -326,6 +326,7 @@ class Department extends ApplicationModel {
         if (isset($_POST['members']) && is_array($_POST['members'])) {
             $this->invalidateUserLoginByUserids($_POST['members']);
         }
+        $this->bumpApiCacheScope('department');
         
         return $department_id;
     }
@@ -361,6 +362,7 @@ class Department extends ApplicationModel {
         }
 
         $this->invalidateUserLoginByUserids($changedUserids);
+        $this->bumpApiCacheScope('department');
         
         return true;
     }
@@ -368,6 +370,7 @@ class Department extends ApplicationModel {
     function delete() {
         $id = $_GET['id'];
         $this->invalidateUserLoginForDepartmentId($id);
+        $this->bumpApiCacheScope('department');
         // Check if category is in use
         $query = sprintf(
             "SELECT COUNT(*) as count FROM " . DB_PREFIX . "projects WHERE department_id = %d",
@@ -522,6 +525,7 @@ class Department extends ApplicationModel {
         }
         // getCustomFields từng được cache theo user — xóa cache user hiện tại sau khi ghi
         ApiCache::invalidateUser($userId);
+        ApiCache::bumpScopeVersion('department');
     }
 
     function saveCustomFields() {
