@@ -16,3 +16,14 @@ group/caily/assets/upload/project-attachments/
 group/caily/application/logs/
 guis2_group_2025.sql
 group/caily/cli/
+seed/Copy of CAILY(管理).xlsx
+group/caily/docs/delete-ef-only-parent-ids.txt
+group/caily/docs/delete-ef-only-project-ids.txt
+group/caily/docs/delete-ef-only-rows.sql
+group/caily/docs/import-all-log.txt
+group/caily/docs/import-all-shoene.json
+group/caily/docs/import-batch-summary.json
+group/caily/docs/import-test-row1.json
+group/caily/docs/import-test-rows-1-20.json
+group/caily/docs/import-test-rows-2-10.json
+group/caily/docs/import-test-rows-no-koji.json

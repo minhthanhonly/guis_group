@@ -83,7 +83,7 @@ Customer (会社名 + 支店名 + 担当者名)
 |--------|--------|
 | — | `department_id = 7` |
 | — | `parent_project_id` |
-| お施主様名 | `name` |
+| お施主様名 | `name` = `お施主様名 (#excel行)` (building `project_name` giữ nguyên, không kèm dòng) |
 | — | `description` **để trống** (không lấy cột E) |
 | 建物規模 | `building_size` |
 | Project type | `building_type` |
@@ -124,8 +124,9 @@ Dry-run: nếu label chưa có trong set dept 7 → báo (không tự tạo fiel
 
 | | |
 |--|--|
-| Title | `Task 1`, `Task 2`, … |
+| Title | `Task 1 (#excel行)`, `Task 2 (#…)` — kèm số dòng Excel |
 | Assignee | cột **担当者** → lookup user |
+| Status (theo dòng) | có `実納品日` → `completed` + `progress=100` + `actual_end_date`; không → `in-progress` + `progress=0` |
 | due_date | CAILY納期 của dòng (nếu có) |
 | note | メモ + 入力注意点 của dòng |
 | Default tasks dept | **Không tạo** |
@@ -167,7 +168,8 @@ Thứ tự khớp:
 
 | Case | Xử lý |
 |------|--------|
-| Thiếu 工事番号 (~375 dòng) | Fallback khóa ghi vào `construction_number`: (1) `PJ No.` nếu có và không chỉ `★`/`△`; (2) không thì `会社名\|支店名\|お施主様名`; flag `koji_fallback` trong summary |
+| Thiếu 工事番号 (~375 dòng) | **DB `construction_number` để trống**. Gộp/lookup tạm bằng (1) `PJ No.` nếu có và không chỉ `★`/`△`; (2) không thì `会社名+支店名+お施主様名`; flag `koji_fallback` trong summary |
+| Excel `#VALUE!` / `#REF!` / … | Coi như ô trống (`excel_clean`); không tạo building/project từ token lỗi |
 | Cùng 工事番号, khác PJ No. (~813 group) | 1 building + 1 project; `PJ No(旧)` từ dòng đầu; PJ khác ghi note task nếu cần |
 | `type2` ngoài whitelist | Lấy token đầu; phần lạ ghi dry-run |
 | Re-run | Idempotent theo `construction_number` + `department_id=7` |
