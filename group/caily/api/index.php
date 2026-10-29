@@ -12,12 +12,17 @@ try {
     require_once dirname(__DIR__) . '/application/library/ApiCache.php';
 
     $userId = isset($_SESSION['userid']) ? $_SESSION['userid'] : (isset($_SESSION['id']) ? (string) $_SESSION['id'] : '');
+    $numericUserId = isset($_SESSION['id']) ? (int) $_SESSION['id'] : 0;
     $isGet  = ($_SERVER['REQUEST_METHOD'] ?? '') === 'GET';
 
     if ($isGet && $userId !== '' && ApiCache::isCacheable($model, $method)) {
+        $owner    = ApiCache::cacheOwnerId($userId, $model, $method, $params);
         $cacheKey = ApiCache::getKey($userId, $model, $method, $params);
-        $cached   = ApiCache::get($cacheKey, $userId);
+        $cached   = ApiCache::get($cacheKey, $owner);
         if ($cached !== false) {
+            if (ApiCache::cacheScope($model, $method, $params) === ApiCache::SCOPE_PERMISSION) {
+                $cached = ApiCache::applyUserFavorites($model, $cached, $numericUserId);
+            }
             echo $cached;
             exit;
         }
@@ -26,8 +31,17 @@ try {
     $response = $controller->api($model, $method, $params);
 
     if ($isGet && $userId !== '' && ApiCache::isCacheable($model, $method)) {
-        $cacheKey = ApiCache::getKey($userId, $model, $method, $params);
-        ApiCache::set($cacheKey, $userId, $response, ApiCache::DEFAULT_TTL);
+        if (ApiCache::isSuccessfulResponse($response)) {
+            $owner    = ApiCache::cacheOwnerId($userId, $model, $method, $params);
+            $cacheKey = ApiCache::getKey($userId, $model, $method, $params);
+            $toStore  = $response;
+            if (ApiCache::cacheScope($model, $method, $params) === ApiCache::SCOPE_PERMISSION) {
+                $toStore = ApiCache::stripUserFavorites($response);
+            }
+            ApiCache::set($cacheKey, $owner, $toStore, ApiCache::DEFAULT_TTL);
+        }
+    } elseif ($model !== '' && !ApiCache::isCacheable($model, $method) && ApiCache::isSuccessfulResponse($response)) {
+        ApiCache::bumpScopeVersion($model);
     }
 
     echo $response;

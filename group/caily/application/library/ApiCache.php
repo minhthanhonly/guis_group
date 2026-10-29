@@ -1,43 +1,90 @@
 <?php
 /**
- * Cache phản hồi API theo từng user (chỉ GET, whitelist model+method).
- * Key: userid_model_method_v{scopeVer}_[hash(payload)]
- * Backend: Redis (SETEX + index SET) khi bật; fallback file application/cache/api/
- * Shared list freshness: bumpScopeVersion(model) khi DB đổi → key cũ tự miss.
+ * Cache phản hồi API (GET đọc; denylist method ghi).
+ *
+ * Ba lớp owner:
+ * - shared     (_shared_): master data giống nhau mọi user (department list, category…)
+ * - permission (p{fp}):    user cùng phân quyền department/authority share với nhau
+ *                          (project / parentproject=building list…). Favorite được
+ *                          strip khi ghi cache và patch lại theo user khi đọc.
+ * - user       (u{userid}): dữ liệu gắn identity (task permission/membership,
+ *                          permitWhere forum/storage, notification…)
+ *
+ * Freshness: bumpScopeVersion(model) khi write → key cũ tự miss.
  */
 class ApiCache {
 
-    /** Thư mục cache (application/cache/api/) */
-    private static $cacheDir;
+    const OWNER_SHARED = '_shared_';
+    const SCOPE_SHARED = 'shared';
+    const SCOPE_PERMISSION = 'permission';
+    const SCOPE_USER = 'user';
 
-    /** TTL mặc định (giây) — lưới an toàn; freshness chính = invalidate/bump */
+    private static $cacheDir;
+    private static $permissionFingerprint = null;
+
     const DEFAULT_TTL = 900;
 
-    /**
-     * Danh sách endpoint được phép cache: [ 'model' => [ 'method1', 'method2' ] ]
-     */
-    private static $cacheable = [
-        'department' => [ 'list_department', 'get_users', 'get_user_permission_by_department', 'get_user_permissions', 'getAll' ],
-        'user' => [ 'searchMembers', 'getMentionUsers'],
-        'customer' => [ 'list_category', 'list_categories'],
+    private static $uncacheableMethodPrefixes = [
+        'add', 'edit', 'delete', 'save', 'update', 'create', 'remove', 'insert',
+        'upload', 'import', 'export', 'send', 'suspend', 'resign', 'active',
+        'change_', 'invalidate', 'login', 'logout', 'force', 'bulk', 'hard',
+        'copy', 'move', 'assign', 'unassign', 'toggle', 'reset', 'clear', 'sync',
+        'run', 'execute', 'process', 'generate', 'rebuild', 'migrate', 'fix',
+        'set_', 'post', 'put', 'patch', 'destroy', 'restore', 'approve', 'reject',
+        'cancel', 'confirm', 'submit', 'attach', 'detach', 'reorder', 'sort_save',
     ];
 
-    /** model API → scope version (shared data) */
+    /**
+     * Share theo fingerprint phân quyền (department flags + authority).
+     * Không gồm task: getPermission phụ thuộc project_members của từng user.
+     */
+    private static $permissionScopedModels = [
+        'project',
+        'parentproject',
+    ];
+
+    /**
+     * Luôn theo từng user (identity / membership / permitWhere).
+     */
+    private static $userScopedModels = [
+        'task', 'drawing', 'projectnote', 'parentprojectnote',
+        'forum', 'storage', 'schedule', 'facility',
+        'ai', 'notification', 'message', 'chat', 'mail', 'authority',
+        'online', 'presence', 'timecard', 'request', 'leave',
+        'bookmark', 'todo', 'addressbook', 'workflow',
+    ];
+
+    /** Method → luôn user-scope (kể cả model permission-scoped). */
+    private static $userScopedMethodNeedles = [
+        'permission', 'permit', 'mention', 'notification', 'unread', 'profile',
+        'personal', 'private', 'session', 'auth', 'password', 'token', 'remember',
+        'mine', 'myself', 'self', 'assigned', 'favorite', 'bookmark', 'inbox',
+        'current_user', 'me_', '_me', 'my_',
+        'searchmembers', 'getmention', 'get_user_permission', 'user_permission',
+        'canuser', 'can_view', 'can_edit', 'canview', 'canedit',
+        'foraicontext',
+    ];
+
+    /** Cột quyền trên user_department (khớp Department::departmentPermissionFields). */
+    private static $departmentPermissionFields = [
+        'project_manager',
+        'project_director_stat',
+        'project_director_view',
+        'project_director_edit',
+        'project_add',
+        'project_edit',
+        'project_delete',
+        'project_comment',
+        'project_view_end_date',
+        'task_view',
+        'task_add',
+        'task_edit',
+        'task_delete',
+    ];
+
     private static $modelScopes = [
-        'department' => 'department',
-        'user' => 'user',
         'customer' => 'customer_category',
     ];
-
-    private static function ensureRedisClientLoaded()
-    {
-        if (!class_exists('RedisClient', false)) {
-            $path = dirname(__FILE__) . '/RedisClient.php';
-            if (is_file($path)) {
-                require_once $path;
-            }
-        }
-    }
 
     private static function getCacheDir()
     {
@@ -60,74 +107,21 @@ class ApiCache {
         return $dir;
     }
 
-    /**
-     * Scope version cho model (dùng trong cache key). File + Redis đều hỗ trợ.
-     */
-    public static function getScopeVersion($modelOrScope)
+    private static function ownerDir($ownerId)
     {
-        $scope = self::resolveScope($modelOrScope);
-        if ($scope === '') {
-            return '0';
+        $dir = self::getCacheDir();
+        $ownerId = (string) $ownerId;
+        if ($ownerId === self::OWNER_SHARED || $ownerId === '') {
+            $sub = $dir . 'shared/';
+        } elseif (strpos($ownerId, 'p') === 0 && preg_match('/^p[a-f0-9]+$/', $ownerId)) {
+            $sub = $dir . $ownerId . '/';
+        } else {
+            $sub = $dir . 'u' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $ownerId) . '/';
         }
-
-        self::ensureRedisClientLoaded();
-        if (class_exists('RedisClient', false)) {
-            $redis = RedisClient::get();
-            if ($redis) {
-                try {
-                    $key = RedisClient::prefix() . 'ver:' . $scope;
-                    $v = $redis->get($key);
-                    if ($v === null || $v === false || $v === '') {
-                        $redis->set($key, '1');
-                        return '1';
-                    }
-                    return (string) $v;
-                } catch (\Throwable $e) {
-                    // fall through to file
-                }
-            }
+        if (!is_dir($sub)) {
+            @mkdir($sub, 0755, true);
         }
-
-        $file = self::versionDir() . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $scope) . '.ver';
-        if (!is_file($file)) {
-            @file_put_contents($file, '1');
-            return '1';
-        }
-        $raw = @file_get_contents($file);
-        $n = intval(trim((string) $raw));
-        return (string) max(1, $n);
-    }
-
-    /**
-     * Tăng version scope → mọi cache key gắn version cũ tự miss (mọi user).
-     */
-    public static function bumpScopeVersion($modelOrScope)
-    {
-        $scope = self::resolveScope($modelOrScope);
-        if ($scope === '') {
-            return true;
-        }
-
-        self::ensureRedisClientLoaded();
-        if (class_exists('RedisClient', false)) {
-            $redis = RedisClient::get();
-            if ($redis) {
-                try {
-                    $key = RedisClient::prefix() . 'ver:' . $scope;
-                    $redis->incr($key);
-                } catch (\Throwable $e) {
-                    // continue to file bump
-                }
-            }
-        }
-
-        $file = self::versionDir() . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $scope) . '.ver';
-        $cur = 1;
-        if (is_file($file)) {
-            $cur = max(1, intval(trim((string) @file_get_contents($file))));
-        }
-        @file_put_contents($file, (string) ($cur + 1));
-        return true;
+        return $sub;
     }
 
     private static function resolveScope($modelOrScope)
@@ -143,67 +137,215 @@ class ApiCache {
     }
 
     /**
-     * Kiểm tra request GET có được cache không.
+     * Request có filter gắn identity → bắt buộc user-scope.
      */
-    public static function isCacheable($model, $method)
+    private static function requestForcesUserScope($params = null)
     {
-        $model = strtolower($model);
-        if (!isset(self::$cacheable[$model])) {
-            return false;
+        $g = is_array($params) ? $params : (isset($_GET) && is_array($_GET) ? $_GET : []);
+        if (isset($g['my_projects']) && (string) $g['my_projects'] === '1') {
+            return true;
         }
-        return in_array($method, self::$cacheable[$model], true);
+        if (isset($g['favorites_only']) && (string) $g['favorites_only'] === '1') {
+            return true;
+        }
+        return false;
     }
 
     /**
-     * Tạo cache key kèm payload + scope version.
+     * @return string shared|permission|user
      */
+    public static function cacheScope($model, $method, $params = null)
+    {
+        $model = strtolower(trim((string) $model));
+        $method = strtolower(trim((string) $method));
+        if ($model === '' || $method === '') {
+            return self::SCOPE_USER;
+        }
+        if (self::requestForcesUserScope($params)) {
+            return self::SCOPE_USER;
+        }
+        foreach (self::$userScopedMethodNeedles as $needle) {
+            if ($needle !== '' && strpos($method, $needle) !== false) {
+                return self::SCOPE_USER;
+            }
+        }
+        if (in_array($model, self::$userScopedModels, true)) {
+            return self::SCOPE_USER;
+        }
+        if (in_array($model, self::$permissionScopedModels, true)) {
+            return self::SCOPE_PERMISSION;
+        }
+        return self::SCOPE_SHARED;
+    }
+
+    /** @deprecated dùng cacheScope(); giữ để smoke/compat */
+    public static function isUserScoped($model, $method)
+    {
+        return self::cacheScope($model, $method) === self::SCOPE_USER;
+    }
+
+    /**
+     * Fingerprint phân quyền: authority + group + từng department flags.
+     * User cùng fingerprint → cùng cohort cache.
+     */
+    public static function permissionFingerprint()
+    {
+        if (self::$permissionFingerprint !== null) {
+            return self::$permissionFingerprint;
+        }
+
+        $payload = [
+            'authority' => isset($_SESSION['authority']) ? (string) $_SESSION['authority'] : '',
+            'group' => isset($_SESSION['group']) ? (string) $_SESSION['group'] : '',
+            'depts' => [],
+        ];
+
+        $userid = isset($_SESSION['userid']) ? (string) $_SESSION['userid'] : '';
+        if ($userid !== '' && defined('DB_PREFIX') && class_exists('Connection', false)) {
+            try {
+                $conn = new Connection();
+                $fields = self::$departmentPermissionFields;
+                // project_director legacy column cũng ảnh hưởng director checks
+                $cols = array_merge(['department_id', 'project_director'], $fields);
+                $cols = array_unique($cols);
+                $sql = sprintf(
+                    "SELECT %s FROM %suser_department WHERE userid = '%s' ORDER BY department_id ASC",
+                    implode(',', $cols),
+                    DB_PREFIX,
+                    self::sqlEscape($conn, $userid)
+                );
+                $rows = $conn->fetchAll($sql);
+                $conn->close();
+                foreach ($rows as $row) {
+                    $entry = ['department_id' => (int) ($row['department_id'] ?? 0)];
+                    $entry['project_director'] = (int) ($row['project_director'] ?? 0);
+                    foreach ($fields as $f) {
+                        $entry[$f] = (int) ($row[$f] ?? 0);
+                    }
+                    $payload['depts'][] = $entry;
+                }
+            } catch (\Throwable $e) {
+                // Fallback: cohort hẹp hơn = userid (an toàn, ít share)
+                $payload['fallback_userid'] = $userid;
+            }
+        } elseif ($userid !== '') {
+            $payload['fallback_userid'] = $userid;
+        }
+
+        self::$permissionFingerprint = substr(sha1(json_encode($payload)), 0, 16);
+        return self::$permissionFingerprint;
+    }
+
+    private static function sqlEscape($conn, $value)
+    {
+        if (isset($conn->handler) && $conn->handler) {
+            return mysqli_real_escape_string($conn->handler, $value);
+        }
+        return addslashes($value);
+    }
+
+    /**
+     * Owner id: _shared_ | p{fingerprint} | {userid}
+     */
+    public static function cacheOwnerId($userId, $model, $method, $params = null)
+    {
+        $scope = self::cacheScope($model, $method, $params);
+        if ($scope === self::SCOPE_SHARED) {
+            return self::OWNER_SHARED;
+        }
+        if ($scope === self::SCOPE_PERMISSION) {
+            return 'p' . self::permissionFingerprint();
+        }
+        return (string) $userId;
+    }
+
+    public static function getScopeVersion($modelOrScope)
+    {
+        $scope = self::resolveScope($modelOrScope);
+        if ($scope === '') {
+            return '0';
+        }
+        $file = self::versionDir() . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $scope) . '.ver';
+        if (!is_file($file)) {
+            @file_put_contents($file, '1');
+            return '1';
+        }
+        $raw = @file_get_contents($file);
+        $n = intval(trim((string) $raw));
+        return (string) max(1, $n);
+    }
+
+    public static function bumpScopeVersion($modelOrScope)
+    {
+        $scope = self::resolveScope($modelOrScope);
+        if ($scope === '') {
+            return true;
+        }
+        $file = self::versionDir() . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $scope) . '.ver';
+        $cur = 1;
+        if (is_file($file)) {
+            $cur = max(1, intval(trim((string) @file_get_contents($file))));
+        }
+        @file_put_contents($file, (string) ($cur + 1));
+        return true;
+    }
+
+    public static function isCacheable($model, $method)
+    {
+        $model = trim((string) $model);
+        $method = trim((string) $method);
+        if ($model === '' || $method === '') {
+            return false;
+        }
+        $methodLower = strtolower($method);
+        foreach (self::$uncacheableMethodPrefixes as $prefix) {
+            $prefix = strtolower($prefix);
+            if ($methodLower === $prefix || strpos($methodLower, $prefix) === 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public static function isSuccessfulResponse($body)
+    {
+        if (!is_string($body) || $body === '') {
+            return false;
+        }
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return true;
+        }
+        if (isset($data['error']) && $data['error'] !== '' && $data['error'] !== null) {
+            if (!isset($data['status']) || $data['status'] !== 'success') {
+                return false;
+            }
+        }
+        if (isset($data['status']) && is_string($data['status'])) {
+            $st = strtolower($data['status']);
+            if (in_array($st, ['error', 'fail', 'failed'], true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     public static function getKey($userId, $model, $method, $params = [])
     {
         $model = strtolower($model);
+        $owner = self::cacheOwnerId($userId, $model, $method, $params);
         $p = is_array($params) ? $params : [];
+        unset($p['PHPSESSID'], $p['_'], $p['nocache']);
         ksort($p);
         $payloadHash = md5(serialize($p));
         $ver = self::getScopeVersion($model);
-        $key = $userId . '_' . $model . '_' . $method . '_v' . $ver . '_' . $payloadHash;
+        $key = $owner . '_' . $model . '_' . $method . '_v' . $ver . '_' . $payloadHash;
         return preg_replace('/[^a-zA-Z0-9_\-]/', '_', $key);
     }
 
-    private static function redisBodyKey($cacheKey)
+    public static function get($key, $ownerId)
     {
-        self::ensureRedisClientLoaded();
-        return RedisClient::prefix() . 'b:' . $cacheKey;
-    }
-
-    private static function redisIndexKey($userId)
-    {
-        self::ensureRedisClientLoaded();
-        $uid = preg_replace('/[^a-zA-Z0-9_\-]/', '_', (string) $userId);
-        return RedisClient::prefix() . 'idx:' . $uid;
-    }
-
-    /**
-     * Đọc cache. Trả về nội dung (string) hoặc false nếu hết hạn/không có.
-     */
-    public static function get($key, $userId)
-    {
-        self::ensureRedisClientLoaded();
-        if (class_exists('RedisClient', false)) {
-            $redis = RedisClient::get();
-            if ($redis) {
-                try {
-                    $body = $redis->get(self::redisBodyKey($key));
-                    if ($body !== null && $body !== false && $body !== '') {
-                        return $body;
-                    }
-                } catch (\Throwable $e) {
-                    // fall through to file
-                }
-            }
-        }
-
-        $dir = self::getCacheDir();
-        $userDir = $dir . 'u' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $userId) . '/';
-        $file = $userDir . $key . '.cache';
+        $file = self::ownerDir($ownerId) . $key . '.cache';
         if (!is_file($file)) {
             return false;
         }
@@ -223,72 +365,134 @@ class ApiCache {
         return $data['body'];
     }
 
-    /**
-     * Ghi cache. $body là chuỗi JSON response, $ttl là số giây.
-     */
-    public static function set($key, $userId, $body, $ttl = self::DEFAULT_TTL)
+    public static function set($key, $ownerId, $body, $ttl = self::DEFAULT_TTL)
     {
-        $ttl = max(1, (int) $ttl);
-        $okRedis = false;
-
-        self::ensureRedisClientLoaded();
-        if (class_exists('RedisClient', false)) {
-            $redis = RedisClient::get();
-            if ($redis) {
-                try {
-                    $pipe = $redis->pipeline();
-                    $pipe->setex(self::redisBodyKey($key), $ttl, $body);
-                    $pipe->sadd(self::redisIndexKey($userId), $key);
-                    $pipe->execute();
-                    $okRedis = true;
-                } catch (\Throwable $e) {
-                    $okRedis = false;
-                }
-            }
-        }
-
-        $dir = self::getCacheDir();
-        $userDir = $dir . 'u' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $userId) . '/';
-        if (!is_dir($userDir)) {
-            @mkdir($userDir, 0755, true);
-        }
-        $file = $userDir . $key . '.cache';
+        $dir = self::ownerDir($ownerId);
+        $file = $dir . $key . '.cache';
         $data = [
-            'expiry' => time() + $ttl,
+            'expiry' => time() + max(1, (int) $ttl),
             'body'   => $body,
         ];
-        $okFile = @file_put_contents($file, json_encode($data, JSON_UNESCAPED_UNICODE)) !== false;
-        return $okRedis || $okFile;
+        return @file_put_contents($file, json_encode($data, JSON_UNESCAPED_UNICODE)) !== false;
     }
 
     /**
-     * Xóa toàn bộ cache của một user (khi đăng xuất hoặc khi cần invalidate).
+     * Trước khi lưu cache permission-scope: xóa is_favorite (gắn user).
      */
-    public static function invalidateUser($userId)
+    public static function stripUserFavorites($body)
     {
-        self::ensureRedisClientLoaded();
-        if (class_exists('RedisClient', false)) {
-            $redis = RedisClient::get();
-            if ($redis) {
-                try {
-                    $idx = self::redisIndexKey($userId);
-                    $members = $redis->smembers($idx);
-                    if (is_array($members) && count($members) > 0) {
-                        $pipe = $redis->pipeline();
-                        foreach ($members as $m) {
-                            $pipe->del(self::redisBodyKey($m));
-                        }
-                        $pipe->del($idx);
-                        $pipe->execute();
-                    } else {
-                        $redis->del($idx);
-                    }
-                } catch (\Throwable $e) {
-                    // continue file cleanup
-                }
-            }
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $body;
+        }
+        self::walkSetFavorite($data, 0);
+        return json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    /**
+     * Sau cache hit permission-scope: gắn lại is_favorite của user hiện tại.
+     * $numericUserId = $_SESSION['id']
+     */
+    public static function applyUserFavorites($model, $body, $numericUserId)
+    {
+        $numericUserId = intval($numericUserId);
+        if ($numericUserId <= 0 || !is_string($body) || $body === '') {
+            return $body;
+        }
+        $model = strtolower($model);
+        $data = json_decode($body, true);
+        if (!is_array($data)) {
+            return $body;
         }
 
+        $ids = self::collectEntityIds($data);
+        if (empty($ids)) {
+            return $body;
+        }
+
+        $favSet = self::loadFavoriteIdSet($model, $numericUserId, $ids);
+        self::walkPatchFavorite($data, $favSet);
+        return json_encode($data, JSON_UNESCAPED_UNICODE);
+    }
+
+    private static function collectEntityIds(array $node)
+    {
+        $ids = [];
+        if (isset($node['data']) && is_array($node['data'])) {
+            foreach ($node['data'] as $row) {
+                if (is_array($row) && isset($row['id'])) {
+                    $ids[] = (int) $row['id'];
+                }
+            }
+        } elseif (isset($node['id']) && (isset($node['is_favorite']) || array_key_exists('is_favorite', $node))) {
+            $ids[] = (int) $node['id'];
+        }
+        return array_values(array_unique(array_filter($ids)));
+    }
+
+    private static function loadFavoriteIdSet($model, $numericUserId, array $ids)
+    {
+        $favSet = [];
+        if (!defined('DB_PREFIX') || !class_exists('Connection', false) || empty($ids)) {
+            return $favSet;
+        }
+        try {
+            $conn = new Connection();
+            $idList = implode(',', array_map('intval', $ids));
+            if ($model === 'parentproject') {
+                $sql = sprintf(
+                    "SELECT parent_project_id AS id FROM %sparent_project_favorites WHERE user_id = %d AND parent_project_id IN (%s)",
+                    DB_PREFIX,
+                    $numericUserId,
+                    $idList
+                );
+            } else {
+                $sql = sprintf(
+                    "SELECT project_id AS id FROM %sproject_favorites WHERE user_id = %d AND project_id IN (%s)",
+                    DB_PREFIX,
+                    $numericUserId,
+                    $idList
+                );
+            }
+            $rows = $conn->fetchAll($sql);
+            $conn->close();
+            foreach ($rows as $row) {
+                $favSet[(int) $row['id']] = true;
+            }
+        } catch (\Throwable $e) {
+            // keep empty → is_favorite = 0
+        }
+        return $favSet;
+    }
+
+    private static function walkSetFavorite(array &$node, $value)
+    {
+        if (array_key_exists('is_favorite', $node)) {
+            $node['is_favorite'] = $value;
+        }
+        foreach ($node as &$child) {
+            if (is_array($child)) {
+                self::walkSetFavorite($child, $value);
+            }
+        }
+        unset($child);
+    }
+
+    private static function walkPatchFavorite(array &$node, array $favSet)
+    {
+        if (isset($node['id']) && array_key_exists('is_favorite', $node)) {
+            $node['is_favorite'] = isset($favSet[(int) $node['id']]) ? 1 : 0;
+        }
+        foreach ($node as &$child) {
+            if (is_array($child)) {
+                self::walkPatchFavorite($child, $favSet);
+            }
+        }
+        unset($child);
+    }
+
+    public static function invalidateUser($userId)
+    {
         $dir = self::getCacheDir();
         $userDir = $dir . 'u' . preg_replace('/[^a-zA-Z0-9_\-]/', '_', $userId) . '/';
         if (!is_dir($userDir)) {
@@ -304,9 +508,6 @@ class ApiCache {
         return true;
     }
 
-    /**
-     * Xóa cache API của nhiều user (userid string).
-     */
     public static function invalidateUsers(array $userIds)
     {
         foreach (array_unique(array_filter(array_map('strval', $userIds), function ($uid) {

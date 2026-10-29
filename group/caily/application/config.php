@@ -60,16 +60,13 @@ define('DIR_UPLOAD', DIR_PATH.'upload/');
 define('DB_STORAGE', 'mysql');
 
 //データベースのホスト名
-//define('DB_HOSTNAME', 'mysql653.db.sakura.ne.jp');
-define('DB_HOSTNAME', 'localhost');
+define('DB_HOSTNAME', 'mysql80.guis3.sakura.ne.jp');
 //データベース名
-define('DB_DATABASE', 'guis2_group_2025');
+define('DB_DATABASE', 'guis3_group_2025');
 //データベースユーザー名
-define('DB_USERNAME', 'root');
-// define('DB_USERNAME', 'guis2');
+define('DB_USERNAME', 'guis3');
 //データベースパスワード
-// define('DB_PASSWORD', 'URtMzWthwqB5');
-define('DB_PASSWORD', 'mysql');
+define('DB_PASSWORD', 'URtMzWthwqB5');
 //テーブル接頭辞
 define('DB_PREFIX', 'groupware_');
 //データベースポート番号
@@ -103,10 +100,6 @@ define('ADMIN_GROUP', '4');
 define('RETIRE_GROUP', '5');
 
 define('RETIRE_GROUP_NAME', '退職者');
-
-if (is_file(__DIR__ . '/config_redis.php')) {
-	require_once __DIR__ . '/config_redis.php';
-}
 
 require_once 'version.php';
 
