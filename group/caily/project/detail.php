@@ -595,9 +595,9 @@ if($_SESSION['show_project'] == 0){
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span>
                                     <span v-if="isEditMode && project.end_date && project.tantou === 'CAILY'" class="text-danger">*</span>
-                                    <span v-if="getTimeRemainingForDate(project.caily_nouki) && project.caily_nouki_status !== '納品済み'" :class="'badge ms-2 ' + getTimeRemainingForDate(project.caily_nouki).class"
-                                          :title="getTimeRemainingForDate(project.caily_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
-                                        {{ getTimeRemainingForDate(project.caily_nouki).text }}
+                                    <span v-if="cailyNoukiTimeRemaining()" :class="'badge ms-2 ' + cailyNoukiTimeRemaining().class"
+                                          :title="cailyNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
+                                        {{ cailyNoukiTimeRemaining().text }}
                                     </span>
                                     <span v-if="getNoukiScheduleJudgment('caily')"
                                           :class="'badge ms-1 ' + getNoukiScheduleJudgment('caily').className">
@@ -632,9 +632,9 @@ if($_SESSION['show_project'] == 0){
                             <div class="col-md-4" v-if="canViewEndDate">
                                 <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span>
                                     <span v-if="isEditMode && !isCailyBranchUser && project.end_date && project.tantou === 'GUIS'" class="text-danger">*</span>
-                                    <span v-if="getTimeRemainingForDate(project.guis_nouki) && project.guis_nouki_status !== '納品済み'" :class="'badge ms-2 ' + getTimeRemainingForDate(project.guis_nouki).class"
-                                          :title="getTimeRemainingForDate(project.guis_nouki).isOverdue ? '期限を超過しています' : '残り時間'">
-                                        {{ getTimeRemainingForDate(project.guis_nouki).text }}
+                                    <span v-if="guisNoukiTimeRemaining()" :class="'badge ms-2 ' + guisNoukiTimeRemaining().class"
+                                          :title="guisNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
+                                        {{ guisNoukiTimeRemaining().text }}
                                     </span>
                                     <span v-if="getNoukiScheduleJudgment('guis')"
                                           :class="'badge ms-1 ' + getNoukiScheduleJudgment('guis').className">
@@ -1167,10 +1167,10 @@ if($_SESSION['show_project'] == 0){
                                     <span v-if="isNoukiDelivered(sibling.caily_nouki_status)"
                                           class="badge bg-success"
                                           data-i18n="納品済み">納品済み</span>
-                                    <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki)"
+                                    <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki, isNoukiDelivered(sibling.caily_nouki_status))"
                                           class="badge"
-                                          :class="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki).class">
-                                        {{ getSiblingDeadlineRemaining(sibling, sibling.caily_nouki).text }}
+                                          :class="getSiblingDeadlineRemaining(sibling, sibling.caily_nouki, isNoukiDelivered(sibling.caily_nouki_status)).class">
+                                        {{ getSiblingDeadlineRemaining(sibling, sibling.caily_nouki, isNoukiDelivered(sibling.caily_nouki_status)).text }}
                                     </span>
                                 </div>
                                 <template v-if="canViewEndDate">
@@ -1186,10 +1186,10 @@ if($_SESSION['show_project'] == 0){
                                         <span v-if="isNoukiDelivered(sibling.guis_nouki_status)"
                                               class="badge bg-success"
                                               data-i18n="納品済み">納品済み</span>
-                                        <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki)"
+                                        <span v-else-if="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki, isNoukiDelivered(sibling.guis_nouki_status))"
                                               class="badge"
-                                              :class="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki).class">
-                                            {{ getSiblingDeadlineRemaining(sibling, sibling.guis_nouki).text }}
+                                              :class="getSiblingDeadlineRemaining(sibling, sibling.guis_nouki, isNoukiDelivered(sibling.guis_nouki_status)).class">
+                                            {{ getSiblingDeadlineRemaining(sibling, sibling.guis_nouki, isNoukiDelivered(sibling.guis_nouki_status)).text }}
                                         </span>
                                     </div>
                                     <div class="d-flex flex-wrap align-items-center gap-1">
@@ -1201,10 +1201,10 @@ if($_SESSION['show_project'] == 0){
                                             {{ formatDateTime(sibling.end_date) }}
                                         </span>
                                         <span v-else class="text-muted">-</span>
-                                        <span v-if="getSiblingDeadlineRemaining(sibling, sibling.end_date)"
+                                        <span v-if="getSiblingDeadlineRemaining(sibling, sibling.end_date, isRowNoukiDelivered(sibling))"
                                               class="badge"
-                                              :class="getSiblingDeadlineRemaining(sibling, sibling.end_date).class">
-                                            {{ getSiblingDeadlineRemaining(sibling, sibling.end_date).text }}
+                                              :class="getSiblingDeadlineRemaining(sibling, sibling.end_date, isRowNoukiDelivered(sibling)).class">
+                                            {{ getSiblingDeadlineRemaining(sibling, sibling.end_date, isRowNoukiDelivered(sibling)).text }}
                                         </span>
                                     </div>
                                 </template>

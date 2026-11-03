@@ -4217,7 +4217,7 @@ var projectTable;
                     var todayText = (typeof translateText === 'function' ? translateText('本日') : '本日');
                     badgeHtml = '<span class="badge bg-label-primary mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + todayText + '</span>';
                 }
-                if (isOverdue && !hasSentStatus) {
+                if (isOverdue && !hasSentStatus && !shouldSkipProjectDeadlineBadge(row && row.status, isProjectNoukiDelivered(row))) {
                     var lateText = (typeof translateText === 'function' ? translateText('遅れ') : '遅れ');
                     badgeHtml += '<span class="badge bg-label-danger mt-1 ' + REMOVE_FOR_EXCEL_CLASS + '" style="font-size: 0.7rem; padding: 0.2rem 0.4rem;">' + lateText + '</span>';
                 }
@@ -6178,7 +6178,7 @@ var projectTable;
                             '</div>';
                         }
 
-                        const timeRemaining = getTimeRemaining(data, row.status);
+                        const timeRemaining = getTimeRemaining(data, row.status, { isDelivered: isDelivered });
                         if (timeRemaining) {
                             const pulseClass = timeRemaining.isOverdue ? 'pulse-animation' : '';
                             const titleText = timeRemaining.isOverdue
@@ -6232,7 +6232,7 @@ var projectTable;
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, 'GUIS納期') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        const timeRemaining = getTimeRemaining(data, row.status);
+                        const timeRemaining = getTimeRemaining(data, row.status, { isDelivered: isDelivered });
                         const dateStr = formatDateTimeWithLineBreak(data);
 
                         if (isDelivered) {
@@ -6279,7 +6279,7 @@ var projectTable;
                         var rawEsc = String(data).replace(/"/g, '&quot;').replace(/</g, '&lt;');
                         var attrs = ' data-time="' + rawEsc + '"' + (typeof getTodoDataAttrs === 'function' ? getTodoDataAttrs(row, '期限日') : '');
                         if (vnTip) attrs += ' data-bs-toggle="tooltip" data-bs-title="' + vnTip.replace(/"/g, '&quot;') + '"';
-                        const timeRemaining = isProjectNoukiDelivered(row) ? null : getTimeRemaining(data, row.status);
+                        const timeRemaining = getTimeRemaining(data, row.status, { isDelivered: isProjectNoukiDelivered(row) });
                         const dateStr = formatDateTimeWithLineBreak(data);
                         
                         if (timeRemaining) {
@@ -8565,8 +8565,24 @@ var projectTable;
         return ' data-todo-title="' + title + '" data-todo-link="' + link + '"';
     }
 
-    function getTimeRemaining(endDate, status) {
-        if (!endDate || status === 'paused' || status === 'completed' || status === 'deleted' || status === 'draft' || status === 'cancelled' || status === 'waiting_invoice') {
+    /**
+     * Hide deadline / overdue badges for finished or non-active projects.
+     * completed | cancelled | waiting_invoice | deleted | draft | paused | 納品済み
+     */
+    function shouldSkipProjectDeadlineBadge(status, isDelivered) {
+        if (isDelivered) return true;
+        var s = String(status || '').trim().toLowerCase();
+        return s === 'completed'
+            || s === 'cancelled'
+            || s === 'waiting_invoice'
+            || s === 'deleted'
+            || s === 'draft'
+            || s === 'paused';
+    }
+
+    function getTimeRemaining(endDate, status, options) {
+        options = options || {};
+        if (!endDate || shouldSkipProjectDeadlineBadge(status, options.isDelivered)) {
             return null;
         }
         
@@ -8642,9 +8658,7 @@ var projectTable;
 
     function getOverdueDeadlineMoment(row) {
         if (!row) return null;
-        const skipStatuses = ['completed', 'cancelled', 'paused', 'deleted', 'waiting_invoice'];
-        if (skipStatuses.includes(row.status)) return null;
-        if (isProjectNoukiDelivered(row)) return null;
+        if (shouldSkipProjectDeadlineBadge(row.status, isProjectNoukiDelivered(row))) return null;
 
         if (isCailyBranchUser()) {
             return parseProjectDateMoment(row.caily_nouki);

@@ -1786,11 +1786,20 @@ const vueApp = createApp({
                     : PROJECT_DATETIME_JA_DATE_FORMAT
             );
         },
+        /** Hide overdue/remaining badges: 完了・中止・請求待ち・削除・下書き・一時停止・納品済み */
+        shouldSkipDeadlineBadge(status, isDelivered) {
+            if (isDelivered) return true;
+            const s = String(status || '').trim().toLowerCase();
+            return s === 'completed'
+                || s === 'cancelled'
+                || s === 'waiting_invoice'
+                || s === 'deleted'
+                || s === 'draft'
+                || s === 'paused';
+        },
         getTimeRemaining() {
-            if (!this.project || !this.project.end_date || this.project.status === 'completed' ||
-                 this.project.status === 'deleted' ||
-                 this.project.status === 'draft' || this.project.status === 'cancelled' ||
-                 this.project.status === 'waiting_invoice' || this.isProjectNoukiDelivered()) {
+            if (!this.project || !this.project.end_date
+                || this.shouldSkipDeadlineBadge(this.project.status, this.isProjectNoukiDelivered())) {
                 return null;
             }
             
@@ -1895,10 +1904,24 @@ const vueApp = createApp({
             const isDelivered = !!(status && String(status).indexOf('納品済み') !== -1);
             return getScheduleJudgment(this.project, deadline, { isDelivered: isDelivered });
         },
-        /** Remaining time for a given date (e.g. caily_nouki, guis_nouki). Returns null if status is draft/paused/cancelled. */
-        getTimeRemainingForDate(dateStr) {
+        cailyNoukiTimeRemaining() {
+            if (!this.project) return null;
+            return this.getTimeRemainingForDate(
+                this.project.caily_nouki,
+                this.isNoukiDelivered(this.project.caily_nouki_status)
+            );
+        },
+        guisNoukiTimeRemaining() {
+            if (!this.project) return null;
+            return this.getTimeRemainingForDate(
+                this.project.guis_nouki,
+                this.isNoukiDelivered(this.project.guis_nouki_status)
+            );
+        },
+        /** Remaining time for a given date (e.g. caily_nouki, guis_nouki). Null when inactive status or delivered. */
+        getTimeRemainingForDate(dateStr, isDelivered) {
             if (!this.project || !dateStr) return null;
-            if (['draft', 'paused', 'cancelled', 'completed', 'deleted'].includes(String(this.project.status || '').toLowerCase())) return null;
+            if (this.shouldSkipDeadlineBadge(this.project.status, !!isDelivered)) return null;
             const now = moment.tz('Asia/Tokyo');
             const endDate = moment.tz(dateStr, 'Asia/Tokyo');
             if (!endDate.isValid()) return null;
@@ -1936,9 +1959,9 @@ const vueApp = createApp({
             }
         },
         /** Remaining time for a sibling project's deadline (uses sibling status, not current project). */
-        getSiblingDeadlineRemaining(sibling, dateStr) {
+        getSiblingDeadlineRemaining(sibling, dateStr, isDelivered) {
             if (!sibling || !dateStr) return null;
-            if (['draft', 'paused', 'cancelled', 'completed', 'deleted'].includes(String(sibling.status || '').toLowerCase())) {
+            if (this.shouldSkipDeadlineBadge(sibling.status, !!isDelivered)) {
                 return null;
             }
             const now = moment.tz('Asia/Tokyo');
@@ -2078,11 +2101,15 @@ const vueApp = createApp({
         },
         isProjectNoukiDelivered() {
             if (!this.project) return false;
+            return this.isRowNoukiDelivered(this.project);
+        },
+        isRowNoukiDelivered(row) {
+            if (!row) return false;
             if (this.isCailyBranchUser) {
-                return this.isNoukiDelivered(this.project.caily_nouki_status);
+                return this.isNoukiDelivered(row.caily_nouki_status);
             }
-            return this.isNoukiDelivered(this.project.caily_nouki_status)
-                || this.isNoukiDelivered(this.project.guis_nouki_status);
+            return this.isNoukiDelivered(row.caily_nouki_status)
+                || this.isNoukiDelivered(row.guis_nouki_status);
         },
         getRequestBadgeClass(request) {
             const map = {
