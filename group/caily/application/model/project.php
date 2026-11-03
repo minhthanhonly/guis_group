@@ -1862,8 +1862,47 @@ class Project extends ApplicationModel {
         return $this->quote($str);
     }
 
-    private function buildKeywordFilterWhere($rawKeyword) {
-        return $this->buildFlexibleLikeWhere($rawKeyword, [
+    /**
+     * Label text for BELSのZEH等級 so keyword search matches UI labels, not only codes.
+     */
+    private function sqlBelsZehGradeLabelExpr($column = 'pp.bels_zeh_grade') {
+        return "CASE CAST({$column} AS CHAR)
+            WHEN '0' THEN '0 : 該当なし（非ZEH）'
+            WHEN '1' THEN '1 : ZEH'
+            WHEN '2' THEN '2 : Nearly ZEH'
+            WHEN '3' THEN '3 : ZEH Oriented'
+            WHEN '4' THEN '4 : ZEH-M'
+            WHEN '5' THEN '5 : Nearly ZEH-M'
+            WHEN '6' THEN '6 : ZEH-M Oriented'
+            ELSE CAST({$column} AS CHAR)
+        END";
+    }
+
+    /**
+     * Split keyword into terms by ASCII/JP comma (, 、). Empty terms are dropped.
+     * @return string[]
+     */
+    private function splitKeywordTerms($rawKeyword) {
+        $raw = trim((string)$rawKeyword);
+        if ($raw === '') {
+            return [];
+        }
+        $parts = preg_split('/[,、]+/u', $raw, -1, PREG_SPLIT_NO_EMPTY);
+        $terms = [];
+        foreach ($parts as $part) {
+            $term = trim((string)$part);
+            if ($term !== '') {
+                $terms[] = $term;
+            }
+        }
+        return array_values(array_unique($terms));
+    }
+
+    /**
+     * Match one keyword term against project / parent / notes fields.
+     */
+    private function buildSingleKeywordFilterWhere($rawKeyword) {
+        $fieldWhere = $this->buildFlexibleLikeWhere($rawKeyword, [
             'p.name',
             'CAST(p.id AS CHAR)',
             'p.tags',
@@ -1878,7 +1917,54 @@ class Project extends ApplicationModel {
             'pp.scale',
             'pp.type1',
             'pp.type2',
+            // Building (parent_projects): 特徴 / 申請提出先の審査機関 / BELSのZEH等級
+            'pp.features',
+            'pp.application_review_agency',
+            'pp.bels_zeh_grade',
+            $this->sqlBelsZehGradeLabelExpr('pp.bels_zeh_grade'),
         ]);
+        $notesContentWhere = $this->buildFlexibleLikeWhere($rawKeyword, ['pn.content']);
+        if ($notesContentWhere === '') {
+            return $fieldWhere;
+        }
+        $notesExists = sprintf(
+            "EXISTS (
+                SELECT 1 FROM %sproject_notes pn
+                WHERE pn.project_id = p.id
+                  AND %s
+            )",
+            DB_PREFIX,
+            $notesContentWhere
+        );
+        if ($fieldWhere === '') {
+            return $notesExists;
+        }
+        return '(' . $fieldWhere . ' OR ' . $notesExists . ')';
+    }
+
+    /**
+     * Multi-term keyword: terms separated by , or 、 must ALL match (AND).
+     * Each term may match any searchable field (project / building / notes).
+     */
+    private function buildKeywordFilterWhere($rawKeyword) {
+        $terms = $this->splitKeywordTerms($rawKeyword);
+        if (empty($terms)) {
+            return '';
+        }
+        $parts = [];
+        foreach ($terms as $term) {
+            $where = $this->buildSingleKeywordFilterWhere($term);
+            if ($where !== '') {
+                $parts[] = $where;
+            }
+        }
+        if (empty($parts)) {
+            return '';
+        }
+        if (count($parts) === 1) {
+            return $parts[0];
+        }
+        return '(' . implode(' AND ', $parts) . ')';
     }
 
     /**

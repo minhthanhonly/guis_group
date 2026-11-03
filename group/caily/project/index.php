@@ -154,8 +154,8 @@ if($_SESSION['show_project'] == 0){
                         type="text"
                         class="form-control form-control-sm"
                         id="filterKeyword"
-                        data-i18n="案件名、工事番号、支店名などで検索..."
-                        placeholder="案件名、工事番号、支店名などで検索...">
+                        data-i18n="案件名、工事番号、支店名など（複数はカンマ区切り）"
+                        placeholder="案件名、工事番号、支店名など（複数はカンマ区切り）">
                     </div>
                     <div class="col-md-2 col-6">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="案件ID">案件ID</label>
