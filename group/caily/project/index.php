@@ -80,6 +80,7 @@ if($_SESSION['show_project'] == 0){
                         <option value="請求準備" data-i18n="請求準備">請求準備</option>
                         <option value="請求済" data-i18n="請求済">請求済</option>
                         <option value="無償" data-i18n="無償">無償</option>
+                        <option value="対象外" data-i18n="対象外">対象外</option>
                     </select>
                     </div>
                     <div class="col-md-3 col-6">
@@ -507,131 +508,186 @@ if($_SESSION['show_project'] == 0){
                         <button type="button" class="btn-close" data-bs-dismiss="modal" @click="closeBusinessDocumentModal"></button>
                     </div>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body" v-if="businessDocumentProject">
                     <input type="hidden" v-model.number="businessDocumentProject.payment_version">
-                    <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <label class="form-label mb-0">見積日 <span class="text-danger">*</span></label>
-                                <button v-if="!hasBdDate('estimate_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                        @click="setBdDateToday('estimate_date')">今日</button>
+
+                    <template v-if="isBdEnergyDepartment">
+                        <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
+                        <div v-for="row in energyBdEstimateFeeRows" :key="'bd-est-' + row.fee" class="border rounded p-3 mb-3">
+                            <div class="fw-semibold mb-2"><span :data-i18n="row.title">{{ row.title }}</span></div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label mb-0">{{ row.dateLabel }} <span class="text-danger">*</span></label>
+                                        <button v-if="!hasBdDate(row.dateKey)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                                @click="setBdDateToday(row.dateKey)">今日</button>
+                                    </div>
+                                    <input type="text" class="form-control" v-model="businessDocumentProject[row.dateKey]"
+                                           :id="bdModalPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">{{ row.amountLabel }} <span class="text-danger">*</span></label>
+                                    <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject[row.amountKey]"
+                                           placeholder="未入力" data-i18n="未入力" @input="scheduleBdUpdate" min="0" step="1">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">状況</label>
+                                    <div class="btn-group d-block">
+                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                                :class="getBdEnergyFeeStatusButtonClass(row.kind, businessDocumentProject[row.statusKey])"
+                                                :id="row.dropdownId" data-bs-toggle="dropdown" aria-expanded="false">
+                                            {{ getBdEnergyFeeStatusLabel(row.kind, businessDocumentProject[row.statusKey]) }}
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li v-for="status in getBdEnergyFeeStatusOptions(row.kind)" :key="status.value">
+                                                <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                   :class="{ disabled: status.value === '発行済' && !isBdEnergyFeeRowComplete(row) }"
+                                                   @click="selectBdEnergyFeeStatus(row, status.value)">{{ status.label }}</a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div v-if="shouldShowBdEnergyFeeIssuedHint(row)" class="form-text text-muted">
+                                        発行済にするには{{ row.dateLabel }}・{{ row.amountLabel }}が必要です
+                                    </div>
+                                </div>
                             </div>
-                            <input type="text" class="form-control" v-model="businessDocumentProject.estimate_date"
-                                   id="bd_modal_estimate_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
                         </div>
-                        <div class="col-md-6">
-                            <label class="form-label">見積金額(税抜き) <span class="text-danger">*</span></label>
-                            <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.amount"
-                                   placeholder="未入力" data-i18n="未入力"
-                                   @input="scheduleBdUpdate" min="0" step="1">
-                    </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-muted">消費税（10%）</label>
-                            <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(businessDocumentProject.amount)">
-                            </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-muted">税込合計</label>
-                            <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(businessDocumentProject.amount)">
-                            </div>
-                        <div class="col-md-6">
-                            <label class="form-label">見積番号</label>
-                            <input type="text" autocomplete="off" class="form-control" v-model="businessDocumentProject.estimate_number" @change="scheduleBdUpdate">
-                            </div>
-                        <div class="col-md-6">
-                            <label class="form-label">見積状況</label>
-                            <div class="btn-group d-block">
-                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                        :class="getBdEstimateStatusButtonClass(businessDocumentProject.estimate_status)"
-                                        id="bdEstimateStatusDropdown"
-                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                    {{ getBdEstimateStatusLabel(businessDocumentProject.estimate_status) }}
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li v-for="status in businessEstimateStatuses" :key="status.value">
-                                        <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                           :class="{ disabled: status.value === '発行済' && !isBdEstimateDocumentFieldsComplete() }"
-                                           @click="selectBdEstimateStatus(status.value)">
-                                            {{ status.label }}
-                                        </a>
-                                    </li>
-                                </ul>
-                            </div>
-                            <div v-if="!isBdEstimateDocumentFieldsComplete()" class="form-text text-muted">
-                                発行済にするには見積日・見積金額が必要です
-                            </div>
+                        <hr class="my-3">
+                        <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
+                        <div v-for="row in energyBdInvoiceFeeRows" :key="'bd-inv-' + row.fee" class="border rounded p-3 mb-3">
+                            <div class="fw-semibold mb-2"><span :data-i18n="row.title">{{ row.title }}</span></div>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label mb-0">{{ row.dateLabel }} <span class="text-danger">*</span></label>
+                                        <button v-if="!hasBdDate(row.dateKey)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                                @click="setBdDateToday(row.dateKey)">今日</button>
+                                    </div>
+                                    <input type="text" class="form-control" v-model="businessDocumentProject[row.dateKey]"
+                                           :id="bdModalPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label mb-0">{{ row.amountLabel }} <span class="text-danger">*</span></label>
+                                        <button v-if="canCopyBdEnergyFeeAmountToInvoice(row)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                                @click="copyBdEnergyFeeAmountToInvoice(row)">見積と同額</button>
+                                    </div>
+                                    <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject[row.amountKey]"
+                                           placeholder="未入力" data-i18n="未入力" @input="scheduleBdUpdate" min="0" step="1">
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">状況</label>
+                                    <div class="btn-group d-block">
+                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                                :class="getBdEnergyFeeStatusButtonClass(row.kind, businessDocumentProject[row.statusKey])"
+                                                :id="row.dropdownId" data-bs-toggle="dropdown" aria-expanded="false">
+                                            {{ getBdEnergyFeeStatusLabel(row.kind, businessDocumentProject[row.statusKey]) }}
+                                        </button>
+                                        <ul class="dropdown-menu">
+                                            <li v-for="status in getBdEnergyFeeStatusOptions(row.kind)" :key="status.value">
+                                                <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                   :class="{ disabled: status.value === '発行済' && !isBdEnergyFeeRowComplete(row) }"
+                                                   @click="selectBdEnergyFeeStatus(row, status.value)">{{ status.label }}</a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div v-if="shouldShowBdEnergyFeeIssuedHint(row)" class="form-text text-muted">
+                                        発行済にするには{{ row.dateLabel }}・{{ row.amountLabel }}が必要です
+                                    </div>
                                 </div>
                             </div>
+                        </div>
+                    </template>
+
+                    <template v-else>
+                        <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label mb-0">見積日 <span class="text-danger">*</span></label>
+                                    <button v-if="!hasBdDate('estimate_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                            @click="setBdDateToday('estimate_date')">今日</button>
+                                </div>
+                                <input type="text" class="form-control" v-model="businessDocumentProject.estimate_date"
+                                       id="bd_modal_estimate_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">見積金額(税抜き) <span class="text-danger">*</span></label>
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.amount"
+                                       placeholder="未入力" data-i18n="未入力" @input="scheduleBdUpdate" min="0" step="1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">見積状況</label>
+                                <div class="btn-group d-block">
+                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                            :class="getBdEstimateStatusButtonClass(businessDocumentProject.estimate_status)"
+                                            id="bdEstimateStatusDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getBdEstimateStatusLabel(businessDocumentProject.estimate_status) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="status in businessEstimateStatuses" :key="status.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                               :class="{ disabled: status.value === '発行済' && !isBdEstimateDocumentFieldsComplete() }"
+                                               @click="selectBdEstimateStatus(status.value)">{{ status.label }}</a>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div v-if="shouldShowBdEstimateIssuedHint()" class="form-text text-muted">
+                                    発行済にするには見積日・見積金額が必要です
+                                </div>
+                            </div>
+                        </div>
+                        <hr class="my-3">
+                        <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label mb-0">請求日 <span class="text-danger">*</span></label>
+                                    <button v-if="!hasBdDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                            @click="setBdDateToday('invoice_date')">今日</button>
+                                </div>
+                                <input type="text" class="form-control" v-model="businessDocumentProject.invoice_date"
+                                       id="bd_modal_invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <label class="form-label mb-0">請求金額(税抜き) <span class="text-danger">*</span></label>
+                                    <button v-if="canCopyBdEstimateAmountToInvoice()" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                            @click="copyBdEstimateAmountToInvoice">見積と同額</button>
+                                </div>
+                                <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.invoice_amount"
+                                       placeholder="未入力" data-i18n="未入力" @input="scheduleBdUpdate" min="0" step="1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">請求状況</label>
+                                <div class="btn-group d-block">
+                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                            :class="getBdInvoiceStatusButtonClass(businessDocumentProject.invoice_status)"
+                                            id="bdInvoiceStatusDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                                        {{ getBdInvoiceStatusLabel(businessDocumentProject.invoice_status) }}
+                                    </button>
+                                    <ul class="dropdown-menu">
+                                        <li v-for="status in businessInvoiceStatuses" :key="status.value">
+                                            <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                               :class="{ disabled: status.value === '発行済' && !isBdInvoiceDocumentFieldsComplete() }"
+                                               @click="selectBdInvoiceStatus(status.value)">{{ status.label }}</a>
+                                        </li>
+                                    </ul>
+                                </div>
+                                <div v-if="shouldShowBdInvoiceIssuedHint()" class="form-text text-muted">
+                                    発行済にするには請求日・請求金額が必要です
+                                </div>
+                            </div>
+                        </div>
+                    </template>
 
                     <hr class="my-3">
-
-                    <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
-                    <div class="row g-3 mb-3">
-                        <div class="col-md-6">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <label class="form-label mb-0">請求日 <span class="text-danger">*</span></label>
-                                <button v-if="!hasBdDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                        @click="setBdDateToday('invoice_date')">今日</button>
-                                    </div>
-                            <input type="text" class="form-control" v-model="businessDocumentProject.invoice_date"
-                                   id="bd_modal_invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                    </div>
-                        <div class="col-md-6">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <label class="form-label mb-0">請求金額(税抜き) <span class="text-danger">*</span></label>
-                                <button v-if="!hasBdAmount(businessDocumentProject.invoice_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                        @click="copyBdEstimateAmountToInvoice">見積と同額</button>
-                                </div>
-                            <input type="number" autocomplete="off" class="form-control" v-model.number="businessDocumentProject.invoice_amount"
-                                   placeholder="未入力" data-i18n="未入力"
-                                   @input="scheduleBdUpdate" min="0" step="1">
-                            </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-muted">消費税（10%）</label>
-                            <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(businessDocumentProject.invoice_amount)">
-                                    </div>
-                        <div class="col-md-6">
-                            <label class="form-label text-muted">税込合計</label>
-                            <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(businessDocumentProject.invoice_amount)">
-                                </div>
-                        <div class="col-md-6">
-                            <label class="form-label">請求番号</label>
-                            <input type="text" autocomplete="off" class="form-control" v-model="businessDocumentProject.invoice_number" @change="scheduleBdUpdate">
-                            </div>
-                        <div class="col-md-6">
-                            <label class="form-label">請求状況</label>
-                            <div class="btn-group d-block">
-                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                        :class="getBdInvoiceStatusButtonClass(businessDocumentProject.invoice_status)"
-                                        id="bdInvoiceStatusDropdown"
-                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                    {{ getBdInvoiceStatusLabel(businessDocumentProject.invoice_status) }}
-                                </button>
-                                <ul class="dropdown-menu">
-                                    <li v-for="status in businessInvoiceStatuses" :key="status.value">
-                                        <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                           :class="{ disabled: status.value === '発行済' && !isBdInvoiceDocumentFieldsComplete() }"
-                                           @click="selectBdInvoiceStatus(status.value)">
-                                            {{ status.label }}
-                                        </a>
-                                    </li>
-                                </ul>
-                                    </div>
-                            <div v-if="!isBdInvoiceDocumentFieldsComplete()" class="form-text text-muted">
-                                発行済にするには請求日・請求金額が必要です
-                                </div>
-                            </div>
-                            </div>
-
-                    <hr class="my-3">
-
                     <div class="mb-0">
                         <label class="form-label" data-i18n="決済備考">決済備考</label>
                         <textarea class="form-control" rows="3" v-model="businessDocumentProject.payment_note" @change="scheduleBdUpdate"></textarea>
-                                </div>
-
+                    </div>
                     <div v-if="businessDocumentError" class="alert alert-danger mt-3 mb-0">{{ businessDocumentError }}</div>
-                            </div>
+                </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" @click="closeBusinessDocumentModal">閉じる</button>
                                 </div>
@@ -1747,5 +1803,6 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/energy-fee-payment.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

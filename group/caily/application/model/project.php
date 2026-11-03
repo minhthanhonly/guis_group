@@ -6,7 +6,9 @@ class Project extends ApplicationModel {
         // Add integer fields that should not be quoted
         $this->donotquote = array_merge($this->donotquote, array(
             'parent_folder_id', 'folder_id', 'project_id', 'file_size', 'amount',
-            'invoice_amount', 'payment_amount', 'version', 'payment_version'
+            'invoice_amount', 'payment_amount', 'version', 'payment_version',
+            'estimate_application_amount', 'estimate_design_amount',
+            'invoice_application_amount', 'invoice_design_amount',
         ));
         $this->schema = array(
             'id' => array('except' => array('search')),
@@ -53,10 +55,22 @@ class Project extends ApplicationModel {
             'estimate_status' => array(), //未発行, 見積作成中, 発行済, 発行済み, 承認済み, 却下, 調整, 無償
             'estimate_date' => array(),
             'estimate_number' => array(),
+            'estimate_application_amount' => array(),
+            'estimate_application_date' => array(),
+            'estimate_application_status' => array(), //未発行, 見積作成中, 発行済, 無償, 対象外(省エネ)
+            'estimate_design_amount' => array(),
+            'estimate_design_date' => array(),
+            'estimate_design_status' => array(), //未発行, 見積作成中, 発行済, 無償, 対象外(省エネ)
             'invoice_status' => array(), //未発行, 請求準備, 発行済, 発行済み, 承認済み, 却下, 調整, 無償
             'invoice_date' => array(),
             'invoice_amount' => array(),
             'invoice_number' => array(),
+            'invoice_application_amount' => array(),
+            'invoice_application_date' => array(),
+            'invoice_application_status' => array(), //未発行, 請求準備, 発行済, 無償, 対象外(省エネ)
+            'invoice_design_amount' => array(),
+            'invoice_design_date' => array(),
+            'invoice_design_status' => array(), //未発行, 請求準備, 発行済, 無償, 対象外(省エネ)
             'payment_status' => array(), //未入金, 入金済, 入金拒否
             'payment_date' => array(),
             'payment_amount' => array(),
@@ -313,8 +327,14 @@ class Project extends ApplicationModel {
             'end_date' => array('col' => 'p.end_date', 'excludeDone' => true),
             'caily_nouki' => array('col' => 'p.caily_nouki', 'excludeDone' => true),
             'guis_nouki' => array('col' => 'p.guis_nouki', 'excludeDone' => true),
-            'estimate_date' => array('col' => 'p.estimate_date', 'excludeDone' => false),
-            'invoice_date' => array('col' => 'p.invoice_date', 'excludeDone' => false),
+            'estimate_date' => array(
+                'col' => 'COALESCE(p.estimate_application_date, p.estimate_design_date, p.estimate_date)',
+                'excludeDone' => false,
+            ),
+            'invoice_date' => array(
+                'col' => 'COALESCE(p.invoice_application_date, p.invoice_design_date, p.invoice_date)',
+                'excludeDone' => false,
+            ),
         );
 
         if (isset($builtin[$field])) {
@@ -407,10 +427,18 @@ class Project extends ApplicationModel {
             'invoice_date', 'invoice_status', 'invoice_amount', 'payment_note', 'project_order_type',
             'project_number', 'created_at', 'updated_at', 'teams', 'building_size', 'is_kadai',
             'yotei',
+            'estimate_application_date', 'estimate_design_date',
+            'invoice_application_date', 'invoice_design_date',
         );
         if (in_array($order_column, $projectColumns, true)) {
             if ($order_column === 'yotei') {
                 return "CAST(JSON_UNQUOTE(JSON_EXTRACT(p.yotei, '$.sort_start')) AS DATE)";
+            }
+            if ($order_column === 'estimate_date') {
+                return 'COALESCE(p.estimate_application_date, p.estimate_design_date, p.estimate_date)';
+            }
+            if ($order_column === 'invoice_date') {
+                return 'COALESCE(p.invoice_application_date, p.invoice_design_date, p.invoice_date)';
             }
             return 'p.' . $order_column;
         }
@@ -1098,6 +1126,10 @@ class Project extends ApplicationModel {
         $directorColumnFields = array(
             'amount', 'estimate_date', 'estimate_status', 'invoice_date',
             'invoice_status', 'invoice_amount', 'payment_note',
+            'estimate_application_amount', 'estimate_application_date', 'estimate_application_status',
+            'estimate_design_amount', 'estimate_design_date', 'estimate_design_status',
+            'invoice_application_amount', 'invoice_application_date', 'invoice_application_status',
+            'invoice_design_amount', 'invoice_design_date', 'invoice_design_status',
         );
         $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'end_date';
         if (!$canViewDirectorColumns && in_array($order_column, $directorColumnFields, true)) {
@@ -1191,29 +1223,46 @@ class Project extends ApplicationModel {
             if ($canViewDirectorColumns) {
                 if (isset($_GET['filterEstimateMonth']) && $_GET['filterEstimateMonth'] !== '') {
                     $month = $this->escape($_GET['filterEstimateMonth']);
-                    $whereArr[] = "DATE_FORMAT(p.estimate_date, '%Y-%m') = '$month'";
+                    $whereArr[] = "DATE_FORMAT(COALESCE(p.estimate_application_date, p.estimate_design_date, p.estimate_date), '%Y-%m') = '$month'";
                 }
                 if (isset($_GET['filterInvoiceMonth']) && $_GET['filterInvoiceMonth'] !== '') {
                     $month = $this->escape($_GET['filterInvoiceMonth']);
-                    $whereArr[] = "DATE_FORMAT(p.invoice_date, '%Y-%m') = '$month'";
+                    $whereArr[] = "DATE_FORMAT(COALESCE(p.invoice_application_date, p.invoice_design_date, p.invoice_date), '%Y-%m') = '$month'";
                 }
                 if (isset($_GET['filterBusinessDocumentStatus']) && $_GET['filterBusinessDocumentStatus'] !== '') {
                     $bdFilter = (string)$_GET['filterBusinessDocumentStatus'];
+                    // Include 省エネ split statuses (OR) alongside legacy single status
                     if ($bdFilter === '未見積') {
-                        $whereArr[] = "COALESCE(NULLIF(TRIM(p.estimate_status), ''), '未発行') = '未発行'";
+                        $whereArr[] = "(COALESCE(NULLIF(TRIM(p.estimate_status), ''), '未発行') = '未発行'
+                            AND COALESCE(NULLIF(TRIM(p.estimate_application_status), ''), '未発行') = '未発行'
+                            AND COALESCE(NULLIF(TRIM(p.estimate_design_status), ''), '未発行') = '未発行')";
                     } elseif ($bdFilter === '見積作成中') {
-                        $whereArr[] = "p.estimate_status = '見積作成中'";
+                        $whereArr[] = "(p.estimate_status = '見積作成中'
+                            OR p.estimate_application_status = '見積作成中'
+                            OR p.estimate_design_status = '見積作成中')";
                     } elseif ($bdFilter === '見積済') {
-                        $whereArr[] = "p.estimate_status IN ('発行済', '発行済み')";
+                        $whereArr[] = "(p.estimate_status IN ('発行済', '発行済み')
+                            OR p.estimate_application_status IN ('発行済', '発行済み')
+                            OR p.estimate_design_status IN ('発行済', '発行済み'))";
                     } elseif ($bdFilter === '未請求') {
-                        $whereArr[] = "COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') = '未発行'";
+                        $whereArr[] = "(COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') = '未発行'
+                            AND COALESCE(NULLIF(TRIM(p.invoice_application_status), ''), '未発行') = '未発行'
+                            AND COALESCE(NULLIF(TRIM(p.invoice_design_status), ''), '未発行') = '未発行')";
                     } elseif ($bdFilter === '請求準備') {
-                        $whereArr[] = "p.invoice_status = '請求準備'";
+                        $whereArr[] = "(p.invoice_status = '請求準備'
+                            OR p.invoice_application_status = '請求準備'
+                            OR p.invoice_design_status = '請求準備')";
                     } elseif ($bdFilter === '請求済') {
-                        $whereArr[] = "p.invoice_status IN ('発行済', '発行済み')";
+                        $whereArr[] = "(p.invoice_status IN ('発行済', '発行済み')
+                            OR p.invoice_application_status IN ('発行済', '発行済み')
+                            OR p.invoice_design_status IN ('発行済', '発行済み'))";
                     } elseif ($bdFilter === '無償' || $bdFilter === '見積無償' || $bdFilter === '請求無償') {
-                        // 見積 or 請求 is free-of-charge (legacy filter keys still accepted)
-                        $whereArr[] = "(p.estimate_status = '無償' OR p.invoice_status = '無償')";
+                        $whereArr[] = "(p.estimate_status = '無償' OR p.invoice_status = '無償'
+                            OR p.estimate_application_status IN ('無償', '対象外') OR p.estimate_design_status IN ('無償', '対象外')
+                            OR p.invoice_application_status IN ('無償', '対象外') OR p.invoice_design_status IN ('無償', '対象外'))";
+                    } elseif ($bdFilter === '対象外') {
+                        $whereArr[] = "(p.estimate_application_status = '対象外' OR p.estimate_design_status = '対象外'
+                            OR p.invoice_application_status = '対象外' OR p.invoice_design_status = '対象外')";
                     }
                 }
             }
@@ -1730,6 +1779,10 @@ class Project extends ApplicationModel {
         $directorColumnFields = array(
             'amount', 'estimate_date', 'estimate_status', 'invoice_date',
             'invoice_status', 'invoice_amount', 'payment_note',
+            'estimate_application_amount', 'estimate_application_date', 'estimate_application_status',
+            'estimate_design_amount', 'estimate_design_date', 'estimate_design_status',
+            'invoice_application_amount', 'invoice_application_date', 'invoice_application_status',
+            'invoice_design_amount', 'invoice_design_date', 'invoice_design_status',
         );
         $order_column = isset($_GET['order_column']) ? $_GET['order_column'] : 'end_date';
         if (!$canViewDirectorColumns && in_array($order_column, $directorColumnFields, true)) {
@@ -3483,10 +3536,22 @@ class Project extends ApplicationModel {
             'estimate_status' => '見積状況を変更',
             'estimate_date' => '見積日を変更',
             'estimate_number' => '見積番号を変更',
+            'estimate_application_amount' => '見積申請費を変更',
+            'estimate_application_date' => '見積申請費日を変更',
+            'estimate_application_status' => '見積申請費状況を変更',
+            'estimate_design_amount' => '見積設計費を変更',
+            'estimate_design_date' => '見積設計費日を変更',
+            'estimate_design_status' => '見積設計費状況を変更',
             'invoice_status' => '請求状況を変更',
             'invoice_date' => '請求日を変更',
             'invoice_amount' => '請求金額を変更',
             'invoice_number' => '請求番号を変更',
+            'invoice_application_amount' => '請求申請費を変更',
+            'invoice_application_date' => '請求申請費日を変更',
+            'invoice_application_status' => '請求申請費状況を変更',
+            'invoice_design_amount' => '請求設計費を変更',
+            'invoice_design_date' => '請求設計費日を変更',
+            'invoice_design_status' => '請求設計費状況を変更',
             'payment_status' => '入金状況を変更',
             'payment_date' => '入金日を変更',
             'payment_amount' => '入金額を変更',
@@ -5242,6 +5307,36 @@ class Project extends ApplicationModel {
             {$listJoins}";
     }
 
+    /** Match 省エネ計算 / 省エネ計算2 etc. */
+    private function isEnergyDepartmentById($departmentId) {
+        $departmentId = intval($departmentId);
+        if ($departmentId <= 0) {
+            return false;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT name FROM %sdepartments WHERE id = %d LIMIT 1",
+            DB_PREFIX,
+            $departmentId
+        ));
+        $name = isset($row['name']) ? trim((string)$row['name']) : '';
+        return $name !== '' && mb_strpos($name, '省エネ') !== false;
+    }
+
+    /** 省エネ fee amount: invoice fee, fallback estimate fee of same kind. */
+    private function sqlEnergyInvoiceFeeAmountExpr($fee) {
+        if ($fee === 'design') {
+            return "CASE WHEN COALESCE(p.invoice_design_amount, 0) > 0 THEN p.invoice_design_amount ELSE COALESCE(p.estimate_design_amount, 0) END";
+        }
+        return "CASE WHEN COALESCE(p.invoice_application_amount, 0) > 0 THEN p.invoice_application_amount ELSE COALESCE(p.estimate_application_amount, 0) END";
+    }
+
+    private function sqlEnergyEstimateFeeAmountExpr($fee) {
+        if ($fee === 'design') {
+            return "COALESCE(p.estimate_design_amount, 0)";
+        }
+        return "COALESCE(p.estimate_application_amount, 0)";
+    }
+
     /**
      * @return array{rows: array, totals: array}
      */
@@ -5251,13 +5346,79 @@ class Project extends ApplicationModel {
         $companyLabel,
         $monthEsc,
         $invoiceAmountExpr,
-        $tantou = null
+        $tantou = null,
+        $energySplit = false
     ) {
         $where = $baseWhere;
         if ($tantou === 'CAILY' || $tantou === 'GUIS') {
             $where .= " AND p.tantou = '" . $this->escape($tantou) . "'";
         }
 
+        if ($energySplit) {
+            $appInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('application');
+            $desInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('design');
+            $appEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('application');
+            $desEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('design');
+            $summaryQuery = sprintf(
+                "SELECT
+                    %s AS company_name,
+                    COUNT(DISTINCT CASE
+                        WHEN DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') = '%s'
+                          OR DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') = '%s'
+                          OR DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                        THEN p.id END) AS project_count,
+                    SUM(
+                        (CASE WHEN DATE_FORMAT(p.estimate_application_date, '%%Y-%%m') = '%s' THEN 1 ELSE 0 END)
+                      + (CASE WHEN DATE_FORMAT(p.estimate_design_date, '%%Y-%%m') = '%s' THEN 1 ELSE 0 END)
+                    ) AS estimate_count,
+                    SUM(
+                        (CASE WHEN DATE_FORMAT(p.estimate_application_date, '%%Y-%%m') = '%s' THEN %s ELSE 0 END)
+                      + (CASE WHEN DATE_FORMAT(p.estimate_design_date, '%%Y-%%m') = '%s' THEN %s ELSE 0 END)
+                    ) AS estimate_amount,
+                    SUM(
+                        (CASE
+                            WHEN DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') = '%s'
+                             AND p.invoice_application_status IN ('発行済', '発行済み')
+                            THEN 1 ELSE 0 END)
+                      + (CASE
+                            WHEN DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') = '%s'
+                             AND p.invoice_design_status IN ('発行済', '発行済み')
+                            THEN 1 ELSE 0 END)
+                    ) AS invoice_count,
+                    SUM(
+                        (CASE
+                            WHEN DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') = '%s'
+                             AND p.invoice_application_status IN ('発行済', '発行済み')
+                            THEN %s ELSE 0 END)
+                      + (CASE
+                            WHEN DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') = '%s'
+                             AND p.invoice_design_status IN ('発行済', '発行済み')
+                            THEN %s ELSE 0 END)
+                    ) AS invoice_amount,
+                    SUM(CASE
+                        WHEN DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                         AND p.payment_status = '入金済'
+                        THEN 1 ELSE 0 END) AS payment_count,
+                    SUM(CASE
+                        WHEN DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                         AND p.payment_status = '入金済'
+                        THEN COALESCE(p.payment_amount, 0) ELSE 0 END) AS payment_amount
+                %s
+                WHERE %s
+                GROUP BY company_name
+                HAVING project_count > 0
+                ORDER BY company_name ASC",
+                $companyLabel,
+                $monthEsc, $monthEsc, $monthEsc,
+                $monthEsc, $monthEsc,
+                $monthEsc, $appEstAmt, $monthEsc, $desEstAmt,
+                $monthEsc, $monthEsc,
+                $monthEsc, $appInvAmt, $monthEsc, $desInvAmt,
+                $monthEsc, $monthEsc,
+                $baseFrom,
+                $where
+            );
+        } else {
         $summaryQuery = sprintf(
             "SELECT
                 %s AS company_name,
@@ -5296,6 +5457,7 @@ class Project extends ApplicationModel {
             $baseFrom,
             $where
         );
+        }
         $summaryRows = $this->fetchAll($summaryQuery);
         $totals = [
             'project_count' => 0,
@@ -5424,45 +5586,171 @@ class Project extends ApplicationModel {
         $companyLabel = $this->sqlMonthlyRevenueCompanyLabel();
         $branchExpr = $this->sqlEffectiveBranchName();
         $baseWhere = "p.department_id = {$deptId} AND p.status != 'deleted'";
+        $energySplit = $this->isEnergyDepartmentById($deptId);
 
         $invoiceAmountExpr = "CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END";
         $cancelledEstimatedWhere = $cancelledEstimatedOnly
-            ? " AND p.estimate_status IN ('発行済', '発行済み')"
+            ? ($energySplit
+                ? " AND (p.estimate_application_status IN ('発行済', '発行済み') OR p.estimate_design_status IN ('発行済', '発行済み') OR p.estimate_status IN ('発行済', '発行済み'))"
+                : " AND p.estimate_status IN ('発行済', '発行済み')")
             : "";
 
         $summaryAll = $this->buildMonthlyRevenueSummaryByCompany(
-            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr
+            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, null, $energySplit
         );
         $summaryRows = $summaryAll['rows'];
         $totals = $summaryAll['totals'];
         $monthlyActualSales = floatval($totals['invoice_amount'] ?? 0);
 
-        $cumulativeActualQuery = sprintf(
-            "SELECT COALESCE(SUM(CASE
-                        WHEN p.invoice_status IN ('発行済', '発行済み') THEN %s
-                        ELSE 0
-                    END), 0) AS cumulative_actual
-             FROM {$this->table} p
-             WHERE p.department_id = %d
-               AND p.status != 'deleted'
-               AND p.invoice_date IS NOT NULL
-               AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') >= '%s'
-               AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') <= '%s'",
-            $invoiceAmountExpr,
-            $deptId,
-            $this->escape($fiscalStartMonth),
-            $monthEsc
-        );
+        if ($energySplit) {
+            $appInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('application');
+            $desInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('design');
+            $cumulativeActualQuery = sprintf(
+                "SELECT COALESCE(SUM(
+                        (CASE
+                            WHEN p.invoice_application_status IN ('発行済', '発行済み')
+                             AND p.invoice_application_date IS NOT NULL
+                             AND DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') >= '%s'
+                             AND DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') <= '%s'
+                            THEN %s ELSE 0 END)
+                      + (CASE
+                            WHEN p.invoice_design_status IN ('発行済', '発行済み')
+                             AND p.invoice_design_date IS NOT NULL
+                             AND DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') >= '%s'
+                             AND DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') <= '%s'
+                            THEN %s ELSE 0 END)
+                    ), 0) AS cumulative_actual
+                 FROM {$this->table} p
+                 WHERE p.department_id = %d
+                   AND p.status != 'deleted'",
+                $this->escape($fiscalStartMonth),
+                $monthEsc,
+                $appInvAmt,
+                $this->escape($fiscalStartMonth),
+                $monthEsc,
+                $desInvAmt,
+                $deptId
+            );
+        } else {
+            $cumulativeActualQuery = sprintf(
+                "SELECT COALESCE(SUM(CASE
+                            WHEN p.invoice_status IN ('発行済', '発行済み') THEN %s
+                            ELSE 0
+                        END), 0) AS cumulative_actual
+                 FROM {$this->table} p
+                 WHERE p.department_id = %d
+                   AND p.status != 'deleted'
+                   AND p.invoice_date IS NOT NULL
+                   AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') >= '%s'
+                   AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') <= '%s'",
+                $invoiceAmountExpr,
+                $deptId,
+                $this->escape($fiscalStartMonth),
+                $monthEsc
+            );
+        }
         $cumulativeActualRow = $this->fetchOne($cumulativeActualQuery);
         $cumulativeActualSales = floatval($cumulativeActualRow['cumulative_actual'] ?? 0);
 
         $summaryCaily = $this->buildMonthlyRevenueSummaryByCompany(
-            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'CAILY'
+            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'CAILY', $energySplit
         );
         $summaryGuis = $this->buildMonthlyRevenueSummaryByCompany(
-            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'GUIS'
+            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'GUIS', $energySplit
         );
 
+        if ($energySplit) {
+            $appInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('application');
+            $desInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('design');
+            $appEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('application');
+            $desEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('design');
+            $invoicedSelectTpl = "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
+                %s AS amount,
+                %s AS estimate_status,
+                %s AS invoice_status,
+                %s AS invoice_date,
+                %s AS invoice_amount,
+                p.payment_status,
+                p.payment_date,
+                COALESCE(p.payment_amount, 0) AS payment_amount,
+                p.payment_note,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.teams,
+                '%s' AS fee_type
+            %s
+            WHERE %s
+              AND %s IN ('発行済', '発行済み')
+              AND DATE_FORMAT(%s, '%%Y-%%m') = '%s'";
+            $invoicedQuery = '(' . sprintf(
+                $invoicedSelectTpl,
+                $companyLabel, $branchExpr, $appEstAmt,
+                'p.estimate_application_status', 'p.invoice_application_status',
+                'p.invoice_application_date', $appInvAmt, '申請費',
+                $baseFrom, $baseWhere,
+                'p.invoice_application_status', 'p.invoice_application_date', $monthEsc
+            ) . ') UNION ALL (' . sprintf(
+                $invoicedSelectTpl,
+                $companyLabel, $branchExpr, $desEstAmt,
+                'p.estimate_design_status', 'p.invoice_design_status',
+                'p.invoice_design_date', $desInvAmt, '設計費',
+                $baseFrom, $baseWhere,
+                'p.invoice_design_status', 'p.invoice_design_date', $monthEsc
+            ) . ') ORDER BY invoice_date ASC, company_name ASC, id ASC, fee_type ASC';
+
+            $estimatedSelectTpl = "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
+                %s AS amount,
+                %s AS invoice_amount,
+                %s AS estimate_status,
+                %s AS estimate_date,
+                p.end_date,
+                p.payment_note,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.teams,
+                '%s' AS fee_type
+            %s
+            WHERE %s
+              AND p.status NOT IN ('waiting_invoice', 'completed', 'cancelled', 'deleted')
+              AND %s IS NOT NULL
+              AND COALESCE(NULLIF(TRIM(%s), ''), '未発行') IN ('未発行', '請求準備')
+              %s";
+            $monthFilterApp = $estimatedAllTime ? '' : "AND DATE_FORMAT(p.estimate_application_date, '%Y-%m') = '{$monthEsc}'";
+            $monthFilterDes = $estimatedAllTime ? '' : "AND DATE_FORMAT(p.estimate_design_date, '%Y-%m') = '{$monthEsc}'";
+            $estimatedQuery = '(' . sprintf(
+                $estimatedSelectTpl,
+                $companyLabel, $branchExpr, $appEstAmt, $appInvAmt,
+                'p.estimate_application_status', 'p.estimate_application_date', '申請費',
+                $baseFrom, $baseWhere,
+                'p.estimate_application_date', 'p.invoice_application_status', $monthFilterApp
+            ) . ') UNION ALL (' . sprintf(
+                $estimatedSelectTpl,
+                $companyLabel, $branchExpr, $desEstAmt, $desInvAmt,
+                'p.estimate_design_status', 'p.estimate_design_date', '設計費',
+                $baseFrom, $baseWhere,
+                'p.estimate_design_date', 'p.invoice_design_status', $monthFilterDes
+            ) . ') ORDER BY estimate_date ASC, company_name ASC, id ASC, fee_type ASC';
+        } else {
         $invoicedQuery = sprintf(
             "SELECT
                 p.id,
@@ -5486,7 +5774,8 @@ class Project extends ApplicationModel {
                 pp.type2 AS parent_type2,
                 p.caily_nouki,
                 p.guis_nouki,
-                p.teams
+                p.teams,
+                NULL AS fee_type
             %s
             WHERE %s
               AND p.invoice_status IN ('発行済', '発行済み')
@@ -5520,10 +5809,13 @@ class Project extends ApplicationModel {
                 pp.type2 AS parent_type2,
                 p.caily_nouki,
                 p.guis_nouki,
-                p.teams
+                p.teams,
+                NULL AS fee_type
             %s
             WHERE %s
+              AND p.status NOT IN ('waiting_invoice', 'completed', 'cancelled', 'deleted')
               AND p.estimate_date IS NOT NULL
+              AND COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') IN ('未発行', '請求準備')
             ORDER BY p.estimate_date ASC, company_name ASC, p.id ASC",
             $companyLabel,
             $branchExpr,
@@ -5552,10 +5844,13 @@ class Project extends ApplicationModel {
                 pp.type2 AS parent_type2,
                 p.caily_nouki,
                 p.guis_nouki,
-                p.teams
+                p.teams,
+                NULL AS fee_type
             %s
             WHERE %s
+              AND p.status NOT IN ('waiting_invoice', 'completed', 'cancelled', 'deleted')
               AND p.estimate_date IS NOT NULL
+              AND COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') IN ('未発行', '請求準備')
               AND DATE_FORMAT(p.estimate_date, '%%Y-%%m') = '%s'
             ORDER BY p.estimate_date ASC, company_name ASC, p.id ASC",
                 $companyLabel,
@@ -5566,23 +5861,29 @@ class Project extends ApplicationModel {
                 $monthEsc
             );
         }
+        }
         $estimatedProjects = $this->fetchAll($estimatedQuery);
         $this->enrichMonthlyRevenueStatsProjects($estimatedProjects);
 
         $invoicedProjects = $this->fetchAll($invoicedQuery);
         $this->enrichMonthlyRevenueStatsProjects($invoicedProjects);
 
-        $backlogQuery = sprintf(
-            "SELECT
+        if ($energySplit) {
+            $appEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('application');
+            $desEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('design');
+            $appInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('application');
+            $desInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('design');
+            $backlogSelectTpl = "SELECT
                 p.id,
                 p.name,
                 %s AS company_name,
                 %s AS branch_name,
                 pp.construction_number AS parent_construction_number,
-                COALESCE(p.amount, 0) AS amount,
+                %s AS amount,
                 %s AS invoice_amount,
                 p.status,
-                p.invoice_status,
+                %s AS estimate_status,
+                %s AS invoice_status,
                 p.actual_end_date,
                 p.end_date,
                 p.payment_note,
@@ -5593,23 +5894,119 @@ class Project extends ApplicationModel {
                 pp.scale AS parent_scale,
                 pp.type1 AS parent_type1,
                 pp.type2 AS parent_type2,
-                p.teams
+                p.teams,
+                '%s' AS fee_type
             %s
             WHERE %s
-              AND p.status = 'completed'
-              AND p.invoice_status = '未発行'
-              AND p.estimate_status IN ('発行済', '発行済み')
-            ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC",
-            $companyLabel,
-            $branchExpr,
-            $invoiceAmountExpr,
-            $baseFrom,
-            $baseWhere
-        );
+              AND p.status IN ('waiting_invoice', 'completed')
+              AND %s IN ('発行済', '発行済み')
+              AND COALESCE(NULLIF(TRIM(%s), ''), '未発行') IN ('未発行', '請求準備')";
+            $backlogQuery = '(' . sprintf(
+                $backlogSelectTpl,
+                $companyLabel, $branchExpr, $appEstAmt, $appInvAmt,
+                'p.estimate_application_status', 'p.invoice_application_status', '申請費',
+                $baseFrom, $baseWhere,
+                'p.estimate_application_status', 'p.invoice_application_status'
+            ) . ') UNION ALL (' . sprintf(
+                $backlogSelectTpl,
+                $companyLabel, $branchExpr, $desEstAmt, $desInvAmt,
+                'p.estimate_design_status', 'p.invoice_design_status', '設計費',
+                $baseFrom, $baseWhere,
+                'p.estimate_design_status', 'p.invoice_design_status'
+            ) . ') ORDER BY (end_date IS NULL) ASC, end_date ASC, company_name ASC, id ASC, fee_type ASC';
+        } else {
+            $backlogQuery = sprintf(
+                "SELECT
+                    p.id,
+                    p.name,
+                    %s AS company_name,
+                    %s AS branch_name,
+                    pp.construction_number AS parent_construction_number,
+                    COALESCE(p.amount, 0) AS amount,
+                    %s AS invoice_amount,
+                    p.status,
+                    p.estimate_status,
+                    p.invoice_status,
+                    p.actual_end_date,
+                    p.end_date,
+                    p.payment_note,
+                    p.caily_nouki,
+                    p.guis_nouki,
+                    p.tantou,
+                    p.project_order_type,
+                    pp.scale AS parent_scale,
+                    pp.type1 AS parent_type1,
+                    pp.type2 AS parent_type2,
+                    p.teams,
+                    NULL AS fee_type
+                %s
+                WHERE %s
+                  AND p.status IN ('waiting_invoice', 'completed')
+                  AND p.invoice_status IN ('未発行', '請求準備')
+                  AND p.estimate_status IN ('発行済', '発行済み')
+                ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC",
+                $companyLabel,
+                $branchExpr,
+                $invoiceAmountExpr,
+                $baseFrom,
+                $baseWhere
+            );
+        }
         $completedUninvoiced = $this->fetchAll($backlogQuery);
         $this->enrichMonthlyRevenueStatsProjects($completedUninvoiced);
 
-        if ($cancelledAllTime) {
+        if ($energySplit) {
+            $appEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('application');
+            $desEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('design');
+            $cancelledSelectTpl = "SELECT
+                p.id,
+                p.name,
+                %s AS company_name,
+                %s AS branch_name,
+                pp.construction_number AS parent_construction_number,
+                %s AS amount,
+                p.status,
+                %s AS estimate_status,
+                p.actual_end_date,
+                p.end_date,
+                p.payment_note,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.teams,
+                '%s' AS fee_type
+            %s
+            WHERE %s
+              AND p.status = 'cancelled'
+              %s
+              %s";
+            $cancelledEstFilterApp = $cancelledEstimatedOnly
+                ? "AND p.estimate_application_status IN ('発行済', '発行済み')"
+                : '';
+            $cancelledEstFilterDes = $cancelledEstimatedOnly
+                ? "AND p.estimate_design_status IN ('発行済', '発行済み')"
+                : '';
+            $cancelledMonthFilter = $cancelledAllTime
+                ? ''
+                : "AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date), '%Y-%m') = '{$monthEsc}'";
+            $cancelledQuery = '(' . sprintf(
+                $cancelledSelectTpl,
+                $companyLabel, $branchExpr, $appEstAmt,
+                'p.estimate_application_status', '申請費',
+                $baseFrom, $baseWhere,
+                $cancelledEstFilterApp, $cancelledMonthFilter
+            ) . ') UNION ALL (' . sprintf(
+                $cancelledSelectTpl,
+                $companyLabel, $branchExpr, $desEstAmt,
+                'p.estimate_design_status', '設計費',
+                $baseFrom, $baseWhere,
+                $cancelledEstFilterDes, $cancelledMonthFilter
+            ) . ') ORDER BY company_name ASC, (end_date IS NULL) ASC, end_date ASC, id ASC, fee_type ASC';
+        } elseif ($cancelledAllTime) {
             $cancelledQuery = sprintf(
                 "SELECT
                 p.id,
@@ -5619,6 +6016,7 @@ class Project extends ApplicationModel {
                 pp.construction_number AS parent_construction_number,
                 COALESCE(p.amount, 0) AS amount,
                 p.status,
+                p.estimate_status,
                 p.actual_end_date,
                 p.end_date,
                 p.payment_note,
@@ -5629,7 +6027,8 @@ class Project extends ApplicationModel {
                 pp.scale AS parent_scale,
                 pp.type1 AS parent_type1,
                 pp.type2 AS parent_type2,
-                p.teams
+                p.teams,
+                NULL AS fee_type
             %s
             WHERE %s
               AND p.status = 'cancelled'
@@ -5651,6 +6050,7 @@ class Project extends ApplicationModel {
                 pp.construction_number AS parent_construction_number,
                 COALESCE(p.amount, 0) AS amount,
                 p.status,
+                p.estimate_status,
                 p.actual_end_date,
                 p.end_date,
                 p.payment_note,
@@ -5661,7 +6061,8 @@ class Project extends ApplicationModel {
                 pp.scale AS parent_scale,
                 pp.type1 AS parent_type1,
                 pp.type2 AS parent_type2,
-                p.teams
+                p.teams,
+                NULL AS fee_type
             %s
             WHERE %s
               AND p.status = 'cancelled'
@@ -5679,24 +6080,56 @@ class Project extends ApplicationModel {
         $cancelledProjects = $this->fetchAll($cancelledQuery);
         $this->enrichMonthlyRevenueStatsProjects($cancelledProjects);
 
-        $monthsQuery = sprintf(
-            "SELECT DISTINCT month_value AS month,
-                DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%%Y-%%m-%%d'), '%%Y年%%m月') AS month_label
-            FROM (
-                SELECT DATE_FORMAT(p.invoice_date, '%%Y-%%m') AS month_value
-                FROM {$this->table} p
-                WHERE p.department_id = %d AND p.status != 'deleted' AND p.invoice_date IS NOT NULL
-                UNION
-                SELECT DATE_FORMAT(p.payment_date, '%%Y-%%m') AS month_value
-                FROM {$this->table} p
-                WHERE p.department_id = %d AND p.status != 'deleted' AND p.payment_date IS NOT NULL
-            ) months
-            WHERE month_value IS NOT NULL AND month_value != ''
-            ORDER BY month_value DESC
-            LIMIT 24",
-            $deptId,
-            $deptId
-        );
+        if ($energySplit) {
+            $monthsQuery = sprintf(
+                "SELECT DISTINCT month_value AS month,
+                    DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%%Y-%%m-%%d'), '%%Y年%%m月') AS month_label
+                FROM (
+                    SELECT DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') AS month_value
+                    FROM {$this->table} p
+                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.invoice_application_date IS NOT NULL
+                    UNION
+                    SELECT DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') AS month_value
+                    FROM {$this->table} p
+                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.invoice_design_date IS NOT NULL
+                    UNION
+                    SELECT DATE_FORMAT(p.estimate_application_date, '%%Y-%%m') AS month_value
+                    FROM {$this->table} p
+                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.estimate_application_date IS NOT NULL
+                    UNION
+                    SELECT DATE_FORMAT(p.estimate_design_date, '%%Y-%%m') AS month_value
+                    FROM {$this->table} p
+                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.estimate_design_date IS NOT NULL
+                    UNION
+                    SELECT DATE_FORMAT(p.payment_date, '%%Y-%%m') AS month_value
+                    FROM {$this->table} p
+                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.payment_date IS NOT NULL
+                ) months
+                WHERE month_value IS NOT NULL AND month_value != ''
+                ORDER BY month_value DESC
+                LIMIT 24",
+                $deptId, $deptId, $deptId, $deptId, $deptId
+            );
+        } else {
+            $monthsQuery = sprintf(
+                "SELECT DISTINCT month_value AS month,
+                    DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%%Y-%%m-%%d'), '%%Y年%%m月') AS month_label
+                FROM (
+                    SELECT DATE_FORMAT(p.invoice_date, '%%Y-%%m') AS month_value
+                    FROM {$this->table} p
+                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.invoice_date IS NOT NULL
+                    UNION
+                    SELECT DATE_FORMAT(p.payment_date, '%%Y-%%m') AS month_value
+                    FROM {$this->table} p
+                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.payment_date IS NOT NULL
+                ) months
+                WHERE month_value IS NOT NULL AND month_value != ''
+                ORDER BY month_value DESC
+                LIMIT 24",
+                $deptId,
+                $deptId
+            );
+        }
         $availableMonths = $this->fetchAll($monthsQuery);
 
         return [
@@ -5704,6 +6137,7 @@ class Project extends ApplicationModel {
             'meta' => [
                 'month' => $month,
                 'department_id' => $deptId,
+                'is_energy_department' => $energySplit ? 1 : 0,
                 'available_months' => $availableMonths,
                 'target_summary' => [
                     'fiscal_year' => $fiscalYear,
@@ -6198,6 +6632,34 @@ class Project extends ApplicationModel {
         if (isset($_POST['invoice_number'])) {
             $data['invoice_number'] = $_POST['invoice_number'];
         }
+        $energyAmountFields = [
+            'estimate_application_amount',
+            'estimate_design_amount',
+            'invoice_application_amount',
+            'invoice_design_amount',
+        ];
+        foreach ($energyAmountFields as $amountField) {
+            if (!array_key_exists($amountField, $_POST)) {
+                continue;
+            }
+            $raw = is_string($_POST[$amountField]) ? trim($_POST[$amountField]) : $_POST[$amountField];
+            if ($raw === '' || $raw === null) {
+                $nullAmountFields[] = $amountField;
+            } else {
+                $data[$amountField] = floatval($raw);
+            }
+        }
+        $energyStatusFields = [
+            'estimate_application_status',
+            'estimate_design_status',
+            'invoice_application_status',
+            'invoice_design_status',
+        ];
+        foreach ($energyStatusFields as $statusField) {
+            if (isset($_POST[$statusField])) {
+                $data[$statusField] = $_POST[$statusField];
+            }
+        }
         // 無償: force related amounts to 0
         $estimateStatus = isset($data['estimate_status'])
             ? $data['estimate_status']
@@ -6217,6 +6679,24 @@ class Project extends ApplicationModel {
                 return $field !== 'invoice_amount';
             }));
         }
+        $energyFeeZeroPairs = [
+            'estimate_application_status' => 'estimate_application_amount',
+            'estimate_design_status' => 'estimate_design_amount',
+            'invoice_application_status' => 'invoice_application_amount',
+            'invoice_design_status' => 'invoice_design_amount',
+        ];
+        foreach ($energyFeeZeroPairs as $statusKey => $amountKey) {
+            $st = isset($data[$statusKey])
+                ? $data[$statusKey]
+                : (isset($old[$statusKey]) ? $old[$statusKey] : '');
+            // 無償 / 対象外 (省エネ): force amount to 0
+            if ($st === '無償' || $st === '対象外') {
+                $data[$amountKey] = 0;
+                $nullAmountFields = array_values(array_filter($nullAmountFields, function ($field) use ($amountKey) {
+                    return $field !== $amountKey;
+                }));
+            }
+        }
         if (isset($_POST['payment_status'])) {
             $data['payment_status'] = $_POST['payment_status'];
         }
@@ -6235,6 +6715,10 @@ class Project extends ApplicationModel {
             'estimate_date' => '18:00',
             'invoice_date' => '18:00',
             'payment_date' => '18:00',
+            'estimate_application_date' => '18:00',
+            'estimate_design_date' => '18:00',
+            'invoice_application_date' => '18:00',
+            'invoice_design_date' => '18:00',
         ];
         foreach ($businessDatetimeFields as $field => $defaultTime) {
             if (!array_key_exists($field, $_POST)) {
@@ -6292,10 +6776,22 @@ class Project extends ApplicationModel {
             'estimate_status' => ['action' => 'estimate_status_updated', 'note' => '見積状況を変更'],
             'estimate_date' => ['action' => 'estimate_date_updated', 'note' => '見積日を変更'],
             'estimate_number' => ['action' => 'estimate_number_updated', 'note' => '見積番号を変更'],
+            'estimate_application_amount' => ['action' => 'estimate_application_amount_updated', 'note' => '見積申請費を変更', 'numeric' => true],
+            'estimate_application_date' => ['action' => 'estimate_application_date_updated', 'note' => '見積申請費日を変更'],
+            'estimate_application_status' => ['action' => 'estimate_application_status_updated', 'note' => '見積申請費状況を変更'],
+            'estimate_design_amount' => ['action' => 'estimate_design_amount_updated', 'note' => '見積設計費を変更', 'numeric' => true],
+            'estimate_design_date' => ['action' => 'estimate_design_date_updated', 'note' => '見積設計費日を変更'],
+            'estimate_design_status' => ['action' => 'estimate_design_status_updated', 'note' => '見積設計費状況を変更'],
             'invoice_status' => ['action' => 'invoice_status_updated', 'note' => '請求状況を変更'],
             'invoice_date' => ['action' => 'invoice_date_updated', 'note' => '請求日を変更'],
             'invoice_amount' => ['action' => 'invoice_amount_updated', 'note' => '請求金額を変更', 'numeric' => true],
             'invoice_number' => ['action' => 'invoice_number_updated', 'note' => '請求番号を変更'],
+            'invoice_application_amount' => ['action' => 'invoice_application_amount_updated', 'note' => '請求申請費を変更', 'numeric' => true],
+            'invoice_application_date' => ['action' => 'invoice_application_date_updated', 'note' => '請求申請費日を変更'],
+            'invoice_application_status' => ['action' => 'invoice_application_status_updated', 'note' => '請求申請費状況を変更'],
+            'invoice_design_amount' => ['action' => 'invoice_design_amount_updated', 'note' => '請求設計費を変更', 'numeric' => true],
+            'invoice_design_date' => ['action' => 'invoice_design_date_updated', 'note' => '請求設計費日を変更'],
+            'invoice_design_status' => ['action' => 'invoice_design_status_updated', 'note' => '請求設計費状況を変更'],
             'payment_status' => ['action' => 'payment_status_updated', 'note' => '入金状況を変更'],
             'payment_date' => ['action' => 'payment_date_updated', 'note' => '入金日を変更'],
             'payment_amount' => ['action' => 'payment_amount_updated', 'note' => '入金額を変更', 'numeric' => true],
@@ -6303,7 +6799,11 @@ class Project extends ApplicationModel {
             'payment_note' => ['action' => 'payment_note_updated', 'note' => '決済備考を変更'],
         ];
 
-        $datetimeFields = ['estimate_date', 'invoice_date', 'payment_date'];
+        $datetimeFields = [
+            'estimate_date', 'invoice_date', 'payment_date',
+            'estimate_application_date', 'estimate_design_date',
+            'invoice_application_date', 'invoice_design_date',
+        ];
 
         foreach ($fields as $field => $meta) {
             if (!array_key_exists($field, $data) && !in_array($field, $nullDatetimeFields, true)) {

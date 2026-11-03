@@ -146,100 +146,173 @@
             .substring(0, 80) || 'export';
     }
 
+    function withEnergyFeeTypeColumn(headers, mapRow, insertAfterTeam) {
+        return {
+            headers: headers,
+            mapRow: mapRow,
+            energyHeaders: function() {
+                const h = headers.slice();
+                const idx = typeof insertAfterTeam === 'number' ? insertAfterTeam : 9;
+                h.splice(idx, 0, '種類');
+                return h;
+            },
+            energyMapRow: function(p, vm) {
+                const row = mapRow(p, vm);
+                const idx = typeof insertAfterTeam === 'number' ? insertAfterTeam : 9;
+                row.splice(idx, 0, excelDash(p.fee_type));
+                return row;
+            }
+        };
+    }
+
+    const REVENUE_EXPORT_DETAIL = withEnergyFeeTypeColumn(
+        ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '請求日', '請求金額', '決済備考'],
+        function(p, vm) {
+            return [
+                p.id,
+                excelDash(p.name),
+                excelDash(p.branch_name),
+                excelDash(p.parent_construction_number),
+                excelDash(p.tantou),
+                excelDash(p.project_order_type),
+                excelDash(p.parent_scale),
+                vm.formatDate(p.end_date),
+                vm.formatProjectTeams(p),
+                vm.formatDate(p.invoice_date),
+                excelAmount(p.invoice_amount),
+                excelDash(p.payment_note)
+            ];
+        },
+        9
+    );
+
+    const REVENUE_EXPORT_ESTIMATED = withEnergyFeeTypeColumn(
+        ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '見積日', '見積状況', '決済備考'],
+        function(p, vm) {
+            return [
+                p.id,
+                excelDash(p.name),
+                excelDash(p.branch_name),
+                excelDash(p.parent_construction_number),
+                excelDash(p.tantou),
+                excelDash(p.project_order_type),
+                excelDash(p.parent_scale),
+                vm.formatDate(p.end_date),
+                vm.formatProjectTeams(p),
+                excelAmount(p.amount),
+                vm.formatDate(p.estimate_date),
+                excelDash(p.estimate_status),
+                excelDash(p.payment_note)
+            ];
+        },
+        9
+    );
+
     const REVENUE_EXPORT_CONFIG = {
         detail: {
             groupsComputed: 'invoicedGroups',
             sheetName: '請求済み案件',
             filenamePrefix: '請求済み案件',
-            headers: ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '請求日', '請求金額', '決済備考'],
-            mapRow(p, vm) {
-                return [
-                    p.id,
-                    excelDash(p.name),
-                    excelDash(p.branch_name),
-                    excelDash(p.parent_construction_number),
-                    excelDash(p.tantou),
-                    excelDash(p.project_order_type),
-                    excelDash(p.parent_scale),
-                    vm.formatDate(p.end_date),
-                    vm.formatProjectTeams(p),
-                    vm.formatDate(p.invoice_date),
-                    excelAmount(p.invoice_amount),
-                    excelDash(p.payment_note)
-                ];
-            }
+            headers: REVENUE_EXPORT_DETAIL.headers,
+            mapRow: REVENUE_EXPORT_DETAIL.mapRow,
+            energyHeaders: REVENUE_EXPORT_DETAIL.energyHeaders,
+            energyMapRow: REVENUE_EXPORT_DETAIL.energyMapRow
         },
-        backlog: {
-            groupsComputed: 'backlogGroups',
-            sheetName: '完了未請求',
-            filenamePrefix: '完了未請求',
-            headers: ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '完了日', '決済備考'],
-            mapRow(p, vm) {
-                return [
-                    p.id,
-                    excelDash(p.name),
-                    excelDash(p.branch_name),
-                    excelDash(p.parent_construction_number),
-                    excelDash(p.tantou),
-                    excelDash(p.project_order_type),
-                    excelDash(p.parent_scale),
-                    vm.formatDate(p.end_date),
-                    vm.formatProjectTeams(p),
-                    excelAmount(p.amount),
-                    vm.formatDate(p.actual_end_date),
-                    excelDash(p.payment_note)
-                ];
-            }
-        },
+        backlog: (function() {
+            const base = withEnergyFeeTypeColumn(
+                ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '完了日', '決済備考'],
+                function(p, vm) {
+                    return [
+                        p.id,
+                        excelDash(p.name),
+                        excelDash(p.branch_name),
+                        excelDash(p.parent_construction_number),
+                        excelDash(p.tantou),
+                        excelDash(p.project_order_type),
+                        excelDash(p.parent_scale),
+                        vm.formatDate(p.end_date),
+                        vm.formatProjectTeams(p),
+                        excelAmount(p.amount),
+                        vm.formatDate(p.actual_end_date),
+                        excelDash(p.payment_note)
+                    ];
+                },
+                9
+            );
+            return {
+                groupsComputed: 'backlogGroups',
+                sheetName: '未請求案件',
+                filenamePrefix: '未請求案件_請求待ち_完了',
+                headers: base.headers,
+                mapRow: base.mapRow,
+                energyHeaders: function() {
+                    const h = base.energyHeaders();
+                    // After 種類 + 見積金額, insert 請求状況 before 完了日
+                    const completeIdx = h.indexOf('完了日');
+                    if (completeIdx >= 0) {
+                        h.splice(completeIdx, 0, '請求状況');
+                    }
+                    return h;
+                },
+                energyMapRow: function(p, vm) {
+                    const row = base.energyMapRow(p, vm);
+                    // base energy row: ...チーム, 種類, 見積金額, 完了日, 決済備考
+                    // insert 請求状況 before 完了日 (index length-2)
+                    row.splice(row.length - 2, 0, excelDash(p.invoice_status));
+                    return row;
+                }
+            };
+        })(),
         estimated: {
             groupsComputed: 'estimatedGroups',
             sheetName: '見積済未完了',
             filenamePrefix: '見積済未完了',
-            headers: ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '見積日', '見積状況', '決済備考'],
-            mapRow(p, vm) {
-                return [
-                    p.id,
-                    excelDash(p.name),
-                    excelDash(p.branch_name),
-                    excelDash(p.parent_construction_number),
-                    excelDash(p.tantou),
-                    excelDash(p.project_order_type),
-                    excelDash(p.parent_scale),
-                    vm.formatDate(p.end_date),
-                    vm.formatProjectTeams(p),
-                    excelAmount(p.amount),
-                    vm.formatDate(p.estimate_date),
-                    excelDash(p.estimate_status),
-                    excelDash(p.payment_note)
-                ];
-            }
+            headers: REVENUE_EXPORT_ESTIMATED.headers,
+            mapRow: REVENUE_EXPORT_ESTIMATED.mapRow,
+            energyHeaders: REVENUE_EXPORT_ESTIMATED.energyHeaders,
+            energyMapRow: REVENUE_EXPORT_ESTIMATED.energyMapRow
         },
-        cancelled: {
-            groupsComputed: 'cancelledGroups',
-            sheetName: 'キャンセル',
-            filenamePrefix: 'キャンセル案件',
-            headers: ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '決済備考'],
-            mapRow(p, vm) {
-                return [
-                    p.id,
-                    excelDash(p.name),
-                    excelDash(p.branch_name),
-                    excelDash(p.parent_construction_number),
-                    excelDash(p.tantou),
-                    excelDash(p.project_order_type),
-                    excelDash(p.parent_scale),
-                    vm.formatDate(p.end_date),
-                    vm.formatProjectTeams(p),
-                    excelAmount(p.amount),
-                    excelDash(p.payment_note)
-                ];
-            }
-        }
+        cancelled: (function() {
+            const base = withEnergyFeeTypeColumn(
+                ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '決済備考'],
+                function(p, vm) {
+                    return [
+                        p.id,
+                        excelDash(p.name),
+                        excelDash(p.branch_name),
+                        excelDash(p.parent_construction_number),
+                        excelDash(p.tantou),
+                        excelDash(p.project_order_type),
+                        excelDash(p.parent_scale),
+                        vm.formatDate(p.end_date),
+                        vm.formatProjectTeams(p),
+                        excelAmount(p.amount),
+                        excelDash(p.payment_note)
+                    ];
+                },
+                9
+            );
+            return {
+                groupsComputed: 'cancelledGroups',
+                sheetName: 'キャンセル',
+                filenamePrefix: 'キャンセル案件',
+                headers: base.headers,
+                mapRow: base.mapRow,
+                energyHeaders: base.energyHeaders,
+                energyMapRow: base.energyMapRow
+            };
+        })()
     };
 
-    function buildRevenueStatsExcelRows(groups, config, vm, title) {
+    function buildRevenueStatsExcelRows(groups, config, vm, title, useEnergyFeeType) {
         const rows = [];
-        const headers = (config.headers || []).map(translateLabel);
+        const rawHeaders = (useEnergyFeeType && typeof config.energyHeaders === 'function')
+            ? config.energyHeaders()
+            : (config.headers || []);
+        const headers = rawHeaders.map(translateLabel);
+        const mapRowFn = (useEnergyFeeType && typeof config.energyMapRow === 'function')
+            ? config.energyMapRow
+            : config.mapRow;
         const companyRowNumbers = [];
         const headerRowNumbers = [];
 
@@ -254,7 +327,7 @@
             rows.push(headers.slice());
             headerRowNumbers.push(rows.length);
             (group.projects || []).forEach(function(p) {
-                rows.push(config.mapRow(p, vm));
+                rows.push(mapRowFn(p, vm));
             });
         });
 
@@ -270,7 +343,7 @@
             case 'detail':
                 return translateLabel('請求済み案件') + '（' + vm.monthLabel + '）';
             case 'backlog':
-                return translateLabel('完了・未請求案件(見積済)') + '（' + translateLabel('すべての期間') + '）';
+                return translateLabel('未請求案件(請求待ち・完了)') + '（' + translateLabel('すべての期間') + '）';
             case 'estimated': {
                 const period = vm.showEstimatedAllTime
                     ? translateLabel('すべての期間')
@@ -588,7 +661,8 @@
                 estimatedProjects: [],
                 invoicedProjects: [],
                 completedUninvoiced: [],
-                cancelledProjects: []
+                cancelledProjects: [],
+                isEnergyDepartment: false
             };
         },
         computed: {
@@ -598,6 +672,9 @@
             },
             currentYearMonthValue() {
                 return currentYearMonth();
+            },
+            showEnergyFeeType() {
+                return !!this.isEnergyDepartment;
             },
             estimatedGroups() {
                 return groupProjectsByCompany(this.filteredEstimatedProjects, ['amount']);
@@ -681,6 +758,11 @@
         },
         methods: {
             formatCompanyNameLabel,
+            feeTypeBadgeClass(feeType) {
+                if (feeType === '申請費') return 'bg-label-primary';
+                if (feeType === '設計費') return 'bg-label-info';
+                return 'bg-label-secondary';
+            },
             formatCurrency(val) {
                 const n = Number(val);
                 if (!Number.isFinite(n)) return '¥0';
@@ -790,10 +872,17 @@
                     return null;
                 }
             },
-            refreshAvailableMonths() {
+            refreshAvailableMonths(extraMonths) {
                 const map = {};
                 buildMonthOptions(18, 12).forEach(function(m) {
                     if (m && m.month) map[m.month] = m;
+                });
+                (Array.isArray(extraMonths) ? extraMonths : []).forEach(function(m) {
+                    if (!m || !m.month) return;
+                    map[m.month] = {
+                        month: m.month,
+                        month_label: m.month_label || buildMonthLabel(m.month)
+                    };
                 });
                 if (this.selectedMonth && !map[this.selectedMonth]) {
                     map[this.selectedMonth] = {
@@ -998,9 +1087,13 @@
                 if (!groups.length) return;
 
                 const title = buildRevenueExportTitle(tabKey, this);
-                const exportData = buildRevenueStatsExcelRows(groups, config, this, title);
+                const useEnergy = this.showEnergyFeeType
+                    && (tabKey === 'detail' || tabKey === 'estimated' || tabKey === 'backlog' || tabKey === 'cancelled');
+                const exportData = buildRevenueStatsExcelRows(groups, config, this, title, useEnergy);
                 const rows = exportData.rows;
-                const colCount = (config.headers || []).length;
+                const colCount = useEnergy && typeof config.energyHeaders === 'function'
+                    ? config.energyHeaders().length
+                    : (config.headers || []).length;
                 const worksheet = XLSX.utils.aoa_to_sheet(rows);
                 const workbook = XLSX.utils.book_new();
                 const sheetName = String(config.sheetName || 'Sheet1').substring(0, 31);
@@ -1055,6 +1148,7 @@
                         this.invoicedProjects = [];
                         this.completedUninvoiced = [];
                         this.cancelledProjects = [];
+                        this.isEnergyDepartment = false;
                         return;
                     }
                     this.summaryByCompany = data.summary_by_company || [];
@@ -1069,10 +1163,18 @@
                         monthly_actual_sales: 0,
                         cumulative_actual_sales: 0
                     }, data.meta && data.meta.target_summary ? data.meta.target_summary : {});
+                    this.isEnergyDepartment = !!(data.meta && Number(data.meta.is_energy_department) === 1);
                     this.estimatedProjects = data.estimated_projects || [];
                     this.invoicedProjects = data.invoiced_projects || [];
                     this.completedUninvoiced = data.completed_uninvoiced || [];
                     this.cancelledProjects = data.cancelled_projects || [];
+                    // Always keep the default month window + current selection so the
+                    // select never goes blank when a department has few/no invoice months.
+                    this.refreshAvailableMonths(
+                        data.meta && Array.isArray(data.meta.available_months)
+                            ? data.meta.available_months
+                            : []
+                    );
                 } catch (err) {
                     console.error('loadStats:', err);
                     const msg = err.response && err.response.data

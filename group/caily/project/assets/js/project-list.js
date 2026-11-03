@@ -2742,12 +2742,18 @@ var projectTable;
     }
 
     function isBusinessDocumentReadyForCompletion(status) {
+        if (window.EnergyFeePayment && window.EnergyFeePayment.isReadyForCompletion) {
+            return window.EnergyFeePayment.isReadyForCompletion(status);
+        }
         var normalized = normalizeBusinessDocumentStatusValue(status);
         return normalized === '発行済' || normalized === '無償';
     }
 
     function needsPaymentInfoBeforeComplete(project) {
         if (!project) return true;
+        if (window.EnergyFeePayment && window.EnergyFeePayment.needsPaymentInfoBeforeComplete) {
+            return window.EnergyFeePayment.needsPaymentInfoBeforeComplete(project);
+        }
         return !isBusinessDocumentReadyForCompletion(project.estimate_status)
             || !isBusinessDocumentReadyForCompletion(project.invoice_status);
     }
@@ -2763,14 +2769,24 @@ var projectTable;
     }
 
     function getPaymentInfoBeforeCompleteMessage(project) {
-        var missing = [];
-        if (!isBusinessDocumentReadyForCompletion(project && project.estimate_status)) {
-            missing.push(translatePaymentCompleteText('見積状況'));
+        var missing = (window.EnergyFeePayment && window.EnergyFeePayment.getMissingPaymentLabels)
+            ? window.EnergyFeePayment.getMissingPaymentLabels(project, translatePaymentCompleteText)
+            : [];
+        if (!missing.length) {
+            if (!isBusinessDocumentReadyForCompletion(project && project.estimate_status)) {
+                missing.push(translatePaymentCompleteText('見積状況'));
+            }
+            if (!isBusinessDocumentReadyForCompletion(project && project.invoice_status)) {
+                missing.push(translatePaymentCompleteText('請求状況'));
+            }
         }
-        if (!isBusinessDocumentReadyForCompletion(project && project.invoice_status)) {
-            missing.push(translatePaymentCompleteText('請求状況'));
-        }
-        var base = translatePaymentCompleteText('完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
+        var isEnergy = window.EnergyFeePayment && window.EnergyFeePayment.isEnergyProject
+            && window.EnergyFeePayment.isEnergyProject(project);
+        var base = translatePaymentCompleteText(
+            isEnergy
+                ? '完了にする前に見積・請求の決済情報を設定してください。（発行済・無償・対象外）'
+                : '完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）'
+        );
         return missing.length ? (base + '\n（' + missing.join(' / ') + '）') : base;
     }
 

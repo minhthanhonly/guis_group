@@ -248,10 +248,22 @@ const BUSINESS_DOCUMENT_FIELDS = [
     'estimate_status',
     'estimate_date',
     'estimate_number',
+    'estimate_application_amount',
+    'estimate_application_date',
+    'estimate_application_status',
+    'estimate_design_amount',
+    'estimate_design_date',
+    'estimate_design_status',
     'invoice_status',
     'invoice_date',
     'invoice_amount',
     'invoice_number',
+    'invoice_application_amount',
+    'invoice_application_date',
+    'invoice_application_status',
+    'invoice_design_amount',
+    'invoice_design_date',
+    'invoice_design_status',
     'payment_status',
     'payment_date',
     'payment_amount',
@@ -259,7 +271,24 @@ const BUSINESS_DOCUMENT_FIELDS = [
     'payment_note',
 ];
 
-const BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date'];
+const BUSINESS_DOCUMENT_DATE_FIELDS = [
+    'estimate_date',
+    'invoice_date',
+    'estimate_application_date',
+    'estimate_design_date',
+    'invoice_application_date',
+    'invoice_design_date',
+];
+
+const BUSINESS_DOCUMENT_PICKER_IDS = {
+    estimate_date: 'estimate_date_picker',
+    invoice_date: 'invoice_date_picker',
+    payment_date: 'payment_date_picker',
+    estimate_application_date: 'estimate_application_date_picker',
+    estimate_design_date: 'estimate_design_date_picker',
+    invoice_application_date: 'invoice_application_date_picker',
+    invoice_design_date: 'invoice_design_date_picker',
+};
 
 function normalizeProjectVersion(version) {
     const n = Number(version);
@@ -906,11 +935,31 @@ const vueApp = createApp({
         },
         /** Current project belongs to 省エネ計算 (or 省エネ計算2 etc.). */
         isEnergyDepartmentProject() {
+            if (window.EnergyFeePayment && window.EnergyFeePayment.isEnergyProject) {
+                return window.EnergyFeePayment.isEnergyProject(this.project);
+            }
             const name = String(this.project && this.project.department_name || '').trim();
             if (window.EnergyDrawingShare && window.EnergyDrawingShare.isEnergyDepartmentName) {
                 return window.EnergyDrawingShare.isEnergyDepartmentName(name);
             }
             return name.indexOf('省エネ') !== -1;
+        },
+        energyEstimateFeeRows() {
+            const rows = (window.EnergyFeePayment && window.EnergyFeePayment.FEE_ROWS) || [];
+            return rows.filter((r) => r.kind === 'estimate');
+        },
+        energyInvoiceFeeRows() {
+            const rows = (window.EnergyFeePayment && window.EnergyFeePayment.FEE_ROWS) || [];
+            return rows.filter((r) => r.kind === 'invoice');
+        },
+        /** 省エネ fee status list: base + 対象外 */
+        businessEnergyEstimateStatuses() {
+            const extra = (window.EnergyFeePayment && window.EnergyFeePayment.ENERGY_EXTRA_STATUSES) || [];
+            return this.businessEstimateStatuses.concat(extra);
+        },
+        businessEnergyInvoiceStatuses() {
+            const extra = (window.EnergyFeePayment && window.EnergyFeePayment.ENERGY_EXTRA_STATUSES) || [];
+            return this.businessInvoiceStatuses.concat(extra);
         },
         /** Default tasks with show_on_project for this project's department. */
         namedDefaultTaskRows() {
@@ -2513,17 +2562,25 @@ const vueApp = createApp({
             this.isUpdatingStatus = true;
             try {
                 this.syncBusinessDocumentDatesFromPickers();
-                if (this.normalizeBusinessDocumentStatusValue(this.project.estimate_status) === '発行済'
-                    && !this.isEstimateDocumentFieldsComplete()) {
+                const energyIssuedError = this.getEnergyFeeIssuedValidationError();
+                if (energyIssuedError) {
                     this.businessDocumentSaveStatus = null;
-                    this.businessDocumentError = this.getEstimateDocumentFieldsValidationError();
+                    this.businessDocumentError = energyIssuedError;
                     return;
                 }
-                if (this.normalizeBusinessDocumentStatusValue(this.project.invoice_status) === '発行済'
-                    && !this.isInvoiceDocumentFieldsComplete()) {
-                    this.businessDocumentSaveStatus = null;
-                    this.businessDocumentError = this.getInvoiceDocumentFieldsValidationError();
-                    return;
+                if (!this.isEnergyDepartmentProject) {
+                    if (this.normalizeBusinessDocumentStatusValue(this.project.estimate_status) === '発行済'
+                        && !this.isEstimateDocumentFieldsComplete()) {
+                        this.businessDocumentSaveStatus = null;
+                        this.businessDocumentError = this.getEstimateDocumentFieldsValidationError();
+                        return;
+                    }
+                    if (this.normalizeBusinessDocumentStatusValue(this.project.invoice_status) === '発行済'
+                        && !this.isInvoiceDocumentFieldsComplete()) {
+                        this.businessDocumentSaveStatus = null;
+                        this.businessDocumentError = this.getInvoiceDocumentFieldsValidationError();
+                        return;
+                    }
                 }
                 const formData = new FormData();
                 formData.append('id', this.projectId);
@@ -2536,6 +2593,14 @@ const vueApp = createApp({
                 formData.append('invoice_amount', this.getBusinessDocumentAmountForApi(this.project.invoice_amount));
                 formData.append('invoice_number', this.project.invoice_number || '');
                 formData.append('payment_note', this.project.payment_note || '');
+                if (window.EnergyFeePayment && window.EnergyFeePayment.appendEnergyFieldsToFormData) {
+                    window.EnergyFeePayment.appendEnergyFieldsToFormData(
+                        formData,
+                        this.project,
+                        (v) => this.getBusinessDocumentAmountForApi(v),
+                        (key) => this.getBusinessDocumentDateForApi(key)
+                    );
+                }
                 appendPaymentVersionToFormData(formData, this.project);
                 const response = await axios.post('/api/index.php?model=project&method=updateProjectStatus', formData);
                 if (response.data && response.data.status === 'success') {
@@ -2546,18 +2611,18 @@ const vueApp = createApp({
                     // Keep cleared amounts as empty so placeholder 未入力 stays visible
                     this.project.amount = this.normalizeBusinessDocumentAmountInputValue(this.project.amount);
                     this.project.invoice_amount = this.normalizeBusinessDocumentAmountInputValue(this.project.invoice_amount);
+                    if (window.EnergyFeePayment && window.EnergyFeePayment.AMOUNT_FIELDS) {
+                        window.EnergyFeePayment.AMOUNT_FIELDS.forEach((key) => {
+                            this.project[key] = this.normalizeBusinessDocumentAmountInputValue(this.project[key]);
+                        });
+                    }
                     BUSINESS_DOCUMENT_DATE_FIELDS.forEach((key) => {
                         const apiVal = this.getBusinessDocumentDateForApi(key);
                         this.setBusinessDocumentServerDate(key, apiVal || '');
                         this.project[key] = apiVal
                             ? canonicalizeProjectDateTimeInputDisplay(toProjectDateTimeInputValue(apiVal))
                             : '';
-                        const pickerIds = {
-                            estimate_date: 'estimate_date_picker',
-                            invoice_date: 'invoice_date_picker',
-                            payment_date: 'payment_date_picker',
-                        };
-                        const el = document.getElementById(pickerIds[key]);
+                        const el = document.getElementById(BUSINESS_DOCUMENT_PICKER_IDS[key]);
                         if (el && el._flatpickr) {
                             if (apiVal) {
                                 el._flatpickr.setDate(this.project[key], false, PROJECT_DATETIME_FLATPICKR_FORMAT);
@@ -2598,6 +2663,9 @@ const vueApp = createApp({
         },
         normalizeBusinessDocumentFields() {
             if (!this.project) return;
+            if (window.EnergyFeePayment && window.EnergyFeePayment.hydrateApplicationFromLegacy) {
+                window.EnergyFeePayment.hydrateApplicationFromLegacy(this.project);
+            }
             this.project.estimate_status = this.normalizeBusinessDocumentStatus(this.project.estimate_status, '未発行');
             this.project.invoice_status = this.normalizeBusinessDocumentStatus(this.project.invoice_status, '未発行');
             this.project.payment_status = this.project.payment_status || '未入金';
@@ -2608,6 +2676,16 @@ const vueApp = createApp({
             this.project.invoice_amount = this.normalizeBusinessDocumentAmountInputValue(this.project.invoice_amount);
             this.project.payment_amount = this.project.payment_amount != null ? Number(this.project.payment_amount) : 0;
             this.project.amount = this.normalizeBusinessDocumentAmountInputValue(this.project.amount);
+            if (window.EnergyFeePayment && window.EnergyFeePayment.AMOUNT_FIELDS) {
+                window.EnergyFeePayment.AMOUNT_FIELDS.forEach((key) => {
+                    this.project[key] = this.normalizeBusinessDocumentAmountInputValue(this.project[key]);
+                });
+            }
+            if (window.EnergyFeePayment && window.EnergyFeePayment.STATUS_FIELDS) {
+                window.EnergyFeePayment.STATUS_FIELDS.forEach((key) => {
+                    this.project[key] = this.normalizeBusinessDocumentStatus(this.project[key], '未発行');
+                });
+            }
             this.normalizeBusinessDocumentDateFields();
         },
         normalizeBusinessDocumentAmountInputValue(value) {
@@ -2684,12 +2762,7 @@ const vueApp = createApp({
         },
         getBusinessDocumentDateForApi(key) {
             if (!this.project) return '';
-            const pickerIds = {
-                estimate_date: 'estimate_date_picker',
-                invoice_date: 'invoice_date_picker',
-                payment_date: 'payment_date_picker',
-            };
-            const el = document.getElementById(pickerIds[key]);
+            const el = document.getElementById(BUSINESS_DOCUMENT_PICKER_IDS[key]);
             if (el) {
                 const displayVal = this.getBusinessDocumentPickerDisplayValue(el);
                 if (!displayVal) {
@@ -2724,30 +2797,155 @@ const vueApp = createApp({
             return normalized === '発行済';
         },
         isBusinessDocumentFreeStatus(status) {
+            if (window.EnergyFeePayment && window.EnergyFeePayment.isWaivedStatus) {
+                return window.EnergyFeePayment.isWaivedStatus(status);
+            }
             return this.normalizeBusinessDocumentStatusValue(status) === '無償';
         },
-        /** 完了にできる決済状態: 発行済 or 無償 */
+        /** 完了にできる決済状態: 発行済 / 無償 / 対象外(省エネ) */
         isBusinessDocumentReadyForCompletion(status) {
+            if (window.EnergyFeePayment && window.EnergyFeePayment.isReadyForCompletion) {
+                return window.EnergyFeePayment.isReadyForCompletion(status);
+            }
             const normalized = this.normalizeBusinessDocumentStatusValue(status);
             return normalized === '発行済' || normalized === '無償';
         },
         needsPaymentInfoBeforeComplete(project) {
             const p = project || this.project;
             if (!p) return true;
+            if (window.EnergyFeePayment && window.EnergyFeePayment.needsPaymentInfoBeforeComplete) {
+                return window.EnergyFeePayment.needsPaymentInfoBeforeComplete(p);
+            }
             return !this.isBusinessDocumentReadyForCompletion(p.estimate_status)
                 || !this.isBusinessDocumentReadyForCompletion(p.invoice_status);
         },
         getPaymentInfoBeforeCompleteMessage(project) {
             const p = project || this.project;
-            const missing = [];
-            if (!this.isBusinessDocumentReadyForCompletion(p && p.estimate_status)) {
-                missing.push(this.translateLabel('見積状況'));
+            const missing = (window.EnergyFeePayment && window.EnergyFeePayment.getMissingPaymentLabels)
+                ? window.EnergyFeePayment.getMissingPaymentLabels(p, (k) => this.translateLabel(k))
+                : [];
+            if (!missing.length) {
+                if (!this.isBusinessDocumentReadyForCompletion(p && p.estimate_status)) {
+                    missing.push(this.translateLabel('見積状況'));
+                }
+                if (!this.isBusinessDocumentReadyForCompletion(p && p.invoice_status)) {
+                    missing.push(this.translateLabel('請求状況'));
+                }
             }
-            if (!this.isBusinessDocumentReadyForCompletion(p && p.invoice_status)) {
-                missing.push(this.translateLabel('請求状況'));
-            }
-            const base = this.translateLabel('完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
+            const base = this.isEnergyDepartmentProject
+                ? this.translateLabel('完了にする前に見積・請求の決済情報を設定してください。（発行済・無償・対象外）')
+                : this.translateLabel('完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
             return missing.length ? (base + '\n（' + missing.join(' / ') + '）') : base;
+        },
+        isEnergyFeeRowComplete(row) {
+            if (!this.project || !row) return false;
+            return this.hasBusinessDocumentDate(row.dateKey)
+                && this.hasBusinessDocumentAmount(this.project[row.amountKey]);
+        },
+        /** Hint for 発行済: only while still draft-like (未発行 / 見積作成中 or 請求準備). */
+        shouldShowIssuedRequirementHint(status, kind) {
+            const n = this.normalizeBusinessDocumentStatusValue(status);
+            if (kind === 'invoice') {
+                return n === '未発行' || n === '請求準備';
+            }
+            return n === '未発行' || n === '見積作成中';
+        },
+        shouldShowEnergyFeeIssuedHint(row) {
+            if (!this.project || !row || this.isEnergyFeeRowComplete(row)) return false;
+            return this.shouldShowIssuedRequirementHint(this.project[row.statusKey], row.kind);
+        },
+        shouldShowEstimateIssuedHint() {
+            if (!this.project || this.isEstimateDocumentFieldsComplete()) return false;
+            return this.shouldShowIssuedRequirementHint(this.project.estimate_status, 'estimate');
+        },
+        shouldShowInvoiceIssuedHint() {
+            if (!this.project || this.isInvoiceDocumentFieldsComplete()) return false;
+            return this.shouldShowIssuedRequirementHint(this.project.invoice_status, 'invoice');
+        },
+        getEnergyFeeIssuedValidationError() {
+            if (!this.isEnergyDepartmentProject || !this.project) return '';
+            const rows = (window.EnergyFeePayment && window.EnergyFeePayment.FEE_ROWS) || [];
+            for (let i = 0; i < rows.length; i++) {
+                const row = rows[i];
+                if (this.normalizeBusinessDocumentStatusValue(this.project[row.statusKey]) !== '発行済') {
+                    continue;
+                }
+                if (this.isEnergyFeeRowComplete(row)) continue;
+                const missing = [];
+                if (!this.hasBusinessDocumentDate(row.dateKey)) missing.push(row.dateLabel);
+                if (!this.hasBusinessDocumentAmount(this.project[row.amountKey])) missing.push(row.amountLabel);
+                return '発行済にするには以下を入力してください: ' + missing.join('、') + '（' + row.title + '）';
+            }
+            return '';
+        },
+        selectEnergyFeeStatus(row, status) {
+            if (!this.project || !row || !this.canEditBusinessDocuments) return;
+            this.syncBusinessDocumentDatesFromPickers();
+            const normalized = this.normalizeBusinessDocumentStatusValue(status);
+            if (normalized === '発行済' && !this.isEnergyFeeRowComplete(row)) {
+                this.businessDocumentError = this.getEnergyFeeIssuedValidationError()
+                    || ('発行済にするには' + row.dateLabel + '・' + row.amountLabel + 'が必要です');
+                this.hideBusinessDocumentStatusDropdown('#' + row.dropdownId);
+                return;
+            }
+            if (this.normalizeBusinessDocumentStatusValue(this.project[row.statusKey]) === normalized) {
+                this.hideBusinessDocumentStatusDropdown('#' + row.dropdownId);
+                return;
+            }
+            this.project[row.statusKey] = normalized;
+            if (this.isBusinessDocumentFreeStatus(normalized)) {
+                this.project[row.amountKey] = 0;
+            }
+            this.businessDocumentError = '';
+            this.scheduleBusinessDocumentUpdate();
+            this.hideBusinessDocumentStatusDropdown('#' + row.dropdownId);
+        },
+        getEnergyFeeStatusLabel(kind, status) {
+            return kind === 'invoice'
+                ? this.getInvoiceStatusLabel(status)
+                : this.getEstimateStatusLabel(status);
+        },
+        getEnergyFeeStatusButtonClass(kind, status) {
+            return kind === 'invoice'
+                ? this.getInvoiceStatusButtonClass(status)
+                : this.getEstimateStatusButtonClass(status);
+        },
+        getEnergyFeeStatusBadgeClass(kind, status) {
+            return kind === 'invoice'
+                ? this.getInvoiceStatusBadgeClass(status)
+                : this.getEstimateStatusBadgeClass(status);
+        },
+        getEnergyFeeStatusOptions(kind) {
+            return kind === 'invoice'
+                ? this.businessEnergyInvoiceStatuses
+                : this.businessEnergyEstimateStatuses;
+        },
+        businessDocumentAmountsDiffer(a, b) {
+            const na = (a == null || a === '') ? null : Number(a);
+            const nb = (b == null || b === '') ? null : Number(b);
+            if (na == null && nb == null) return false;
+            if (na == null || nb == null) return true;
+            if (!Number.isFinite(na) || !Number.isFinite(nb)) return true;
+            return na !== nb;
+        },
+        canCopyEnergyFeeAmountToInvoice(row) {
+            if (!this.project || !row || !row.copyFromAmountKey) return false;
+            return this.businessDocumentAmountsDiffer(
+                this.project[row.amountKey],
+                this.project[row.copyFromAmountKey]
+            );
+        },
+        canCopyEstimateAmountToInvoice() {
+            if (!this.project) return false;
+            return this.businessDocumentAmountsDiffer(this.project.invoice_amount, this.project.amount);
+        },
+        copyEnergyFeeAmountToInvoice(row) {
+            if (!this.project || !row || !row.copyFromAmountKey) return;
+            this.project[row.amountKey] = this.project[row.copyFromAmountKey];
+            this.scheduleBusinessDocumentUpdate();
+        },
+        businessDocumentPickerId(dateKey) {
+            return BUSINESS_DOCUMENT_PICKER_IDS[dateKey] || (dateKey + '_picker');
         },
         async confirmPaymentInfoBeforeComplete(project) {
             if (!this.needsPaymentInfoBeforeComplete(project)) return true;
@@ -2844,16 +3042,11 @@ const vueApp = createApp({
         },
         setBusinessDocumentDateToday(field) {
             if (!this.canEditBusinessDocuments || !this.project) return;
-            const pickerIds = {
-                estimate_date: 'estimate_date_picker',
-                invoice_date: 'invoice_date_picker',
-                payment_date: 'payment_date_picker',
-            };
             const serverNow = moment.tz(SERVER_TASK_TIMEZONE).format('YYYY-MM-DD HH:mm:ss');
             const dateStr = canonicalizeProjectDateTimeInputDisplay(toProjectDateTimeInputValue(serverNow));
             this.project[field] = dateStr || '';
             this.setBusinessDocumentServerDate(field, serverNow);
-            const el = document.getElementById(pickerIds[field]);
+            const el = document.getElementById(BUSINESS_DOCUMENT_PICKER_IDS[field]);
             if (el && el._flatpickr) {
                 el._flatpickr.setDate(dateStr, false, PROJECT_DATETIME_FLATPICKR_FORMAT);
             }
@@ -2945,12 +3138,14 @@ const vueApp = createApp({
         },
         initBusinessDocumentDatePickers(force) {
             if (!this.project || !this.canEditBusinessDocuments) return;
-            this.initBusinessDocumentDatePicker('estimate_date_picker', 'estimate_date', force);
-            this.initBusinessDocumentDatePicker('invoice_date_picker', 'invoice_date', force);
+            Object.keys(BUSINESS_DOCUMENT_PICKER_IDS).forEach((key) => {
+                if (key === 'payment_date') return;
+                this.initBusinessDocumentDatePicker(BUSINESS_DOCUMENT_PICKER_IDS[key], key, force);
+            });
         },
         reinitBusinessDocumentDatePickersOnLocaleChange() {
             if (!this.project || !this.canEditBusinessDocuments) return;
-            ['estimate_date_picker', 'invoice_date_picker'].forEach((elId) => {
+            Object.values(BUSINESS_DOCUMENT_PICKER_IDS).forEach((elId) => {
                 const el = document.getElementById(elId);
                 if (el && el._flatpickr) {
                     el._flatpickr.destroy();
@@ -4335,17 +4530,20 @@ const vueApp = createApp({
         },
         // Estimate status methods
         getEstimateStatusLabel(status) {
-            const statusObj = this.findBusinessStatusOption(this.businessEstimateStatuses, status)
+            const statusObj = this.findBusinessStatusOption(this.businessEnergyEstimateStatuses, status)
+                || this.findBusinessStatusOption(this.businessEstimateStatuses, status)
                 || this.estimateStatuses.find(s => s.value === status);
             return statusObj ? statusObj.label : '未発行';
         },
         getEstimateStatusBadgeClass(status) {
-            const statusObj = this.findBusinessStatusOption(this.businessEstimateStatuses, status)
+            const statusObj = this.findBusinessStatusOption(this.businessEnergyEstimateStatuses, status)
+                || this.findBusinessStatusOption(this.businessEstimateStatuses, status)
                 || this.estimateStatuses.find(s => s.value === status);
             return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
         },
         getEstimateStatusButtonClass(status) {
-            const statusObj = this.findBusinessStatusOption(this.businessEstimateStatuses, status)
+            const statusObj = this.findBusinessStatusOption(this.businessEnergyEstimateStatuses, status)
+                || this.findBusinessStatusOption(this.businessEstimateStatuses, status)
                 || this.estimateStatuses.find(s => s.value === status);
             return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
         },
@@ -4399,17 +4597,20 @@ const vueApp = createApp({
         
         // Invoice status methods
         getInvoiceStatusLabel(status) {
-            const statusObj = this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
+            const statusObj = this.findBusinessStatusOption(this.businessEnergyInvoiceStatuses, status)
+                || this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
                 || this.invoiceStatuses.find(s => s.value === status);
             return statusObj ? statusObj.label : '未発行';
         },
         getInvoiceStatusBadgeClass(status) {
-            const statusObj = this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
+            const statusObj = this.findBusinessStatusOption(this.businessEnergyInvoiceStatuses, status)
+                || this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
                 || this.invoiceStatuses.find(s => s.value === status);
             return statusObj ? `bg-${statusObj.color}` : 'bg-secondary';
         },
         getInvoiceStatusButtonClass(status) {
-            const statusObj = this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
+            const statusObj = this.findBusinessStatusOption(this.businessEnergyInvoiceStatuses, status)
+                || this.findBusinessStatusOption(this.businessInvoiceStatuses, status)
                 || this.invoiceStatuses.find(s => s.value === status);
             return statusObj ? `btn-${statusObj.color}` : 'btn-secondary';
         },

@@ -81,7 +81,7 @@ if (!$canAccessRevenueStats) {
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" :class="{ active: activeSubTab === 'backlog' }" type="button" @click="setActiveSubTab('backlog')">
-                    <i class="fa fa-clock-o me-1"></i><span data-i18n="未請求案件(完了・見積済)">未請求案件(完了・見積済)</span>
+                    <i class="fa fa-clock-o me-1"></i><span data-i18n="未請求案件(請求待ち・完了)">未請求案件(請求待ち・完了)</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -332,17 +332,18 @@ if (!$canAccessRevenueStats) {
                             <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-invoiced  table-narrow">
                                 <colgroup>
                                     <col style="width: 4%;">
-                                    <col style="width: 13%;">
-                                    <col style="width: 8%;">
+                                    <col style="width: 12%;">
                                     <col style="width: 7%;">
+                                    <col style="width: 6%;">
+                                    <col style="width: 5%;">
                                     <col style="width: 6%;">
                                     <col style="width: 7%;">
                                     <col style="width: 8%;">
-                                    <col style="width: 9%;">
-                                    <col style="width: 9%;">
-                                    <col style="width: 9%;">
-                                    <col style="width: 12%;">
-                                    <col style="width: 12%;">
+                                    <col style="width: 8%;">
+                                    <col v-if="showEnergyFeeType" style="width: 6%;">
+                                    <col style="width: 8%;">
+                                    <col style="width: 10%;">
+                                    <col style="width: 10%;">
                                 </colgroup>
                                 <thead class="table-light">
                                     <tr>
@@ -355,13 +356,14 @@ if (!$canAccessRevenueStats) {
                                         <th data-i18n="規模">規模</th>
                                         <th data-i18n="期限日">期限日</th>
                                         <th data-i18n="チーム">チーム</th>
+                                        <th v-if="showEnergyFeeType" data-i18n="種類">種類</th>
                                         <th data-i18n="請求日">請求日</th>
                                         <th class="text-end" data-i18n="請求金額">請求金額</th>
                                         <th data-i18n="決済備考">決済備考</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in group.projects" :key="p.id">
+                                    <tr v-for="p in group.projects" :key="p.id + '-' + (p.fee_type || '')">
                                         <td>{{ p.id }}</td>
                                         <td class="revenue-stats-cell-name" :title="p.name"><a :href="'detail.php?id=' + p.id" target="_blank">{{ p.name }}</a></td>
                                         <td class="revenue-stats-cell-text" :title="p.branch_name">{{ p.branch_name || '—' }}</td>
@@ -371,6 +373,10 @@ if (!$canAccessRevenueStats) {
                                         <td class="revenue-stats-cell-text" :title="p.parent_scale">{{ p.parent_scale || '—' }}</td>
                                         <td>{{ formatDate(p.end_date) }}</td>
                                         <td class="revenue-stats-cell-text" :title="formatProjectTeams(p)">{{ formatProjectTeams(p) }}</td>
+                                        <td v-if="showEnergyFeeType">
+                                            <span v-if="p.fee_type" class="badge revenue-fee-type-badge" :class="feeTypeBadgeClass(p.fee_type)">{{ p.fee_type }}</span>
+                                            <template v-else>—</template>
+                                        </td>
                                         <td>{{ formatDate(p.invoice_date) }}</td>
                                         <td class="text-end">{{ formatCurrency(p.invoice_amount) }}</td>
                                         <td class="revenue-stats-cell-text" :title="p.payment_note">{{ p.payment_note || '—' }}</td>
@@ -378,7 +384,7 @@ if (!$canAccessRevenueStats) {
                                 </tbody>
                                 <tfoot v-if="group.projects.length" class="table-secondary fw-semibold">
                                     <tr>
-                                        <td colspan="9" data-i18n="合計">合計</td>
+                                        <td :colspan="showEnergyFeeType ? 10 : 9" data-i18n="合計">合計</td>
                                         <td></td>
                                         <td class="text-end">{{ formatCurrency(group.totals.invoice_amount) }}</td>
                                         <td></td>
@@ -396,7 +402,7 @@ if (!$canAccessRevenueStats) {
             <div class="card mb-4">
                 <div class="card-header revenue-stats-card-header">
                     <h5 class="mb-0">
-                        <span data-i18n="完了・未請求案件(見積済)">完了・未請求案件(見積済)</span>（<span data-i18n="すべての期間">すべての期間</span>）
+                        <span data-i18n="未請求案件(請求待ち・完了)">未請求案件(請求待ち・完了)</span>（<span data-i18n="すべての期間">すべての期間</span>）
                         <span class="form-check form-check-inline ms-3 mb-0 align-middle">
                             <input class="form-check-input" type="checkbox" id="tantouCailyBacklogToggle" v-model="showTantouCaily">
                             <label class="form-check-label small" for="tantouCailyBacklogToggle">CAILY</label>
@@ -428,17 +434,19 @@ if (!$canAccessRevenueStats) {
                             <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-backlog table-narrow">
                                 <colgroup>
                                     <col style="width: 4%;">
-                                    <col style="width: 12%;">
+                                    <col style="width: 11%;">
                                     <col style="width: 7%;">
-                                    <col style="width: 7%;">
+                                    <col style="width: 6%;">
                                     <col style="width: 5%;">
+                                    <col style="width: 6%;">
                                     <col style="width: 6%;">
                                     <col style="width: 7%;">
                                     <col style="width: 8%;">
+                                    <col v-if="showEnergyFeeType" style="width: 6%;">
+                                    <col style="width: 8%;">
+                                    <col v-if="showEnergyFeeType" style="width: 7%;">
+                                    <col style="width: 7%;">
                                     <col style="width: 9%;">
-                                    <col style="width: 8%;">
-                                    <col style="width: 8%;">
-                                    <col style="width: 10%;">
                                 </colgroup>
                                 <thead class="table-light">
                                     <tr>
@@ -451,13 +459,15 @@ if (!$canAccessRevenueStats) {
                                         <th data-i18n="規模">規模</th>
                                         <th data-i18n="期限日">期限日</th>
                                         <th data-i18n="チーム">チーム</th>
+                                        <th v-if="showEnergyFeeType" data-i18n="種類">種類</th>
                                         <th class="text-end" data-i18n="見積金額">見積金額</th>
+                                        <th v-if="showEnergyFeeType" data-i18n="請求状況">請求状況</th>
                                         <th data-i18n="完了日">完了日</th>
                                         <th data-i18n="決済備考">決済備考</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in group.projects" :key="p.id">
+                                    <tr v-for="p in group.projects" :key="p.id + '-' + (p.fee_type || '')">
                                         <td>{{ p.id }}</td>
                                         <td class="revenue-stats-cell-name" :title="p.name"><a :href="'detail.php?id=' + p.id" target="_blank">{{ p.name }}</a></td>
                                         <td class="revenue-stats-cell-text" :title="p.branch_name">{{ p.branch_name || '—' }}</td>
@@ -467,15 +477,21 @@ if (!$canAccessRevenueStats) {
                                         <td class="revenue-stats-cell-text" :title="p.parent_scale">{{ p.parent_scale || '—' }}</td>
                                         <td>{{ formatDate(p.end_date) }}</td>
                                         <td class="revenue-stats-cell-text" :title="formatProjectTeams(p)">{{ formatProjectTeams(p) }}</td>
+                                        <td v-if="showEnergyFeeType">
+                                            <span v-if="p.fee_type" class="badge revenue-fee-type-badge" :class="feeTypeBadgeClass(p.fee_type)">{{ p.fee_type }}</span>
+                                            <template v-else>—</template>
+                                        </td>
                                         <td class="text-end">{{ formatCurrency(p.amount) }}</td>
+                                        <td v-if="showEnergyFeeType">{{ p.invoice_status || '—' }}</td>
                                         <td>{{ formatDate(p.actual_end_date) }}</td>
                                         <td class="revenue-stats-cell-text" :title="p.payment_note">{{ p.payment_note || '—' }}</td>
                                     </tr>
                                 </tbody>
                                 <tfoot v-if="group.projects.length" class="table-secondary fw-semibold">
                                     <tr>
-                                        <td colspan="9" data-i18n="合計">合計</td>
+                                        <td :colspan="showEnergyFeeType ? 10 : 9" data-i18n="合計">合計</td>
                                         <td class="text-end">{{ formatCurrency(group.totals.amount) }}</td>
+                                        <td v-if="showEnergyFeeType"></td>
                                         <td></td>
                                         <td></td>
                                     </tr>
@@ -530,15 +546,16 @@ if (!$canAccessRevenueStats) {
                                     <col style="width: 4%;">
                                     <col style="width: 11%;">
                                     <col style="width: 7%;">
-                                    <col style="width: 7%;">
+                                    <col style="width: 6%;">
                                     <col style="width: 5%;">
                                     <col style="width: 6%;">
+                                    <col style="width: 6%;">
+                                    <col style="width: 7%;">
+                                    <col style="width: 7%;">
+                                    <col v-if="showEnergyFeeType" style="width: 6%;">
+                                    <col style="width: 8%;">
                                     <col style="width: 7%;">
                                     <col style="width: 8%;">
-                                    <col style="width: 8%;">
-                                    <col style="width: 8%;">
-                                    <col style="width: 8%;">
-                                    <col style="width: 10%;">
                                     <col style="width: 8%;">
                                 </colgroup>
                                 <thead class="table-light">
@@ -552,6 +569,7 @@ if (!$canAccessRevenueStats) {
                                         <th data-i18n="規模">規模</th>
                                         <th data-i18n="期限日">期限日</th>
                                         <th data-i18n="チーム">チーム</th>
+                                        <th v-if="showEnergyFeeType" data-i18n="種類">種類</th>
                                         <th class="text-end" data-i18n="見積金額">見積金額</th>
                                         <th data-i18n="見積日">見積日</th>
                                         <th data-i18n="見積状況">見積状況</th>
@@ -559,7 +577,7 @@ if (!$canAccessRevenueStats) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in group.projects" :key="p.id">
+                                    <tr v-for="p in group.projects" :key="p.id + '-' + (p.fee_type || '')">
                                         <td>{{ p.id }}</td>
                                         <td class="revenue-stats-cell-name" :title="p.name"><a :href="'detail.php?id=' + p.id" target="_blank">{{ p.name }}</a></td>
                                         <td class="revenue-stats-cell-text" :title="p.branch_name">{{ p.branch_name || '—' }}</td>
@@ -569,6 +587,10 @@ if (!$canAccessRevenueStats) {
                                         <td class="revenue-stats-cell-text" :title="p.parent_scale">{{ p.parent_scale || '—' }}</td>
                                         <td>{{ formatDate(p.end_date) }}</td>
                                         <td class="revenue-stats-cell-text" :title="formatProjectTeams(p)">{{ formatProjectTeams(p) }}</td>
+                                        <td v-if="showEnergyFeeType">
+                                            <span v-if="p.fee_type" class="badge revenue-fee-type-badge" :class="feeTypeBadgeClass(p.fee_type)">{{ p.fee_type }}</span>
+                                            <template v-else>—</template>
+                                        </td>
                                         <td class="text-end">{{ formatCurrency(p.amount) }}</td>
                                         <td>{{ formatDate(p.estimate_date) }}</td>
                                         <td>{{ p.estimate_status || '—' }}</td>
@@ -577,7 +599,7 @@ if (!$canAccessRevenueStats) {
                                 </tbody>
                                 <tfoot v-if="group.projects.length" class="table-secondary fw-semibold">
                                     <tr>
-                                        <td colspan="9" data-i18n="合計">合計</td>
+                                        <td :colspan="showEnergyFeeType ? 10 : 9" data-i18n="合計">合計</td>
                                         <td class="text-end">{{ formatCurrency(group.totals.amount) }}</td>
                                         <td></td>
                                         <td></td>
@@ -635,15 +657,16 @@ if (!$canAccessRevenueStats) {
                             <table class="table table-sm table-bordered mb-0 revenue-stats-table revenue-stats-table-cancelled  table-narrow">
                                 <colgroup>
                                     <col style="width: 4%;">
-                                    <col style="width: 13%;">
+                                    <col style="width: 12%;">
+                                    <col style="width: 7%;">
+                                    <col style="width: 7%;">
+                                    <col style="width: 5%;">
+                                    <col style="width: 7%;">
                                     <col style="width: 8%;">
-                                    <col style="width: 8%;">
-                                    <col style="width: 6%;">
                                     <col style="width: 8%;">
                                     <col style="width: 9%;">
+                                    <col v-if="showEnergyFeeType" style="width: 6%;">
                                     <col style="width: 9%;">
-                                    <col style="width: 11%;">
-                                    <col style="width: 10%;">
                                     <col style="width: 10%;">
                                 </colgroup>
                                 <thead class="table-light">
@@ -657,12 +680,13 @@ if (!$canAccessRevenueStats) {
                                         <th data-i18n="規模">規模</th>
                                         <th data-i18n="期限日">期限日</th>
                                         <th data-i18n="チーム">チーム</th>
+                                        <th v-if="showEnergyFeeType" data-i18n="種類">種類</th>
                                         <th class="text-end" data-i18n="見積金額">見積金額</th>
                                         <th data-i18n="決済備考">決済備考</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in group.projects" :key="p.id">
+                                    <tr v-for="p in group.projects" :key="p.id + '-' + (p.fee_type || '')">
                                         <td>{{ p.id }}</td>
                                         <td class="revenue-stats-cell-name" :title="p.name"><a :href="'detail.php?id=' + p.id" target="_blank">{{ p.name }}</a></td>
                                         <td class="revenue-stats-cell-text" :title="p.branch_name">{{ p.branch_name || '—' }}</td>
@@ -672,13 +696,17 @@ if (!$canAccessRevenueStats) {
                                         <td class="revenue-stats-cell-text" :title="p.parent_scale">{{ p.parent_scale || '—' }}</td>
                                         <td>{{ formatDate(p.end_date) }}</td>
                                         <td class="revenue-stats-cell-text" :title="formatProjectTeams(p)">{{ formatProjectTeams(p) }}</td>
+                                        <td v-if="showEnergyFeeType">
+                                            <span v-if="p.fee_type" class="badge revenue-fee-type-badge" :class="feeTypeBadgeClass(p.fee_type)">{{ p.fee_type }}</span>
+                                            <template v-else>—</template>
+                                        </td>
                                         <td class="text-end">{{ formatCurrency(p.amount) }}</td>
                                         <td class="revenue-stats-cell-text" :title="p.payment_note">{{ p.payment_note || '—' }}</td>
                                     </tr>
                                 </tbody>
                                 <tfoot v-if="group.projects.length" class="table-secondary fw-semibold">
                                     <tr>
-                                        <td colspan="9" data-i18n="合計">合計</td>
+                                        <td :colspan="showEnergyFeeType ? 10 : 9" data-i18n="合計">合計</td>
                                         <td class="text-end">{{ formatCurrency(group.totals.amount) }}</td>
                                         <td></td>
                                     </tr>
@@ -997,6 +1025,11 @@ html.dark-style .revenue-stats-table-summary-grouped .revenue-summary-unbilled-l
 .revenue-stats-table-cancelled {
     width: 100%;
     min-width: 72rem;
+}
+.revenue-fee-type-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
 }
 .revenue-stats-table th,
 .revenue-stats-table td {

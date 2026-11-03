@@ -51,10 +51,22 @@
         'estimate_status_updated',
         'estimate_date_updated',
         'estimate_number_updated',
+        'estimate_application_amount_updated',
+        'estimate_application_date_updated',
+        'estimate_application_status_updated',
+        'estimate_design_amount_updated',
+        'estimate_design_date_updated',
+        'estimate_design_status_updated',
         'invoice_status_updated',
         'invoice_date_updated',
         'invoice_amount_updated',
         'invoice_number_updated',
+        'invoice_application_amount_updated',
+        'invoice_application_date_updated',
+        'invoice_application_status_updated',
+        'invoice_design_amount_updated',
+        'invoice_design_date_updated',
+        'invoice_design_status_updated',
         'payment_status_updated',
         'payment_date_updated',
         'payment_amount_updated',
@@ -67,10 +79,22 @@
         'estimate_status',
         'estimate_date',
         'estimate_number',
+        'estimate_application_amount',
+        'estimate_application_date',
+        'estimate_application_status',
+        'estimate_design_amount',
+        'estimate_design_date',
+        'estimate_design_status',
         'invoice_status',
         'invoice_date',
         'invoice_amount',
         'invoice_number',
+        'invoice_application_amount',
+        'invoice_application_date',
+        'invoice_application_status',
+        'invoice_design_amount',
+        'invoice_design_date',
+        'invoice_design_status',
         'payment_status',
         'payment_date',
         'payment_amount',
@@ -78,11 +102,22 @@
         'payment_note'
     ];
 
-    var BUSINESS_DOCUMENT_DATE_FIELDS = ['estimate_date', 'invoice_date'];
+    var BUSINESS_DOCUMENT_DATE_FIELDS = [
+        'estimate_date',
+        'invoice_date',
+        'estimate_application_date',
+        'estimate_design_date',
+        'invoice_application_date',
+        'invoice_design_date'
+    ];
 
     var BD_MODAL_PICKER_IDS = {
         estimate_date: 'bd_modal_estimate_date_picker',
-        invoice_date: 'bd_modal_invoice_date_picker'
+        invoice_date: 'bd_modal_invoice_date_picker',
+        estimate_application_date: 'bd_modal_estimate_application_date_picker',
+        estimate_design_date: 'bd_modal_estimate_design_date_picker',
+        invoice_application_date: 'bd_modal_invoice_application_date_picker',
+        invoice_design_date: 'bd_modal_invoice_design_date_picker'
     };
 
     function isVietnameseLocale() {
@@ -329,6 +364,32 @@
                 if (this.userPermissions && this.userPermissions.project_director_edit == 1) return true;
                 return false;
             },
+            isBdEnergyDepartment: function() {
+                if (window.EnergyFeePayment && window.EnergyFeePayment.isEnergyProject) {
+                    return window.EnergyFeePayment.isEnergyProject(this.businessDocumentProject);
+                }
+                return false;
+            },
+            energyBdEstimateFeeRows: function() {
+                var rows = (window.EnergyFeePayment && window.EnergyFeePayment.FEE_ROWS) || [];
+                return rows.filter(function(r) { return r.kind === 'estimate'; }).map(function(r) {
+                    return Object.assign({}, r, { dropdownId: 'bd_' + r.dropdownId });
+                });
+            },
+            energyBdInvoiceFeeRows: function() {
+                var rows = (window.EnergyFeePayment && window.EnergyFeePayment.FEE_ROWS) || [];
+                return rows.filter(function(r) { return r.kind === 'invoice'; }).map(function(r) {
+                    return Object.assign({}, r, { dropdownId: 'bd_' + r.dropdownId });
+                });
+            },
+            businessEnergyEstimateStatuses: function() {
+                var extra = (window.EnergyFeePayment && window.EnergyFeePayment.ENERGY_EXTRA_STATUSES) || [];
+                return this.businessEstimateStatuses.concat(extra);
+            },
+            businessEnergyInvoiceStatuses: function() {
+                var extra = (window.EnergyFeePayment && window.EnergyFeePayment.ENERGY_EXTRA_STATUSES) || [];
+                return this.businessInvoiceStatuses.concat(extra);
+            },
             sortedBusinessDocumentLogs: function() {
                 if (!this.businessDocumentLogs) return [];
                 var self = this;
@@ -391,6 +452,9 @@
             normalizeBdFields: function() {
                 if (!this.businessDocumentProject) return;
                 var p = this.businessDocumentProject;
+                if (window.EnergyFeePayment && window.EnergyFeePayment.hydrateApplicationFromLegacy) {
+                    window.EnergyFeePayment.hydrateApplicationFromLegacy(p);
+                }
                 p.estimate_status = this.normalizeBusinessDocumentStatus(p.estimate_status, '未発行');
                 p.invoice_status = this.normalizeBusinessDocumentStatus(p.invoice_status, '未発行');
                 p.estimate_number = p.estimate_number || '';
@@ -398,7 +462,108 @@
                 p.payment_note = p.payment_note || '';
                 p.invoice_amount = this.normalizeBdAmountInputValue(p.invoice_amount);
                 p.amount = this.normalizeBdAmountInputValue(p.amount);
+                if (window.EnergyFeePayment && window.EnergyFeePayment.AMOUNT_FIELDS) {
+                    window.EnergyFeePayment.AMOUNT_FIELDS.forEach(function(key) {
+                        p[key] = this.normalizeBdAmountInputValue(p[key]);
+                    }.bind(this));
+                }
+                if (window.EnergyFeePayment && window.EnergyFeePayment.STATUS_FIELDS) {
+                    window.EnergyFeePayment.STATUS_FIELDS.forEach(function(key) {
+                        p[key] = this.normalizeBusinessDocumentStatus(p[key], '未発行');
+                    }.bind(this));
+                }
                 this.normalizeBdDateFields();
+            },
+            bdModalPickerId: function(dateKey) {
+                return BD_MODAL_PICKER_IDS[dateKey] || ('bd_modal_' + dateKey + '_picker');
+            },
+            isBdEnergyFeeRowComplete: function(row) {
+                if (!this.businessDocumentProject || !row) return false;
+                return this.hasBdDate(row.dateKey) && this.hasBdAmount(this.businessDocumentProject[row.amountKey]);
+            },
+            shouldShowBdIssuedRequirementHint: function(status, kind) {
+                var n = this.normalizeBusinessDocumentStatusValue(status);
+                if (kind === 'invoice') {
+                    return n === '未発行' || n === '請求準備';
+                }
+                return n === '未発行' || n === '見積作成中';
+            },
+            shouldShowBdEnergyFeeIssuedHint: function(row) {
+                if (!this.businessDocumentProject || !row || this.isBdEnergyFeeRowComplete(row)) return false;
+                return this.shouldShowBdIssuedRequirementHint(this.businessDocumentProject[row.statusKey], row.kind);
+            },
+            shouldShowBdEstimateIssuedHint: function() {
+                if (!this.businessDocumentProject || this.isBdEstimateDocumentFieldsComplete()) return false;
+                return this.shouldShowBdIssuedRequirementHint(this.businessDocumentProject.estimate_status, 'estimate');
+            },
+            shouldShowBdInvoiceIssuedHint: function() {
+                if (!this.businessDocumentProject || this.isBdInvoiceDocumentFieldsComplete()) return false;
+                return this.shouldShowBdIssuedRequirementHint(this.businessDocumentProject.invoice_status, 'invoice');
+            },
+            getBdEnergyFeeIssuedValidationError: function() {
+                if (!this.isBdEnergyDepartment || !this.businessDocumentProject) return '';
+                var rows = (this.energyBdEstimateFeeRows || []).concat(this.energyBdInvoiceFeeRows || []);
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    if (this.normalizeBusinessDocumentStatusValue(this.businessDocumentProject[row.statusKey]) !== '発行済') {
+                        continue;
+                    }
+                    if (this.isBdEnergyFeeRowComplete(row)) continue;
+                    var missing = [];
+                    if (!this.hasBdDate(row.dateKey)) missing.push(row.dateLabel);
+                    if (!this.hasBdAmount(this.businessDocumentProject[row.amountKey])) missing.push(row.amountLabel);
+                    return '発行済にするには以下を入力してください: ' + missing.join('、') + '（' + row.title + '）';
+                }
+                return '';
+            },
+            selectBdEnergyFeeStatus: function(row, status) {
+                if (!this.businessDocumentProject || !row) return;
+                this.syncBdDatesFromPickers();
+                var normalized = this.normalizeBusinessDocumentStatusValue(status);
+                if (normalized === '発行済' && !this.isBdEnergyFeeRowComplete(row)) {
+                    this.businessDocumentError = this.getBdEnergyFeeIssuedValidationError()
+                        || ('発行済にするには' + row.dateLabel + '・' + row.amountLabel + 'が必要です');
+                    this.hideBdStatusDropdown('#' + row.dropdownId);
+                    return;
+                }
+                if (this.normalizeBusinessDocumentStatusValue(this.businessDocumentProject[row.statusKey]) === normalized) {
+                    this.hideBdStatusDropdown('#' + row.dropdownId);
+                    return;
+                }
+                this.businessDocumentProject[row.statusKey] = normalized;
+                if (this.isBdWaivedStatus(normalized)) {
+                    this.businessDocumentProject[row.amountKey] = 0;
+                }
+                this.businessDocumentError = '';
+                this.scheduleBdUpdate();
+                this.hideBdStatusDropdown('#' + row.dropdownId);
+            },
+            bdAmountsDiffer: function(a, b) {
+                var na = (a == null || a === '') ? null : Number(a);
+                var nb = (b == null || b === '') ? null : Number(b);
+                if (na == null && nb == null) return false;
+                if (na == null || nb == null) return true;
+                if (!Number.isFinite(na) || !Number.isFinite(nb)) return true;
+                return na !== nb;
+            },
+            canCopyBdEnergyFeeAmountToInvoice: function(row) {
+                if (!this.businessDocumentProject || !row || !row.copyFromAmountKey) return false;
+                return this.bdAmountsDiffer(
+                    this.businessDocumentProject[row.amountKey],
+                    this.businessDocumentProject[row.copyFromAmountKey]
+                );
+            },
+            canCopyBdEstimateAmountToInvoice: function() {
+                if (!this.businessDocumentProject) return false;
+                return this.bdAmountsDiffer(
+                    this.businessDocumentProject.invoice_amount,
+                    this.businessDocumentProject.amount
+                );
+            },
+            copyBdEnergyFeeAmountToInvoice: function(row) {
+                if (!this.businessDocumentProject || !row || !row.copyFromAmountKey) return;
+                this.businessDocumentProject[row.amountKey] = this.businessDocumentProject[row.copyFromAmountKey];
+                this.scheduleBdUpdate();
             },
             normalizeBdAmountInputValue: function(value) {
                 // Empty/null → '' (placeholder 未入力). Keep 0 as a real value.
@@ -505,12 +670,39 @@
                 return status;
             },
             isBdDocumentReadyForCompletion: function(status) {
+                if (window.EnergyFeePayment && window.EnergyFeePayment.isReadyForCompletion) {
+                    return window.EnergyFeePayment.isReadyForCompletion(status);
+                }
                 var normalized = this.normalizeBusinessDocumentStatusValue(status);
                 return normalized === '発行済' || normalized === '無償';
+            },
+            isBdWaivedStatus: function(status) {
+                if (window.EnergyFeePayment && window.EnergyFeePayment.isWaivedStatus) {
+                    return window.EnergyFeePayment.isWaivedStatus(status);
+                }
+                return this.normalizeBusinessDocumentStatusValue(status) === '無償';
+            },
+            getBdEnergyFeeStatusOptions: function(kind) {
+                return kind === 'invoice'
+                    ? this.businessEnergyInvoiceStatuses
+                    : this.businessEnergyEstimateStatuses;
+            },
+            getBdEnergyFeeStatusLabel: function(kind, status) {
+                var list = this.getBdEnergyFeeStatusOptions(kind);
+                var item = this.findBdStatusOption(list, status);
+                return item ? this.translateLabel(item.label) : this.translateLabel('未発行');
+            },
+            getBdEnergyFeeStatusButtonClass: function(kind, status) {
+                var list = this.getBdEnergyFeeStatusOptions(kind);
+                var item = this.findBdStatusOption(list, status);
+                return item ? 'btn-' + item.color : 'btn-secondary';
             },
             needsPaymentInfoBeforeComplete: function(project) {
                 var p = project || this.businessDocumentProject;
                 if (!p) return true;
+                if (window.EnergyFeePayment && window.EnergyFeePayment.needsPaymentInfoBeforeComplete) {
+                    return window.EnergyFeePayment.needsPaymentInfoBeforeComplete(p);
+                }
                 return !this.isBdDocumentReadyForCompletion(p.estimate_status)
                     || !this.isBdDocumentReadyForCompletion(p.invoice_status);
             },
@@ -523,14 +715,22 @@
                     if (typeof translateText === 'function') return translateText(key);
                     return key;
                 };
-                var missing = [];
-                if (!this.isBdDocumentReadyForCompletion(p && p.estimate_status)) {
-                    missing.push(t('見積状況'));
+                var missing = (window.EnergyFeePayment && window.EnergyFeePayment.getMissingPaymentLabels)
+                    ? window.EnergyFeePayment.getMissingPaymentLabels(p, t)
+                    : [];
+                if (!missing.length) {
+                    if (!this.isBdDocumentReadyForCompletion(p && p.estimate_status)) {
+                        missing.push(t('見積状況'));
+                    }
+                    if (!this.isBdDocumentReadyForCompletion(p && p.invoice_status)) {
+                        missing.push(t('請求状況'));
+                    }
                 }
-                if (!this.isBdDocumentReadyForCompletion(p && p.invoice_status)) {
-                    missing.push(t('請求状況'));
-                }
-                var base = t('完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
+                var isEnergy = window.EnergyFeePayment && window.EnergyFeePayment.isEnergyProject
+                    && window.EnergyFeePayment.isEnergyProject(p);
+                var base = t(isEnergy
+                    ? '完了にする前に見積・請求の決済情報を設定してください。（発行済・無償・対象外）'
+                    : '完了にする前に見積・請求の決済情報を設定してください。（発行済または無償）');
                 return missing.length ? (base + '\n（' + missing.join(' / ') + '）') : base;
             },
             confirmPaymentInfoBeforeComplete: async function(project) {
@@ -631,19 +831,28 @@
 
                 this.syncBdDatesFromPickers();
                 var p = this.businessDocumentProject;
-                if (this.normalizeBusinessDocumentStatusValue(p.estimate_status) === '発行済'
-                    && !this.isBdEstimateDocumentFieldsComplete()) {
+                var energyIssuedError = this.getBdEnergyFeeIssuedValidationError();
+                if (energyIssuedError) {
                     this.businessDocumentSaveStatus = null;
-                    this.businessDocumentError = this.getBdEstimateDocumentFieldsValidationError();
+                    this.businessDocumentError = energyIssuedError;
                     this.isUpdatingBusinessDocument = false;
                     return;
                 }
-                if (this.normalizeBusinessDocumentStatusValue(p.invoice_status) === '発行済'
-                    && !this.isBdInvoiceDocumentFieldsComplete()) {
-                    this.businessDocumentSaveStatus = null;
-                    this.businessDocumentError = this.getBdInvoiceDocumentFieldsValidationError();
-                    this.isUpdatingBusinessDocument = false;
-                    return;
+                if (!this.isBdEnergyDepartment) {
+                    if (this.normalizeBusinessDocumentStatusValue(p.estimate_status) === '発行済'
+                        && !this.isBdEstimateDocumentFieldsComplete()) {
+                        this.businessDocumentSaveStatus = null;
+                        this.businessDocumentError = this.getBdEstimateDocumentFieldsValidationError();
+                        this.isUpdatingBusinessDocument = false;
+                        return;
+                    }
+                    if (this.normalizeBusinessDocumentStatusValue(p.invoice_status) === '発行済'
+                        && !this.isBdInvoiceDocumentFieldsComplete()) {
+                        this.businessDocumentSaveStatus = null;
+                        this.businessDocumentError = this.getBdInvoiceDocumentFieldsValidationError();
+                        this.isUpdatingBusinessDocument = false;
+                        return;
+                    }
                 }
 
                 var formData = new FormData();
@@ -657,6 +866,14 @@
                 formData.append('invoice_amount', this.getBdAmountForApi(p.invoice_amount));
                 formData.append('invoice_number', p.invoice_number || '');
                 formData.append('payment_note', p.payment_note || '');
+                if (window.EnergyFeePayment && window.EnergyFeePayment.appendEnergyFieldsToFormData) {
+                    window.EnergyFeePayment.appendEnergyFieldsToFormData(
+                        formData,
+                        p,
+                        this.getBdAmountForApi.bind(this),
+                        this.getBdDateForApi.bind(this)
+                    );
+                }
                 appendPaymentVersionToFormData(formData, p);
 
                 axios.post('/api/index.php?model=project&method=updateProjectStatus', formData)
@@ -669,6 +886,11 @@
                             // Keep cleared amounts as empty so placeholder 未入力 stays visible
                             self.businessDocumentProject.amount = self.normalizeBdAmountInputValue(self.businessDocumentProject.amount);
                             self.businessDocumentProject.invoice_amount = self.normalizeBdAmountInputValue(self.businessDocumentProject.invoice_amount);
+                            if (window.EnergyFeePayment && window.EnergyFeePayment.AMOUNT_FIELDS) {
+                                window.EnergyFeePayment.AMOUNT_FIELDS.forEach(function(key) {
+                                    self.businessDocumentProject[key] = self.normalizeBdAmountInputValue(self.businessDocumentProject[key]);
+                                });
+                            }
                             BUSINESS_DOCUMENT_DATE_FIELDS.forEach(function(key) {
                                 var apiVal = self.getBdDateForApi(key);
                                 self.setBdServerDate(key, apiVal || '');
@@ -823,19 +1045,23 @@
                 });
             },
             getBdEstimateStatusLabel: function(status) {
-                var item = this.findBdStatusOption(BUSINESS_ESTIMATE_STATUSES, status);
+                var item = this.findBdStatusOption(this.businessEnergyEstimateStatuses, status)
+                    || this.findBdStatusOption(BUSINESS_ESTIMATE_STATUSES, status);
                 return item ? this.translateLabel(item.label) : this.translateLabel('未発行');
             },
             getBdEstimateStatusButtonClass: function(status) {
-                var item = this.findBdStatusOption(BUSINESS_ESTIMATE_STATUSES, status);
+                var item = this.findBdStatusOption(this.businessEnergyEstimateStatuses, status)
+                    || this.findBdStatusOption(BUSINESS_ESTIMATE_STATUSES, status);
                 return item ? 'btn-' + item.color : 'btn-secondary';
             },
             getBdInvoiceStatusLabel: function(status) {
-                var item = this.findBdStatusOption(BUSINESS_INVOICE_STATUSES, status);
+                var item = this.findBdStatusOption(this.businessEnergyInvoiceStatuses, status)
+                    || this.findBdStatusOption(BUSINESS_INVOICE_STATUSES, status);
                 return item ? this.translateLabel(item.label) : this.translateLabel('未発行');
             },
             getBdInvoiceStatusButtonClass: function(status) {
-                var item = this.findBdStatusOption(BUSINESS_INVOICE_STATUSES, status);
+                var item = this.findBdStatusOption(this.businessEnergyInvoiceStatuses, status)
+                    || this.findBdStatusOption(BUSINESS_INVOICE_STATUSES, status);
                 return item ? 'btn-' + item.color : 'btn-secondary';
             },
             selectBdEstimateStatus: function(status) {
@@ -915,7 +1141,7 @@
                 if (log.action && log.action.endsWith('_date_updated')) {
                     return this.formatShortDateTime(value) || value;
                 }
-                if (log.action === 'amount_updated' || log.action === 'invoice_amount_updated' || log.action === 'payment_amount_updated') {
+                if (log.action && (log.action.indexOf('_amount_updated') !== -1 || log.action === 'amount_updated')) {
                     var num = Number(value);
                     if (!isNaN(num)) {
                         return this.formatCurrency(num);
@@ -926,8 +1152,9 @@
             getBdLogBadgeClass: function(log, field) {
                 var value = log[field];
                 if (!this.hasBdLogValue(value)) return 'badge bg-secondary';
-                if (log.action === 'estimate_status_updated' || log.action === 'invoice_status_updated') {
-                    var cls = log.action === 'estimate_status_updated'
+                if (log.action && log.action.indexOf('_status_updated') !== -1) {
+                    var isEstimate = log.action.indexOf('estimate_') === 0;
+                    var cls = isEstimate
                         ? this.getBusinessEstimateStatusBadgeClass(value)
                         : this.getBusinessInvoiceStatusBadgeClass(value);
                     return 'badge ' + cls;
@@ -938,22 +1165,19 @@
                 return field === 'value1' ? 'badge bg-secondary' : 'badge bg-primary';
             },
             bdHistoryIcon: function(action) {
+                if (!action) return 'fa fa-history text-secondary';
+                if (action.indexOf('amount_updated') !== -1 || action === 'payment_amount_updated') {
+                    return 'fa fa-yen-sign text-success';
+                }
+                if (action.indexOf('estimate_') === 0) {
+                    return 'fa fa-file-invoice text-info';
+                }
+                if (action.indexOf('invoice_') === 0) {
+                    return 'fa fa-file-alt text-primary';
+                }
                 switch (action) {
-                    case 'amount_updated':
-                    case 'invoice_amount_updated':
-                    case 'payment_amount_updated':
-                        return 'fa fa-yen-sign text-success';
-                    case 'estimate_status_updated':
-                    case 'estimate_date_updated':
-                    case 'estimate_number_updated':
-                        return 'fa fa-file-invoice text-info';
-                    case 'invoice_status_updated':
-                    case 'invoice_date_updated':
-                    case 'invoice_number_updated':
-                        return 'fa fa-file-alt text-primary';
                     case 'payment_status_updated':
                     case 'payment_date_updated':
-                    case 'payment_amount_updated':
                     case 'receipt_number_updated':
                         return 'fa fa-money-bill-wave text-success';
                     case 'payment_note_updated':
@@ -996,10 +1220,10 @@
             getLogBadgeLabel: function(log, field) {
                 var value = log[field];
                 if (!value) return '';
-                if (log.action === 'estimate_status_updated') {
+                if (log.action && log.action.indexOf('estimate_') === 0 && log.action.indexOf('_status_updated') !== -1) {
                     return this.getBusinessEstimateStatusLabel(value);
                 }
-                if (log.action === 'invoice_status_updated') {
+                if (log.action && log.action.indexOf('invoice_') === 0 && log.action.indexOf('_status_updated') !== -1) {
                     return this.getBusinessInvoiceStatusLabel(value);
                 }
                 if (log.action === 'payment_status_updated') {

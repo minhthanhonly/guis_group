@@ -932,129 +932,216 @@ if($_SESSION['show_project'] == 0){
                     </div>
                     <div class="card-body" v-if="project">
                         <input type="hidden" v-model.number="project.payment_version">
-                        <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label mb-0">見積日 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('estimate_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                            @click="setBusinessDocumentDateToday('estimate_date')">今日</button>
+
+                        <template v-if="isEnergyDepartmentProject">
+                            <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
+                            <div v-for="row in energyEstimateFeeRows" :key="'est-' + row.fee" class="border rounded p-3 mb-3">
+                                <div class="fw-semibold mb-2"><span :data-i18n="row.title">{{ row.title }}</span></div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label class="form-label mb-0">{{ row.dateLabel }} <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                            <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate(row.dateKey)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                                    @click="setBusinessDocumentDateToday(row.dateKey)">今日</button>
+                                        </div>
+                                        <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project[row.dateKey]" :id="businessDocumentPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                        <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime(row.dateKey)" :data-time="getBusinessDocumentDateForTooltip(row.dateKey)" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip(row.dateKey))" readonly>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">{{ row.amountLabel }} <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                        <input type="number" autocomplete="off" class="form-control" v-model.number="project[row.amountKey]" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">状況</label>
+                                        <div v-if="canEditBusinessDocuments">
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                                        :class="getEnergyFeeStatusButtonClass(row.kind, project[row.statusKey])"
+                                                        :id="row.dropdownId"
+                                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                                    {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li v-for="status in getEnergyFeeStatusOptions(row.kind)" :key="status.value">
+                                                        <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                           :class="{ disabled: status.value === '発行済' && !isEnergyFeeRowComplete(row) }"
+                                                           @click="selectEnergyFeeStatus(row, status.value)">
+                                                            {{ status.label }}
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <div v-if="shouldShowEnergyFeeIssuedHint(row)" class="form-text text-muted">
+                                                発行済にするには{{ row.dateLabel }}・{{ row.amountLabel }}が必要です
+                                            </div>
+                                        </div>
+                                        <div v-else>
+                                            <span class="badge" :class="getEnergyFeeStatusBadgeClass(row.kind, project[row.statusKey])">
+                                                {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
+                                            </span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.estimate_date" id="estimate_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('estimate_date')" :data-time="getBusinessDocumentDateForTooltip('estimate_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('estimate_date'))" readonly>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label">見積金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+
+                            <hr class="my-3">
+
+                            <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
+                            <div v-for="row in energyInvoiceFeeRows" :key="'inv-' + row.fee" class="border rounded p-3 mb-3">
+                                <div class="fw-semibold mb-2"><span :data-i18n="row.title">{{ row.title }}</span></div>
+                                <div class="row g-3">
+                                    <div class="col-md-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-1">
+                                            <label class="form-label mb-0">{{ row.dateLabel }} <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                            <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate(row.dateKey)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                                    @click="setBusinessDocumentDateToday(row.dateKey)">今日</button>
+                                        </div>
+                                        <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project[row.dateKey]" :id="businessDocumentPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                        <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime(row.dateKey)" :data-time="getBusinessDocumentDateForTooltip(row.dateKey)" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip(row.dateKey))" readonly>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="d-flex justify-content-between align-items-center mb-1 flex-nowrap gap-1">
+                                            <label class="form-label mb-0 text-nowrap">{{ row.amountLabel }} <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                            <button v-if="canEditBusinessDocuments && canCopyEnergyFeeAmountToInvoice(row)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2 text-nowrap flex-shrink-0"
+                                                    @click="copyEnergyFeeAmountToInvoice(row)">見積と同額</button>
+                                        </div>
+                                        <input type="number" autocomplete="off" class="form-control" v-model.number="project[row.amountKey]" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label">状況</label>
+                                        <div v-if="canEditBusinessDocuments">
+                                            <div class="btn-group">
+                                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                                        :class="getEnergyFeeStatusButtonClass(row.kind, project[row.statusKey])"
+                                                        :id="row.dropdownId"
+                                                        data-bs-toggle="dropdown" aria-expanded="false">
+                                                    {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
+                                                </button>
+                                                <ul class="dropdown-menu">
+                                                    <li v-for="status in getEnergyFeeStatusOptions(row.kind)" :key="status.value">
+                                                        <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                           :class="{ disabled: status.value === '発行済' && !isEnergyFeeRowComplete(row) }"
+                                                           @click="selectEnergyFeeStatus(row, status.value)">
+                                                            {{ status.label }}
+                                                        </a>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                            <div v-if="shouldShowEnergyFeeIssuedHint(row)" class="form-text text-muted">
+                                                発行済にするには{{ row.dateLabel }}・{{ row.amountLabel }}が必要です
+                                            </div>
+                                        </div>
+                                        <div v-else>
+                                            <span class="badge" :class="getEnergyFeeStatusBadgeClass(row.kind, project[row.statusKey])">
+                                                {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="col-md-6">
-                                <label class="form-label text-muted">消費税（10%）</label>
-                                <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(project.amount)">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label text-muted">税込合計</label>
-                                <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(project.amount)">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">見積番号</label>
-                                <input type="text" autocomplete="off" class="form-control" v-model="project.estimate_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">見積状況</label>
-                                <div v-if="canEditBusinessDocuments">
-                                    <div class="btn-group">
-                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                                :class="getEstimateStatusButtonClass(project.estimate_status)"
-                                                id="estimateStatusDropdown"
-                                                data-bs-toggle="dropdown" aria-expanded="false">
+                        </template>
+
+                        <template v-else>
+                            <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label mb-0">見積日 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                        <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('estimate_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                                @click="setBusinessDocumentDateToday('estimate_date')">今日</button>
+                                    </div>
+                                    <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.estimate_date" id="estimate_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                    <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('estimate_date')" :data-time="getBusinessDocumentDateForTooltip('estimate_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('estimate_date'))" readonly>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">見積金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                    <input type="number" autocomplete="off" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">見積状況</label>
+                                    <div v-if="canEditBusinessDocuments">
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                                    :class="getEstimateStatusButtonClass(project.estimate_status)"
+                                                    id="estimateStatusDropdown"
+                                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                                {{ getEstimateStatusLabel(project.estimate_status) }}
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li v-for="status in businessEstimateStatuses" :key="status.value">
+                                                    <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                       :class="{ disabled: status.value === '発行済' && !isEstimateDocumentFieldsComplete() }"
+                                                       @click="selectEstimateStatus(status.value)">
+                                                        {{ status.label }}
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div v-if="shouldShowEstimateIssuedHint()" class="form-text text-muted">
+                                            発行済にするには見積日・見積金額が必要です
+                                        </div>
+                                    </div>
+                                    <div v-else>
+                                        <span class="badge" :class="getEstimateStatusBadgeClass(project.estimate_status)">
                                             {{ getEstimateStatusLabel(project.estimate_status) }}
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li v-for="status in businessEstimateStatuses" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                   :class="{ disabled: status.value === '発行済' && !isEstimateDocumentFieldsComplete() }"
-                                                   @click="selectEstimateStatus(status.value)">
-                                                    {{ status.label }}
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                    <div v-if="!isEstimateDocumentFieldsComplete()" class="form-text text-muted">
-                                        発行済にするには見積日・見積金額が必要です
+                                        </span>
                                     </div>
                                 </div>
-                                <div v-else>
-                                    <span class="badge" :class="getEstimateStatusBadgeClass(project.estimate_status)">
-                                        {{ getEstimateStatusLabel(project.estimate_status) }}
-                                    </span>
-                                </div>
                             </div>
-                        </div>
 
-                        <hr class="my-3">
+                            <hr class="my-3">
 
-                        <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
-                        <div class="row g-3 mb-3">
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label mb-0">請求日 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                            @click="setBusinessDocumentDateToday('invoice_date')">今日</button>
+                            <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <label class="form-label mb-0">請求日 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                        <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                                                @click="setBusinessDocumentDateToday('invoice_date')">今日</button>
+                                    </div>
+                                    <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.invoice_date" id="invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                    <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('invoice_date')" :data-time="getBusinessDocumentDateForTooltip('invoice_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('invoice_date'))" readonly>
                                 </div>
-                                <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.invoice_date" id="invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('invoice_date')" :data-time="getBusinessDocumentDateForTooltip('invoice_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('invoice_date'))" readonly>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                    <label class="form-label mb-0">請求金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                    <button v-if="canEditBusinessDocuments && !hasBusinessDocumentAmount(project.invoice_amount)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                            @click="copyEstimateAmountToInvoice">見積と同額</button>
+                                <div class="col-md-6">
+                                    <div class="d-flex justify-content-between align-items-center mb-1 flex-nowrap gap-1">
+                                        <label class="form-label mb-0 text-nowrap">請求金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
+                                        <button v-if="canEditBusinessDocuments && canCopyEstimateAmountToInvoice()" type="button" class="btn btn-outline-primary btn-sm py-0 px-2 text-nowrap flex-shrink-0"
+                                                @click="copyEstimateAmountToInvoice">見積と同額</button>
+                                    </div>
+                                    <input type="number" autocomplete="off" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
                                 </div>
-                                <input type="number" autocomplete="off" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label text-muted">消費税（10%）</label>
-                                <input type="text" class="form-control bg-light" readonly tabindex="-1" :value="formatBusinessDocumentTaxAmount(project.invoice_amount)">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label text-muted">税込合計</label>
-                                <input type="text" class="form-control bg-light fw-semibold" readonly tabindex="-1" :value="formatBusinessDocumentTotalWithTax(project.invoice_amount)">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">請求番号</label>
-                                <input type="text" autocomplete="off" class="form-control" v-model="project.invoice_number" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">請求状況</label>
-                                <div v-if="canEditBusinessDocuments">
-                                    <div class="btn-group">
-                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                                :class="getInvoiceStatusButtonClass(project.invoice_status)"
-                                                id="invoiceStatusDropdown"
-                                                data-bs-toggle="dropdown" aria-expanded="false">
+                                <div class="col-md-6">
+                                    <label class="form-label">請求状況</label>
+                                    <div v-if="canEditBusinessDocuments">
+                                        <div class="btn-group">
+                                            <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
+                                                    :class="getInvoiceStatusButtonClass(project.invoice_status)"
+                                                    id="invoiceStatusDropdown"
+                                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                                {{ getInvoiceStatusLabel(project.invoice_status) }}
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li v-for="status in businessInvoiceStatuses" :key="status.value">
+                                                    <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                       :class="{ disabled: status.value === '発行済' && !isInvoiceDocumentFieldsComplete() }"
+                                                       @click="selectInvoiceStatus(status.value)">
+                                                        {{ status.label }}
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div v-if="shouldShowInvoiceIssuedHint()" class="form-text text-muted">
+                                            発行済にするには請求日・請求金額が必要です
+                                        </div>
+                                    </div>
+                                    <div v-else>
+                                        <span class="badge" :class="getInvoiceStatusBadgeClass(project.invoice_status)">
                                             {{ getInvoiceStatusLabel(project.invoice_status) }}
-                                        </button>
-                                        <ul class="dropdown-menu">
-                                            <li v-for="status in businessInvoiceStatuses" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                   :class="{ disabled: status.value === '発行済' && !isInvoiceDocumentFieldsComplete() }"
-                                                   @click="selectInvoiceStatus(status.value)">
-                                                    {{ status.label }}
-                                                </a>
-                                            </li>
-                                        </ul>
+                                        </span>
                                     </div>
-                                    <div v-if="!isInvoiceDocumentFieldsComplete()" class="form-text text-muted">
-                                        発行済にするには請求日・請求金額が必要です
-                                    </div>
-                                </div>
-                                <div v-else>
-                                    <span class="badge" :class="getInvoiceStatusBadgeClass(project.invoice_status)">
-                                        {{ getInvoiceStatusLabel(project.invoice_status) }}
-                                    </span>
                                 </div>
                             </div>
-                        </div>
+                        </template>
 
                         <hr class="my-3">
 
@@ -1912,6 +1999,7 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-clipboard.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/energy-fee-payment.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 
