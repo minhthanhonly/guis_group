@@ -1874,6 +1874,9 @@ class Project extends ApplicationModel {
             WHEN '4' THEN '4 : ZEH-M'
             WHEN '5' THEN '5 : Nearly ZEH-M'
             WHEN '6' THEN '6 : ZEH-M Oriented'
+            WHEN '7' THEN '7 : ZEH Ready'
+            WHEN '8' THEN '8 : DK-ZEH'
+            WHEN '9' THEN '9 : 関西限定DK-ZEH'
             ELSE CAST({$column} AS CHAR)
         END";
     }

@@ -868,7 +868,10 @@ const vueApp = createApp({
                 { value: '3', label: '3 : ZEH Oriented' },
                 { value: '4', label: '4 : ZEH-M' },
                 { value: '5', label: '5 : Nearly ZEH-M' },
-                { value: '6', label: '6 : ZEH-M Oriented' }
+                { value: '6', label: '6 : ZEH-M Oriented' },
+                { value: '7', label: '7 : ZEH Ready' },
+                { value: '8', label: '8 : DK-ZEH' },
+                { value: '9', label: '9 : 関西限定DK-ZEH' }
             ];
             const found = options.find(function(opt) { return opt.value === code; });
             return found ? found.label : code;

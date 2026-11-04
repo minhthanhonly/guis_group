@@ -85,7 +85,7 @@ class ParentProject extends ApplicationModel {
             'materials_memo' => "VARCHAR(500) NULL DEFAULT NULL COMMENT '資料・その他メモ' AFTER `materials`",
             'features' => "TEXT NULL DEFAULT NULL COMMENT '特徴 (comma-separated)' AFTER `materials_memo`",
             'application_review_agency' => "VARCHAR(255) NULL DEFAULT NULL COMMENT '申請提出先の審査機関' AFTER `features`",
-            'bels_zeh_grade' => "VARCHAR(10) NULL DEFAULT '0' COMMENT 'BELSのZEH等級 (0-6)' AFTER `application_review_agency`",
+            'bels_zeh_grade' => "VARCHAR(10) NULL DEFAULT '0' COMMENT 'BELSのZEH等級 (0-9)' AFTER `application_review_agency`",
             'energy_materials' => "TEXT NULL DEFAULT NULL COMMENT '省エネ資料 (comma-separated)' AFTER `bels_zeh_grade`",
             'energy_materials_memo' => "VARCHAR(500) NULL DEFAULT NULL COMMENT '省エネ資料・その他メモ' AFTER `energy_materials`",
         );
@@ -518,7 +518,7 @@ class ParentProject extends ApplicationModel {
         $features = isset($_POST['features']) ? $this->validateUTF8MB4($_POST['features']) : '';
         $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : '';
         $belsZehGrade = isset($_POST['bels_zeh_grade']) ? trim((string)$_POST['bels_zeh_grade']) : '0';
-        if (!in_array($belsZehGrade, array('0', '1', '2', '3', '4', '5', '6'), true)) {
+        if (!in_array($belsZehGrade, array('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), true)) {
             $belsZehGrade = '0';
         }
         
@@ -642,7 +642,7 @@ class ParentProject extends ApplicationModel {
             : (isset($old['application_review_agency']) ? $old['application_review_agency'] : '');
         if (isset($_POST['bels_zeh_grade'])) {
             $belsZehGrade = trim((string)$_POST['bels_zeh_grade']);
-            if (!in_array($belsZehGrade, array('0', '1', '2', '3', '4', '5', '6'), true)) {
+            if (!in_array($belsZehGrade, array('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), true)) {
                 $belsZehGrade = isset($old['bels_zeh_grade']) ? (string)$old['bels_zeh_grade'] : '0';
             }
         } else {
