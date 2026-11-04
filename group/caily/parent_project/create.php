@@ -164,7 +164,7 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
-                                <input type="text" class="form-control" v-model="parentProject.city" placeholder="市区町村を入力">
+                                <input type="text" class="form-control tagify" id="city_tags" name="city_tags" placeholder="市区町村を入力">
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -208,7 +208,7 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                <input type="text" class="form-control" v-model="parentProject.structural_office">
+                                <input type="text" class="form-control tagify" id="structural_office_tags" name="structural_office_tags" placeholder="構造事務所を入力">
                             </div>
                         </div>
                         <!-- <div class="col-md-6">
@@ -789,4 +789,5 @@ window.currentUser = {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-tagify-options.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-create.js?v=<?=PROJECT_CACHE_VERSION?>"></script> 

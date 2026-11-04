@@ -129,17 +129,22 @@ createApp({
             applicationReviewAgencyTagify: null,
             constructionBranchTagify: null,
             scaleTagify: null,
-            applicationReviewAgencyWhitelist: [
-                '日本ERI',
-                'ERIソリューション',
-                'ビューローベリタスジャパン',
-                '日本住宅保証検査機構（JIO）',
-                'ハウスプラス住宅保証',
-                '東京建築検査機構（TBTC）',
-                'ユーディーアイ確認検査',
-                '日本確認検査センター',
-                'JCI'
-            ],
+            cityTagify: null,
+            structuralOfficeTagify: null,
+            applicationReviewAgencyWhitelist: (window.ParentProjectReviewAgency
+                && Array.isArray(window.ParentProjectReviewAgency.DEFAULT_WHITELIST))
+                ? window.ParentProjectReviewAgency.DEFAULT_WHITELIST.slice()
+                : [
+                    '日本ERI',
+                    'ERIソリューション',
+                    'ビューローベリタスジャパン',
+                    '日本住宅保証検査機構（JIO）',
+                    'ハウスプラス住宅保証',
+                    '東京建築検査機構（TBTC）',
+                    'ユーディーアイ確認検査',
+                    '日本確認検査センター',
+                    'JCI'
+                ],
             // Customer modal data
             categories: [],
             departments: [],
@@ -1000,9 +1005,16 @@ createApp({
                 }
             }
         },
-        initApplicationReviewAgencyTagify() {
+        async refreshApplicationReviewAgencyWhitelist() {
+            if (window.ParentProjectReviewAgency && typeof window.ParentProjectReviewAgency.loadMergedWhitelist === 'function') {
+                this.applicationReviewAgencyWhitelist = await window.ParentProjectReviewAgency.loadMergedWhitelist();
+            }
+            return this.applicationReviewAgencyWhitelist;
+        },
+        async initApplicationReviewAgencyTagify() {
             const input = document.querySelector('#application_review_agency_tags');
             if (!input || !window.Tagify) return;
+            await this.refreshApplicationReviewAgencyWhitelist();
             this.destroyApplicationReviewAgencyTagify();
             input.value = '';
             this.applicationReviewAgencyTagify = new Tagify(input, {
@@ -1010,7 +1022,7 @@ createApp({
                 enforceWhitelist: false,
                 maxTags: 1,
                 dropdown: {
-                    maxItems: 20,
+                    maxItems: 40,
                     classname: 'tags-look-review-agency',
                     enabled: 0,
                     closeOnSelect: true
@@ -1021,133 +1033,173 @@ createApp({
                     .map(tag => tag.value)
                     .join(',');
             };
-            this.applicationReviewAgencyTagify.on('add', updateAgency);
+            this.applicationReviewAgencyTagify.on('add', (e) => {
+                updateAgency();
+                const value = e && e.detail && e.detail.data ? e.detail.data.value : '';
+                if (value && window.ParentProjectReviewAgency) {
+                    window.ParentProjectReviewAgency.saveLocalCustom(value);
+                    this.applicationReviewAgencyWhitelist = window.ParentProjectReviewAgency.buildWhitelist(
+                        this.applicationReviewAgencyWhitelist
+                    );
+                    this.applicationReviewAgencyTagify.settings.whitelist = this.applicationReviewAgencyWhitelist.slice();
+                    this.applicationReviewAgencyTagify.whitelist = this.applicationReviewAgencyWhitelist.slice();
+                }
+            });
             this.applicationReviewAgencyTagify.on('remove', updateAgency);
             const current = String(this.parentProject.application_review_agency || '').trim();
             if (current) {
                 this.applicationReviewAgencyTagify.addTags(current);
             }
         },
-        initTagify() {
+        async loadTagifyWhitelists() {
+            const T = window.ParentProjectTagifyOptions;
+            if (!T || typeof T.loadMergedWhitelist !== 'function') {
+                return {
+                    type2: ['長屋', '共同', '戸建', '非住宅', '集合'],
+                    scale: ['W2F3J', 'W2F4J', 'W2F5J', 'W2F6J', 'W3F3J', 'W3F4J', 'W3F5J', 'W3F6J', 'RC3F3J', 'RC3F4J', 'RC3F5J', 'RC3F6J', 'RC3F7J', 'RC3F8J'],
+                    city: [],
+                    structural_office: []
+                };
+            }
+            const [type2, scale, city, structural_office] = await Promise.all([
+                T.loadMergedWhitelist('type2'),
+                T.loadMergedWhitelist('scale'),
+                T.loadMergedWhitelist('city'),
+                T.loadMergedWhitelist('structural_office')
+            ]);
+            return { type2, scale, city, structural_office };
+        },
+        bindTagifyField(tagify, field, onUpdate) {
+            if (!tagify) return;
+            if (window.ParentProjectTagifyOptions && typeof window.ParentProjectTagifyOptions.bindSaveOnAdd === 'function') {
+                window.ParentProjectTagifyOptions.bindSaveOnAdd(tagify, field, onUpdate);
+            } else {
+                tagify.on('add', onUpdate);
+                tagify.on('remove', onUpdate);
+            }
+        },
+        async initTagify() {
             // Initialize Tagify after Vue is mounted
-            this.$nextTick(() => {
-                // --- Tagify for Type1 (種類1) ---
-                const type1Input = document.querySelector('#type1_tags');
-                if (type1Input && window.Tagify && !type1Input._tagify) {
-                    if (this.type1Tagify) {
-                        try {
-                            this.type1Tagify.destroy();
-                        } catch (e) {
-                            console.log('Error destroying existing type1Tagify:', e);
-                        }
-                    }
-                    this.type1Tagify = new Tagify(type1Input, {
-                        whitelist: ['TAC', '特注'],
-                        maxTags: 5,
-                        dropdown: {
-                            maxItems: 20,
-                            classname: "tags-look-type1",
-                            enabled: 0,
-                            closeOnSelect: true
-                        },
-                    });
-                    const updateType1 = () => {
-                        this.parentProject.type1 = this.type1Tagify.value.map(tag => tag.value).join(',');
-                    };
-                    this.type1Tagify.on('add', updateType1);
-                    this.type1Tagify.on('remove', updateType1);
+            await this.$nextTick();
+            if (!window.Tagify) return;
+            const whitelists = await this.loadTagifyWhitelists();
+
+            // --- Tagify for Type1 (種類1) ---
+            const type1Input = document.querySelector('#type1_tags');
+            if (type1Input && !type1Input._tagify) {
+                if (this.type1Tagify) {
+                    try { this.type1Tagify.destroy(); } catch (e) { /* ignore */ }
                 }
-                
-                // --- Tagify for Type2 (住宅種類) ---
-                const type2Input = document.querySelector('#type2_tags');
-                if (type2Input && window.Tagify && !type2Input._tagify) {
-                    if (this.type2Tagify) {
-                        try {
-                            this.type2Tagify.destroy();
-                        } catch (e) {
-                            console.log('Error destroying existing type2Tagify:', e);
-                        }
-                    }
-                    this.type2Tagify = new Tagify(type2Input, {
-                        whitelist: ['長屋', '共同', '戸建', '非住宅', '集合'],
-                        maxTags: 1,
-                        dropdown: {
-                            maxItems: 20,
-                            classname: "tags-look-type2",
-                            enabled: 0,
-                            closeOnSelect: true
-                        },
-                    });
-                    const updateType2 = () => {
-                        this.parentProject.type2 = this.type2Tagify.value.map(tag => tag.value).join(',');
-                        if (!this.hasNonResidentialType) {
-                            this.parentProject.type3 = '';
-                        }
-                    };
-                    this.type2Tagify.on('add', updateType2);
-                    this.type2Tagify.on('remove', updateType2);
+                this.type1Tagify = new Tagify(type1Input, {
+                    whitelist: ['TAC', '特注'],
+                    maxTags: 5,
+                    dropdown: { maxItems: 20, classname: 'tags-look-type1', enabled: 0, closeOnSelect: true }
+                });
+                const updateType1 = () => {
+                    this.parentProject.type1 = this.type1Tagify.value.map(tag => tag.value).join(',');
+                };
+                this.type1Tagify.on('add', updateType1);
+                this.type1Tagify.on('remove', updateType1);
+            }
+
+            // --- Tagify for Type2 (住宅種類) ---
+            const type2Input = document.querySelector('#type2_tags');
+            if (type2Input && !type2Input._tagify) {
+                if (this.type2Tagify) {
+                    try { this.type2Tagify.destroy(); } catch (e) { /* ignore */ }
                 }
-                
-                // --- Tagify for Construction Branch (工事支店) ---
-                const constructionBranchInput = document.querySelector('#construction_branch_tags');
-                if (constructionBranchInput && window.Tagify && !constructionBranchInput._tagify) {
-                    if (this.constructionBranchTagify) {
-                        try {
-                            this.constructionBranchTagify.destroy();
-                        } catch (e) {
-                            console.log('Error destroying existing constructionBranchTagify:', e);
-                        }
+                this.type2Tagify = new Tagify(type2Input, {
+                    whitelist: whitelists.type2.slice(),
+                    enforceWhitelist: false,
+                    maxTags: 1,
+                    dropdown: { maxItems: 40, classname: 'tags-look-type2', enabled: 0, closeOnSelect: true }
+                });
+                this.bindTagifyField(this.type2Tagify, 'type2', () => {
+                    this.parentProject.type2 = this.type2Tagify.value.map(tag => tag.value).join(',');
+                    if (!this.hasNonResidentialType) {
+                        this.parentProject.type3 = '';
                     }
-                    this.constructionBranchTagify = new Tagify(constructionBranchInput, {
-                        whitelist: ['北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
-                '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
-                '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
-                '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
-                '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
-                '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
-                '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'],
-                        maxTags: 5,
-                        dropdown: {
-                            maxItems: 20,
-                            classname: "tags-look-construction-branch",
-                            enabled: 0,
-                            closeOnSelect: true
-                        },
-                    });
-                    const updateConstructionBranch = () => {
-                        this.parentProject.construction_branch = this.constructionBranchTagify.value.map(tag => tag.value).join(',');
-                    };
-                    this.constructionBranchTagify.on('add', updateConstructionBranch);
-                    this.constructionBranchTagify.on('remove', updateConstructionBranch);
+                });
+            }
+
+            // --- Tagify for Construction Branch (工事支店) ---
+            const constructionBranchInput = document.querySelector('#construction_branch_tags');
+            if (constructionBranchInput && !constructionBranchInput._tagify) {
+                if (this.constructionBranchTagify) {
+                    try { this.constructionBranchTagify.destroy(); } catch (e) { /* ignore */ }
                 }
-                
-                // --- Tagify for Scale (建物規模) ---
-                const scaleInput = document.querySelector('#scale_tags');
-                if (scaleInput && window.Tagify && !scaleInput._tagify) {
-                    if (this.scaleTagify) {
-                        try {
-                            this.scaleTagify.destroy();
-                        } catch (e) {
-                            console.log('Error destroying existing scaleTagify:', e);
-                        }
-                    }
-                    this.scaleTagify = new Tagify(scaleInput, {
-                        whitelist: ['W2F3J', 'W2F4J', 'W2F5J', 'W2F6J', 'W3F3J', 'W3F4J', 'W3F5J', 'W3F6J', 'RC3F3J', 'RC3F4J', 'RC3F5J', 'RC3F6J', 'RC3F7J', 'RC3F8J'],
-                        maxTags: 5,
-                        dropdown: {
-                            maxItems: 20,
-                            classname: "tags-look-scale",
-                            enabled: 0,
-                            closeOnSelect: true
-                        },
-                    });
-                    const updateScale = () => {
-                        this.parentProject.scale = this.scaleTagify.value.map(tag => tag.value).join(',');
-                    };
-                    this.scaleTagify.on('add', updateScale);
-                    this.scaleTagify.on('remove', updateScale);
+                this.constructionBranchTagify = new Tagify(constructionBranchInput, {
+                    whitelist: ['北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
+                        '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
+                        '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
+                        '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
+                        '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
+                        '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
+                        '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'],
+                    maxTags: 5,
+                    dropdown: { maxItems: 20, classname: 'tags-look-construction-branch', enabled: 0, closeOnSelect: true }
+                });
+                const updateConstructionBranch = () => {
+                    this.parentProject.construction_branch = this.constructionBranchTagify.value.map(tag => tag.value).join(',');
+                };
+                this.constructionBranchTagify.on('add', updateConstructionBranch);
+                this.constructionBranchTagify.on('remove', updateConstructionBranch);
+            }
+
+            // --- Tagify for Scale (建物規模) ---
+            const scaleInput = document.querySelector('#scale_tags');
+            if (scaleInput && !scaleInput._tagify) {
+                if (this.scaleTagify) {
+                    try { this.scaleTagify.destroy(); } catch (e) { /* ignore */ }
                 }
-            });
+                this.scaleTagify = new Tagify(scaleInput, {
+                    whitelist: whitelists.scale.slice(),
+                    enforceWhitelist: false,
+                    maxTags: 5,
+                    dropdown: { maxItems: 40, classname: 'tags-look-scale', enabled: 0, closeOnSelect: true }
+                });
+                this.bindTagifyField(this.scaleTagify, 'scale', () => {
+                    this.parentProject.scale = this.scaleTagify.value.map(tag => tag.value).join(',');
+                });
+            }
+
+            // --- Tagify for City (市区町村) ---
+            const cityInput = document.querySelector('#city_tags');
+            if (cityInput && !cityInput._tagify) {
+                if (this.cityTagify) {
+                    try { this.cityTagify.destroy(); } catch (e) { /* ignore */ }
+                }
+                this.cityTagify = new Tagify(cityInput, {
+                    whitelist: whitelists.city.slice(),
+                    enforceWhitelist: false,
+                    maxTags: 1,
+                    dropdown: { maxItems: 40, classname: 'tags-look-city', enabled: 0, closeOnSelect: true }
+                });
+                this.bindTagifyField(this.cityTagify, 'city', () => {
+                    this.parentProject.city = this.cityTagify.value.map(tag => tag.value).join(',');
+                });
+                const cityVal = String(this.parentProject.city || '').trim();
+                if (cityVal) this.cityTagify.addTags(cityVal);
+            }
+
+            // --- Tagify for Structural office (構造事務所) ---
+            const structuralOfficeInput = document.querySelector('#structural_office_tags');
+            if (structuralOfficeInput && !structuralOfficeInput._tagify) {
+                if (this.structuralOfficeTagify) {
+                    try { this.structuralOfficeTagify.destroy(); } catch (e) { /* ignore */ }
+                }
+                this.structuralOfficeTagify = new Tagify(structuralOfficeInput, {
+                    whitelist: whitelists.structural_office.slice(),
+                    enforceWhitelist: false,
+                    maxTags: 1,
+                    dropdown: { maxItems: 40, classname: 'tags-look-structural-office', enabled: 0, closeOnSelect: true }
+                });
+                this.bindTagifyField(this.structuralOfficeTagify, 'structural_office', () => {
+                    this.parentProject.structural_office = this.structuralOfficeTagify.value.map(tag => tag.value).join(',');
+                });
+                const officeVal = String(this.parentProject.structural_office || '').trim();
+                if (officeVal) this.structuralOfficeTagify.addTags(officeVal);
+            }
         },
 
         // Customer modal methods
@@ -1825,6 +1877,8 @@ createApp({
             apply(this.scaleTagify, this.parentProject.scale);
             apply(this.type1Tagify, this.parentProject.type1);
             apply(this.type2Tagify, this.parentProject.type2);
+            apply(this.cityTagify, this.parentProject.city);
+            apply(this.structuralOfficeTagify, this.parentProject.structural_office);
             if (this.hasEnergySavingRequest) {
                 this.$nextTick(() => {
                     this.initApplicationReviewAgencyTagify();

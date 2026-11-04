@@ -1009,6 +1009,79 @@ class ParentProject extends ApplicationModel {
         return $hash;
     }
 
+    /**
+     * Collect distinct values for a parent_projects column (optionally split by comma).
+     * @return string[]
+     */
+    private function collectDistinctTagifyFieldValues($column, $splitCommas = true) {
+        $allowed = array(
+            'type2',
+            'scale',
+            'city',
+            'structural_office',
+            'application_review_agency',
+        );
+        if (!in_array($column, $allowed, true)) {
+            return array();
+        }
+        $rows = $this->fetchAll(
+            "SELECT `{$column}` AS value
+             FROM {$this->table}
+             WHERE `{$column}` IS NOT NULL
+               AND TRIM(`{$column}`) != ''
+             ORDER BY `{$column}` ASC
+             LIMIT 1000"
+        );
+        $values = array();
+        $seen = array();
+        foreach ($rows as $row) {
+            $raw = isset($row['value']) ? (string)$row['value'] : '';
+            $parts = $splitCommas
+                ? preg_split('/[,、]+/u', $raw, -1, PREG_SPLIT_NO_EMPTY)
+                : array($raw);
+            foreach ($parts as $part) {
+                $value = trim((string)$part);
+                if ($value === '' || isset($seen[$value])) {
+                    continue;
+                }
+                $seen[$value] = true;
+                $values[] = $value;
+            }
+        }
+        return $values;
+    }
+
+    /**
+     * Distinct Tagify field values already saved on parent projects.
+     * Used to surface custom options in whitelists.
+     */
+    function listTagifyFieldOptions($params = null) {
+        return array(
+            'status' => 'success',
+            'options' => array(
+                'type2' => $this->collectDistinctTagifyFieldValues('type2', true),
+                'scale' => $this->collectDistinctTagifyFieldValues('scale', true),
+                'city' => $this->collectDistinctTagifyFieldValues('city', false),
+                'structural_office' => $this->collectDistinctTagifyFieldValues('structural_office', false),
+                'application_review_agency' => $this->collectDistinctTagifyFieldValues('application_review_agency', true),
+            ),
+        );
+    }
+
+    /**
+     * Backward-compatible wrapper for 申請提出先の審査機関 options.
+     */
+    function listApplicationReviewAgencies($params = null) {
+        $all = $this->listTagifyFieldOptions();
+        $agencies = isset($all['options']['application_review_agency'])
+            ? $all['options']['application_review_agency']
+            : array();
+        return array(
+            'status' => 'success',
+            'agencies' => $agencies,
+        );
+    }
+
     function updateStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => '建物IDが指定されていません'];

@@ -175,17 +175,22 @@ createApp({
             editParentType1Tagify: null,
             editParentType2Tagify: null,
             editParentReviewAgencyTagify: null,
-            applicationReviewAgencyWhitelist: [
-                '日本ERI',
-                'ERIソリューション',
-                'ビューローベリタスジャパン',
-                '日本住宅保証検査機構（JIO）',
-                'ハウスプラス住宅保証',
-                '東京建築検査機構（TBTC）',
-                'ユーディーアイ確認検査',
-                '日本確認検査センター',
-                'JCI'
-            ],
+            editParentScaleTagify: null,
+            editParentStructuralOfficeTagify: null,
+            applicationReviewAgencyWhitelist: (window.ParentProjectReviewAgency
+                && Array.isArray(window.ParentProjectReviewAgency.DEFAULT_WHITELIST))
+                ? window.ParentProjectReviewAgency.DEFAULT_WHITELIST.slice()
+                : [
+                    '日本ERI',
+                    'ERIソリューション',
+                    'ビューローベリタスジャパン',
+                    '日本住宅保証検査機構（JIO）',
+                    'ハウスプラス住宅保証',
+                    '東京建築検査機構（TBTC）',
+                    'ユーディーアイ確認検査',
+                    '日本確認検査センター',
+                    'JCI'
+                ],
             columnVisibilityStorageKey: 'parent_project_column_visibility',
             filterStorageKey: 'parent_project_list_filters',
             searchTimer: null,
@@ -530,7 +535,13 @@ createApp({
             if (dateEl && dateEl._flatpickr) {
                 try { dateEl._flatpickr.destroy(); } catch (e) {}
             }
-            [this.editParentType1Tagify, this.editParentType2Tagify, this.editParentReviewAgencyTagify].forEach((t) => {
+            [
+                this.editParentType1Tagify,
+                this.editParentType2Tagify,
+                this.editParentReviewAgencyTagify,
+                this.editParentScaleTagify,
+                this.editParentStructuralOfficeTagify
+            ].forEach((t) => {
                 if (t && typeof t.destroy === 'function') {
                     try { t.destroy(); } catch (e) {}
                 }
@@ -538,7 +549,15 @@ createApp({
             this.editParentType1Tagify = null;
             this.editParentType2Tagify = null;
             this.editParentReviewAgencyTagify = null;
-            ['#edit_pp_type1_tags', '#edit_pp_type2_tags', '#edit_pp_application_review_agency_tags'].forEach((sel) => {
+            this.editParentScaleTagify = null;
+            this.editParentStructuralOfficeTagify = null;
+            [
+                '#edit_pp_type1_tags',
+                '#edit_pp_type2_tags',
+                '#edit_pp_application_review_agency_tags',
+                '#edit_pp_scale_tags',
+                '#edit_pp_structural_office_tags'
+            ].forEach((sel) => {
                 const el = document.querySelector(sel);
                 if (el) el.value = '';
             });
@@ -565,6 +584,35 @@ createApp({
             if (fieldName === 'application_review_agency' && this.editParentReviewAgencyTagify) {
                 this.editParentReviewAgencyTagify.removeAllTags();
             }
+            if (fieldName === 'scale' && this.editParentScaleTagify) this.editParentScaleTagify.removeAllTags();
+            if (fieldName === 'structural_office' && this.editParentStructuralOfficeTagify) {
+                this.editParentStructuralOfficeTagify.removeAllTags();
+            }
+        },
+        bindTagifyField(tagify, field, onUpdate) {
+            if (!tagify) return;
+            if (window.ParentProjectTagifyOptions && typeof window.ParentProjectTagifyOptions.bindSaveOnAdd === 'function') {
+                window.ParentProjectTagifyOptions.bindSaveOnAdd(tagify, field, onUpdate);
+            } else {
+                tagify.on('add', onUpdate);
+                tagify.on('remove', onUpdate);
+            }
+        },
+        async loadTagifyWhitelists() {
+            const T = window.ParentProjectTagifyOptions;
+            if (!T || typeof T.loadMergedWhitelist !== 'function') {
+                return {
+                    type2: ['長屋', '共同', '戸建', '非住宅', '集合'],
+                    scale: ['W2F3J', 'W2F4J', 'W2F5J', 'W2F6J', 'W3F3J', 'W3F4J', 'W3F5J', 'W3F6J', 'RC3F3J', 'RC3F4J', 'RC3F5J', 'RC3F6J', 'RC3F7J', 'RC3F8J'],
+                    structural_office: []
+                };
+            }
+            const [type2, scale, structural_office] = await Promise.all([
+                T.loadMergedWhitelist('type2'),
+                T.loadMergedWhitelist('scale'),
+                T.loadMergedWhitelist('structural_office')
+            ]);
+            return { type2, scale, structural_office };
         },
         destroyEditParentReviewAgencyTagify() {
             if (this.editParentReviewAgencyTagify) {
@@ -579,9 +627,16 @@ createApp({
                 }
             }
         },
-        initEditParentReviewAgencyTagify() {
+        async refreshApplicationReviewAgencyWhitelist() {
+            if (window.ParentProjectReviewAgency && typeof window.ParentProjectReviewAgency.loadMergedWhitelist === 'function') {
+                this.applicationReviewAgencyWhitelist = await window.ParentProjectReviewAgency.loadMergedWhitelist();
+            }
+            return this.applicationReviewAgencyWhitelist;
+        },
+        async initEditParentReviewAgencyTagify() {
             const input = document.querySelector('#edit_pp_application_review_agency_tags');
             if (!input || !window.Tagify) return;
+            await this.refreshApplicationReviewAgencyWhitelist();
             this.destroyEditParentReviewAgencyTagify();
             input.value = '';
             this.editParentReviewAgencyTagify = new Tagify(input, {
@@ -589,7 +644,7 @@ createApp({
                 enforceWhitelist: false,
                 maxTags: 1,
                 dropdown: {
-                    maxItems: 20,
+                    maxItems: 40,
                     classname: 'tags-look-review-agency',
                     enabled: 0,
                     closeOnSelect: true
@@ -600,7 +655,18 @@ createApp({
                     .map(t => t.value)
                     .join(',');
             };
-            this.editParentReviewAgencyTagify.on('add', updateAgency);
+            this.editParentReviewAgencyTagify.on('add', (e) => {
+                updateAgency();
+                const value = e && e.detail && e.detail.data ? e.detail.data.value : '';
+                if (value && window.ParentProjectReviewAgency) {
+                    window.ParentProjectReviewAgency.saveLocalCustom(value);
+                    this.applicationReviewAgencyWhitelist = window.ParentProjectReviewAgency.buildWhitelist(
+                        this.applicationReviewAgencyWhitelist
+                    );
+                    this.editParentReviewAgencyTagify.settings.whitelist = this.applicationReviewAgencyWhitelist.slice();
+                    this.editParentReviewAgencyTagify.whitelist = this.applicationReviewAgencyWhitelist.slice();
+                }
+            });
             this.editParentReviewAgencyTagify.on('remove', updateAgency);
             const current = String(this.editingParentProject.application_review_agency || '').trim();
             if (current) {
@@ -627,9 +693,12 @@ createApp({
                 dateEl._flatpickr.setDate(this.editingParentProject.request_date, false);
             }
         },
-        initEditParentTagify() {
+        async initEditParentTagify() {
+            if (!window.Tagify) return;
+            const whitelists = await this.loadTagifyWhitelists();
+
             const type1Input = document.querySelector('#edit_pp_type1_tags');
-            if (type1Input && window.Tagify) {
+            if (type1Input) {
                 if (type1Input.tagify) { try { type1Input.tagify.destroy(); } catch (e) {} }
                 type1Input.value = '';
                 this.editParentType1Tagify = new Tagify(type1Input, {
@@ -645,26 +714,62 @@ createApp({
                 const type1Val = String(this.editingParentProject.type1 || '').trim();
                 if (type1Val) this.editParentType1Tagify.addTags(type1Val);
             }
+
             const type2Input = document.querySelector('#edit_pp_type2_tags');
-            if (type2Input && window.Tagify) {
+            if (type2Input) {
                 if (type2Input.tagify) { try { type2Input.tagify.destroy(); } catch (e) {} }
                 type2Input.value = '';
                 this.editParentType2Tagify = new Tagify(type2Input, {
-                    whitelist: ['長屋', '共同', '戸建', '非住宅', '集合'],
+                    whitelist: whitelists.type2.slice(),
+                    enforceWhitelist: false,
                     maxTags: 1,
-                    dropdown: { maxItems: 20, classname: 'tags-look-type2', enabled: 0, closeOnSelect: true }
+                    dropdown: { maxItems: 40, classname: 'tags-look-type2', enabled: 0, closeOnSelect: true }
                 });
-                const updateType2 = () => {
+                this.bindTagifyField(this.editParentType2Tagify, 'type2', () => {
                     this.editingParentProject.type2 = this.editParentType2Tagify.value.map(t => t.value).join(',');
                     if (!this.editHasNonResidentialType) {
                         this.editingParentProject.type3 = '';
                     }
-                };
-                this.editParentType2Tagify.on('add', updateType2);
-                this.editParentType2Tagify.on('remove', updateType2);
+                });
                 const type2Val = String(this.editingParentProject.type2 || '').trim();
                 if (type2Val) this.editParentType2Tagify.addTags(type2Val);
             }
+
+            const scaleInput = document.querySelector('#edit_pp_scale_tags');
+            if (scaleInput) {
+                if (scaleInput.tagify) { try { scaleInput.tagify.destroy(); } catch (e) {} }
+                scaleInput.value = '';
+                this.editParentScaleTagify = new Tagify(scaleInput, {
+                    whitelist: whitelists.scale.slice(),
+                    enforceWhitelist: false,
+                    maxTags: 5,
+                    dropdown: { maxItems: 40, classname: 'tags-look-scale', enabled: 0, closeOnSelect: true }
+                });
+                this.bindTagifyField(this.editParentScaleTagify, 'scale', () => {
+                    this.editingParentProject.scale = this.editParentScaleTagify.value.map(t => t.value).join(',');
+                });
+                const scaleVal = String(this.editingParentProject.scale || '').trim();
+                if (scaleVal) this.editParentScaleTagify.addTags(scaleVal);
+            }
+
+            const structuralOfficeInput = document.querySelector('#edit_pp_structural_office_tags');
+            if (structuralOfficeInput) {
+                if (structuralOfficeInput.tagify) { try { structuralOfficeInput.tagify.destroy(); } catch (e) {} }
+                structuralOfficeInput.value = '';
+                this.editParentStructuralOfficeTagify = new Tagify(structuralOfficeInput, {
+                    whitelist: whitelists.structural_office.slice(),
+                    enforceWhitelist: false,
+                    maxTags: 1,
+                    dropdown: { maxItems: 40, classname: 'tags-look-structural-office', enabled: 0, closeOnSelect: true }
+                });
+                this.bindTagifyField(this.editParentStructuralOfficeTagify, 'structural_office', () => {
+                    this.editingParentProject.structural_office = this.editParentStructuralOfficeTagify.value
+                        .map(t => t.value).join(',');
+                });
+                const officeVal = String(this.editingParentProject.structural_office || '').trim();
+                if (officeVal) this.editParentStructuralOfficeTagify.addTags(officeVal);
+            }
+
             if (this.editHasEnergySavingRequest) {
                 this.initEditParentReviewAgencyTagify();
             }

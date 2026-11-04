@@ -564,13 +564,23 @@ $view->heading('建物一覧');
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
-                                <input type="text" class="form-control" v-model="editingParentProject.scale" placeholder="規模を入力">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" id="edit_pp_scale_tags" name="edit_pp_scale_tags" placeholder="規模を入力">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditParentTagifyTags('scale')" title="すべて削除">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                <input type="text" class="form-control" v-model="editingParentProject.structural_office" placeholder="構造事務所を入力">
+                                <div class="d-flex align-items-center gap-2">
+                                    <input type="text" class="form-control tagify" id="edit_pp_structural_office_tags" name="edit_pp_structural_office_tags" placeholder="構造事務所を入力">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditParentTagifyTags('structural_office')" title="すべて削除">
+                                        <i class="fa fa-times"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
@@ -1119,4 +1129,5 @@ const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_
 const IS_ADMIN = <?php echo json_encode(($_SESSION['authority'] ?? '') === 'administrator'); ?>;
 </script>
 <script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-tagify-options.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-index.js?v=<?=PROJECT_CACHE_VERSION?>"></script> 

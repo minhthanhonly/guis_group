@@ -250,8 +250,13 @@ $view->heading('建物詳細');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
                                 <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="parentProject.scale"
-                                        placeholder="規模を入力">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control tagify" id="scale_tags" name="scale_tags"
+                                            placeholder="規模を入力">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                            @click="clearTagifyTags('scale')" title="すべて削除"><i
+                                                class="fa fa-times"></i></button>
+                                    </div>
                                 </template>
                                 <template v-else>
                                     <input type="text" class="form-control" :value="parentProject.scale || '-'"
@@ -263,8 +268,13 @@ $view->heading('建物詳細');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
                                 <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="parentProject.city"
-                                        placeholder="市区町村を入力">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control tagify" id="city_tags" name="city_tags"
+                                            placeholder="市区町村を入力">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                            @click="clearTagifyTags('city')" title="すべて削除"><i
+                                                class="fa fa-times"></i></button>
+                                    </div>
                                 </template>
                                 <template v-else>
                                     <input type="text" class="form-control" :value="parentProject.city || '-'"
@@ -276,8 +286,13 @@ $view->heading('建物詳細');
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
                                 <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="parentProject.structural_office"
-                                        placeholder="構造事務所を入力">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control tagify" id="structural_office_tags"
+                                            name="structural_office_tags" placeholder="構造事務所を入力">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button"
+                                            @click="clearTagifyTags('structural_office')" title="すべて削除"><i
+                                                class="fa fa-times"></i></button>
+                                    </div>
                                 </template>
                                 <template v-else>
                                     <input type="text" class="form-control"
@@ -4637,6 +4652,7 @@ $view->footing();
 <script src="../assets/vendor/libs/apex-charts/apexcharts.js"></script>
 <script src="/project/assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-tagify-options.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/energy-fee-payment.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
