@@ -289,6 +289,22 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * True when filterDateField + from/to (or legacy filterToday) resolve to a usable range.
+     */
+    private function hasProjectDateFieldRangeFilter(array $get) {
+        $field = isset($get['filterDateField']) ? trim((string)$get['filterDateField']) : '';
+        $from = isset($get['filterDateFrom']) ? $this->normalizeFilterYmd($get['filterDateFrom']) : '';
+        $to = isset($get['filterDateTo']) ? $this->normalizeFilterYmd($get['filterDateTo']) : '';
+        if ($field !== '' && ($from !== '' || $to !== '')) {
+            return true;
+        }
+        if (!empty($get['filterToday']) && $this->migrateLegacyFilterToday($get['filterToday'])) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Filter by date column / custom datetime field within [from, to] (inclusive).
      * Params: filterDateField, filterDateFrom, filterDateTo (or legacy filterToday).
      */
@@ -322,30 +338,22 @@ class Project extends ApplicationModel {
             $to = $tmp;
         }
 
+        // Status visibility is handled by list()'s showInactive / status filters —
+        // do not hard-exclude completed here or month/range searches under-count.
         $builtin = array(
-            'start_date' => array('col' => 'p.start_date', 'excludeDone' => false),
-            'end_date' => array('col' => 'p.end_date', 'excludeDone' => true),
-            'caily_nouki' => array('col' => 'p.caily_nouki', 'excludeDone' => true),
-            'guis_nouki' => array('col' => 'p.guis_nouki', 'excludeDone' => true),
-            'estimate_date' => array(
-                'col' => 'COALESCE(p.estimate_application_date, p.estimate_design_date, p.estimate_date)',
-                'excludeDone' => false,
-            ),
-            'invoice_date' => array(
-                'col' => 'COALESCE(p.invoice_application_date, p.invoice_design_date, p.invoice_date)',
-                'excludeDone' => false,
-            ),
+            'start_date' => 'p.start_date',
+            'end_date' => 'p.end_date',
+            'caily_nouki' => 'p.caily_nouki',
+            'guis_nouki' => 'p.guis_nouki',
+            'estimate_date' => 'COALESCE(p.estimate_application_date, p.estimate_design_date, p.estimate_date)',
+            'invoice_date' => 'COALESCE(p.invoice_application_date, p.invoice_design_date, p.invoice_date)',
         );
 
         if (isset($builtin[$field])) {
-            $col = $builtin[$field]['col'];
+            $col = $builtin[$field];
             $fromEsc = $this->escape($from);
             $toEsc = $this->escape($to);
-            $sql = "DATE({$col}) BETWEEN '{$fromEsc}' AND '{$toEsc}'";
-            if (!empty($builtin[$field]['excludeDone'])) {
-                $sql .= " AND p.status NOT IN ('completed', 'cancelled', 'deleted')";
-            }
-            $whereArr[] = $sql;
+            $whereArr[] = "DATE({$col}) BETWEEN '{$fromEsc}' AND '{$toEsc}'";
             return;
         }
 
@@ -1116,7 +1124,8 @@ class Project extends ApplicationModel {
     function list() {
         $draw = isset($_GET['draw']) ? intval($_GET['draw']) : 1;
         $start = isset($_GET['start']) ? intval($_GET['start']) : 0;
-        $length = isset($_GET['length']) ? intval($_GET['length']) : 10;
+        // DataTables sends length=-1 for 「すべて」
+        $length = isset($_GET['length']) ? intval($_GET['length']) : 100;
         $search = isset($_GET['search']) ? $_GET['search'] : '';
         $user_id = $_SESSION['id'];
         $department_id = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
@@ -1179,6 +1188,7 @@ class Project extends ApplicationModel {
         $filterByIdOrKeyword = $hasKeyword || $hasProjectId;
         $hasStatus = !empty($statusKeys);
         $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] == '1';
+        $hasDateRangeFilter = $this->hasProjectDateFieldRangeFilter($_GET);
         
         // Filter by project ID (案件ID)
         if ($hasProjectId) {
@@ -1364,8 +1374,9 @@ class Project extends ApplicationModel {
             if (isset($_GET['filterNoDates']) && $_GET['filterNoDates'] === '1') {
                 $whereArr[] = "(p.start_date IS NULL OR p.end_date IS NULL)";
             }
-            // Điều kiện mặc định: nếu không có status và không bật showInactive thì chỉ hiển thị active
-            if (!$hasStatus && !$showInactive) {
+            // Điều kiện mặc định: nếu không có status và không bật showInactive thì chỉ hiển thị active.
+            // Date-range search (e.g. CAILY納期 last month) includes completed/cancelled like keyword search.
+            if (!$hasStatus && !$showInactive && !$hasDateRangeFilter) {
                 $whereArr[] = "p.status NOT IN ('completed', 'cancelled', 'deleted')";
             }
             
@@ -1439,7 +1450,10 @@ class Project extends ApplicationModel {
         $totalRecords = $this->fetchOne($totalQuery)['count'];
         $filteredRecords = $totalRecords;
 
-        // Get data for current page
+        // Get data for current page (length < 0 = DataTables 「すべて」)
+        $limitSql = ($length < 0)
+            ? ''
+            : sprintf(' LIMIT %d, %d', max(0, $start), max(1, $length));
         $query = sprintf(
             "SELECT p.*, d.name as department_name,
             %s as effective_company_name,
@@ -1465,7 +1479,7 @@ class Project extends ApplicationModel {
             " . $listJoins . "
             %s
             %s
-            LIMIT %d, %d",
+            %s",
             $this->sqlEffectiveCompanyName(),
             $this->sqlEffectiveContactName(),
             $this->sqlEffectiveBranchName(),
@@ -1474,8 +1488,7 @@ class Project extends ApplicationModel {
             $this->sqlEffectiveCustomerName(),
             $where,
             $orderBy,
-            $start,
-            $length
+            $limitSql
         );
 
         $data = $this->fetchAll($query);

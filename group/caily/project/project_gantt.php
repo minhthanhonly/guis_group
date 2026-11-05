@@ -437,6 +437,10 @@ body > .select2-container--default,
 .status-filter-btn.btn-label-warning.active::after {
     background-color: #ffc107 !important;
 }
+.status-filter-btn.btn-dark.active::after,
+.status-filter-btn.btn-label-dark.active::after {
+    background-color: #212529 !important;
+}
 .status-filter-btn.btn-danger.active::after,
 .status-filter-btn.btn-label-danger.active::after {
     background-color: #dc3545 !important;

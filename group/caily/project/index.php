@@ -416,6 +416,9 @@ if($_SESSION['show_project'] == 0){
                         <button type="button" class="btn btn-sm btn-outline-primary" id="dateRangeFilterSetThisMonth" data-date-range-preset="this_month">
                             <span data-i18n="今月">今月</span>
                         </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary" id="dateRangeFilterSetLastMonth" data-date-range-preset="last_month">
+                            <span data-i18n="先月">先月</span>
+                        </button>
                         <button type="button" class="btn btn-sm btn-outline-secondary" id="dateRangeFilterClearDates">
                             <span data-i18n="日付をクリア">日付をクリア</span>
                         </button>
@@ -1686,6 +1689,12 @@ body.pl-col-resizing * {
 .status-filter-btn.btn-danger.active::after,
 .status-filter-btn.btn-label-danger.active::after {
     background-color: #dc3545 !important;
+}
+
+/* 請求待ち (dark): btn-dark text is white → currentColor becomes invisible on light bg */
+.status-filter-btn.btn-dark.active::after,
+.status-filter-btn.btn-label-dark.active::after {
+    background-color: #212529 !important;
 }
 .pagination{
     justify-content: flex-end;

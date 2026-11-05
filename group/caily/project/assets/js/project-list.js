@@ -2032,6 +2032,11 @@ var projectTable;
             var last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
             return { from: formatLocalYmd(first), to: formatLocalYmd(last) };
         }
+        if (key === 'last_month') {
+            var lastFirst = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            var lastLast = new Date(now.getFullYear(), now.getMonth(), 0);
+            return { from: formatLocalYmd(lastFirst), to: formatLocalYmd(lastLast) };
+        }
         return null;
     }
 
@@ -6669,7 +6674,8 @@ var projectTable;
             colReorder: true,
             order: defaultOrder,
            
-            pageLength: 50,
+            pageLength: 100,
+            lengthMenu: [[25, 50, 100, 200, -1], [25, 50, 100, 200, 'すべて']],
             ordering: false,
             responsive: false,
             language: {

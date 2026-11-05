@@ -1208,6 +1208,10 @@ if($_SESSION['show_project'] == 0){
 .status-filter-btn.btn-label-danger.active::after {
     background-color: #dc3545 !important;
 }
+.status-filter-btn.btn-dark.active::after,
+.status-filter-btn.btn-label-dark.active::after {
+    background-color: #212529 !important;
+}
 
 </style>
 <script>
