@@ -175,6 +175,10 @@ if($_SESSION['show_project'] == 0){
                                 <input class="form-check-input" type="checkbox" id="showInactiveSwitch">
                                 <label class="form-check-label" for="showInactiveSwitch" data-i18n="完了・中止案件等も表示">完了・中止案件等も表示</label>
                             </div>
+                            <div class="form-check mb-0 form-switch">
+                                <input class="form-check-input" type="checkbox" id="keepFiltersWithKeywordSwitch" checked>
+                                <label class="form-check-label" for="keepFiltersWithKeywordSwitch" data-i18n="キーワード時も条件維持">キーワード時も条件維持</label>
+                            </div>
                         </div>
                     </div>
                 </form>
@@ -1511,14 +1515,14 @@ body.pl-col-resizing * {
 }
 
 #projectTable .confirmation-note-item.important-note {
-    border: 1px solid #dc3545;
+    border-left: 3px solid #dc3545;
 }
 #projectTable .confirmation-note-item.pinned-self-note {
     border-left: 3px solid #0d6efd;
 }
 #projectTable .confirmation-note-item.important-note.pinned-self-note {
-    border: 1px solid #dc3545;
-    border-left: 3px solid #0d6efd;
+    border-left: 3px solid #dc3545;
+    box-shadow: inset 3px 0 0 #0d6efd;
 }
 
 /* Layout for confirmation note content & action icons */

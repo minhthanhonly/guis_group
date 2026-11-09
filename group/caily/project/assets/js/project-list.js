@@ -2405,6 +2405,9 @@ var projectTable;
         if (raw.showInactive !== undefined) {
             out.showInactive = raw.showInactive == 1 ? 1 : 0;
         }
+        if (raw.keepFiltersWithKeyword !== undefined) {
+            out.keepFiltersWithKeyword = raw.keepFiltersWithKeyword == 1 ? 1 : 0;
+        }
         if (raw.sortByStatus !== undefined) {
             out.sortByStatus = raw.sortByStatus == 0 ? 0 : 1;
         }
@@ -4752,6 +4755,7 @@ var projectTable;
         { key: 'filterCompany', labelKey: '会社', group: 'org', defaultValue: [] },
         { key: 'statusKeys', labelKey: '案件状況', group: 'status', defaultValue: [], defaultKept: true },
         { key: 'showInactive', labelKey: '完了・中止案件等も表示', group: 'status', defaultValue: 0 },
+        { key: 'keepFiltersWithKeyword', labelKey: 'キーワード時も条件維持', group: 'status', defaultValue: 1 },
         { key: 'myProjects', labelKey: '私の案件', group: 'status', defaultValue: 0 },
         { key: 'favorites_only', labelKey: 'お気に入りのみ', group: 'status', defaultValue: 0 }
     ];
@@ -4941,6 +4945,11 @@ var projectTable;
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(normalizeFilterKeyword(filters.filterKeyword));
         if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
+        if (filters.keepFiltersWithKeyword !== undefined) {
+            $('#keepFiltersWithKeywordSwitch').prop('checked', filters.keepFiltersWithKeyword != 0);
+        } else if ($('#keepFiltersWithKeywordSwitch').length) {
+            $('#keepFiltersWithKeywordSwitch').prop('checked', true);
+        }
         if (filters.sortByStatus !== undefined) {
             $('#sortByStatusSwitch').prop('checked', filters.sortByStatus != 0);
         } else if ($('#sortByStatusSwitch').length) {
@@ -5087,6 +5096,7 @@ var projectTable;
             filterKeyword: normalizeFilterKeyword($('#filterKeyword').val()),
             filterProjectId: $('#filterProjectId').val() || '',
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
+            keepFiltersWithKeyword: $('#keepFiltersWithKeywordSwitch').is(':checked') ? 1 : 0,
             sortByStatus: $('#sortByStatusSwitch').is(':checked') ? 1 : 0,
             listSortColumn: getProjectListSortColumnFromUi(),
             listSortDir: getProjectListSortDirFromUi(),
@@ -5174,6 +5184,10 @@ var projectTable;
         if (params.has('filterKeyword')) merged.filterKeyword = normalizeFilterKeyword(params.get('filterKeyword') || '');
         if (params.has('filterProjectId')) merged.filterProjectId = params.get('filterProjectId') || '';
         if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
+        if (params.has('keepFiltersWithKeyword')) {
+            // Default ON: explicit 0 turns off; missing/other → on
+            merged.keepFiltersWithKeyword = params.get('keepFiltersWithKeyword') === '0' ? 0 : 1;
+        }
         if (params.has('sortByStatus')) merged.sortByStatus = getBool('sortByStatus');
         if (params.has('listSortColumn')) merged.listSortColumn = normalizeProjectListSortColumn(params.get('listSortColumn') || '');
         if (params.has('listSortDir')) merged.listSortDir = normalizeProjectListSortDir(params.get('listSortDir') || '');
@@ -5267,6 +5281,7 @@ var projectTable;
             noDates: filters.filterNoDates == 1,
             keyword: normalizeFilterKeyword(filters.filterKeyword),
             showInactive: filters.showInactive == 1,
+            keepFiltersWithKeyword: filters.keepFiltersWithKeyword === undefined ? true : filters.keepFiltersWithKeyword != 0,
             sortByStatus: filters.sortByStatus === undefined ? true : filters.sortByStatus != 0,
             myProjects: filters.myProjects == 1,
             statusKeys: normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || ''),
@@ -5310,7 +5325,9 @@ var projectTable;
         }
         if (filters.keyword && filters.keyword.trim() !== '') {
             badges.push(`<span class="badge bg-label-info me-1" >キーワード: ${filters.keyword}</span>`);
-        } else {
+        }
+        // Keyword mặc định ẩn badge điều kiện khác; bật keepFiltersWithKeyword thì vẫn hiện (kết hợp).
+        if (!filters.keyword || filters.keyword.trim() === '' || filters.keepFiltersWithKeyword) {
             const statusKeys = filters.statusKeys || getSelectedStatusKeysFromApp();
             if (statusKeys.length) {
                 const statusLabel = statusKeys.map(getProjectStatusLabel).join('、');
@@ -5445,6 +5462,12 @@ var projectTable;
         setOrDelete('filterKeyword', normalizeFilterKeyword(filters.filterKeyword));
         setOrDelete('filterProjectId', filters.filterProjectId);
         setOrDelete('showInactive', filters.showInactive ? 1 : '');
+        // Default ON: only put in URL when turned off
+        if (filters.keepFiltersWithKeyword === 0 || filters.keepFiltersWithKeyword === false) {
+            params.set('keepFiltersWithKeyword', '0');
+        } else {
+            params.delete('keepFiltersWithKeyword');
+        }
         // Default ON: only put in URL when turned off
         if (filters.sortByStatus === 0 || filters.sortByStatus === false) {
             params.set('sortByStatus', '0');
@@ -6900,6 +6923,7 @@ var projectTable;
                     const filterKeyword = normalizeFilterKeyword($('#filterKeyword').val());
                     const filterProjectId = $('#filterProjectId').val();
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
+                    const keepFiltersWithKeyword = $('#keepFiltersWithKeywordSwitch').is(':checked') ? 1 : 0;
                     const sortByStatus = $('#sortByStatusSwitch').length
                         ? ($('#sortByStatusSwitch').is(':checked') ? 1 : 0)
                         : 1;
@@ -6935,6 +6959,7 @@ var projectTable;
                         filterKeyword,
                         filterProjectId,
                         showInactive,
+                        keepFiltersWithKeyword,
                         sortByStatus,
                         favorites_only: favoritesOnly
                     };
@@ -8066,6 +8091,12 @@ var projectTable;
             renderActiveFilters();
             if (projectTable) reloadProjectTable(true);
         });
+        $('#keepFiltersWithKeywordSwitch').on('change', function() {
+            if (suppressProjectListFilterReload) return;
+            saveFiltersToLocalStorage();
+            renderActiveFilters();
+            if (projectTable) reloadProjectTable(true);
+        });
         $('#sortByStatusSwitch').on('change', function() {
             if (suppressProjectListFilterReload) return;
             saveFiltersToLocalStorage();
@@ -8722,7 +8753,7 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterDateField, #filterDateFrom, #filterDateTo, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch').on('change input', function() {
+        $('#filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterDateField, #filterDateFrom, #filterDateTo, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch, #keepFiltersWithKeywordSwitch').on('change input', function() {
            renderActiveFilters();
         });
         let timer = null;

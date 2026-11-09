@@ -1195,10 +1195,19 @@ class Project extends ApplicationModel {
             $whereArr[] = sprintf("p.department_id = %d", intval($_GET['department_id']));
         }
         
-        // Nếu có filterKeyword hoặc filterProjectId thì chỉ áp dụng điều kiện tìm kiếm, bỏ qua các filter nâng cao khác
+        // Nếu có filterKeyword hoặc filterProjectId: mặc định chỉ tìm theo keyword/ID.
+        // keepFiltersWithKeyword=1 → vẫn kết hợp các điều kiện filter khác (status, team, …).
         $hasKeyword = isset($_GET['filterKeyword']) && trim($_GET['filterKeyword']) !== '';
         $hasProjectId = !empty($_GET['filterProjectId']) && intval($_GET['filterProjectId']) > 0;
         $filterByIdOrKeyword = $hasKeyword || $hasProjectId;
+        // Default ON: only explicit 0/false turns it off
+        $keepFiltersWithKeyword = !(isset($_GET['keepFiltersWithKeyword']) && (
+            $_GET['keepFiltersWithKeyword'] === '0'
+            || $_GET['keepFiltersWithKeyword'] === 0
+            || $_GET['keepFiltersWithKeyword'] === false
+            || $_GET['keepFiltersWithKeyword'] === 'false'
+        ));
+        $keywordOnlyMode = $filterByIdOrKeyword && !$keepFiltersWithKeyword;
         $hasStatus = !empty($statusKeys);
         $showInactive = isset($_GET['showInactive']) && $_GET['showInactive'] == '1';
         $hasDateRangeFilter = $this->hasProjectDateFieldRangeFilter($_GET);
@@ -1207,16 +1216,15 @@ class Project extends ApplicationModel {
         if ($hasProjectId) {
             $whereArr[] = "p.id = " . intval($_GET['filterProjectId']);
         }
+        if ($hasKeyword) {
+            $whereArr[] = $this->buildKeywordFilterWhere($_GET['filterKeyword']);
+        }
         
-        if ($filterByIdOrKeyword) {
-            // Khi filter theo ID hoặc keyword: chỉ áp dụng điều kiện keyword (nếu có), bỏ qua các filter nâng cao khác
-            if ($hasKeyword) {
-                $whereArr[] = $this->buildKeywordFilterWhere($_GET['filterKeyword']);
-            }
-            // Status: khi filter theo ID hoặc keyword thì chỉ ẩn deleted, không áp dụng status dropdown và showInactive
+        if ($keywordOnlyMode) {
+            // Status: khi filter theo ID hoặc keyword (không giữ điều kiện khác) thì chỉ ẩn deleted
             $whereArr[] = "p.status != 'deleted'";
         } else {
-            // Status filter (chỉ áp dụng khi không có filterByIdOrKeyword)
+            // Status / advanced filters (kể cả khi có keyword nếu keepFiltersWithKeyword=1)
             if ($hasStatus) {
                 $escapedStatuses = array_map(function($statusKey) {
                     return "'" . $this->escape($statusKey) . "'";
