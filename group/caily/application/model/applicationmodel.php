@@ -1024,7 +1024,16 @@ class ApplicationModel extends Model {
             DB_PREFIX,
             $teamId
         ));
-        $this->invalidateApiCacheForNumericUserIds(array_column($rows, 'user_id'));
+        $ids = array_column($rows, 'user_id');
+        $supervisorRows = $this->fetchAll(sprintf(
+            "SELECT user_id FROM %steam_supervisors WHERE team_id = %d",
+            DB_PREFIX,
+            $teamId
+        ));
+        if ($supervisorRows) {
+            $ids = array_merge($ids, array_column($supervisorRows, 'user_id'));
+        }
+        $this->invalidateApiCacheForNumericUserIds($ids);
     }
 }
 

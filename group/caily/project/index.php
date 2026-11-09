@@ -252,6 +252,11 @@ if($_SESSION['show_project'] == 0){
                 </span>
             </p>
             <div id="projectListColumnToolsRow" class="d-flex justify-content-end align-items-center gap-2 mb-1 flex-wrap" v-show="selectedDepartment">
+                <div class="form-check form-switch mb-0 text-nowrap" id="noteDisplayOneLineTourTarget">
+                    <input class="form-check-input" type="checkbox" id="noteDisplayOneLineSwitch"
+                           v-model="noteDisplayOneLine" @change="onNoteDisplayOneLineChange">
+                    <label class="form-check-label" for="noteDisplayOneLineSwitch" data-i18n="メモを1行表示">メモを1行表示</label>
+                </div>
                 <div class="dropdown" id="projectListSortTourTarget">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="projectListSortDropdown"
                             data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
@@ -766,10 +771,11 @@ if($_SESSION['show_project'] == 0){
                             <label class="form-label"><span data-i18n="内容">内容</span></label>
                             <div class="form-control ql-editor" style="min-height:100px;max-height:600px;overflow-y:auto;" v-html="editingNote.content || '-'"></div>
                         </div>
-                        <div class="mb-3" v-if="editingNote.is_important">
-                            <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>
-                            <div>
-                                <i class="fa fa-exclamation-circle text-danger"></i>
+                        <div class="mb-3" v-if="editingNote.is_important || editingNote.is_pinned_self">
+                            <label class="form-label"><span data-i18n="ピン">ピン</span></label>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span v-if="editingNote.is_important" class="badge bg-danger"><i class="fa fa-thumb-tack me-1"></i><span data-i18n="ピン（全員）">ピン（全員）</span></span>
+                                <span v-if="editingNote.is_pinned_self" class="badge bg-primary"><i class="fa fa-bookmark me-1"></i><span data-i18n="ピン（自分）">ピン（自分）</span></span>
                             </div>
                         </div>
                         <div class="mb-3" v-if="editingNote.needs_confirmation">
@@ -801,10 +807,16 @@ if($_SESSION['show_project'] == 0){
                             </div>
                         </div>
                         <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant">
+                            <div class="form-check mb-1">
+                                <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant" @change="onNotePinEveryoneChange">
                                 <label class="form-check-label" for="isImportant">
-                                    <i class="fa fa-exclamation-circle text-danger me-2"></i> <span data-i18n="重要メモ">重要メモ</span>
+                                    <i class="fa fa-thumb-tack text-danger me-2"></i> <span data-i18n="ピン（全員）">ピン（全員）</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" v-model="editingNote.is_pinned_self" id="isPinnedSelf" @change="onNotePinSelfChange">
+                                <label class="form-check-label" for="isPinnedSelf">
+                                    <i class="fa fa-bookmark text-primary me-2"></i> <span data-i18n="ピン（自分）">ピン（自分）</span>
                                 </label>
                             </div>
                         </div>
@@ -1501,16 +1513,330 @@ body.pl-col-resizing * {
 #projectTable .confirmation-note-item.important-note {
     border: 1px solid #dc3545;
 }
+#projectTable .confirmation-note-item.pinned-self-note {
+    border-left: 3px solid #0d6efd;
+}
+#projectTable .confirmation-note-item.important-note.pinned-self-note {
+    border: 1px solid #dc3545;
+    border-left: 3px solid #0d6efd;
+}
 
 /* Layout for confirmation note content & action icons */
 #projectTable td.confirmation-notes-column .confirmation-note-item {
     position: relative;
-    display: block;
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
     cursor: pointer;
+    padding-left: 4px;
+}
+body.project-notes-one-line #projectTable td.confirmation-notes-column .confirmation-note-item,
+#projectTableCard.project-notes-one-line #projectTable td.confirmation-notes-column .confirmation-note-item {
+    align-items: center;
+}
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+#projectTable .confirmation-note-item .note-drag-handle {
+    position: static;
+    flex: 0 0 14px;
+    width: 14px;
+    height: 1.2em;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    color: #adb5bd;
+    cursor: grab;
+    font-size: 0.75rem;
+    line-height: 1;
+    padding: 0;
+    margin: 0;
+    z-index: 3;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    transform: none;
+}
+#projectTable .confirmation-note-item .note-drag-handle:active {
+    cursor: grabbing;
+}
+#projectTable .confirmation-note-item .note-drag-handle:hover {
+    color: #0d6efd;
+}
+#projectTable td.confirmation-notes-column .note-drag-handle,
+#projectTable td.confirmation-notes-column .note-drag-handle * {
+    user-select: none !important;
+    -webkit-user-select: none !important;
 }
 
-#projectTable td.confirmation-notes-column .confirmation-note-item .note-text {
+/* Sortable drag feedback (ghost / chosen / drag) */
+#projectTable .confirmation-note-item.note-sortable-ghost,
+.note-sortable-ghost {
+    opacity: 0.25 !important;
+    background-color: #dee2e6 !important;
+    border: 1px dashed #868e96 !important;
+    box-shadow: none !important;
+    transform: none !important;
+    filter: grayscale(0.3);
+}
+#projectTable .confirmation-note-item.note-sortable-chosen,
+.note-sortable-chosen {
+    background-color: #e7f1ff !important;
+    box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.25);
+}
+/* Do NOT set transform here — Sortable positions the fallback with transform: translate3d(...) */
+#projectTable .confirmation-note-item.note-sortable-drag,
+.note-sortable-drag,
+.note-sortable-fallback,
+.sortable-fallback.confirmation-note-item {
+    opacity: 1 !important;
+    background-color: #fffdf5 !important;
+    /* Shadow ring instead of border/outline so content box matches original (no text shift) */
+    border: 1px solid #0d6efd !important;
+    box-shadow:
+        0 0 0 2px rgba(13, 110, 253, 0.2),
+        0 8px 20px rgba(0, 0, 0, 0.28) !important;
+    outline: none !important;
+    z-index: 10050 !important;
+    cursor: grabbing !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px;
+    padding: 0 4px 0 4px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    border-radius: 4px !important;
+    line-height: 1.2 !important;
+    font-size: 0.875rem !important;
+}
+.note-sortable-fallback .note-main,
+.sortable-fallback.confirmation-note-item .note-main {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    display: flex !important;
+    align-items: center !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.note-sortable-fallback .note-actions,
+.note-sortable-drag .note-actions,
+.sortable-fallback .note-actions {
+    display: none !important;
+}
+.note-sortable-fallback .note-drag-handle,
+.note-sortable-drag .note-drag-handle,
+.sortable-fallback .note-drag-handle {
+    position: static !important;
+    transform: none !important;
+    align-self: center !important;
+    flex: 0 0 14px !important;
+    width: 14px !important;
+    height: 1.2em !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    cursor: grabbing;
+}
+
+/* Drag clone: force single-line (clone is under body, outside #projectTable) */
+.note-drag-one-line,
+.note-sortable-fallback.note-drag-one-line,
+body.project-notes-one-line .note-sortable-fallback,
+body.project-notes-one-line .sortable-fallback.confirmation-note-item {
+    height: 24px !important;
+    max-height: 24px !important;
+    min-height: 24px !important;
+    overflow: hidden !important;
+}
+.note-drag-one-line .note-label-row,
+body.project-notes-one-line .note-sortable-fallback .note-label-row,
+body.project-notes-one-line .sortable-fallback .note-label-row {
+    display: none !important;
+}
+/* Clone is outside #projectTable — re-apply flex so ↓ stays on same row */
+.note-sortable-fallback .note-text-row,
+.sortable-fallback.confirmation-note-item .note-text-row,
+.note-drag-one-line .note-text-row {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 2px;
+    min-width: 0;
+    width: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+.note-sortable-fallback .note-text-row .note-text,
+.sortable-fallback.confirmation-note-item .note-text-row .note-text,
+.note-drag-one-line .note-text-row .note-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.note-sortable-fallback .note-more-lines-icon,
+.sortable-fallback.confirmation-note-item .note-more-lines-icon,
+.note-drag-one-line .note-more-lines-icon {
+    flex: 0 0 auto;
+    align-self: center;
+    white-space: nowrap;
+    line-height: 1;
+}
+/* Only show ↓ on drag clone when 1-line mode (same as table) */
+.note-sortable-fallback .note-more-lines-icon,
+.sortable-fallback.confirmation-note-item .note-more-lines-icon {
+    display: none;
+}
+.note-drag-one-line .note-has-more .note-more-lines-icon,
+body.project-notes-one-line .note-sortable-fallback .note-has-more .note-more-lines-icon,
+body.project-notes-one-line .sortable-fallback.confirmation-note-item .note-has-more .note-more-lines-icon {
+    display: inline-flex !important;
+    color: #0d6efd;
+}
+.note-sortable-fallback .note-text,
+.sortable-fallback.confirmation-note-item .note-text,
+.note-drag-one-line .note-text,
+.note-sortable-fallback.note-drag-one-line .note-text,
+body.project-notes-one-line .note-sortable-fallback .note-text,
+body.project-notes-one-line .sortable-fallback.confirmation-note-item .note-text {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    padding: 0 !important;
+    margin: 0 !important;
+    height: 1.2em !important;
+    max-height: 1.2em !important;
+    line-height: 1.2em !important;
+    overflow: hidden !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+    word-break: break-word !important;
+    vertical-align: middle;
+}
+.note-sortable-fallback .note-text.ql-editor,
+.sortable-fallback.confirmation-note-item .note-text.ql-editor,
+.note-drag-one-line .note-text.ql-editor {
+    padding: 0 !important;
+    margin: 0 !important;
+}
+.note-drag-one-line .note-text > *,
+.note-sortable-fallback .note-text > *,
+.sortable-fallback.confirmation-note-item .note-text > *,
+.note-sortable-fallback.note-drag-one-line .note-text > *,
+body.project-notes-one-line .note-sortable-fallback .note-text > *,
+body.project-notes-one-line .sortable-fallback.confirmation-note-item .note-text > * {
+    display: inline !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    white-space: nowrap !important;
+}
+.note-sortable-fallback .note-text > * + *,
+.sortable-fallback.confirmation-note-item .note-text > * + *,
+.note-drag-one-line .note-text > * + * {
+    display: none !important;
+}
+body.note-sorting-active {
+    cursor: grabbing !important;
+}
+body.note-sorting-active #projectTable .confirmation-note-item {
+    transition: box-shadow 180ms ease;
+}
+body.note-sorting-active #projectTable .confirmation-notes-wrapper {
+    user-select: none;
+}
+
+#projectTable .confirmation-note-item .note-text {
     display: block;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+#projectTable .confirmation-note-item .note-text.ql-editor {
+    padding: 0 !important;
+}
+
+#projectTable .note-text-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 2px;
+    min-width: 0;
+    width: 100%;
+}
+#projectTable .note-text-row .note-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+#projectTable .note-more-lines-icon {
+    display: none;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    color: #6c757d;
+    font-size: 0.8rem;
+    line-height: 1;
+    padding: 0 1px;
+}
+/* 1-line mode: keep block flow (cho xuống hàng trong nội dung), chỉ cắt còn 1 dòng cao */
+body.project-notes-one-line #projectTable .confirmation-note-item .note-text,
+body.project-notes-one-line #projectTable .cell-note-snippet-item .note-text,
+#projectTableCard.project-notes-one-line #projectTable .confirmation-note-item .note-text,
+#projectTableCard.project-notes-one-line #projectTable .cell-note-snippet-item .note-text {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    max-height: 1.4em !important;
+    line-height: 1.4em !important;
+    overflow: hidden !important;
+    white-space: normal !important;
+    text-overflow: clip !important;
+    word-break: break-word;
+}
+body.project-notes-one-line #projectTable .confirmation-note-item .note-text > *,
+body.project-notes-one-line #projectTable .cell-note-snippet-item .note-text > *,
+#projectTableCard.project-notes-one-line #projectTable .confirmation-note-item .note-text > *,
+#projectTableCard.project-notes-one-line #projectTable .cell-note-snippet-item .note-text > * {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    white-space: normal !important;
+}
+/* Multi-line notes: show ↓ instead of … when clamped to 1 line */
+body.project-notes-one-line #projectTable .note-has-more .note-more-lines-icon,
+#projectTableCard.project-notes-one-line #projectTable .note-has-more .note-more-lines-icon {
+    display: inline-flex !important;
+    color: #0d6efd;
+}
+/* Full mode: multi-line notes wrap / stack normally */
+body:not(.project-notes-one-line) #projectTable .note-text-row,
+#projectTableCard:not(.project-notes-one-line) #projectTable .note-text-row {
+    align-items: flex-start;
+}
+body:not(.project-notes-one-line) #projectTable .confirmation-note-item .note-text,
+body:not(.project-notes-one-line) #projectTable .cell-note-snippet-item .note-text,
+#projectTableCard:not(.project-notes-one-line) #projectTable .confirmation-note-item .note-text,
+#projectTableCard:not(.project-notes-one-line) #projectTable .cell-note-snippet-item .note-text {
+    display: block !important;
+    max-height: none !important;
+    line-height: inherit !important;
+    overflow: visible !important;
+    white-space: normal !important;
+    text-overflow: unset !important;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+}
+body:not(.project-notes-one-line) #projectTable .confirmation-note-item .note-text > *,
+body:not(.project-notes-one-line) #projectTable .cell-note-snippet-item .note-text > *,
+#projectTableCard:not(.project-notes-one-line) #projectTable .confirmation-note-item .note-text > *,
+#projectTableCard:not(.project-notes-one-line) #projectTable .cell-note-snippet-item .note-text > * {
+    display: block !important;
+    white-space: normal !important;
+}
+body:not(.project-notes-one-line) #projectTable .note-more-lines-icon,
+#projectTableCard:not(.project-notes-one-line) #projectTable .note-more-lines-icon {
+    display: none !important;
 }
 
 
@@ -1525,20 +1851,58 @@ body.pl-col-resizing * {
     text-decoration: underline;
 }
 
+/*
+ * Pin icons: overlay on hover only — không chiếm chỗ text.
+ * Trạng thái pin nhìn bằng viền note (important-note / pinned-self-note).
+ */
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-actions {
     position: absolute;
-    right: 6px;
-    top: 4px;
+    right: 2px;
+    top: 2px;
     transform: none;
-    display: inline-flex;
+    display: none;
     align-items: center;
-    gap: 2px;
+    gap: 8px;
     pointer-events: none;
+    z-index: 5;
+    border-radius: 4px;
+    padding: 1px 3px;
+    margin: 0;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+#projectTable td.confirmation-notes-column .confirmation-note-item:hover .note-actions,
+#projectTable td.confirmation-notes-column .confirmation-note-item:focus-within .note-actions {
+    display: inline-flex;
+}
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-action-hover-only {
+    display: inline-flex;
+}
+#projectNoteHoverPopup {
+    pointer-events: none !important;
 }
 
-#projectTable td.confirmation-notes-column .confirmation-note-item .note-delete-icon {
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-pin-everyone-icon,
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-pin-self-icon,
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-drag-handle {
     pointer-events: auto;
     cursor: pointer;
+}
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-drag-handle {
+    cursor: grab;
+}
+#projectTable .note-pin-everyone-icon.is-active {
+    color: #dc3545;
+}
+#projectTable .note-pin-self-icon.is-active {
+    color: #0d6efd;
+}
+#projectNoteHoverPopup .note-hover-full-body.ql-editor {
+    padding: 0;
+    min-height: 0;
+}
+#projectNoteHoverPopup .note-hover-full-body.ql-editor p {
+    margin-bottom: 0.35rem;
 }
 
 /* Highlight note being edited */

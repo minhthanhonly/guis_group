@@ -21,6 +21,7 @@ $view->heading('チーム設定');
                                 <th>チーム名</th>
                                 <th>部署</th>
                                 <th>メンバー</th>
+                                <th>管理担当</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -28,7 +29,8 @@ $view->heading('チーム設定');
                             <tr v-for="team in teams" :key="team.id">
                                 <td>{{ team.name }}</td>
                                 <td>{{ team.department_name }}</td>
-                                <td>{{ team.members }}</td>
+                                <td>{{ team.members || '-' }}</td>
+                                <td>{{ team.supervisors || '-' }}</td>
                                 <td>
                                     <div class="btn-group btn-group-sm">
                                         <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#teamModal" @click="editTeam(team)">
@@ -63,7 +65,7 @@ $view->heading('チーム設定');
                         </div>
                         <div class="mb-3">
                             <label class="form-label">部署</label>
-                            <select class="form-select" v-model="newTeam.department_id" @change="loadDepartmentUsers" required>
+                            <select class="form-select" v-model="newTeam.department_id" @change="onDepartmentChange" required>
                                 <option value="">選択してください</option>
                                 <option v-for="dept in departments" :key="dept.id" :value="dept.id">
                                     {{ dept.name }}
@@ -71,21 +73,20 @@ $view->heading('チーム設定');
                             </select>
                         </div>
                         <div class="mb-3">
+                            <label class="form-label">説明</label>
+                            <textarea class="form-control" v-model="newTeam.description" rows="3"></textarea>
+                        </div>
+
+                        <div class="mb-3">
                             <label class="form-label">メンバー</label>
                             <div class="mb-2">
                                 <select class="form-select" v-model="selectedUser" @change="addMember" style="max-width: 300px;">
                                     <option value="">メンバーを選択</option>
-                                    <option v-for="user in departmentUsers" :key="user.id" :value="user">
+                                    <option v-for="user in availableMemberUsers" :key="'m-' + user.id" :value="user">
                                         {{ user.name }}
                                     </option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">説明</label>
-                            <textarea class="form-control" v-model="newTeam.description" rows="3"></textarea>
-                        </div>
-                        <div class="mb-3">
                             <div class="table-responsive">
                                 <table class="table table-sm">
                                     <thead>
@@ -96,7 +97,7 @@ $view->heading('チーム設定');
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr v-for="(member, index) in selectedMembers" :key="index">
+                                        <tr v-for="(member, index) in selectedMembers" :key="'member-' + member.id">
                                             <td>{{ member.name }}</td>
                                             <td>
                                                 <div class="form-check form-check-inline">
@@ -109,6 +110,45 @@ $view->heading('チーム設定');
                                                     <i class="icon-base ti tabler-trash"></i>
                                                 </button>
                                             </td>
+                                        </tr>
+                                        <tr v-if="selectedMembers.length === 0">
+                                            <td colspan="3" class="text-muted small">メンバーが選択されていません</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">管理担当</label>
+                            <div class="form-text mb-2">チームを管理する担当者を設定できます（メンバーと重複可）。</div>
+                            <div class="mb-2">
+                                <select class="form-select" v-model="selectedSupervisor" @change="addSupervisor" style="max-width: 300px;">
+                                    <option value="">管理担当を選択</option>
+                                    <option v-for="user in availableSupervisorUsers" :key="'s-' + user.id" :value="user">
+                                        {{ user.name }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>名前</th>
+                                            <th>操作</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(person, index) in selectedSupervisors" :key="'supervisor-' + person.id">
+                                            <td>{{ person.name }}</td>
+                                            <td>
+                                                <button type="button" class="btn btn-sm btn-outline-danger" @click="removeSupervisor(index)">
+                                                    <i class="icon-base ti tabler-trash"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                        <tr v-if="selectedSupervisors.length === 0">
+                                            <td colspan="2" class="text-muted small">管理担当が選択されていません</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -144,20 +184,34 @@ $view->footing();
                 selectedTeamMembers: [],
                 editingTeam: null,
                 selectedUser: '',
+                selectedSupervisor: '',
                 selectedMembers: [],
+                selectedSupervisors: [],
                 newTeam: {
                     name: '',
                     department_id: '',
                     description: '',
                     members: [],
-                    leader: {},
-                    // project_delete: {},
-                    // project_comment: {},
-                    // task_view: {},
-                    // task_add: {},
-                    // task_edit: {},
-                    // task_delete: {}
+                    leader: {}
                 }
+            }
+        },
+        computed: {
+            memberIdSet() {
+                const set = {};
+                (this.selectedMembers || []).forEach(m => { set[String(m.id)] = true; });
+                return set;
+            },
+            supervisorIdSet() {
+                const set = {};
+                (this.selectedSupervisors || []).forEach(s => { set[String(s.id)] = true; });
+                return set;
+            },
+            availableMemberUsers() {
+                return (this.departmentUsers || []).filter(u => !this.memberIdSet[String(u.id)]);
+            },
+            availableSupervisorUsers() {
+                return (this.departmentUsers || []).filter(u => !this.supervisorIdSet[String(u.id)]);
             }
         },
         methods: {
@@ -182,7 +236,6 @@ $view->footing();
             async loadDepartmentUsers() {
                 if (!this.newTeam.department_id) {
                     this.departmentUsers = [];
-                    this.selectedMembers = [];
                     return;
                 }
                 try {
@@ -192,6 +245,13 @@ $view->footing();
                     console.error('Error loading department users:', error);
                     showMessage('部署メンバーの読み込みに失敗しました。', true);
                 }
+            },
+            async onDepartmentChange() {
+                this.selectedMembers = [];
+                this.selectedSupervisors = [];
+                this.selectedUser = '';
+                this.selectedSupervisor = '';
+                await this.loadDepartmentUsers();
             },
             async editTeam(team) {
                 try {
@@ -216,8 +276,19 @@ $view->footing();
                         this.selectedMembers = teamData.members.map(member => ({
                             id: member.user_id,
                             name: member.user_name,
-                            leader: member.leader === '1'
+                            leader: member.leader === '1' || member.leader === 1
                         }));
+                    } else {
+                        this.selectedMembers = [];
+                    }
+
+                    if (teamData.supervisors && teamData.supervisors.length > 0) {
+                        this.selectedSupervisors = teamData.supervisors.map(person => ({
+                            id: person.user_id,
+                            name: person.user_name
+                        }));
+                    } else {
+                        this.selectedSupervisors = [];
                     }
                 } catch (error) {
                     console.error('Error loading team details:', error);
@@ -251,12 +322,12 @@ $view->footing();
                 if (!this.selectedUser) return;
                 
                 // Check if member already exists
-                const exists = this.selectedMembers.some(m => m.id === this.selectedUser.id);
+                const exists = this.selectedMembers.some(m => String(m.id) === String(this.selectedUser.id));
                 if (exists) {
                     showMessage('このメンバーは既に追加されています。', true);
+                    this.selectedUser = '';
                     return;
                 }
-
                 // Add new member with default permissions
                 this.selectedMembers.push({
                     id: this.selectedUser.id,
@@ -270,6 +341,25 @@ $view->footing();
             removeMember(index) {
                 this.selectedMembers.splice(index, 1);
             },
+            addSupervisor() {
+                if (!this.selectedSupervisor) return;
+
+                const exists = this.selectedSupervisors.some(s => String(s.id) === String(this.selectedSupervisor.id));
+                if (exists) {
+                    showMessage('この管理担当は既に追加されています。', true);
+                    this.selectedSupervisor = '';
+                    return;
+                }
+
+                this.selectedSupervisors.push({
+                    id: this.selectedSupervisor.id,
+                    name: this.selectedSupervisor.name
+                });
+                this.selectedSupervisor = '';
+            },
+            removeSupervisor(index) {
+                this.selectedSupervisors.splice(index, 1);
+            },
             async saveTeam() {
                 try {
                     // Prepare data for saving
@@ -278,6 +368,7 @@ $view->footing();
                         department_id: this.newTeam.department_id,
                         description: this.newTeam.description,
                         members: this.selectedMembers.map(m => m.id),
+                        supervisors: this.selectedSupervisors.map(s => s.id),
                         leader: {},
                     };
 
@@ -315,7 +406,9 @@ $view->footing();
             resetTeamData() {
                 this.editingTeam = null;
                 this.selectedUser = '';
+                this.selectedSupervisor = '';
                 this.selectedMembers = [];
+                this.selectedSupervisors = [];
                 this.newTeam = {
                     name: '',
                     department_id: '',
@@ -337,4 +430,4 @@ $view->footing();
             });
         }
     }).mount('#app');
-</script> 
+</script>

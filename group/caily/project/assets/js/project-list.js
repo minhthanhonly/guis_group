@@ -393,6 +393,44 @@ var projectTable;
     // --- LocalStorage filter state ---
     const FILTER_STORAGE_KEY = 'projectListFilters';
     const FILTER_RESET_PREFS_KEY = 'projectListFilterResetPrefs';
+    const NOTE_DISPLAY_ONE_LINE_KEY = 'projectListNoteDisplayOneLine';
+
+    function isNoteDisplayOneLine() {
+        try {
+            var v = localStorage.getItem(NOTE_DISPLAY_ONE_LINE_KEY);
+            if (v === null || v === undefined || v === '') return false; // default: off (show all lines)
+            return v === '1' || v === 'true';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function setNoteDisplayOneLine(enabled) {
+        try {
+            localStorage.setItem(NOTE_DISPLAY_ONE_LINE_KEY, enabled ? '1' : '0');
+        } catch (e) { /* ignore */ }
+        applyNoteDisplayOneLineClass(enabled);
+    }
+
+    function applyNoteDisplayOneLineClass(enabled) {
+        var on = enabled !== undefined && enabled !== null ? !!enabled : isNoteDisplayOneLine();
+        if (typeof document !== 'undefined' && document.body) {
+            document.body.classList.toggle('project-notes-one-line', on);
+        }
+        var card = typeof document !== 'undefined' ? document.getElementById('projectTableCard') : null;
+        if (card) {
+            card.classList.toggle('project-notes-one-line', on);
+        }
+        var $sw = $('#noteDisplayOneLineSwitch');
+        if ($sw.length && $sw.prop('checked') !== on) {
+            $sw.prop('checked', on);
+        }
+        var pop = typeof document !== 'undefined' ? document.getElementById('projectNoteHoverPopup') : null;
+        if (pop && !on) {
+            pop.style.display = 'none';
+        }
+        return on;
+    }
     const KEEP_TEAM_ON_RESET_KEY = 'project_list_keep_team_on_reset';
     const KEEP_COMPANY_ON_RESET_KEY = 'project_list_keep_company_on_reset';
     const SELECTED_DEPARTMENT_KEY = 'projectListSelectedDepartment';
@@ -3893,14 +3931,29 @@ var projectTable;
         return { short: short, full: full };
     }
 
-    /** Pack format: id_:_content_:_isImportant[_:_label] */
+    /**
+     * Pack format (new): id_:_content_:_isImportant_:_isPinnedSelf[_:_label]
+     * Legacy: id_:_content_:_isImportant[_:_label]
+     */
     function parsePackedConfirmationNote(raw) {
         var arr = String(raw || '').trim().split('_:_');
+        var id = arr[0] || '';
+        var content = arr.length > 1 ? arr[1] : '';
+        var isImportant = arr.length > 2 ? arr[2] : '0';
+        var isPinnedSelf = '0';
+        var label = '';
+        if (arr.length >= 4 && (arr[3] === '0' || arr[3] === '1')) {
+            isPinnedSelf = arr[3];
+            label = arr.length > 4 ? arr.slice(4).join('_:_') : '';
+        } else if (arr.length > 3) {
+            label = arr.slice(3).join('_:_');
+        }
         return {
-            id: arr[0] || '',
-            content: arr.length > 1 ? arr[1] : '',
-            isImportant: arr.length > 2 ? arr[2] : '0',
-            label: arr.length > 3 ? arr.slice(3).join('_:_') : ''
+            id: id,
+            content: content,
+            isImportant: isImportant,
+            isPinnedSelf: isPinnedSelf,
+            label: label
         };
     }
 
@@ -3932,6 +3985,44 @@ var projectTable;
             '</span>';
     }
 
+    /** True when note HTML has more than one visual/content line (multi <p>, <br>, etc.). */
+    function noteContentHasMultipleLines(html) {
+        var raw = String(html || '').trim();
+        if (!raw || raw === '-') return false;
+        if (/<br\s*\/?>/i.test(raw)) return true;
+        if (/\n/.test(raw.replace(/<[^>]+>/g, '\n'))) return true;
+        try {
+            var tmp = document.createElement('div');
+            tmp.innerHTML = raw;
+            var blocks = tmp.querySelectorAll('p, div, li, blockquote, pre, h1, h2, h3, h4, h5, h6');
+            var nonEmpty = 0;
+            for (var i = 0; i < blocks.length; i++) {
+                if (String(blocks[i].textContent || '').replace(/\u00A0/g, ' ').trim()) {
+                    nonEmpty++;
+                    if (nonEmpty > 1) return true;
+                }
+            }
+            // Single block that itself contains a line break char
+            var text = String(tmp.textContent || '');
+            if (text.indexOf('\n') !== -1) {
+                var lines = text.split(/\n/).filter(function(l) { return l.replace(/\s+/g, '').length; });
+                if (lines.length > 1) return true;
+            }
+        } catch (e) { /* ignore */ }
+        return false;
+    }
+
+    function buildNoteTextRowHtml(decodedHtml) {
+        var body = decodedHtml || '-';
+        var hasMore = noteContentHasMultipleLines(body);
+        return '<div class="note-text-row' + (hasMore ? ' note-has-more' : '') + '">' +
+            '<div class="note-text small ql-editor">' + body + '</div>' +
+            (hasMore
+                ? '<span class="note-more-lines-icon" title="複数行あり" aria-label="複数行あり"><i class="fa fa-angle-down"></i></span>'
+                : '') +
+            '</div>';
+    }
+
     function buildConfirmationNoteItemHtml(parsed) {
         var decodedText = parsed.content || '';
         if (typeof decodeHtmlEntities !== 'undefined') {
@@ -3942,20 +4033,206 @@ var projectTable;
         decodedText = (decodedText || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
         var isEditing = window.app && window.app.currentEditingNoteId === parsed.id;
         var labelHtml = buildNoteLabelBadgeHtml(parsed.label);
+        var isImportant = parsed.isImportant == 1 || parsed.isImportant === '1';
+        var isPinnedSelf = parsed.isPinnedSelf == 1 || parsed.isPinnedSelf === '1';
+        var cls = 'confirmation-note-item mb-1';
+        if (isEditing) cls += ' editing-note';
+        if (isImportant) cls += ' important-note';
+        if (isPinnedSelf) cls += ' pinned-self-note';
+        var pinEveryoneTitle = isImportant ? 'ピン（全員）解除' : 'ピン（全員）';
+        var pinSelfTitle = isPinnedSelf ? 'ピン（自分）解除' : 'ピン（自分）';
         return `
-            <div class="confirmation-note-item mb-1 ${isEditing ? 'editing-note' : ''} ${parsed.isImportant == 1 ? 'important-note' : ''}" ${parsed.id ? `data-note-id="${parsed.id}"` : ''}>
-                ${labelHtml ? '<div class="mb-1">' + labelHtml + '</div>' : ''}
-                <div class="note-text small ql-editor">${decodedText || '-'}</div>
-                <span class="note-actions d-none ms-1">
-                    <span class="note-edit-icon me-1" title="メモを編集" style="cursor: pointer;">
-                        <i class="fa fa-pencil-alt"></i>
+            <div class="${cls}" ${parsed.id ? `data-note-id="${parsed.id}"` : ''} data-is-important="${isImportant ? 1 : 0}" data-is-pinned-self="${isPinnedSelf ? 1 : 0}">
+                <span class="note-drag-handle" title="並べ替え" aria-label="並べ替え"><i class="fa fa-grip-vertical"></i></span>
+                <div class="note-main">
+                    ${labelHtml ? '<div class="mb-1 note-label-row">' + labelHtml + '</div>' : ''}
+                    ${buildNoteTextRowHtml(decodedText || '-')}
+                </div>
+                <span class="note-actions">
+                    <span class="note-pin-everyone-icon ${isImportant ? 'is-active' : ''}" title="${pinEveryoneTitle}" style="cursor: pointer;">
+                        <i class="fa fa-thumb-tack"></i>
                     </span>
-                    <span class="note-delete-icon text-danger" title="メモを削除" style="cursor: pointer;">
-                        <i class="fa fa-trash"></i>
+                    <span class="note-pin-self-icon ${isPinnedSelf ? 'is-active' : ''}" title="${pinSelfTitle}" style="cursor: pointer;">
+                        <i class="fa fa-bookmark"></i>
                     </span>
                 </span>
             </div>
         `;
+    }
+
+    function ensureSortableLoadedForNotes() {
+        if (typeof Sortable !== 'undefined') {
+            return Promise.resolve();
+        }
+        if (window.__sortableJsLoading) {
+            return window.__sortableJsLoading;
+        }
+        var loader = window.AppLoader;
+        if (loader && typeof loader.loadScript === 'function') {
+            window.__sortableJsLoading = loader.loadScript(
+                'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
+            ).catch(function(err) {
+                delete window.__sortableJsLoading;
+                throw err;
+            });
+            return window.__sortableJsLoading;
+        }
+        window.__sortableJsLoading = new Promise(function(resolve, reject) {
+            var s = document.createElement('script');
+            s.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
+            s.async = true;
+            s.onload = function() { resolve(); };
+            s.onerror = function() {
+                delete window.__sortableJsLoading;
+                reject(new Error('Failed to load Sortable'));
+            };
+            document.head.appendChild(s);
+        });
+        return window.__sortableJsLoading;
+    }
+
+    function bindConfirmationNoteSortable(el, $wrapper) {
+        if (!el || typeof Sortable === 'undefined') return;
+        if (el._noteSortable) return;
+        el._noteSortable = Sortable.create(el, {
+            handle: '.note-drag-handle',
+            animation: 180,
+            easing: 'cubic-bezier(0.2, 0, 0, 1)',
+            ghostClass: 'note-sortable-ghost',
+            chosenClass: 'note-sortable-chosen',
+            dragClass: 'note-sortable-drag',
+            fallbackClass: 'note-sortable-fallback',
+            forceFallback: true,
+            fallbackOnBody: true,
+            fallbackTolerance: 0,
+            delay: 0,
+            delayOnTouchOnly: true,
+            swapThreshold: 0.65,
+            draggable: '.confirmation-note-item',
+            preventOnFilter: true,
+            onClone: function(evt) {
+                var clone = evt.clone;
+                if (!clone) return;
+                // Always compact 1-line preview while dragging (avoids vertical text shift)
+                clone.classList.add('note-drag-one-line');
+                var actions = clone.querySelector('.note-actions');
+                if (actions) actions.remove();
+                var label = clone.querySelector('.note-label-row');
+                if (label) label.remove();
+            },
+            onStart: function(evt) {
+                document.body.classList.add('note-sorting-active');
+                if (isNoteDisplayOneLine()) {
+                    document.body.classList.add('project-notes-one-line');
+                }
+                if (window.getSelection) {
+                    var sel = window.getSelection();
+                    if (sel && sel.removeAllRanges) sel.removeAllRanges();
+                }
+                if (evt && evt.item) {
+                    evt.item.classList.add('note-sortable-chosen');
+                    var rect = evt.item.getBoundingClientRect();
+                    // Actions are removed from the floating clone — subtract their width
+                    // so text doesn't reflow / look horizontally shifted.
+                    var actionsEl = evt.item.querySelector('.note-actions');
+                    var actionsW = 0;
+                    if (actionsEl) {
+                        var acs = window.getComputedStyle(actionsEl);
+                        if (acs.display !== 'none' && acs.visibility !== 'hidden') {
+                            actionsW = actionsEl.getBoundingClientRect().width || 0;
+                        }
+                    }
+                    var cloneW = Math.max(80, Math.round(rect.width - actionsW));
+                    var applyCloneBox = function() {
+                        var fallback = document.querySelector('.sortable-fallback, .note-sortable-fallback');
+                        if (!fallback) return;
+                        fallback.classList.add('note-sortable-fallback', 'note-drag-one-line');
+                        fallback.style.width = cloneW + 'px';
+                        fallback.style.maxWidth = cloneW + 'px';
+                        fallback.style.height = '24px';
+                        fallback.style.maxHeight = '24px';
+                        fallback.style.minHeight = '24px';
+                        fallback.style.overflow = 'hidden';
+                        fallback.style.padding = '0 4px';
+                        fallback.style.boxSizing = 'border-box';
+                    };
+                    applyCloneBox();
+                    requestAnimationFrame(applyCloneBox);
+                }
+            },
+            onEnd: function() {
+                document.body.classList.remove('note-sorting-active');
+                persistConfirmationNotesOrder($wrapper);
+            }
+        });
+    }
+
+    function initConfirmationNotesSortable($wrapper) {
+        if (!$wrapper || !$wrapper.length) return;
+        var el = $wrapper.get(0);
+        if (!el) return;
+        if (typeof Sortable !== 'undefined') {
+            bindConfirmationNoteSortable(el, $wrapper);
+            return;
+        }
+        if (el._noteSortablePending) return;
+        el._noteSortablePending = true;
+        ensureSortableLoadedForNotes().then(function() {
+            el._noteSortablePending = false;
+            // Wrapper may have been replaced by a redraw — re-find if needed
+            var live = $wrapper.closest('td').find('.confirmation-notes-wrapper').get(0) || el;
+            if (live && live.isConnected) {
+                bindConfirmationNoteSortable(live, $(live));
+            }
+        }).catch(function(err) {
+            el._noteSortablePending = false;
+            console.error('Failed to load Sortable for notes', err);
+        });
+    }
+
+    function persistConfirmationNotesOrder($wrapper) {
+        if (!$wrapper || !$wrapper.length) return;
+        var $td = $wrapper.closest('td.confirmation-notes-column');
+        var projectId = null;
+        var $first = $wrapper.find('.confirmation-note-item').first();
+        if ($first.length && projectTable) {
+            var rowData = projectTable.row($first.closest('tr')).data();
+            if (rowData) projectId = rowData.id;
+        }
+        if (!projectId) return;
+        var ids = [];
+        $wrapper.find('.confirmation-note-item').each(function() {
+            var id = $(this).data('note-id');
+            if (id) ids.push(id);
+        });
+        if (ids.length < 2) return;
+        var noteType = $td.data('notes-type') === 'guis' ? 2 : 1;
+        var formData = new FormData();
+        formData.append('project_id', projectId);
+        formData.append('note_ids', JSON.stringify(ids));
+        formData.append('needs_confirmation', noteType);
+        axios.post('/api/index.php?model=project&method=reorderNotes', formData).catch(function(err) {
+            console.error('Failed to reorder notes', err);
+        });
+    }
+
+    async function toggleNotePinFromList($item, mode) {
+        var noteId = $item.data('note-id');
+        if (!noteId) return;
+        var method = mode === 'self' ? 'toggleNotePersonalPin' : 'toggleNoteImportant';
+        try {
+            var formData = new FormData();
+            formData.append('id', noteId);
+            var response = await axios.post('/api/index.php?model=project&method=' + method, formData);
+            if (response.data && response.data.status === 'success') {
+                if (projectTable) reloadProjectTable(false);
+            } else {
+                showProjectListError('ピンの更新に失敗しました', response.data);
+            }
+        } catch (error) {
+            console.error('Error toggling note pin:', error);
+            showProjectListError('ピンの更新に失敗しました', error);
+        }
     }
 
     function normalizeColumnVisibilityBool(value, fallback) {
@@ -5661,7 +5938,9 @@ var projectTable;
                             return;
                         }
                         const html = notes.map(note => buildConfirmationNoteItemHtml(parsePackedConfirmationNote(note))).join('');
-                        $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
+                        var $wrap = $(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
+                        $(td).empty().append($wrap);
+                        initConfirmationNotesSortable($wrap);
                     },
                     title: buildI18nHeaderTitle('CAILYメモ'),
                     orderable: false
@@ -5705,7 +5984,9 @@ var projectTable;
                             return;
                         }
                         const html = notes.map(note => buildConfirmationNoteItemHtml(parsePackedConfirmationNote(note))).join('');
-                        $(td).html(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
+                        var $wrap = $(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
+                        $(td).empty().append($wrap);
+                        initConfirmationNotesSortable($wrap);
                     },
                     title: buildI18nHeaderTitle('GUISメモ'),
                     orderable: false
@@ -6717,6 +6998,8 @@ var projectTable;
         });
 
         guardProjectTableNetworkReload(projectTable);
+        // Project list defers Sortable CDN — preload so note drag works on first grab
+        ensureSortableLoadedForNotes().catch(function() { /* ignore */ });
 
         $('#projectTable').off('columns-reordered.dt').on('columns-reordered.dt', function() {
             if (!projectTable) return;
@@ -6784,10 +7067,14 @@ var projectTable;
                             tooltipAttrs = ' data-bs-toggle="tooltip" data-bs-title="' + escapeHtmlForNote(sn.full) + '"';
                         }
                         var isImportant = n.is_important == 1;
+                        var isPinnedSelf = n.is_pinned_self == 1;
+                        var snCls = 'confirmation-note-item mb-1 cell-note-snippet-item';
+                        if (isImportant) snCls += ' important-note';
+                        if (isPinnedSelf) snCls += ' pinned-self-note';
                         // Label only on CAILYメモ / GUISメモ columns — not on other column snippets
                         parts.push(
-                            '<div class="confirmation-note-item mb-1 cell-note-snippet-item ' + (isImportant ? 'important-note' : '') + '" data-note-id="' + (n.id || '') + '" data-project-id="' + (rowData.id || '') + '" style="cursor:pointer"' + tooltipAttrs + '>' +
-                                '<div class="note-text small ql-editor" style="max-height:2.5em;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-clamp:2;">' + (decodedHtml || '-') + '</div>' +
+                            '<div class="' + snCls + '" data-note-id="' + (n.id || '') + '" data-project-id="' + (rowData.id || '') + '" style="cursor:pointer">' +
+                                buildNoteTextRowHtml(decodedHtml || '-') +
                             '</div>'
                         );
                     });
@@ -7474,6 +7761,136 @@ var projectTable;
             $(document).on('mouseleave', '#projectParentPopup', scheduleHide);
         })();
 
+        // Full note content popup on hover (1-line clamp) — non-interactive, never cover action buttons
+        (function initProjectNoteHoverPopup() {
+            var popup = null;
+            var hideTimer = null;
+            var currentTrigger = null;
+            var gap = 8;
+            var viewportMargin = 8;
+
+            function getPopup() {
+                if (!popup) {
+                    popup = document.createElement('div');
+                    popup.id = 'projectNoteHoverPopup';
+                    popup.className = 'project-note-hover-popup shadow border rounded bg-white p-2';
+                    // pointer-events:none so pin/edit/delete on the note stay clickable underneath
+                    popup.style.cssText = 'position:fixed;z-index:1040;min-width:220px;max-width:400px;max-height:320px;overflow:auto;display:none;pointer-events:none;';
+                    popup.setAttribute('role', 'tooltip');
+                    document.body.appendChild(popup);
+                }
+                return popup;
+            }
+
+            function hidePopupNow() {
+                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+                getPopup().style.display = 'none';
+                currentTrigger = null;
+            }
+
+            function positionPopup() {
+                var el = getPopup();
+                if (el.style.display === 'none' || !currentTrigger || !currentTrigger.getBoundingClientRect) return;
+                var $item = $(currentTrigger).closest('.confirmation-note-item');
+                var anchor = ($item.length ? $item.get(0) : currentTrigger);
+                var rect = anchor.getBoundingClientRect();
+                var vw = window.innerWidth;
+                var vh = window.innerHeight;
+                el.style.maxWidth = '400px';
+                el.style.maxHeight = '320px';
+                var popupW = el.offsetWidth || 280;
+                var popupH = el.offsetHeight || 120;
+
+                // Prefer right of note; else left; else below (never overlapping the note body)
+                var left;
+                var top = rect.top;
+                var spaceRight = vw - rect.right - gap;
+                var spaceLeft = rect.left - gap;
+                if (spaceRight >= Math.min(popupW, 200) || spaceRight >= spaceLeft) {
+                    left = rect.right + gap;
+                    if (left + popupW > vw - viewportMargin) {
+                        left = Math.max(viewportMargin, vw - popupW - viewportMargin);
+                    }
+                } else {
+                    left = Math.max(viewportMargin, rect.left - popupW - gap);
+                }
+                if (top + popupH > vh - viewportMargin) {
+                    top = Math.max(viewportMargin, vh - popupH - viewportMargin);
+                }
+                if (top < viewportMargin) top = viewportMargin;
+
+                // If still overlapping the note rect, push below it
+                var overlaps =
+                    left < rect.right &&
+                    left + popupW > rect.left &&
+                    top < rect.bottom &&
+                    top + popupH > rect.top;
+                if (overlaps) {
+                    var spaceBelow = vh - rect.bottom - gap;
+                    if (spaceBelow >= 80) {
+                        top = rect.bottom + gap;
+                        left = Math.min(rect.left, vw - popupW - viewportMargin);
+                        if (left < viewportMargin) left = viewportMargin;
+                        el.style.maxHeight = Math.max(80, spaceBelow) + 'px';
+                    } else {
+                        top = Math.max(viewportMargin, rect.top - popupH - gap);
+                        left = Math.min(rect.left, vw - popupW - viewportMargin);
+                        if (left < viewportMargin) left = viewportMargin;
+                    }
+                }
+
+                el.style.left = Math.round(left) + 'px';
+                el.style.top = Math.round(top) + 'px';
+            }
+
+            function showPopup(textEl) {
+                if (!isNoteDisplayOneLine()) return;
+                if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+                currentTrigger = textEl;
+                var $item = $(textEl).closest('.confirmation-note-item');
+                if (!$item.length) return;
+                var html = $(textEl).html() || '';
+                if (!html || String(html).replace(/<[^>]*>/g, '').trim() === '' || String(html).trim() === '-') {
+                    return;
+                }
+                var el = getPopup();
+                var pins = [];
+                if ($item.hasClass('important-note') || String($item.data('is-important')) === '1') {
+                    pins.push('<span class="badge bg-danger me-1" style="font-size:0.65rem;"><i class="fa fa-thumb-tack me-1"></i>全員</span>');
+                }
+                if ($item.hasClass('pinned-self-note') || String($item.data('is-pinned-self')) === '1') {
+                    pins.push('<span class="badge bg-primary me-1" style="font-size:0.65rem;"><i class="fa fa-bookmark me-1"></i>自分</span>');
+                }
+                var labelHtml = $item.find('.note-label-row').html() || '';
+                el.innerHTML = (pins.length || labelHtml
+                    ? '<div class="mb-1 d-flex flex-wrap align-items-center gap-1">' + pins.join('') + labelHtml + '</div>'
+                    : '')
+                    + '<div class="small ql-editor note-hover-full-body">' + html + '</div>';
+                el.style.display = 'block';
+                positionPopup();
+            }
+
+            function scheduleHide() {
+                if (hideTimer) clearTimeout(hideTimer);
+                hideTimer = setTimeout(function() {
+                    hideTimer = null;
+                    getPopup().style.display = 'none';
+                    currentTrigger = null;
+                }, 120);
+            }
+
+            // Only show when hovering the text — not drag handle / pin / edit / delete
+            $('#projectTable').on('mouseenter', '.confirmation-note-item .note-text', function() {
+                showPopup(this);
+            });
+            $('#projectTable').on('mouseleave', '.confirmation-note-item .note-text', function() {
+                scheduleHide();
+            });
+            $('#projectTable').on('mouseenter', '.confirmation-note-item .note-actions, .confirmation-note-item .note-drag-handle', function() {
+                hidePopupNow();
+            });
+        })();
+
         var fixedScrollHeadUpdate = null;
         function applyStickyScrollHead(tableEl) {
             if (!tableEl) tableEl = document.getElementById('projectTable');
@@ -7995,13 +8412,6 @@ var projectTable;
             }
         });
 
-        // Hover to show/hide note action icons (edit/delete)
-        $('#projectTable tbody').on('mouseenter', 'td.confirmation-notes-column .confirmation-note-item', function() {
-            $(this).find('.note-actions').removeClass('d-none');
-        }).on('mouseleave', 'td.confirmation-notes-column .confirmation-note-item', function() {
-            $(this).find('.note-actions').addClass('d-none');
-        });
-
         // Hover to show/hide add note icon for empty cells
         $('#projectTable tbody').on('mouseenter', 'td.confirmation-notes-column .empty-notes-cell', function() {
             $(this).find('.add-note-icon').removeClass('d-none');
@@ -8024,7 +8434,7 @@ var projectTable;
 
         // Click note item (entire block) to edit the corresponding note
         $('#projectTable tbody').on('click', '.confirmation-note-item', function(e) {
-            if ($(e.target).closest('.note-delete-icon').length > 0) {
+            if ($(e.target).closest('.note-pin-everyone-icon, .note-pin-self-icon, .note-drag-handle').length > 0) {
                 return;
             }
             
@@ -8046,32 +8456,23 @@ var projectTable;
             }
         });
 
-        // Click trash icon to delete the corresponding note
-        $('#projectTable tbody').on('click', '.confirmation-note-item .note-delete-icon', async function(e) {
+        $('#projectTable tbody').on('click', '.confirmation-note-item .note-pin-everyone-icon', function(e) {
+            e.preventDefault();
             e.stopPropagation();
-            const $item = $(this).closest('.confirmation-note-item');
-            const noteId = $item.data('note-id');
-            if (!noteId) return;
+            toggleNotePinFromList($(this).closest('.confirmation-note-item'), 'everyone');
+        });
+        $('#projectTable tbody').on('click', '.confirmation-note-item .note-pin-self-icon', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleNotePinFromList($(this).closest('.confirmation-note-item'), 'self');
+        });
 
-            if (!confirm('このメモを削除しますか？')) {
-                return;
-            }
-
-            try {
-                const formData = new FormData();
-                formData.append('id', noteId);
-                const response = await axios.post('/api/index.php?model=project&method=deleteNote', formData);
-                if (response.data && response.data.status === 'success') {
-                    showMessage('メモが削除されました');
-                    if (projectTable) {
-                        reloadProjectTable(false);
-                    }
-                } else {
-                    showProjectListError('メモの削除に失敗しました', response.data);
-                }
-            } catch (error) {
-                console.error('Error deleting note:', error);
-                showProjectListError('メモの削除に失敗しました', error);
+        // Prevent text-selection when starting a note drag
+        $('#projectTable tbody').on('mousedown.noteDragHandle', '.note-drag-handle', function(e) {
+            e.preventDefault();
+            if (window.getSelection) {
+                var sel = window.getSelection();
+                if (sel && sel.removeAllRanges) sel.removeAllRanges();
             }
         });
 
@@ -8443,6 +8844,9 @@ var projectTable;
             }
         );
 
+        // Note 1-line switch is Vue-bound (inside #app); apply class early for first paint
+        applyNoteDisplayOneLineClass();
+
         syncQuickEditStatusOptions();
         var savedScrollOnLoad = getSavedProjectListScroll();
         if (savedScrollOnLoad) {
@@ -8767,6 +9171,7 @@ var projectTable;
                 return {
                     loading: true,
                     selectedDepartment: null,
+                    noteDisplayOneLine: false,
                     showClearAllFavoritesBtn: false,
                     projects: [],
                     departments: [],
@@ -8962,6 +9367,8 @@ var projectTable;
                 }
                 // Khôi phục status đã lưu (nếu có) để hiển thị trong 適用中のフィルター
                 this.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || '');
+                this.noteDisplayOneLine = isNoteDisplayOneLine();
+                applyNoteDisplayOneLineClass(this.noteDisplayOneLine);
             
                 // Load column visibility (thứ tự giống bảng khi đã chọn department / có save order)
                 migrateColumnVisibilityStorageIfNeeded(customFieldColumnDefinitions || []);
@@ -8970,6 +9377,7 @@ var projectTable;
                 this.availableColumns = buildAvailableColumnsList([], depIdMount, columnVisibility);
                 this.$nextTick(() => {
                     applyI18nToProjectTableUI();
+                    applyNoteDisplayOneLineClass(this.noteDisplayOneLine);
                 });
             
                 this.loadDepartments();
@@ -9479,6 +9887,7 @@ var projectTable;
                         title: '',
                         content: '',
                         is_important: false,
+                        is_pinned_self: false,
                         needs_confirmation: 0,
                         display_column: '',
                         label: '',
@@ -9509,6 +9918,17 @@ var projectTable;
                         this.editingNote.labelOther = '';
                     }
                 },
+                // ピン（全員）とピン（自分）は排他 — 片方ONならもう片方OFF
+                onNotePinEveryoneChange() {
+                    if (this.editingNote && this.editingNote.is_important) {
+                        this.editingNote.is_pinned_self = false;
+                    }
+                },
+                onNotePinSelfChange() {
+                    if (this.editingNote && this.editingNote.is_pinned_self) {
+                        this.editingNote.is_important = false;
+                    }
+                },
                 resolveNoteLabelForSave() {
                     if (this.editingNote.labelSelect === this.NOTE_LABEL_OTHER) {
                         return String(this.editingNote.labelOther || '').trim().slice(0, 100);
@@ -9537,6 +9957,7 @@ var projectTable;
                                 title: match.title,
                                 content: decodeHtmlForNote(match.content),
                                 is_important: match.is_important == 1,
+                                is_pinned_self: match.is_pinned_self == 1,
                                 needs_confirmation: Number(match.needs_confirmation) || 0,
                                 display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : '',
                                 user_id: match.user_id
@@ -9579,6 +10000,7 @@ var projectTable;
                                     title: match.title,
                                     content: decodeHtmlForNote(match.content),
                                     is_important: match.is_important == 1,
+                                    is_pinned_self: match.is_pinned_self == 1,
                                     needs_confirmation: Number(match.needs_confirmation) || 0,
                                     display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : (displayColumnKey || ''),
                                     user_id: match.user_id
@@ -9713,7 +10135,11 @@ var projectTable;
                         const formData = new FormData();
                         formData.append('project_id', this.currentNoteProjectId);
                         formData.append('content', rawContent);
-                        formData.append('is_important', this.editingNote.is_important ? 1 : 0);
+                        // Mutual exclusivity: prefer ピン（全員） if both somehow set
+                        var pinEveryone = !!this.editingNote.is_important;
+                        var pinSelf = !!this.editingNote.is_pinned_self && !pinEveryone;
+                        formData.append('is_important', pinEveryone ? 1 : 0);
+                        formData.append('is_pinned_self', pinSelf ? 1 : 0);
                         formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
                         formData.append('display_column', this.editingNote.display_column || '');
                         formData.append('label', this.resolveNoteLabelForSave());
@@ -9921,6 +10347,9 @@ var projectTable;
                 },
                 filterProjectByStatus(status) {
                     this.toggleProjectStatusFilter(status);
+                },
+                onNoteDisplayOneLineChange() {
+                    setNoteDisplayOneLine(!!this.noteDisplayOneLine);
                 },
                 onFavoritesFilterChange() {
                     const isChecked = $('#filterFavoritesOnly').is(':checked');
@@ -10487,11 +10916,20 @@ var projectTable;
                 filterMyProjects(newVal) {
                     // Save to localStorage when filter changes
                     saveFiltersToLocalStorage();
+                },
+                noteDisplayOneLine(newVal) {
+                    setNoteDisplayOneLine(!!newVal);
                 }
             }
         }).mount('#app');
 
         window.app = app;
+        try {
+            if (app && typeof app.noteDisplayOneLine !== 'undefined') {
+                app.noteDisplayOneLine = isNoteDisplayOneLine();
+            }
+            applyNoteDisplayOneLineClass(isNoteDisplayOneLine());
+        } catch (eNoteDisp) { /* ignore */ }
         // Must run AFTER Vue mount: createApp().mount() replaces #app children, so
         // pre-mount getElementById refs / listeners would point at detached nodes
         // (float filter offcanvas opened empty).

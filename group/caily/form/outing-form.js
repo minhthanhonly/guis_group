@@ -17,7 +17,7 @@ export default {
         destination: '',
         reason: '',
         note: '',
-        add_to_calendar: false,
+        add_to_calendar: true,
         approver_user_ids: []
       },
       errors: {},
@@ -36,7 +36,7 @@ export default {
         destination: '',
         reason: '',
         note: '',
-        add_to_calendar: false,
+        add_to_calendar: true,
         approver_user_ids: []
       }, this.defaultData);
       this.formData.date = this.normalizeDateValue(this.formData.date);
@@ -62,7 +62,7 @@ export default {
             destination: '',
             reason: '',
             note: '',
-            add_to_calendar: false,
+            add_to_calendar: true,
             approver_user_ids: []
           }, newVal);
           this.formData.date = this.normalizeDateValue(this.formData.date);
@@ -319,7 +319,7 @@ export default {
             <div class="col-sm-9">
               <div class="form-check">
                 <input class="form-check-input" type="checkbox" id="outing-add-to-calendar" v-model="formData.add_to_calendar">
-                <label class="form-check-label" for="outing-add-to-calendar">承認後にカレンダーに追加する</label>
+                <label class="form-check-label" for="outing-add-to-calendar">申請後すぐにカレンダーに追加する（承認不要）</label>
               </div>
             </div>
           </div>

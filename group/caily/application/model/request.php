@@ -673,6 +673,14 @@ class Request extends ApplicationModel {
         }
         $result = $this->query_insert($row);
         
+        // 外出申請: 承認不要でカレンダー反映（申請時点で追加）
+        if ($result && $type === 'outing' && $addToCalendar && $status !== 'draft') {
+            $scheduleId = $this->createScheduleFromRequest($result);
+            if ($scheduleId) {
+                $this->query_update(array('schedule_id' => $scheduleId), array('id' => intval($result)));
+            }
+        }
+
         // Send Pusher + email notification if request was created successfully
         if ($result && $status === 'pending') {
             $approverUserId = !empty($_POST['approver_user_id']) ? $_POST['approver_user_id'] : null;
@@ -1115,11 +1123,27 @@ class Request extends ApplicationModel {
             $update['approver_id'] = $user;
             $update['approved_at'] = date('Y-m-d H:i:s');
             // 承認時: add_to_calendar ならカレンダーに追加し schedule_id を保存
+            // 外出は申請時に追加済みの場合があるので、既存があれば更新のみ
             if (!empty($currentRequest['add_to_calendar']) && in_array($currentRequest['type'], ['leave', 'outing', 'trip', 'holiday_work'], true)) {
-                $scheduleId = $this->createScheduleFromRequest($id);
-                if ($scheduleId) {
-                    $update['schedule_id'] = $scheduleId;
+                $existingScheduleId = !empty($currentRequest['schedule_id']) ? (int) $currentRequest['schedule_id'] : 0;
+                if ($existingScheduleId > 0) {
+                    $this->updateScheduleFromRequest($existingScheduleId, $id);
+                } else {
+                    $scheduleId = $this->createScheduleFromRequest($id);
+                    if ($scheduleId) {
+                        $update['schedule_id'] = $scheduleId;
+                    }
                 }
+            }
+        }
+        // 外出: pending（申請/下書き→申請）でもカレンダーへ即反映
+        if ($status === 'pending'
+            && ($currentRequest['type'] ?? '') === 'outing'
+            && !empty($currentRequest['add_to_calendar'])
+            && empty($currentRequest['schedule_id'])) {
+            $scheduleId = $this->createScheduleFromRequest($id);
+            if ($scheduleId) {
+                $update['schedule_id'] = $scheduleId;
             }
         }
         if ($status === 'completed') {
@@ -1128,14 +1152,17 @@ class Request extends ApplicationModel {
         } elseif (in_array($status, ['pending', 'approved', 'rejected', 'draft'], true)) {
             $clearCompletedInfo = true;
         }
-        if (($status === 'rejected' || $status === 'pending' || $status === 'draft') && !empty($currentRequest['schedule_id'])) {
+        // 外出は申請中もカレンダー表示を維持。他種別は pending で削除（従来どおり）
+        $deleteScheduleOnStatus = ($status === 'rejected' || $status === 'draft')
+            || ($status === 'pending' && ($currentRequest['type'] ?? '') !== 'outing');
+        if ($deleteScheduleOnStatus && !empty($currentRequest['schedule_id'])) {
             $this->deleteScheduleForRequest((int) $currentRequest['schedule_id']);
         }
         $result = $this->query_update($update, ['id' => $id]);
         if ($result && $clearCompletedInfo) {
             $this->query("UPDATE {$this->table} SET completed_userid = NULL, completed_at = NULL WHERE id = " . intval($id));
         }
-        if ($result && $status === 'rejected' && !empty($currentRequest['schedule_id'])) {
+        if ($result && $deleteScheduleOnStatus && !empty($currentRequest['schedule_id'])) {
             $this->query("UPDATE {$this->table} SET schedule_id = NULL WHERE id = " . intval($id));
         }
         
@@ -1450,16 +1477,23 @@ class Request extends ApplicationModel {
         if ($end_date !== null) $update['end_date'] = $end_date;
         $result = $this->query_update($update, ['id' => $id]);
         
-        // 承認済みでカレンダー連携: スケジュールを更新するか削除
-        if ($result && $row['status'] === 'approved' && in_array($row['type'], ['leave', 'outing', 'trip', 'holiday_work'], true)) {
+        // カレンダー連携: 承認済み、または外出の申請中は即反映
+        $calendarLive = ($row['status'] === 'approved')
+            || (($row['type'] === 'outing') && ($row['status'] === 'pending'));
+        if ($result && $calendarLive && in_array($row['type'], ['leave', 'outing', 'trip', 'holiday_work'], true)) {
             $scheduleId = isset($row['schedule_id']) ? (int) $row['schedule_id'] : 0;
-            if ($scheduleId > 0) {
-                if (!empty($data['add_to_calendar'])) {
+            if (!empty($data['add_to_calendar'])) {
+                if ($scheduleId > 0) {
                     $this->updateScheduleFromRequest($scheduleId, $id);
                 } else {
-                    $this->deleteScheduleForRequest($scheduleId);
-                    $this->query("UPDATE {$this->table} SET schedule_id = NULL WHERE id = " . intval($id));
+                    $newScheduleId = $this->createScheduleFromRequest($id);
+                    if ($newScheduleId) {
+                        $this->query("UPDATE {$this->table} SET schedule_id = " . intval($newScheduleId) . " WHERE id = " . intval($id));
+                    }
                 }
+            } elseif ($scheduleId > 0) {
+                $this->deleteScheduleForRequest($scheduleId);
+                $this->query("UPDATE {$this->table} SET schedule_id = NULL WHERE id = " . intval($id));
             }
         }
         

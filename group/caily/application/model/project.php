@@ -550,6 +550,7 @@ class Project extends ApplicationModel {
                     // Keep HTML — list UI renders ql-editor / tooltips from original markup
                     'content' => isset($note['content']) ? $note['content'] : '',
                     'is_important' => isset($note['is_important']) ? $note['is_important'] : 0,
+                    'is_pinned_self' => isset($note['is_pinned_self']) ? $note['is_pinned_self'] : 0,
                     'label' => isset($note['label']) ? (string) $note['label'] : '',
                 );
                 $n++;
@@ -656,18 +657,30 @@ class Project extends ApplicationModel {
         $notesCaily = [];
         $notesGuis = [];
         $this->query("SET SESSION group_concat_max_len = 1048576");
+        // Ensure note pin/sort schema exists (lazy migrate)
+        require_once dirname(__FILE__) . '/projectnote.php';
+        $noteSchema = new ProjectNote();
+        unset($noteSchema);
+        $pinTable = DB_PREFIX . 'project_note_user_pins';
+        $sessionUserid = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
         $noteRows = $this->fetchAll(sprintf(
-            "SELECT project_id, needs_confirmation, id, content, is_important, label
-             FROM %sproject_notes
-             WHERE project_id IN (%s) AND needs_confirmation IN (1, 2)
-             ORDER BY project_id, needs_confirmation, is_important DESC, created_at DESC",
+            "SELECT n.project_id, n.needs_confirmation, n.id, n.content, n.is_important, n.label, n.sort_order,
+                    CASE WHEN pin.id IS NOT NULL THEN 1 ELSE 0 END AS is_pinned_self
+             FROM %sproject_notes n
+             LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
+             WHERE n.project_id IN (%s) AND n.needs_confirmation IN (1, 2)
+             ORDER BY n.project_id, n.needs_confirmation,
+                      is_pinned_self DESC, n.is_important DESC, n.sort_order ASC, n.created_at DESC",
             DB_PREFIX,
+            $this->quote($sessionUserid),
             $idsList
         ));
         foreach ($noteRows as $row) {
             $pid = (int)$row['project_id'];
             $labelSafe = str_replace(array('_:_', '_|_'), array('-', '-'), trim((string)($row['label'] ?? '')));
-            $part = $row['id'] . '_:_' . ($row['content'] ?? '') . '_:_' . ($row['is_important'] ?? 0);
+            // Pack: id_:_content_:_isImportant_:_isPinnedSelf[_:_label]
+            $part = $row['id'] . '_:_' . ($row['content'] ?? '') . '_:_' . ($row['is_important'] ?? 0)
+                . '_:_' . (isset($row['is_pinned_self']) ? intval($row['is_pinned_self']) : 0);
             if ($labelSafe !== '') {
                 $part .= '_:_' . $labelSafe;
             }
@@ -1509,11 +1522,17 @@ class Project extends ApplicationModel {
         if (!empty($projectIds)) {
             $idsList = implode(',', array_map('intval', $projectIds));
             $notesTable = DB_PREFIX . 'project_notes';
-            $notesRows = $this->fetchAll(
-                "SELECT project_id, display_column, id, content, is_important, label FROM {$notesTable} " .
-                "WHERE project_id IN ({$idsList}) AND display_column IS NOT NULL AND TRIM(display_column) != '' " .
-                "ORDER BY is_important DESC, created_at DESC"
-            );
+            $pinTable = DB_PREFIX . 'project_note_user_pins';
+            $sessionUserid = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
+            $notesRows = $this->fetchAll(sprintf(
+                "SELECT n.project_id, n.display_column, n.id, n.content, n.is_important, n.label, n.sort_order,
+                        CASE WHEN pin.id IS NOT NULL THEN 1 ELSE 0 END AS is_pinned_self
+                 FROM {$notesTable} n
+                 LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
+                 WHERE n.project_id IN ({$idsList}) AND n.display_column IS NOT NULL AND TRIM(n.display_column) != ''
+                 ORDER BY is_pinned_self DESC, n.is_important DESC, n.sort_order ASC, n.created_at DESC",
+                $this->quote($sessionUserid)
+            ));
             foreach ($notesRows as $nr) {
                 $pid = (int) $nr['project_id'];
                 $col = trim((string) ($nr['display_column'] ?? ''));
@@ -1524,6 +1543,7 @@ class Project extends ApplicationModel {
                     'id' => $nr['id'],
                     'content' => $nr['content'] ?? '',
                     'is_important' => $nr['is_important'] ?? 0,
+                    'is_pinned_self' => isset($nr['is_pinned_self']) ? intval($nr['is_pinned_self']) : 0,
                     'label' => isset($nr['label']) ? (string) $nr['label'] : '',
                 ];
             }
@@ -3519,20 +3539,41 @@ class Project extends ApplicationModel {
             }
             $projectName = isset($data['name']) ? $data['name'] : ($old['name'] ?? '');
 
-            // Use userid (string) consistently for notification recipients.
-            $department_managers = $departmentId > 0 ? $this->getDepartmentManagers($departmentId) : [];
-            $project_managers = $this->getMembers(['project_id' => $id, 'role' => 'manager']);
-            $project_managers_ids = array_column($project_managers, 'userid');
+            // Members/managers + team supervisors (or dept project_manager if no team)
+            $notifyRecipientIds = $this->getProjectInteractionNotifyUserids($id);
 
-            $managerIds = array_merge($project_managers_ids, $department_managers);
-            $managerIds = array_unique($managerIds);
-         
             if (isset($data['caily_nouki_status']) && $data['caily_nouki_status'] !== $old['caily_nouki_status'] && $data['caily_nouki_status'] == '納品済み') {
-               $this->notifyProjectCailyNouhinUpdated($id, $projectName, $this->getUserRealname(), $data['caily_nouki_status'], $managerIds);
+               $this->notifyProjectCailyNouhinUpdated($id, $projectName, $this->getUserRealname(), $data['caily_nouki_status'], $notifyRecipientIds);
             }
             if (isset($data['guis_nouki_status']) && $data['guis_nouki_status'] !== $old['guis_nouki_status'] && $data['guis_nouki_status'] == '納品済み') {
-                $this->notifyProjectGuisNoukiUpdated($id, $projectName, $this->getUserRealname(), $data['guis_nouki_status'], $managerIds);
+                $this->notifyProjectGuisNoukiUpdated($id, $projectName, $this->getUserRealname(), $data['guis_nouki_status'], $notifyRecipientIds);
             }
+
+            $teamsChanged = $this->didProjectTeamsChange($old, $data);
+            if ($teamsChanged) {
+                $oldTeamIds = $this->parseProjectTeamIds(isset($old['teams']) ? $old['teams'] : '');
+                if (!empty($oldTeamIds)) {
+                    $notifyRecipientIds = array_values(array_unique(array_merge(
+                        $notifyRecipientIds,
+                        $this->getTeamSupervisorUserids($oldTeamIds)
+                    )));
+                }
+                $oldTeamsCsv = isset($old['teams']) ? (string)$old['teams'] : '';
+                $newTeamsCsv = array_key_exists('teams', $data) ? (string)$data['teams'] : $oldTeamsCsv;
+                $this->notifyProjectTeamsChanged(
+                    $id,
+                    $projectName,
+                    $this->convertTeamIdsToNames($oldTeamsCsv),
+                    $this->convertTeamIdsToNames($newTeamsCsv),
+                    $notifyRecipientIds
+                );
+            }
+
+            $importantChanges = $this->collectImportantProjectFieldChanges($old, $data, $nullDatetimeFields);
+            if (!empty($importantChanges)) {
+                $this->notifyProjectUpdated($id, $projectName, $importantChanges, $notifyRecipientIds);
+            }
+
             return ['status' => 'success', 'message' => 'Project updated successfully', 'version' => $newProjectVersion];
         } else {
             return ['status' => 'error', 'message' => 'Update failed'];
@@ -4471,9 +4512,9 @@ class Project extends ApplicationModel {
         
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
-            $projectMembers = $this->getMembers(['project_id' => $id]);
             if($old['status'] != $status) {
-                $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], array_column($projectMembers, 'userid'));
+                $statusRecipients = $this->getProjectInteractionNotifyUserids($id);
+                $this->notifyProjectStatusChanged($project_number,$id, $name, $data['status'], $statusRecipients);
                 $this->logProjectAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
             }
             if (!empty($data['energy_drawing_share_status'])) {
@@ -6976,6 +7017,24 @@ class Project extends ApplicationModel {
         return $noteModel->list($params);
     }
 
+    function toggleNotePersonalPin($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->togglePersonalPin($params);
+    }
+
+    function toggleNoteImportant($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->toggleImportant($params);
+    }
+
+    function reorderNotes($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->reorder($params);
+    }
+
   
     function sendProjectNotification($params = null) {
         try {
@@ -7104,13 +7163,94 @@ class Project extends ApplicationModel {
     }
     
     /**
-     * Lấy danh sách user IDs của thành viên dự án
+     * Lấy danh sách userid (string) của thành viên dự án (member + manager).
      */
     private function getProjectMemberIds($projectId) {
-        $query = sprintf("SELECT DISTINCT userid FROM " . DB_PREFIX . "project_members WHERE project_id = %d", intval($projectId));
+        $query = sprintf(
+            "SELECT DISTINCT userid FROM " . DB_PREFIX . "project_members WHERE project_id = %d AND userid IS NOT NULL AND userid != ''",
+            intval($projectId)
+        );
         $members = $this->fetchAll($query);
-        
-        return array_column($members, 'user_id');
+        return array_values(array_filter(array_column($members ?: [], 'userid')));
+    }
+
+    /** Parse projects.teams CSV into unique positive team ids. */
+    private function parseProjectTeamIds($teamsCsv) {
+        if ($teamsCsv === null || $teamsCsv === '') {
+            return [];
+        }
+        return array_values(array_unique(array_filter(array_map('intval', explode(',', (string)$teamsCsv)))));
+    }
+
+    /**
+     * Supervisors (管理担当) of the given teams as userid strings.
+     * @param int[] $teamIds
+     * @return string[]
+     */
+    private function getTeamSupervisorUserids(array $teamIds) {
+        $teamIds = array_values(array_unique(array_filter(array_map('intval', $teamIds))));
+        if (empty($teamIds)) {
+            return [];
+        }
+        $table = DB_PREFIX . 'team_supervisors';
+        $exists = $this->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
+            . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "'"
+        );
+        if (empty($exists['cnt'])) {
+            return [];
+        }
+        $rows = $this->fetchAll(sprintf(
+            "SELECT DISTINCT u.userid
+             FROM {$table} ts
+             INNER JOIN %suser u ON u.id = ts.user_id
+             WHERE ts.team_id IN (%s)
+               AND (u.is_suspend = 0 OR u.is_suspend IS NULL OR u.is_suspend = '')
+               AND u.userid IS NOT NULL AND u.userid != ''",
+            DB_PREFIX,
+            implode(',', $teamIds)
+        ));
+        return array_values(array_filter(array_column($rows ?: [], 'userid')));
+    }
+
+    /**
+     * Recipients for project interaction notifications (create / status / 納品済み / …).
+     * - Project members (member + manager)
+     * - Supervisors of assigned teams (projects.teams)
+     * - If no team assigned: department users with project_manager = 1
+     *
+     * @param int $projectId
+     * @param string[] $extraUserids Optional extra recipients (e.g. just-added members at create)
+     * @return string[] userid list
+     */
+    private function getProjectInteractionNotifyUserids($projectId, $extraUserids = []) {
+        $projectId = intval($projectId);
+        $userids = [];
+        if (is_array($extraUserids)) {
+            foreach ($extraUserids as $uid) {
+                $uid = trim((string)$uid);
+                if ($uid !== '') {
+                    $userids[] = $uid;
+                }
+            }
+        }
+
+        $project = $projectId > 0 ? $this->getById($projectId) : null;
+        if ($project) {
+            $userids = array_merge($userids, $this->getProjectMemberIds($projectId));
+
+            $teamIds = $this->parseProjectTeamIds(isset($project['teams']) ? $project['teams'] : '');
+            if (!empty($teamIds)) {
+                $userids = array_merge($userids, $this->getTeamSupervisorUserids($teamIds));
+            } else {
+                $departmentId = isset($project['department_id']) ? intval($project['department_id']) : 0;
+                if ($departmentId > 0) {
+                    $userids = array_merge($userids, $this->getDepartmentManagers($departmentId));
+                }
+            }
+        }
+
+        return array_values(array_unique(array_filter($userids)));
     }
     
     /**
@@ -7148,26 +7288,8 @@ class Project extends ApplicationModel {
      * Hàm tiện ích để gửi thông báo khi tạo dự án mới
      */
     function notifyProjectCreated($projectId, $projectName, $userIds = null) {
-
-        // Get project information to get department_id
-        $project = $this->getById($projectId);
-        $departmentId = $project ? $project['department_id'] : 0;
-        
-        // Get department managers if department is specified
-        $managerIds = [];
-        if ($departmentId > 0) {
-            $managerIds = $this->getDepartmentManagers($departmentId);
-        }
-        
-        // Combine member IDs and manager IDs, remove duplicates
-        $allUserIds = [];
-        if ($userIds) {
-            $allUserIds = array_merge($allUserIds, $userIds);
-        }
-        if (!empty($managerIds)) {
-            $allUserIds = array_merge($allUserIds, $managerIds);
-        }
-        $allUserIds = array_unique($allUserIds);
+        // Members/managers + team supervisors (or dept project_manager if no team)
+        $allUserIds = $this->getProjectInteractionNotifyUserids($projectId, $userIds ?: []);
 
         $projectName = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
         
@@ -7203,33 +7325,175 @@ class Project extends ApplicationModel {
     }
     
     /**
-     * Hàm tiện ích để gửi thông báo khi cập nhật dự án
+     * Important project fields that trigger update notifications.
+     * @return string[]
      */
-    function notifyProjectUpdated($projectId, $projectName, $changes = []) {
-        // Title / message đa ngôn ngữ
+    private function getImportantProjectNotifyFields() {
+        return ['amount', 'name', 'start_date', 'end_date', 'caily_nouki', 'guis_nouki', 'tantou'];
+    }
+
+    /**
+     * @return array<string,array{ja:string,vi:string}>
+     */
+    private function getImportantProjectFieldLabels() {
+        return [
+            'amount' => ['ja' => '総額', 'vi' => 'Tổng tiền'],
+            'name' => ['ja' => '案件名', 'vi' => 'Tên dự án'],
+            'start_date' => ['ja' => '開始日', 'vi' => 'Ngày bắt đầu'],
+            'end_date' => ['ja' => '終了日', 'vi' => 'Ngày kết thúc'],
+            'caily_nouki' => ['ja' => 'CAILY納期', 'vi' => 'Kỳ hạn CAILY'],
+            'guis_nouki' => ['ja' => 'GUIS納期', 'vi' => 'Kỳ hạn GUIS'],
+            'tantou' => ['ja' => '担当', 'vi' => 'Phụ trách'],
+        ];
+    }
+
+    private function normalizeTeamsCsvForCompare($teamsCsv) {
+        $ids = $this->parseProjectTeamIds($teamsCsv);
+        sort($ids);
+        return implode(',', $ids);
+    }
+
+    private function didProjectTeamsChange(array $old, array $data) {
+        if (!array_key_exists('teams', $data)) {
+            return false;
+        }
+        $oldNorm = $this->normalizeTeamsCsvForCompare(isset($old['teams']) ? $old['teams'] : '');
+        $newNorm = $this->normalizeTeamsCsvForCompare($data['teams']);
+        return $oldNorm !== $newNorm;
+    }
+
+    /**
+     * Detect changes on important fields (posted values + cleared datetime fields).
+     * @param string[] $nullDatetimeFields
+     * @return array<int,array{field:string,label_ja:string,label_vi:string}>
+     */
+    private function collectImportantProjectFieldChanges(array $old, array $data, array $nullDatetimeFields = []) {
+        $labels = $this->getImportantProjectFieldLabels();
+        $datetimeFields = ['start_date', 'end_date', 'caily_nouki', 'guis_nouki'];
+        $changed = [];
+
+        foreach ($this->getImportantProjectNotifyFields() as $field) {
+            $fieldChanged = false;
+            if (in_array($field, $nullDatetimeFields, true)) {
+                $oldCmp = $this->normalizeDatetimeForCompare(isset($old[$field]) ? $old[$field] : '');
+                $fieldChanged = ($oldCmp !== '');
+            } elseif (!array_key_exists($field, $data)) {
+                continue;
+            } elseif ($field === 'amount') {
+                $fieldChanged = floatval($data[$field]) != floatval(isset($old[$field]) ? $old[$field] : 0);
+            } elseif (in_array($field, $datetimeFields, true)) {
+                $oldCmp = $this->normalizeDatetimeForCompare(isset($old[$field]) ? $old[$field] : '');
+                $newCmp = $this->normalizeDatetimeForCompare($data[$field]);
+                $fieldChanged = ($oldCmp !== $newCmp);
+            } else {
+                $oldVal = isset($old[$field]) ? trim((string)$old[$field]) : '';
+                $newVal = trim((string)$data[$field]);
+                $fieldChanged = ($oldVal !== $newVal);
+            }
+
+            if ($fieldChanged && isset($labels[$field])) {
+                $changed[] = [
+                    'field' => $field,
+                    'label_ja' => $labels[$field]['ja'],
+                    'label_vi' => $labels[$field]['vi'],
+                ];
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * Notify when important project fields are updated.
+     * @param array $changes list from collectImportantProjectFieldChanges()
+     * @param string[] $recipientIds
+     */
+    function notifyProjectUpdated($projectId, $projectName, $changes = [], $recipientIds = []) {
+        if (empty($changes)) {
+            return false;
+        }
+
+        $projectNameShort = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
+        $labelsJa = [];
+        $labelsVi = [];
+        foreach ($changes as $change) {
+            if (!empty($change['label_ja'])) {
+                $labelsJa[] = $change['label_ja'];
+            }
+            if (!empty($change['label_vi'])) {
+                $labelsVi[] = $change['label_vi'];
+            }
+        }
+        $fieldsJa = !empty($labelsJa) ? implode('、', $labelsJa) : '重要項目';
+        $fieldsVi = !empty($labelsVi) ? implode(', ', $labelsVi) : 'trường quan trọng';
+
         $titleJa = '#'.$projectId.': 案件が更新されました';
-        $messageJa = sprintf('案件「%s」が更新されました', $projectName);
-        $titleVi =  '#'.$projectId.': Dự án đã được cập nhật';
-        $messageVi = sprintf('Dự án「%s」đã được cập nhật', $projectName);
-        
+        $messageJa = sprintf('%sが案件「%s」の%sを更新しました', $this->getNotificationActorNameJa(), $projectNameShort, $fieldsJa);
+        $titleVi = '#'.$projectId.': Dự án đã được cập nhật';
+        $messageVi = sprintf('%s đã cập nhật %s của dự án「%s」', $this->getNotificationActorNameVi(), $fieldsVi, $projectNameShort);
+
         $params = [
             'event' => 'project_updated',
             'title' => $titleJa,
             'message' => $messageJa,
             'project_id' => $projectId,
+            'user_ids' => $recipientIds,
             'data' => [
-                'project_name' => $projectName,
+                'project_name' => $projectNameShort,
                 'changes' => $changes,
                 'action' => 'updated',
+                'avatar' => $this->getUserImage(),
+                'url' => "/project/detail.php?id=$projectId",
                 'title_ja' => $titleJa,
                 'message_ja' => $messageJa,
                 'title_vi' => $titleVi,
                 'message_vi' => $messageVi,
+                'is_important' => 1,
             ],
-            'url' => "/project/detail.php?id=$projectId",
             'type' => 'project'
         ];
-        
+
+        return $this->sendProjectNotification($params);
+    }
+
+    /**
+     * Notify when project teams are changed.
+     * @param string[] $recipientIds
+     */
+    function notifyProjectTeamsChanged($projectId, $projectName, $oldTeamNames, $newTeamNames, $recipientIds = []) {
+        $projectNameShort = strlen($projectName) > 15 ? substr($projectName, 0, 15) . '...' : $projectName;
+        $oldLabel = ($oldTeamNames !== null && trim((string)$oldTeamNames) !== '') ? trim((string)$oldTeamNames) : '（なし）';
+        $newLabel = ($newTeamNames !== null && trim((string)$newTeamNames) !== '') ? trim((string)$newTeamNames) : '（なし）';
+        $oldLabelVi = ($oldTeamNames !== null && trim((string)$oldTeamNames) !== '') ? trim((string)$oldTeamNames) : '(không có)';
+        $newLabelVi = ($newTeamNames !== null && trim((string)$newTeamNames) !== '') ? trim((string)$newTeamNames) : '(không có)';
+
+        $titleJa = '#'.$projectId.': チームが変更されました';
+        $messageJa = sprintf('%sが案件「%s」のチームを「%s」から「%s」に変更しました', $this->getNotificationActorNameJa(), $projectNameShort, $oldLabel, $newLabel);
+        $titleVi = '#'.$projectId.': Team dự án đã được thay đổi';
+        $messageVi = sprintf('%s đã đổi team của dự án「%s」từ「%s」sang「%s」', $this->getNotificationActorNameVi(), $projectNameShort, $oldLabelVi, $newLabelVi);
+
+        $params = [
+            'event' => 'project_teams_changed',
+            'title' => $titleJa,
+            'message' => $messageJa,
+            'project_id' => $projectId,
+            'user_ids' => $recipientIds,
+            'data' => [
+                'project_name' => $projectNameShort,
+                'old_teams' => $oldTeamNames,
+                'new_teams' => $newTeamNames,
+                'action' => 'teams_changed',
+                'avatar' => $this->getUserImage(),
+                'url' => "/project/detail.php?id=$projectId",
+                'title_ja' => $titleJa,
+                'message_ja' => $messageJa,
+                'title_vi' => $titleVi,
+                'message_vi' => $messageVi,
+                'is_important' => 1,
+            ],
+            'type' => 'project'
+        ];
+
         return $this->sendProjectNotification($params);
     }
 

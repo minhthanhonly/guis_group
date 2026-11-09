@@ -1411,11 +1411,29 @@ if($_SESSION['show_project'] == 0){
                                 </button>
                             </div>
                         </div>
-                        <div v-if="notes.length > 0 && filteredNotes.length > 0" class="list-group">
-                            <div v-for="note in filteredNotes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
-                                <div class="flex-grow-1" style="cursor: pointer;" @click="openNoteModal(note)">
-                                    <div class="d-flex align-items-center mb-1">
-                                        <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
+                        <div v-if="notes.length > 0 && filteredNotes.length > 0"
+                             ref="detailNotesList"
+                             class="list-group detail-notes-list"
+                             :class="{ 'note-filters-active': !!(noteFilterLabel || noteFilterType !== '') }">
+                            <div v-for="note in filteredNotes"
+                                 :key="note.id"
+                                 class="list-group-item detail-note-item"
+                                 :class="{
+                                     'important-note': note.is_important == 1,
+                                     'pinned-self-note': note.is_pinned_self == 1
+                                 }"
+                                 :data-note-id="note.id">
+                                <span class="note-drag-handle"
+                                      title="並べ替え"
+                                      aria-label="並べ替え"
+                                      @click.stop
+                                      @mousedown.stop>
+                                    <i class="fa fa-grip-vertical"></i>
+                                </span>
+                                <div class="note-main" style="cursor: pointer;" @click="openNoteModal(note)">
+                                    <div class="d-flex align-items-center mb-1 flex-wrap gap-1">
+                                        <i v-if="note.is_important == 1" class="fa fa-thumb-tack text-danger" title="ピン（全員）"></i>
+                                        <i v-if="note.is_pinned_self == 1" class="fa fa-bookmark text-primary" title="ピン（自分）"></i>
                                         <small class="text-secondary">
                                             {{ formatShortDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}
                                         </small>
@@ -1427,14 +1445,30 @@ if($_SESSION['show_project'] == 0){
                                         <span v-else-if="note.needs_confirmation == 2" class="badge bg-dark">GUISメモ</span>
                                         <span v-if="note.display_column" class="badge bg-secondary">関連項目: {{ getNoteDisplayColumnLabel(note.display_column) }}</span>
                                     </div>
-                                    <div v-if="note.content" class="text-muted small ql-editor" style="word-break: break-word;" v-html="decodeNoteHtml(note.content)"></div>
+                                    <div v-if="note.content" class="text-muted small ql-editor detail-note-content" style="word-break: break-word;" v-html="decodeNoteHtml(note.content)"></div>
                                 </div>
-                                <button class="btn btn-outline-danger btn-sm ms-2" 
-                                        @click="deleteNote(note.id)" 
-                                        title="削除"
-                                        v-if="canDeleteNote(note)">
-                                    <i class="fa fa-trash"></i>
-                                </button>
+                                <div class="detail-note-trailing" @click.stop>
+                                    <span class="note-actions">
+                                        <span class="note-pin-everyone-icon"
+                                              :class="{ 'is-active': note.is_important == 1 }"
+                                              :title="note.is_important == 1 ? 'ピン（全員）解除' : 'ピン（全員）'"
+                                              @click="toggleNotePin(note, 'everyone')">
+                                            <i class="fa fa-thumb-tack"></i>
+                                        </span>
+                                        <span class="note-pin-self-icon"
+                                              :class="{ 'is-active': note.is_pinned_self == 1 }"
+                                              :title="note.is_pinned_self == 1 ? 'ピン（自分）解除' : 'ピン（自分）'"
+                                              @click="toggleNotePin(note, 'self')">
+                                            <i class="fa fa-bookmark"></i>
+                                        </span>
+                                    </span>
+                                    <button class="btn btn-outline-danger btn-sm detail-note-delete"
+                                            @click="deleteNote(note.id)"
+                                            title="削除"
+                                            v-if="canDeleteNote(note)">
+                                        <i class="fa fa-trash"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                         <div v-else-if="notes.length > 0" class="text-center text-muted py-3">
@@ -1682,10 +1716,11 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label"><span data-i18n="内容">内容</span></label>
                                 <div class="form-control ql-editor" style="min-height:100px;max-height:300px;overflow-y:auto;" v-html="editingNote.content || '-'"></div>
                             </div>
-                            <div class="mb-3" v-if="editingNote.is_important">
-                                <label class="form-label"><span data-i18n="重要メモ">重要メモ</span></label>
-                                <div>
-                                    <i class="fa fa-exclamation-circle text-danger"></i>
+                            <div class="mb-3" v-if="editingNote.is_important || editingNote.is_pinned_self">
+                                <label class="form-label"><span data-i18n="ピン">ピン</span></label>
+                                <div class="d-flex flex-wrap gap-2">
+                                    <span v-if="editingNote.is_important" class="badge bg-danger"><i class="fa fa-thumb-tack me-1"></i><span data-i18n="ピン（全員）">ピン（全員）</span></span>
+                                    <span v-if="editingNote.is_pinned_self" class="badge bg-primary"><i class="fa fa-bookmark me-1"></i><span data-i18n="ピン（自分）">ピン（自分）</span></span>
                                 </div>
                             </div>
                             <div class="mb-3" v-if="editingNote.needs_confirmation">
@@ -1717,10 +1752,16 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </div>
                             <div class="mb-3">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant">
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant" @change="onNotePinEveryoneChange">
                                     <label class="form-check-label" for="isImportant">
-                                        <i class="fa fa-exclamation-circle text-danger me-2"></i> <span data-i18n="重要メモ">重要メモ</span>
+                                        <i class="fa fa-thumb-tack text-danger me-2"></i> <span data-i18n="ピン（全員）">ピン（全員）</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" v-model="editingNote.is_pinned_self" id="isPinnedSelf" @change="onNotePinSelfChange">
+                                    <label class="form-check-label" for="isPinnedSelf">
+                                        <i class="fa fa-bookmark text-primary me-2"></i> <span data-i18n="ピン（自分）">ピン（自分）</span>
                                     </label>
                                 </div>
                             </div>
@@ -1786,6 +1827,103 @@ $view->footing();
 ?>
 
 <style>
+
+/* Detail notes: pin + drag (aligned with project list) */
+.detail-notes-list .detail-note-item {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+.detail-notes-list .detail-note-item.important-note {
+    border-left: 3px solid #dc3545;
+}
+.detail-notes-list .detail-note-item.pinned-self-note {
+    border-left: 3px solid #0d6efd;
+}
+.detail-notes-list .detail-note-item.important-note.pinned-self-note {
+    border-left: 3px solid #dc3545;
+    box-shadow: inset 3px 0 0 #0d6efd;
+}
+.detail-notes-list .note-drag-handle {
+    flex: 0 0 14px;
+    width: 14px;
+    color: #adb5bd;
+    cursor: grab;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    padding-top: 2px;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.detail-notes-list .note-drag-handle:active {
+    cursor: grabbing;
+}
+.detail-notes-list .note-drag-handle:hover {
+    color: #0d6efd;
+}
+.detail-notes-list.note-filters-active .note-drag-handle {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+.detail-notes-list .note-main {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.detail-notes-list .detail-note-trailing {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+.detail-notes-list .note-actions {
+    position: static;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 1px 3px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+.detail-notes-list .detail-note-item:hover .note-actions,
+.detail-notes-list .detail-note-item:focus-within .note-actions {
+    display: inline-flex;
+}
+.detail-notes-list .note-pin-everyone-icon,
+.detail-notes-list .note-pin-self-icon {
+    cursor: pointer;
+    color: #6c757d;
+}
+.detail-notes-list .note-pin-everyone-icon.is-active {
+    color: #dc3545;
+}
+.detail-notes-list .note-pin-self-icon.is-active {
+    color: #0d6efd;
+}
+.detail-notes-list .detail-note-delete {
+    flex: 0 0 auto;
+}
+.detail-notes-list .detail-note-item.note-sortable-ghost {
+    opacity: 0.35;
+    background: #dee2e6;
+}
+.detail-notes-list .detail-note-item.note-sortable-chosen {
+    background: #e7f1ff;
+}
+.detail-note-item.note-sortable-fallback,
+.sortable-fallback.detail-note-item {
+    background: #fffdf5 !important;
+    border: 1px solid #0d6efd !important;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28) !important;
+    opacity: 1 !important;
+    z-index: 10050 !important;
+}
+.detail-note-item.note-sortable-fallback .detail-note-trailing,
+.sortable-fallback.detail-note-item .detail-note-trailing {
+    display: none !important;
+}
 
 /* Memo label chip — distinct from Bootstrap .badge */
 .note-label-chip {

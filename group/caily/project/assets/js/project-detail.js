@@ -719,6 +719,7 @@ const vueApp = createApp({
                 title: '',
                 content: '',
                 is_important: false,
+                is_pinned_self: false,
                 needs_confirmation: false,
                 display_column: '',
                 label: '',
@@ -726,6 +727,8 @@ const vueApp = createApp({
                 labelOther: '',
                 user_id: null
             },
+            _detailNotesSortable: null,
+            _detailNotesSortablePending: false,
             quillNoteInstance: null,
             quillNoteContent: '',
             // Project status update loading
@@ -4355,6 +4358,139 @@ const vueApp = createApp({
                 console.error('Error loading notes:', error);
                 this.notes = [];
             }
+            this.$nextTick(() => this.initDetailNotesSortable());
+        },
+        ensureSortableLoadedForDetailNotes() {
+            if (typeof Sortable !== 'undefined') {
+                return Promise.resolve();
+            }
+            if (window.__sortableJsLoading) {
+                return window.__sortableJsLoading;
+            }
+            var loader = window.AppLoader;
+            if (loader && typeof loader.loadScript === 'function') {
+                window.__sortableJsLoading = loader.loadScript(
+                    'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
+                ).catch(function(err) {
+                    delete window.__sortableJsLoading;
+                    throw err;
+                });
+                return window.__sortableJsLoading;
+            }
+            window.__sortableJsLoading = new Promise(function(resolve, reject) {
+                var s = document.createElement('script');
+                s.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
+                s.async = true;
+                s.onload = function() { resolve(); };
+                s.onerror = function() {
+                    delete window.__sortableJsLoading;
+                    reject(new Error('Failed to load Sortable'));
+                };
+                document.head.appendChild(s);
+            });
+            return window.__sortableJsLoading;
+        },
+        destroyDetailNotesSortable() {
+            if (this._detailNotesSortable) {
+                try { this._detailNotesSortable.destroy(); } catch (e) { /* ignore */ }
+                this._detailNotesSortable = null;
+            }
+        },
+        initDetailNotesSortable() {
+            var self = this;
+            this.destroyDetailNotesSortable();
+            var el = this.$refs.detailNotesList;
+            if (!el || !this.filteredNotes || this.filteredNotes.length < 2) return;
+            // Filters active → don't allow reorder (would scramble global sort_order)
+            if (this.noteFilterLabel || this.noteFilterType !== '') return;
+
+            var bind = function() {
+                if (typeof Sortable === 'undefined') return;
+                var live = self.$refs.detailNotesList;
+                if (!live || !live.isConnected) return;
+                self._detailNotesSortable = Sortable.create(live, {
+                    handle: '.note-drag-handle',
+                    animation: 180,
+                    ghostClass: 'note-sortable-ghost',
+                    chosenClass: 'note-sortable-chosen',
+                    dragClass: 'note-sortable-drag',
+                    fallbackClass: 'note-sortable-fallback',
+                    forceFallback: true,
+                    fallbackOnBody: true,
+                    draggable: '.detail-note-item',
+                    onClone: function(evt) {
+                        var clone = evt.clone;
+                        if (!clone) return;
+                        var trailing = clone.querySelector('.detail-note-trailing');
+                        if (trailing) trailing.remove();
+                    },
+                    onEnd: function() {
+                        self.persistDetailNotesOrder();
+                    }
+                });
+            };
+
+            if (typeof Sortable !== 'undefined') {
+                bind();
+                return;
+            }
+            if (this._detailNotesSortablePending) return;
+            this._detailNotesSortablePending = true;
+            this.ensureSortableLoadedForDetailNotes().then(function() {
+                self._detailNotesSortablePending = false;
+                bind();
+            }).catch(function(err) {
+                self._detailNotesSortablePending = false;
+                console.error('Failed to load Sortable for detail notes', err);
+            });
+        },
+        persistDetailNotesOrder() {
+            var el = this.$refs.detailNotesList;
+            if (!el) return;
+            var ids = [];
+            el.querySelectorAll('.detail-note-item').forEach(function(node) {
+                var id = node.getAttribute('data-note-id');
+                if (id) ids.push(id);
+            });
+            if (ids.length < 2) return;
+
+            // Keep local array order in sync with DOM before reload
+            var byId = {};
+            (this.notes || []).forEach(function(n) { byId[String(n.id)] = n; });
+            var reordered = [];
+            ids.forEach(function(id) {
+                if (byId[String(id)]) reordered.push(byId[String(id)]);
+            });
+            (this.notes || []).forEach(function(n) {
+                if (ids.indexOf(String(n.id)) === -1 && ids.indexOf(n.id) === -1) {
+                    reordered.push(n);
+                }
+            });
+            this.notes = reordered;
+
+            var formData = new FormData();
+            formData.append('project_id', this.projectId);
+            formData.append('note_ids', JSON.stringify(ids));
+            axios.post('/api/index.php?model=project&method=reorderNotes', formData).catch(function(err) {
+                console.error('Failed to reorder notes', err);
+            });
+        },
+        async toggleNotePin(note, mode) {
+            if (!note || !note.id) return;
+            var method = mode === 'self' ? 'toggleNotePersonalPin' : 'toggleNoteImportant';
+            try {
+                var formData = new FormData();
+                formData.append('id', note.id);
+                var response = await axios.post('/api/index.php?model=project&method=' + method, formData);
+                if (response.data && response.data.status === 'success') {
+                    await this.loadNotes();
+                } else {
+                    this.showNotification('ピンの更新に失敗しました', 'error');
+                }
+            } catch (error) {
+                console.error('Error toggling note pin:', error);
+                this.showNotification('ピンの更新に失敗しました', 'error');
+            }
         },
         buildEmptyEditingNote(overrides = {}) {
             return Object.assign({
@@ -4362,6 +4498,7 @@ const vueApp = createApp({
                 title: '',
                 content: '',
                 is_important: false,
+                is_pinned_self: false,
                 needs_confirmation: 0,
                 display_column: '',
                 label: '',
@@ -4392,6 +4529,16 @@ const vueApp = createApp({
                 this.editingNote.labelOther = '';
             }
         },
+        onNotePinEveryoneChange() {
+            if (this.editingNote && this.editingNote.is_important) {
+                this.editingNote.is_pinned_self = false;
+            }
+        },
+        onNotePinSelfChange() {
+            if (this.editingNote && this.editingNote.is_pinned_self) {
+                this.editingNote.is_important = false;
+            }
+        },
         resolveNoteLabelForSave() {
             if (this.editingNote.labelSelect === this.NOTE_LABEL_OTHER) {
                 return String(this.editingNote.labelOther || '').trim().slice(0, 100);
@@ -4409,6 +4556,7 @@ const vueApp = createApp({
                     title: note.title,
                     content: note.content ? this.decodeHtmlEntities(note.content) : '',
                     is_important: note.is_important == 1,
+                    is_pinned_self: note.is_pinned_self == 1,
                     needs_confirmation: Number(note.needs_confirmation) || 0,
                     display_column: (note.display_column != null && note.display_column !== undefined) ? String(note.display_column) : '',
                     user_id: note.user_id
@@ -4468,7 +4616,11 @@ const vueApp = createApp({
                 const formData = new FormData();
                 formData.append('project_id', this.projectId);
                 formData.append('content', rawContent);
-                formData.append('is_important', this.editingNote.is_important ? 1 : 0);
+                // Mutual exclusivity: prefer ピン（全員） if both somehow set
+                var pinEveryone = !!this.editingNote.is_important;
+                var pinSelf = !!this.editingNote.is_pinned_self && !pinEveryone;
+                formData.append('is_important', pinEveryone ? 1 : 0);
+                formData.append('is_pinned_self', pinSelf ? 1 : 0);
                 formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
                 formData.append('display_column', this.editingNote.display_column || '');
                 formData.append('label', this.resolveNoteLabelForSave());
@@ -5877,6 +6029,15 @@ const vueApp = createApp({
             },
             deep: true
         },
+        noteFilterLabel() {
+            this.$nextTick(() => this.initDetailNotesSortable());
+        },
+        noteFilterType() {
+            this.$nextTick(() => this.initDetailNotesSortable());
+        },
+    },
+    beforeUnmount() {
+        this.destroyDetailNotesSortable();
     },
     async mounted() {
         // D1: permission ∥ getById(+secondary); notes/logs/categories ∥ critical path (projectId từ URL)
