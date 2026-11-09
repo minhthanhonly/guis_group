@@ -1550,18 +1550,22 @@ body.project-notes-one-line #projectTable td.confirmation-notes-column .confirma
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    align-self: center;
+    align-self: flex-start;
     color: #adb5bd;
     cursor: grab;
     font-size: 0.75rem;
     line-height: 1;
-    padding: 0;
+    padding: 4px 0 0;
     margin: 0;
     z-index: 3;
     user-select: none;
     -webkit-user-select: none;
     touch-action: none;
     transform: none;
+}
+body.project-notes-one-line #projectTable .confirmation-note-item .note-drag-handle,
+#projectTableCard.project-notes-one-line #projectTable .confirmation-note-item .note-drag-handle {
+    align-self: flex-start;
 }
 #projectTable .confirmation-note-item .note-drag-handle:active {
     cursor: grabbing;
