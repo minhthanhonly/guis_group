@@ -1393,6 +1393,8 @@
               <!-- holiday-offcanvas.js sẽ inject button vào đây -->
             </div>
           </div>
+          <!-- Upcoming holiday panel — dưới template-customizer-open-btn (filled by holiday-offcanvas.js) -->
+          <div id="upcoming-holiday-banner-slot" aria-live="polite"></div>
           <?php if (!empty($__showProjectDisplayTimezone)): ?>
           <script>
           (function () {

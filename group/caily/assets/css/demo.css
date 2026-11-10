@@ -521,6 +521,138 @@ html.has-test-env-banner.layout-navbar-fixed .layout-wrapper:not(.layout-horizon
 	justify-content: center;
 }
 
+/* Upcoming holiday panel — fixed under .template-customizer-open-btn (top:150px, h:38px) */
+#upcoming-holiday-banner-slot {
+	position: fixed;
+	top: 198px; /* 150 + 38 + 10 */
+	right: 0;
+	z-index: 99990;
+	max-width: min(300px, calc(100vw - 16px));
+	pointer-events: none;
+}
+#upcoming-holiday-banner {
+	pointer-events: auto;
+	border: 1px solid rgba(220, 53, 69, 0.3);
+	background: #fff;
+	border-end-start-radius: 0.5rem;
+	border-start-start-radius: 0.5rem;
+	border-inline-end: 0;
+	box-shadow: 0 0.125rem 0.35rem rgba(34, 48, 62, 0.16);
+	padding: 0.55rem 0.7rem;
+	min-width: 210px;
+}
+#upcoming-holiday-banner.is-collapsed {
+	min-width: 0;
+	width: 38px;
+	padding: 0;
+	border-radius: 0.375rem 0 0 0.375rem;
+	background: var(--bs-danger, #dc3545);
+	border-color: transparent;
+	box-shadow: 0 0.125rem 0.25rem rgba(220, 53, 69, 0.35);
+}
+#upcoming-holiday-banner .uhb-header {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	min-height: 1.5rem;
+}
+#upcoming-holiday-banner.is-collapsed .uhb-header {
+	justify-content: center;
+	min-height: 38px;
+	cursor: pointer;
+}
+#upcoming-holiday-banner .uhb-title {
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: #dc3545;
+	white-space: nowrap;
+}
+#upcoming-holiday-banner .uhb-summary {
+	display: none;
+}
+#upcoming-holiday-banner.is-collapsed .uhb-title,
+#upcoming-holiday-banner.is-collapsed .uhb-summary,
+#upcoming-holiday-banner.is-collapsed .uhb-window {
+	display: none !important;
+}
+#upcoming-holiday-banner .uhb-toggle {
+	flex: 0 0 auto;
+	border: 0;
+	background: transparent;
+	color: #6c757d;
+	padding: 0.15rem 0.3rem;
+	line-height: 1;
+	border-radius: 0.25rem;
+}
+#upcoming-holiday-banner .uhb-toggle:hover {
+	color: #dc3545;
+	background: rgba(220, 53, 69, 0.08);
+}
+#upcoming-holiday-banner.is-collapsed .uhb-toggle {
+	color: #fff;
+	padding: 0;
+	width: 100%;
+	height: 38px;
+	border-radius: 0.375rem 0 0 0.375rem;
+}
+#upcoming-holiday-banner.is-collapsed .uhb-toggle:hover {
+	color: #fff;
+	background: rgba(255, 255, 255, 0.12);
+}
+#upcoming-holiday-banner .uhb-body {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	margin-top: 0.4rem;
+}
+#upcoming-holiday-banner.is-collapsed .uhb-body {
+	display: none;
+}
+#upcoming-holiday-banner .uhb-company {
+	display: flex;
+	align-items: flex-start;
+	gap: 0.4rem;
+	font-size: 0.75rem;
+	min-width: 0;
+}
+#upcoming-holiday-banner .uhb-company .badge {
+	font-size: 0.62rem;
+	margin-top: 0.1rem;
+}
+#upcoming-holiday-banner .uhb-items {
+	display: flex;
+	flex-direction: column;
+	gap: 0.15rem;
+	min-width: 0;
+}
+#upcoming-holiday-banner .uhb-item {
+	display: flex;
+	align-items: baseline;
+	gap: 0.35rem;
+	min-width: 0;
+}
+#upcoming-holiday-banner .uhb-date {
+	color: #495057;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+#upcoming-holiday-banner .uhb-name {
+	color: #212529;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 11rem;
+}
+#upcoming-holiday-banner .uhb-empty {
+	font-size: 0.72rem;
+	color: #adb5bd;
+}
+#upcoming-holiday-banner .uhb-window {
+	font-size: 0.68rem;
+	color: #6c757d;
+	font-weight: 400;
+}
+
 /* FAB shortcut label (chìm phía trên button) */
 .fab-shortcut-label {
 	font-size: 9px;

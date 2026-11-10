@@ -1,18 +1,25 @@
 (function () {
     'use strict';
 
-    var CAILY_API = 'https://group.caily.com.vn/api/index.php?type=get_upcoming_holidays&debug=1&days=90&limit=10';
-    var GUIS_API = '/api/index.php?model=timecard&method=get_holiday_upcoming&days=90&limit=10';
+    var CAILY_API = 'https://group.caily.com.vn/api/index.php?type=get_upcoming_holidays&debug=1&days=60&limit=40';
+    var GUIS_API = '/api/index.php?model=timecard&method=get_holiday_upcoming&days=60&limit=40';
+    var BUSINESS_DAYS_WINDOW = 30;
+    var BANNER_COLLAPSE_KEY = 'upcomingHolidayBannerCollapsed';
 
     // i18n helper — fallback to JP if i18next not ready
     var I18N = {
         '祝日一覧':         { vi: 'Danh sách ngày nghỉ' },
         '今後の祝日':       { vi: 'Ngày nghỉ sắp tới' },
+        '近日の祝日':       { vi: 'Ngày nghỉ sắp tới' },
+        '30営業日以内':     { vi: 'Trong 30 ngày làm việc' },
         '読み込み中...':    { vi: 'Đang tải...' },
         '祝日はありません': { vi: 'Không có ngày nghỉ' },
         '今週':             { vi: 'Tuần này' },
         '今日':             { vi: 'Hôm nay' },
         '明日':             { vi: 'Ngày mai' },
+        '展開':             { vi: 'Mở rộng' },
+        '縮小':             { vi: 'Thu nhỏ' },
+        'なし':             { vi: 'Không có' }
     };
 
     function t(key) {
@@ -23,6 +30,220 @@
         var lang = (typeof i18next !== 'undefined' && i18next.language) ? i18next.language : 'ja';
         if (lang.indexOf('vi') === 0 && I18N[key] && I18N[key].vi) return I18N[key].vi;
         return key;
+    }
+
+    function pad2(n) {
+        return (n < 10 ? '0' : '') + n;
+    }
+
+    function toYmd(dateObj) {
+        return dateObj.getFullYear() + '-' + pad2(dateObj.getMonth() + 1) + '-' + pad2(dateObj.getDate());
+    }
+
+    function parseYmdLocal(dateStr) {
+        if (!dateStr) return null;
+        var m = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (!m) return null;
+        return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
+
+    function isWeekend(dateObj) {
+        var day = dateObj.getDay();
+        return day === 0 || day === 6;
+    }
+
+    function startOfToday() {
+        var d = new Date();
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+
+    /** End of window covering `count` weekdays from today (inclusive when today is weekday). */
+    function getBusinessWindowEnd(count) {
+        var d = startOfToday();
+        var counted = isWeekend(d) ? 0 : 1;
+        while (counted < count) {
+            d.setDate(d.getDate() + 1);
+            if (!isWeekend(d)) counted++;
+        }
+        return d;
+    }
+
+    function weekdayLabel(dateObj) {
+        var labels = ['日', '月', '火', '水', '木', '金', '土'];
+        return labels[dateObj.getDay()] || '';
+    }
+
+    function formatHolidayDate(dateStr) {
+        var d = parseYmdLocal(dateStr);
+        if (!d) return dateStr || '';
+        return (d.getMonth() + 1) + '/' + d.getDate() + '(' + weekdayLabel(d) + ')';
+    }
+
+    function holidayName(h) {
+        return (h && (h.name_ja || h.name)) ? String(h.name_ja || h.name) : '';
+    }
+
+    function filterHolidaysInBusinessWindow(list, days) {
+        var today = startOfToday();
+        var end = getBusinessWindowEnd(days || BUSINESS_DAYS_WINDOW);
+        var todayYmd = toYmd(today);
+        var endYmd = toYmd(end);
+        var out = [];
+        (list || []).forEach(function (h) {
+            var dateStr = h && h.date ? String(h.date).slice(0, 10) : '';
+            if (!dateStr) return;
+            var d = parseYmdLocal(dateStr);
+            if (!d || isWeekend(d)) return;
+            if (dateStr >= todayYmd && dateStr <= endYmd) {
+                out.push(h);
+            }
+        });
+        out.sort(function (a, b) {
+            return String(a.date).localeCompare(String(b.date));
+        });
+        return out;
+    }
+
+    function isBannerCollapsed() {
+        try {
+            return localStorage.getItem(BANNER_COLLAPSE_KEY) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function setBannerCollapsed(collapsed) {
+        try {
+            localStorage.setItem(BANNER_COLLAPSE_KEY, collapsed ? '1' : '0');
+        } catch (e) {}
+    }
+
+    function escapeHtml(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function companyLineHtml(company, list) {
+        var badgeClass = company === 'CAILY' ? 'bg-success' : 'bg-dark';
+        if (!list || !list.length) {
+            return '<div class="uhb-company">' +
+                '<span class="badge ' + badgeClass + '">' + company + '</span>' +
+                '<span class="uhb-empty">' + escapeHtml(t('なし')) + '</span>' +
+                '</div>';
+        }
+        var items = list.map(function (h) {
+            return '<div class="uhb-item">' +
+                '<span class="uhb-date">' + escapeHtml(formatHolidayDate(h.date)) + '</span>' +
+                '<span class="uhb-name" title="' + escapeHtml(holidayName(h)) + '">' + escapeHtml(holidayName(h)) + '</span>' +
+                '</div>';
+        }).join('');
+        return '<div class="uhb-company">' +
+            '<span class="badge ' + badgeClass + '">' + company + '</span>' +
+            '<div class="uhb-items">' + items + '</div>' +
+            '</div>';
+    }
+
+    function syncToggleUi(banner, btn, collapsed) {
+        if (!banner || !btn) return;
+        banner.classList.toggle('is-collapsed', collapsed);
+        var icon = btn.querySelector('i');
+        if (icon) {
+            icon.className = 'fa ' + (collapsed ? 'fa-calendar' : 'fa-chevron-right');
+        }
+        btn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        btn.setAttribute('title', collapsed ? t('展開') : t('縮小'));
+        var headerIcon = banner.querySelector('.uhb-header > .fa-calendar');
+        if (headerIcon) {
+            headerIcon.style.display = collapsed ? 'none' : '';
+        }
+    }
+
+    function renderBanner(guisList, cailyList) {
+        var slot = document.getElementById('upcoming-holiday-banner-slot');
+        if (!slot) return;
+
+        if ((!guisList || !guisList.length) && (!cailyList || !cailyList.length)) {
+            slot.innerHTML = '';
+            return;
+        }
+
+        var collapsed = isBannerCollapsed();
+        var html =
+            '<div id="upcoming-holiday-banner"' + (collapsed ? ' class="is-collapsed"' : '') + ' role="status">' +
+            '  <div class="uhb-header">' +
+            '    <i class="fa fa-calendar text-danger" aria-hidden="true"' + (collapsed ? ' style="display:none"' : '') + '></i>' +
+            '    <span class="uhb-title">' +
+            escapeHtml(t('近日の祝日')) +
+            ' <span class="uhb-window">(' + escapeHtml(t('30営業日以内')) + ')</span>' +
+            '</span>' +
+            '    <button type="button" class="uhb-toggle ms-auto" id="upcomingHolidayBannerToggle"' +
+            '      title="' + escapeHtml(collapsed ? t('展開') : t('縮小')) + '"' +
+            '      aria-expanded="' + (collapsed ? 'false' : 'true') + '">' +
+            '      <i class="fa ' + (collapsed ? 'fa-calendar' : 'fa-chevron-right') + '" aria-hidden="true"></i>' +
+            '    </button>' +
+            '  </div>' +
+            '  <div class="uhb-body">' +
+            companyLineHtml('GUIS', guisList) +
+            companyLineHtml('CAILY', cailyList) +
+            '  </div>' +
+            '</div>';
+
+        slot.innerHTML = html;
+
+        var btn = document.getElementById('upcomingHolidayBannerToggle');
+        var banner = document.getElementById('upcoming-holiday-banner');
+        if (btn && banner) {
+            btn.addEventListener('click', function () {
+                var nextCollapsed = !banner.classList.contains('is-collapsed');
+                setBannerCollapsed(nextCollapsed);
+                syncToggleUi(banner, btn, nextCollapsed);
+            });
+        }
+    }
+
+    function loadBannerHolidays() {
+        if (!document.getElementById('upcoming-holiday-banner-slot')) return;
+
+        var guisList = [];
+        var cailyList = [];
+        var guisDone = false;
+        var cailyDone = false;
+
+        function finish() {
+            if (!guisDone || !cailyDone) return;
+            renderBanner(
+                filterHolidaysInBusinessWindow(guisList, BUSINESS_DAYS_WINDOW),
+                filterHolidaysInBusinessWindow(cailyList, BUSINESS_DAYS_WINDOW)
+            );
+        }
+
+        fetch(GUIS_API)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                guisList = (data && data.list) ? data.list : [];
+                guisDone = true;
+                finish();
+            })
+            .catch(function () {
+                guisDone = true;
+                finish();
+            });
+
+        fetch(CAILY_API)
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                cailyList = (data && data.list) ? data.list : [];
+                cailyDone = true;
+                finish();
+            })
+            .catch(function () {
+                cailyDone = true;
+                finish();
+            });
     }
 
     function injectHTML() {
@@ -76,7 +297,12 @@
         var wrapper = document.createElement('div');
         wrapper.innerHTML = html;
         while (wrapper.firstChild) {
-            target.appendChild(wrapper.firstChild);
+            var node = wrapper.firstChild;
+            if (node.nodeType === 1 && node.id === 'offcanvasHolidays') {
+                document.body.appendChild(node);
+            } else {
+                target.appendChild(node);
+            }
         }
     }
 
@@ -203,9 +429,11 @@
         document.addEventListener('DOMContentLoaded', function () {
             injectHTML();
             initOffcanvas();
+            loadBannerHolidays();
         });
     } else {
         injectHTML();
         initOffcanvas();
+        loadBannerHolidays();
     }
 })();
