@@ -455,6 +455,8 @@ class Customer extends ApplicationModel {
             if ($result) {
                 $hash['status'] = 'success';
                 $hash['message_code'] = 'success';
+                // New customer id, so callers can add it to a list without looking it up by name
+                $hash['id'] = intval($result);
             }
         } catch (Exception $e) {
             $hash['message_code'] = $e->getMessage();
@@ -538,6 +540,25 @@ class Customer extends ApplicationModel {
             $result = $this->fetchOne($query);
             
             if ($result['count'] > 0) {
+                throw new Exception('この顧客は案件で使用中のため削除できません。');
+            }
+            // Also referenced as a (non-primary) customer in a parent project's customer list?
+            $linkedCount = 0;
+            try {
+                $linked = $this->fetchOne(sprintf(
+                    "SELECT COUNT(*) as count
+                    FROM " . DB_PREFIX . "parent_project_customers l
+                    INNER JOIN " . DB_PREFIX . "parent_projects p ON p.id = l.parent_project_id
+                    WHERE l.customer_id = %d
+                    AND (p.status IS NULL OR p.status != 'deleted')",
+                    intval($id)
+                ));
+                $linkedCount = isset($linked['count']) ? intval($linked['count']) : 0;
+            } catch (Exception $e) {
+                // Link table not created yet: nothing can reference the customer through it
+                $linkedCount = 0;
+            }
+            if ($linkedCount > 0) {
                 throw new Exception('この顧客は案件で使用中のため削除できません。');
             }
             $result = $this->query_delete(['id' => $id]);

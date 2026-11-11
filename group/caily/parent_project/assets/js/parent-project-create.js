@@ -1,6 +1,7 @@
 const { createApp } = Vue;
 
 createApp({
+    mixins: [window.ParentProjectCustomersMixin],
     data() {
         return {
             parentProject: {
@@ -150,7 +151,6 @@ createApp({
             categories: [],
             departments: [],
             departmentNameMap: {},
-            customers: [],
             newCustomer: {
                 company_name: '大東建託株式会社',
                 company_name_kana: '',
@@ -180,14 +180,8 @@ createApp({
             },
             selectedCustomer: null,
             updatingCustomer: false,
-            customerSearchKeyword: '',
-            customerSearchResults: [],
-            customerSearchLoading: false,
-            allCustomersForSearch: [],
-            customerSearchLoaded: false,
             duplicateDismissedKey: '',
             duplicatePromptPromise: null,
-            isApplyingCopiedData: false,
         }
     },
     computed: {
@@ -280,21 +274,11 @@ createApp({
             };
             let valid = true;
             
-            if (!this.parentProject.company_name) {
-                this.validationErrors.company_name = '会社名は必須です';
+            // At least one customer; the primary one fills company / branch / contact
+            if (!this.validateCustomerList()) {
                 valid = false;
             }
-            
-            if (!this.parentProject.branch_name) {
-                this.validationErrors.branch_name = '支店名は必須です';
-                valid = false;
-            }
-            
-            if (!this.parentProject.contact_name) {
-                this.validationErrors.contact_name = '担当様は必須です';
-                valid = false;
-            }
-            
+
             if (!this.parentProject.guis_receiver) {
                 this.validationErrors.guis_receiver = 'GUIS受付者は必須です';
                 valid = false;
@@ -480,11 +464,14 @@ createApp({
             }
             
             try {
+                this.syncPrimaryCustomerFields();
                 const formData = new FormData();
                 formData.append('company_name', this.parentProject.company_name || '');
                 formData.append('branch_name', this.parentProject.branch_name || '');
                 formData.append('contact_name', this.parentProject.contact_name || '');
                 formData.append('customer_id', this.parentProject.customer_id || '');
+                // Full customer list; the server takes the primary customer's names from the master
+                this.appendCustomersToFormData(formData);
                 formData.append('guis_receiver', this.parentProject.guis_receiver || '');
                 formData.append('request_date', this.parentProject.request_date || '');
                 formData.append('construction_number', this.parentProject.construction_number || '');
@@ -567,67 +554,6 @@ createApp({
             }
         },
         initSelect2() {
-            // Initialize company name Select2 with default data
-            const $company = $('#company_name');
-            if ($company.length) {
-                const self = this;
-                $company.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $company.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    templateResult: this.addCustomerResultTemplate,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_companies',
-                        dataType: 'json',
-                        delay: 250,
-                        data: function(params) {
-                            return {
-                                search: params.term,
-                                page: params.page || 1
-                            };
-                        },
-                        processResults: function(data) {
-                            const results = (data && data.data ? data.data : []).map(function(item) {
-                                return {
-                                    id: item.company_name,
-                                    text: item.company_name
-                                };
-                            });
-                            // 大東を含むオプションを先頭に
-                            results.sort((a, b) => {
-                                const aHas = (a.text || '').includes('大東');
-                                const bHas = (b.text || '').includes('大東');
-                                if (aHas && !bHas) return -1;
-                                if (!aHas && bHas) return 1;
-                                return 0;
-                            });
-                            return { results: self.appendAddCustomerResult(results) };
-                        }
-                    }
-                }).on('select2:select', (e) => {
-                    if (e.params.data.id === '__add_customer__' || e.params.data.isAddCustomer) {
-                        return;
-                    }
-                    this.parentProject.company_name = e.params.data.id;
-                    this.validationErrors.company_name = ''; // Clear validation error
-                    this.onCompanyChange();
-                }).on('select2:clear', () => {
-                    this.parentProject.company_name = '';
-                    this.onCompanyChange();
-                });
-                this.bindSelect2AddCustomerLink($company);
-
-                // Load initial companies data
-                this.loadInitialCompanies();
-            }
-
-            // Initialize branch name Select2
-            this.initBranchSelect2();
-
-            // Initialize contact name Select2
-            this.initContactSelect2();
-            
             // Initialize GUIS Receiver Select2
             this.initGuisReceiverSelect2();
             
@@ -636,212 +562,6 @@ createApp({
             
             // Initialize Tagify
             this.initTagify();
-        },
-        async loadInitialCompanies() {
-            try {
-                const response = await axios.get('/api/index.php?model=customer&method=list_companies');
-                if (response.data && response.data.data) {
-                    const companies = response.data.data.map(item => ({
-                        id: item.company_name,
-                        text: item.company_name
-                    }));
-                    // 大東を含むオプションを先頭に
-                    companies.sort((a, b) => {
-                        const aHas = (a.text || '').includes('大東');
-                        const bHas = (b.text || '').includes('大東');
-                        if (aHas && !bHas) return -1;
-                        if (!aHas && bHas) return 1;
-                        return 0;
-                    });
-
-                    // Add options to company select2
-                    const $company = $('#company_name');
-                    if ($company.length && $company.data('select2')) {
-                        companies.forEach(company => {
-                            const option = new Option(company.text, company.id, false, false);
-                            $company.append(option);
-                        });
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading initial companies:', error);
-            }
-        },
-        onCompanyChange() {
-            if (this.isApplyingCopiedData) {
-                return;
-            }
-            // Clear branch and contact when company changes
-            this.parentProject.branch_name = '';
-            this.parentProject.contact_name = '';
-            this.parentProject.customer_id = '';
-            
-            // Update branch select2 - trigger to reload data
-            const $branch = $('#branch_name');
-            if ($branch.length && $branch.data('select2')) {
-                $branch.val(null).trigger('change');
-                // Force reload of branch data
-                $branch.select2('destroy');
-                this.initBranchSelect2();
-            }
-            
-            // Update contact select2
-            const $contact = $('#contact_name');
-            if ($contact.length && $contact.data('select2')) {
-                $contact.val(null).trigger('change');
-                $contact.select2('destroy');
-                this.initContactSelect2();
-            }
-        },
-        onBranchChange() {
-            if (this.isApplyingCopiedData) {
-                return;
-            }
-            // Clear contact when branch changes
-            this.parentProject.contact_name = '';
-            this.parentProject.customer_id = '';
-            
-            // Update contact select2
-            const $contact = $('#contact_name');
-            if ($contact.length && $contact.data('select2')) {
-                $contact.val(null).trigger('change');
-                $contact.select2('destroy');
-                this.initContactSelect2();
-            }
-        },
-        /**
-         * Always append「顧客情報を追加」as last Select2 result (works with/without AJAX hits).
-         */
-        appendAddCustomerResult(results) {
-            const list = Array.isArray(results) ? results.slice() : [];
-            const addId = '__add_customer__';
-            return list
-                .filter(function(item) { return item && item.id !== addId; })
-                .concat([{
-                    id: addId,
-                    text: '顧客情報を追加',
-                    isAddCustomer: true
-                }]);
-        },
-        addCustomerResultTemplate(item) {
-            if (item.loading) {
-                return item.text;
-            }
-            if (item.isAddCustomer || item.id === '__add_customer__') {
-                return $(
-                    '<span class="select2-add-customer-option text-primary d-inline-block w-100 py-1 border-top">'
-                    + '<i class="fa fa-plus me-1"></i>顧客情報を追加</span>'
-                );
-            }
-            return item.text;
-        },
-        bindSelect2AddCustomerLink($el) {
-            if (!$el || !$el.length) return;
-            const self = this;
-            $el.off('select2:selecting.addCustomer').on('select2:selecting.addCustomer', function(e) {
-                const data = e.params && e.params.args && e.params.args.data;
-                if (!data || (data.id !== '__add_customer__' && !data.isAddCustomer)) {
-                    return;
-                }
-                e.preventDefault();
-                try { $el.select2('close'); } catch (err) { /* ignore */ }
-                self.openNewCustomerModal();
-            });
-        },
-        initBranchSelect2() {
-            const $branch = $('#branch_name');
-            if ($branch.length) {
-                const self = this;
-                $branch.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $branch.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    templateResult: this.addCustomerResultTemplate,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_branches_by_company',
-                        dataType: 'json',
-                        delay: 250,
-                        data: (params) => {
-                            return {
-                                search: params.term,
-                                page: params.page || 1,
-                                company_name: this.parentProject.company_name
-                            };
-                        },
-                        processResults: function(data) {
-                            const rows = (data && data.data) ? data.data : [];
-                            return {
-                                results: self.appendAddCustomerResult(rows.map(function(item) {
-                                    return {
-                                        id: item.branch,
-                                        text: item.branch
-                                    };
-                                }))
-                            };
-                        }
-                    }
-                }).on('select2:select', (e) => {
-                    if (e.params.data.id === '__add_customer__' || e.params.data.isAddCustomer) {
-                        return;
-                    }
-                    this.parentProject.branch_name = e.params.data.id;
-                    this.validationErrors.branch_name = ''; // Clear validation error
-                    this.onBranchChange();
-                }).on('select2:clear', () => {
-                    this.parentProject.branch_name = '';
-                    this.onBranchChange();
-                });
-                this.bindSelect2AddCustomerLink($branch);
-            }
-        },
-        initContactSelect2() {
-            const $contact = $('#contact_name');
-            if ($contact.length) {
-                const self = this;
-                $contact.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $contact.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    templateResult: this.addCustomerResultTemplate,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_contacts_by_company_branch',
-                        dataType: 'json',
-                        delay: 250,
-                        data: (params) => {
-                            return {
-                                search: params.term,
-                                page: params.page || 1,
-                                company_name: this.parentProject.company_name,
-                                branch_name: this.parentProject.branch_name
-                            };
-                        },
-                        processResults: function(data) {
-                            const rows = (data && data.data) ? data.data : [];
-                            return {
-                                results: self.appendAddCustomerResult(rows.map(function(item) {
-                                    return {
-                                        id: item.id,
-                                        text: item.name
-                                    };
-                                }))
-                            };
-                        }
-                    }
-                }).on('select2:select', (e) => {
-                    if (e.params.data.id === '__add_customer__' || e.params.data.isAddCustomer) {
-                        return;
-                    }
-                    this.parentProject.contact_name = e.params.data.text;
-                    this.parentProject.customer_id = e.params.data.id;
-                    this.validationErrors.contact_name = ''; // Clear validation error
-                }).on('select2:clear', () => {
-                    this.parentProject.contact_name = '';
-                    this.parentProject.customer_id = '';
-                });
-                this.bindSelect2AddCustomerLink($contact);
-            }
         },
         initGuisReceiverSelect2() {
             const $guisReceiver = $('#guis_receiver');
@@ -1221,35 +941,6 @@ createApp({
             }
         },
 
-        getCustomerGuisDepartmentIds(customer) {
-            if (!customer) return [];
-            if (Array.isArray(customer.guis_department)) {
-                return customer.guis_department.map((id) => String(id)).filter(Boolean);
-            }
-            if (typeof customer.guis_department === 'string' && customer.guis_department) {
-                return customer.guis_department.split(',').map((id) => String(id).trim()).filter(Boolean);
-            }
-            return [];
-        },
-
-        formatGuisDepartmentNames(customer) {
-            const names = this.getCustomerGuisDepartmentIds(customer)
-                .map((id) => this.departmentNameMap[id] || '')
-                .filter(Boolean);
-            return names.length > 0 ? names.join(', ') : '—';
-        },
-
-        normalizeCustomerSearchRow(customer) {
-            if (!customer) return customer;
-            const row = { ...customer };
-            if (typeof row.guis_department === 'string' && row.guis_department) {
-                row.guis_department = row.guis_department.split(',').filter(Boolean);
-            } else if (!Array.isArray(row.guis_department)) {
-                row.guis_department = [];
-            }
-            return row;
-        },
-
         async loadCategories() {
             try {
                 const response = await axios.get('/api/index.php?model=customer&method=list_category');
@@ -1261,80 +952,6 @@ createApp({
                 console.error('Error loading categories:', error);
                 showMessage('カテゴリーの読み込みに失敗しました。', true);
             }
-        },
-
-        async loadCustomers() {
-            try {
-                // Only load customers if both company and branch are selected
-                if (!this.parentProject.company_name || !this.parentProject.branch_name) {
-                    this.customers = [];
-                    return;
-                }
-
-                // Load customers from all categories for the contact_name dropdown
-                // First get all categories, then get customers from each category
-                const categoriesResponse = await axios.get('/api/index.php?model=customer&method=list_category');
-                if (categoriesResponse.data && categoriesResponse.data.length > 0) {
-                    this.customers = [];
-                    for (const category of categoriesResponse.data) {
-                        try {
-                            const customersResponse = await axios.get(`/api/index.php?model=customer&method=list_customer&category_id=${category.id}`);
-                            if (customersResponse.data.status === 'success' && customersResponse.data.data) {
-                                // Filter customers by company and branch
-                                const filteredCustomers = customersResponse.data.data.filter(customer => 
-                                    customer.company_name === this.parentProject.company_name && 
-                                    customer.branch === this.parentProject.branch_name
-                                );
-                                this.customers = this.customers.concat(filteredCustomers);
-                            }
-                        } catch (error) {
-                            console.error(`Error loading customers for category ${category.id}:`, error);
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading customers:', error);
-                showMessage('顧客の読み込みに失敗しました。', true);
-            }
-        },
-
-        async loadCustomerDataByProject() {
-            if (this.parentProject.customer_id) {
-                try {
-                    const response = await axios.get(`/api/index.php?model=customer&method=get&id=${this.parentProject.customer_id}`);
-                    if (response.data && response.data.status === 'success' && response.data.data) {
-                        return response.data.data;
-                    }
-                } catch (error) {
-                    console.error('Error loading customer by id:', error);
-                }
-            }
-
-            if (!this.parentProject.contact_name || !this.parentProject.company_name) {
-                return null;
-            }
-
-            try {
-                if (this.categories.length === 0) {
-                    await this.loadCategories();
-                }
-                for (const category of this.categories) {
-                    const customersResponse = await axios.get(`/api/index.php?model=customer&method=list_customer&category_id=${category.id}`);
-                    if (customersResponse.data.status === 'success' && customersResponse.data.data) {
-                        const customer = customersResponse.data.data.find((c) =>
-                            c.name === this.parentProject.contact_name
-                            && c.company_name === this.parentProject.company_name
-                            && c.branch === this.parentProject.branch_name
-                        );
-                        if (customer) {
-                            return customer;
-                        }
-                    }
-                }
-            } catch (error) {
-                console.error('Error loading customer data:', error);
-            }
-            return null;
         },
 
         async showCustomerInfoModal(customer) {
@@ -1371,40 +988,6 @@ createApp({
                     });
                 }
             }, 300);
-        },
-
-        async openCustomerInfoModal() {
-            if (!this.parentProject.contact_name && !this.parentProject.customer_id) {
-                showMessage('担当者が選択されていません。', true);
-                return;
-            }
-
-            try {
-                const customer = await this.loadCustomerDataByProject();
-                if (customer) {
-                    await this.showCustomerInfoModal(customer);
-                } else {
-                    showMessage('顧客情報が見つかりません。', true);
-                }
-            } catch (error) {
-                console.error('Error loading customer info:', error);
-                showMessage('顧客情報の読み込みに失敗しました。', true);
-            }
-        },
-
-        setContactSelect2Value(contactName, customerId) {
-            const $contact = $('#contact_name');
-            if (!$contact.length || !contactName) {
-                return;
-            }
-            const value = customerId || contactName;
-            if ($contact.data('select2')) {
-                $contact.empty();
-                const option = new Option(contactName, value, true, true);
-                $contact.append(option).trigger('change');
-            }
-            this.parentProject.contact_name = contactName;
-            this.parentProject.customer_id = customerId ? String(customerId) : '';
         },
 
         async updateCustomer() {
@@ -1462,18 +1045,9 @@ createApp({
                 if (response.data.status === 'success') {
                     showMessage('顧客情報を更新しました。');
 
-                    this.parentProject.company_name = this.selectedCustomer.company_name || '';
-                    this.parentProject.branch_name = this.selectedCustomer.branch || '';
-                    this.parentProject.contact_name = this.selectedCustomer.name || '';
-                    this.parentProject.customer_id = String(this.selectedCustomer.id);
-
-                    await this.loadCustomers();
-                    this.$nextTick(() => {
-                        this.setContactSelect2Value(
-                            this.parentProject.contact_name,
-                            this.parentProject.customer_id
-                        );
-                    });
+                    this.applyCustomerMasterUpdateToList(this.selectedCustomer);
+                    this.syncPrimaryCustomerFields();
+                    this.customerSearchLoaded = false;
 
                     $('#customerInfoModal').modal('hide');
                     this.selectedCustomer = null;
@@ -1520,84 +1094,6 @@ createApp({
                 branch: this.parentProject.branch_name,
             });
             $('#customerModal').modal('show');
-        },
-
-        async openCustomerSearchModal() {
-            this.customerSearchKeyword = '';
-            this.customerSearchResults = [];
-            $('#customerSearchModal').modal('show');
-            if (Object.keys(this.departmentNameMap).length === 0) {
-                await this.loadDepartments();
-            }
-            if (!this.customerSearchLoaded) {
-                await this.loadAllCustomersForSearch();
-            }
-        },
-
-        async loadAllCustomersForSearch() {
-            this.customerSearchLoading = true;
-            try {
-                const response = await axios.get('/api/index.php?model=customer&method=list_customer&all=1');
-                if (response.data && response.data.status === 'success' && Array.isArray(response.data.data)) {
-                    this.allCustomersForSearch = response.data.data.map((customer) => this.normalizeCustomerSearchRow(customer));
-                    this.customerSearchLoaded = true;
-                } else {
-                    this.allCustomersForSearch = [];
-                }
-            } catch (error) {
-                console.error('Error loading customers for search:', error);
-                this.allCustomersForSearch = [];
-                showMessage('顧客の読み込みに失敗しました。', true);
-            } finally {
-                this.customerSearchLoading = false;
-            }
-        },
-
-        searchCustomersByKeyword() {
-            const keyword = (this.customerSearchKeyword || '').trim().toLowerCase();
-            if (!keyword) {
-                this.customerSearchResults = [];
-                return;
-            }
-            const fieldsForSearch = (customer) => [
-                customer.company_name,
-                customer.company_name_kana,
-                customer.branch,
-                customer.name,
-                customer.name_kana,
-                customer.tel,
-                customer.phone,
-                customer.email,
-                this.formatGuisDepartmentNames(customer),
-            ];
-            this.customerSearchResults = (this.allCustomersForSearch || [])
-                .filter((customer) => fieldsForSearch(customer).some((value) => String(value || '').toLowerCase().includes(keyword)))
-                .slice(0, 100);
-        },
-
-        selectCustomerFromSearch(customer) {
-            if (!customer) {
-                return;
-            }
-            $('#customerSearchModal').modal('hide');
-
-            const customerData = {
-                company_name: customer.company_name || '',
-                branch: customer.branch || '',
-                name: customer.name || '',
-                id: customer.id || null,
-            };
-
-            this.parentProject.company_name = customerData.company_name;
-            this.parentProject.branch_name = customerData.branch;
-            this.parentProject.contact_name = customerData.name;
-            this.parentProject.customer_id = customerData.id ? String(customerData.id) : '';
-
-            this.validationErrors.company_name = '';
-            this.validationErrors.branch_name = '';
-            this.validationErrors.contact_name = '';
-
-            this.updateAllSelect2WithCustomer(customerData);
         },
 
         resetCustomerData(prefill = {}) {
@@ -1664,38 +1160,19 @@ createApp({
                 if (response.data.status == 'success') {
                     showMessage('顧客を保存しました。');
                     
-                    // Store customer data BEFORE doing anything else (since API doesn't return customer ID)
-                    const customerData = {
+                    const created = {
+                        id: response.data.id || null,
                         company_name: this.newCustomer.company_name,
                         branch: this.newCustomer.branch,
-                        name: this.newCustomer.name,
-                        id: null // We'll find this after reloading customers
+                        name: this.newCustomer.name
                     };
-                    
-                    // Close modal
+
                     $('#customerModal').modal('hide');
-                    
-                    // Reset form data AFTER storing the data
                     this.resetCustomerData();
-                    
-                    // Set the form values
-                    this.parentProject.company_name = customerData.company_name;
-                    this.parentProject.branch_name = customerData.branch;
-                    this.parentProject.contact_name = customerData.name;
-                    // customer_id will be set after we find the customer
-                    
-                    // Refresh data first, then update Select2
-                    Promise.all([
-                        this.loadCategories(),
-                        // Don't call loadCustomers here as it will be called by updateAllSelect2WithCustomer
-                    ]).then(() => {
-                        // Update Select2 dropdowns after data is refreshed
-                        setTimeout(() => {
-                            this.updateAllSelect2WithCustomer(customerData);
-                        }, 500);
-                    }).catch(error => {
-                        console.error('Error in Promise.all:', error);
-                    });
+
+                    // Add the new customer to the customer list (first one becomes the primary)
+                    await this.addNewCustomerToList(created);
+                    this.loadCategories();
                 } else {
                     showParentProjectError(response.data.message_code || '顧客の保存に失敗しました。', response && response.data);
                 }
@@ -1725,86 +1202,6 @@ createApp({
                     });
             } else {
                 showMessage('郵便番号が正しくありません。', true);
-            }
-        },
-
-        onContactNameChange() {
-            // Find the selected customer and set the customer_id
-            const selectedCustomer = this.customers.find(c => c.name === this.parentProject.contact_name);
-            if (selectedCustomer) {
-                this.parentProject.customer_id = selectedCustomer.id;
-            } else {
-                this.parentProject.customer_id = '';
-            }
-        },
-
-        onCompanyNameChange() {
-            if (this.isApplyingCopiedData) {
-                return;
-            }
-            // Clear branch and contact when company changes
-            this.parentProject.branch_name = '';
-            this.parentProject.contact_name = '';
-            this.parentProject.customer_id = '';
-            this.customers = []; // Clear customers list
-            
-            // Update Select2 dropdowns
-            this.$nextTick(() => {
-                const $branch = $('#branch_name');
-                if ($branch.length && $branch.data('select2')) {
-                    $branch.val(null).trigger('change');
-                }
-                
-                const $contact = $('#contact_name');
-                if ($contact.length && $contact.data('select2')) {
-                    $contact.val(null).trigger('change');
-                }
-            });
-        },
-
-        onBranchNameChange() {
-            if (this.isApplyingCopiedData) {
-                return;
-            }
-            // Clear contact when branch changes
-            this.parentProject.contact_name = '';
-            this.parentProject.customer_id = '';
-            
-            // Load customers for the selected company and branch
-            this.loadCustomers();
-            
-            // Update contact Select2
-            this.$nextTick(() => {
-                const $contact = $('#contact_name');
-                if ($contact.length && $contact.data('select2')) {
-                    $contact.val(null).trigger('change');
-                }
-            });
-        },
-
-        // Helper method to update Select2 with new options
-        updateSelect2WithNewOption(selectId, value, text) {
-            const $select = $(selectId);
-            if ($select.length && $select.data('select2')) {
-                // Remove existing option if it exists
-                $select.find(`option[value="${value}"]`).remove();
-                
-                // Add new option
-                const newOption = new Option(text, value, false, false);
-                $select.append(newOption);
-                
-                // Set value and trigger change
-                $select.val(value).trigger('change');
-                
-                // Force Select2 to refresh
-                $select.select2('destroy');
-                $select.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $select.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0
-                });
-                $select.val(value).trigger('change');
             }
         },
 
@@ -1900,57 +1297,28 @@ createApp({
                 $select.trigger('change');
             }
         },
-        async applyCopiedCustomerSelects(data) {
-            const company = data.company_name || '';
-            const branch = data.branch_name || '';
-            const contact = data.contact_name || '';
-            const customerId = data.customer_id || '';
-
-            this.isApplyingCopiedData = true;
-            try {
-                this.parentProject.company_name = company;
-                this.parentProject.branch_name = branch;
-                this.parentProject.contact_name = contact;
-                this.parentProject.customer_id = customerId;
-
-                this.setSelect2Value($('#company_name'), company, company);
-                await new Promise((resolve) => setTimeout(resolve, 100));
-
-                this.setSelect2Value($('#branch_name'), branch, branch);
-                await new Promise((resolve) => setTimeout(resolve, 100));
-
-                try {
-                    await this.loadCustomers();
-                } catch (error) {
-                    console.error('Error loading customers for copied building:', error);
-                }
-
-                const $contact = $('#contact_name');
-                if ($contact.length) {
-                    $contact.prop('disabled', false);
-                    $contact.find('option:not(:first)').remove();
-                    (this.customers || []).forEach((customer) => {
-                        const option = new Option(customer.name, customer.name, false, false);
-                        option.setAttribute('data-customer-id', customer.id);
-                        $contact.append(option);
-                    });
-                    if (contact && !$contact.find('option').filter(function () { return String($(this).val()) === contact; }).length) {
-                        const option = new Option(contact, contact, true, true);
-                        if (customerId) {
-                            option.setAttribute('data-customer-id', customerId);
-                        }
-                        $contact.append(option);
-                    }
-                    this.setSelect2Value($contact, contact, contact);
-                }
-
-                this.parentProject.company_name = company;
-                this.parentProject.branch_name = branch;
-                this.parentProject.contact_name = contact;
-                this.parentProject.customer_id = customerId;
-            } finally {
-                this.isApplyingCopiedData = false;
+        // Customers of a copied building: full list when present, otherwise the single (primary) customer
+        async applyCopiedCustomers(data) {
+            const source = data || {};
+            if (Array.isArray(source.customers) && source.customers.length > 0) {
+                this.setCustomerListFromServer(source.customers);
+            } else if (source.customer_id) {
+                const customer = await this.fetchCustomerMasterById(source.customer_id);
+                this.setCustomerListFromServer(customer
+                    ? [{ ...customer, customer_id: customer.id, is_primary: 1 }]
+                    : []);
+            } else if (source.company_name || source.contact_name) {
+                this.setCustomerListFromServer([{
+                    customer_id: null,
+                    is_primary: 1,
+                    company_name: source.company_name || '',
+                    branch_name: source.branch_name || '',
+                    contact_name: source.contact_name || ''
+                }]);
+            } else {
+                this.setCustomerListFromServer([]);
             }
+            this.syncPrimaryCustomerFields();
         },
         async loadCopiedParentProjectData() {
             const raw = sessionStorage.getItem('copyParentProjectData');
@@ -1988,7 +1356,7 @@ createApp({
                 this.clearRequestsValidation();
 
                 await new Promise((resolve) => setTimeout(resolve, 300));
-                await this.applyCopiedCustomerSelects(data);
+                await this.applyCopiedCustomers(data);
 
                 this.setCurrentDateTime();
                 this.applyTagifyValuesFromParentProject();
@@ -2014,71 +1382,6 @@ createApp({
                 }
                 return false;
             }
-        },
-        updateAllSelect2WithCustomer(customerData) {
-            // Update company name Select2
-            const $company = $('#company_name');
-            if ($company.length) {
-                // Check if option already exists
-                if (!$company.find(`option[value="${customerData.company_name}"]`).length) {
-                    $company.append(new Option(customerData.company_name, customerData.company_name, false, false));
-                }
-                $company.val(customerData.company_name).trigger('change');
-            }
-            
-            // Update branch name Select2
-            setTimeout(() => {
-                const $branch = $('#branch_name');
-                if ($branch.length) {
-                    // Check if option already exists
-                    if (!$branch.find(`option[value="${customerData.branch}"]`).length) {
-                        $branch.append(new Option(customerData.branch, customerData.branch, false, false));
-                    }
-                    $branch.val(customerData.branch).trigger('change');
-                }
-                
-                // Load customers for this company/branch combination and then update contact
-                setTimeout(() => {
-                    this.loadCustomers().then(() => {
-                        const $contact = $('#contact_name');
-                        if ($contact.length) {
-                            // Enable the contact dropdown since we now have company and branch
-                            $contact.prop('disabled', false);
-                            
-                            // Find the customer by name and company/branch (since we don't have ID from API)
-                            let targetCustomer = this.customers.find(c => 
-                                c.name === customerData.name && 
-                                c.company_name === customerData.company_name && 
-                                c.branch === customerData.branch
-                            );
-                            
-                            // If we found the customer, update the customerData with the real ID
-                            if (targetCustomer) {
-                                customerData.id = targetCustomer.id;
-                            }
-                            
-                            // Clear existing options except the first one (placeholder)
-                            $contact.find('option:not(:first)').remove();
-                            
-                            // Add all customers as options
-                            this.customers.forEach(customer => {
-                                const option = new Option(customer.name, customer.name, false, false);
-                                option.setAttribute('data-customer-id', customer.id);
-                                $contact.append(option);
-                            });
-                            
-                            // Set the value to the new customer
-                            $contact.val(customerData.name).trigger('change');
-                            
-                            // Update Vue model with the correct customer ID
-                            this.parentProject.contact_name = customerData.name;
-                            this.parentProject.customer_id = customerData.id;
-                        }
-                    }).catch(error => {
-                        console.error('Error loading customers:', error);
-                    });
-                }, 300);
-            }, 200);
         }
     },
 

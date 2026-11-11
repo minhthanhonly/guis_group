@@ -43,6 +43,376 @@ class ParentProject extends ApplicationModel {
         $this->ensureParentProjectsUtf8mb4();
         $this->ensureParentProjectFeatureColumns();
         $this->ensureParentProjectCityColumn();
+        $this->ensureParentProjectCustomersTable();
+    }
+
+    /**
+     * Link table: customers of a parent project. Exactly one row per parent project is the
+     * primary customer (主顧客); parent_projects.customer_id / company_name / branch_name /
+     * contact_name always mirror that primary row.
+     */
+    private function parentProjectCustomersTable() {
+        return DB_PREFIX . 'parent_project_customers';
+    }
+
+    /**
+     * Create the link table if missing and, right after creating it, turn the existing single
+     * customer of every parent project into its primary row.
+     * Same statements as sql/create_parent_project_customers_table.sql.
+     */
+    private function ensureParentProjectCustomersTable() {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        $link = $this->parentProjectCustomersTable();
+        try {
+            $row = $this->fetchOne(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
+                . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($link) . "'"
+            );
+            if (!empty($row['cnt'])) {
+                return;
+            }
+            $this->query(
+                "CREATE TABLE IF NOT EXISTS `{$link}` ("
+                . "`id` int(11) NOT NULL AUTO_INCREMENT, "
+                . "`parent_project_id` int(11) NOT NULL, "
+                . "`customer_id` int(11) NOT NULL, "
+                . "`is_primary` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 = 主顧客 (連絡先)', "
+                . "`sort_order` int(11) NOT NULL DEFAULT 0, "
+                . "`created_at` datetime DEFAULT NULL, "
+                . "PRIMARY KEY (`id`), "
+                . "UNIQUE KEY `uniq_parent_project_customer` (`parent_project_id`, `customer_id`), "
+                . "KEY `idx_ppc_customer_id` (`customer_id`)"
+                . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+            );
+            $this->query(
+                "INSERT INTO `{$link}` (`parent_project_id`, `customer_id`, `is_primary`, `sort_order`, `created_at`) "
+                . "SELECT p.id, CAST(p.customer_id AS UNSIGNED), 1, 0, NOW() "
+                . "FROM `{$this->table}` p "
+                . "INNER JOIN `" . DB_PREFIX . "customer` c ON c.id = CAST(p.customer_id AS UNSIGNED) "
+                . "WHERE p.customer_id REGEXP '^[0-9]+$' "
+                . "AND NOT EXISTS (SELECT 1 FROM `{$link}` l WHERE l.parent_project_id = p.id)"
+            );
+        } catch (Exception $e) {
+            error_log('ensureParentProjectCustomersTable failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Customers of a parent project in display order, with exactly one row flagged is_primary.
+     * Names come from the customer master (always fresh). The parent row's own customer_id is the
+     * authority for which customer is primary, so rows written without the link table
+     * (CLI import, older code) still come back correctly.
+     *
+     * @param int $parentProjectId
+     * @param array|null $parentRow parent_projects row (customer_id, company_name, branch_name, contact_name)
+     * @return array[] each: customer_id (int|null), is_primary (0|1), company_name, branch_name, contact_name, tel, phone, email
+     */
+    private function fetchParentProjectCustomers($parentProjectId, $parentRow = null) {
+        $parentProjectId = intval($parentProjectId);
+        if ($parentProjectId <= 0) {
+            return array();
+        }
+        if (!is_array($parentRow)) {
+            $parentRow = $this->fetchOne(sprintf(
+                "SELECT customer_id, company_name, branch_name, contact_name FROM %s WHERE id = %d",
+                $this->table,
+                $parentProjectId
+            ));
+        }
+        $mirrorId = (isset($parentRow['customer_id']) && ctype_digit(trim((string)$parentRow['customer_id'])))
+            ? intval($parentRow['customer_id']) : 0;
+        $mirrorCompany = isset($parentRow['company_name']) ? (string)$parentRow['company_name'] : '';
+        $mirrorBranch = isset($parentRow['branch_name']) ? (string)$parentRow['branch_name'] : '';
+        $mirrorContact = isset($parentRow['contact_name']) ? (string)$parentRow['contact_name'] : '';
+
+        $rows = $this->fetchAll(sprintf(
+            "SELECT l.customer_id, l.is_primary, c.id AS master_id, c.company_name, c.branch AS branch_name,
+                    c.name AS contact_name, c.tel, c.phone, c.email
+             FROM %s l
+             LEFT JOIN %scustomer c ON c.id = l.customer_id
+             WHERE l.parent_project_id = %d
+             ORDER BY l.sort_order ASC, l.id ASC",
+            $this->parentProjectCustomersTable(),
+            DB_PREFIX,
+            $parentProjectId
+        ));
+
+        $list = array();
+        foreach ($rows as $r) {
+            $cid = intval($r['customer_id']);
+            if (empty($r['master_id']) && $cid !== $mirrorId) {
+                continue; // customer master row no longer exists
+            }
+            $list[] = array(
+                'customer_id' => $cid,
+                'is_primary' => 0,
+                'company_name' => !empty($r['master_id']) ? (string)$r['company_name'] : $mirrorCompany,
+                'branch_name' => !empty($r['master_id']) ? (string)$r['branch_name'] : $mirrorBranch,
+                'contact_name' => !empty($r['master_id']) ? (string)$r['contact_name'] : $mirrorContact,
+                'tel' => isset($r['tel']) ? (string)$r['tel'] : '',
+                'phone' => isset($r['phone']) ? (string)$r['phone'] : '',
+                'email' => isset($r['email']) ? (string)$r['email'] : '',
+                '_flag' => intval($r['is_primary']),
+            );
+        }
+
+        $primaryIndex = -1;
+        if ($mirrorId > 0) {
+            foreach ($list as $i => $item) {
+                if ($item['customer_id'] === $mirrorId) {
+                    $primaryIndex = $i;
+                    break;
+                }
+            }
+            if ($primaryIndex < 0) {
+                $c = $this->fetchOne(sprintf(
+                    "SELECT id, company_name, branch, name, tel, phone, email FROM %scustomer WHERE id = %d",
+                    DB_PREFIX,
+                    $mirrorId
+                ));
+                array_unshift($list, array(
+                    'customer_id' => $mirrorId,
+                    'is_primary' => 0,
+                    'company_name' => !empty($c) ? (string)$c['company_name'] : $mirrorCompany,
+                    'branch_name' => !empty($c) ? (string)$c['branch'] : $mirrorBranch,
+                    'contact_name' => !empty($c) ? (string)$c['name'] : $mirrorContact,
+                    'tel' => !empty($c) ? (string)$c['tel'] : '',
+                    'phone' => !empty($c) ? (string)$c['phone'] : '',
+                    'email' => !empty($c) ? (string)$c['email'] : '',
+                    '_flag' => 1,
+                ));
+                $primaryIndex = 0;
+            }
+        } elseif (trim($mirrorCompany) !== '' || trim($mirrorContact) !== '') {
+            // Legacy row: names only, not linked to the customer master.
+            array_unshift($list, array(
+                'customer_id' => null,
+                'is_primary' => 0,
+                'company_name' => $mirrorCompany,
+                'branch_name' => $mirrorBranch,
+                'contact_name' => $mirrorContact,
+                'tel' => '',
+                'phone' => '',
+                'email' => '',
+                '_flag' => 1,
+            ));
+            $primaryIndex = 0;
+        } else {
+            foreach ($list as $i => $item) {
+                if ($item['_flag']) {
+                    $primaryIndex = $i;
+                    break;
+                }
+            }
+            if ($primaryIndex < 0 && !empty($list)) {
+                $primaryIndex = 0;
+            }
+        }
+
+        foreach ($list as $i => &$item) {
+            $item['is_primary'] = ($i === $primaryIndex) ? 1 : 0;
+            unset($item['_flag']);
+        }
+        unset($item);
+        return $list;
+    }
+
+    /**
+     * Parse the `customers` request value: JSON (or array) of {customer_id, is_primary} in display order.
+     * @return array[]|null null when the request does not carry a customer list at all
+     */
+    private function parseCustomersPayload($raw) {
+        if ($raw === null) {
+            return null;
+        }
+        if (is_string($raw)) {
+            $decoded = json_decode($raw, true);
+            $raw = is_array($decoded) ? $decoded : array();
+        }
+        if (!is_array($raw)) {
+            return array();
+        }
+        $items = array();
+        $seen = array();
+        foreach ($raw as $entry) {
+            if (!is_array($entry) || !isset($entry['customer_id'])) {
+                continue;
+            }
+            $cid = intval($entry['customer_id']);
+            if ($cid <= 0 || isset($seen[$cid])) {
+                continue;
+            }
+            $seen[$cid] = true;
+            $items[] = array(
+                'customer_id' => $cid,
+                'is_primary' => !empty($entry['is_primary']) && (string)$entry['is_primary'] !== '0',
+            );
+        }
+        return $items;
+    }
+
+    /**
+     * Keep only customers that exist in the master and settle on exactly one primary
+     * (first one flagged, otherwise the first of the list).
+     * @return array|null ['rows' => [[customer_id, is_primary]], 'primary' => customer master row]; null when nothing valid is left
+     */
+    private function resolveCustomersForSave(array $items) {
+        if (empty($items)) {
+            return null;
+        }
+        $ids = array();
+        foreach ($items as $item) {
+            $ids[] = intval($item['customer_id']);
+        }
+        $masters = array();
+        $found = $this->fetchAll(sprintf(
+            "SELECT id, company_name, branch, name FROM %scustomer WHERE id IN (%s)",
+            DB_PREFIX,
+            implode(',', $ids)
+        ));
+        foreach ($found as $m) {
+            $masters[intval($m['id'])] = $m;
+        }
+        $rows = array();
+        $primaryIndex = -1;
+        foreach ($items as $item) {
+            $cid = intval($item['customer_id']);
+            if (!isset($masters[$cid])) {
+                continue;
+            }
+            if ($primaryIndex < 0 && $item['is_primary']) {
+                $primaryIndex = count($rows);
+            }
+            $rows[] = array('customer_id' => $cid, 'is_primary' => 0);
+        }
+        if (empty($rows)) {
+            return null;
+        }
+        if ($primaryIndex < 0) {
+            $primaryIndex = 0;
+        }
+        $rows[$primaryIndex]['is_primary'] = 1;
+        return array(
+            'rows' => $rows,
+            'primary' => $masters[$rows[$primaryIndex]['customer_id']],
+        );
+    }
+
+    private function replaceParentProjectCustomers($parentProjectId, array $rows) {
+        $parentProjectId = intval($parentProjectId);
+        if ($parentProjectId <= 0) {
+            return;
+        }
+        $link = $this->parentProjectCustomersTable();
+        $this->query(sprintf("DELETE FROM %s WHERE parent_project_id = %d", $link, $parentProjectId));
+        $values = array();
+        $now = date('Y-m-d H:i:s');
+        foreach (array_values($rows) as $i => $row) {
+            $values[] = sprintf(
+                "(%d, %d, %d, %d, '%s')",
+                $parentProjectId,
+                intval($row['customer_id']),
+                !empty($row['is_primary']) ? 1 : 0,
+                $i,
+                $now
+            );
+        }
+        if (!empty($values)) {
+            $this->query(sprintf(
+                "INSERT INTO %s (parent_project_id, customer_id, is_primary, sort_order, created_at) VALUES %s",
+                $link,
+                implode(', ', $values)
+            ));
+        }
+    }
+
+    /**
+     * For writes that only set parent_projects.customer_id (quick edit, public upsert, AI, older clients):
+     * make that customer the primary row of the list. Already in the list -> promoted;
+     * otherwise it replaces the previous primary row. Other customers are kept.
+     */
+    private function syncPrimaryCustomerLink($parentProjectId, $customerId) {
+        $parentProjectId = intval($parentProjectId);
+        $customerId = ctype_digit(trim((string)$customerId)) ? intval($customerId) : 0;
+        if ($parentProjectId <= 0 || $customerId <= 0) {
+            return;
+        }
+        $link = $this->parentProjectCustomersTable();
+        try {
+            $existing = $this->fetchAll(sprintf(
+                "SELECT id, customer_id, is_primary FROM %s WHERE parent_project_id = %d ORDER BY sort_order ASC, id ASC",
+                $link,
+                $parentProjectId
+            ));
+            $hasTarget = false;
+            $primaryRowId = 0;
+            foreach ($existing as $row) {
+                if (intval($row['customer_id']) === $customerId) {
+                    $hasTarget = true;
+                }
+                if ($primaryRowId === 0 && intval($row['is_primary']) === 1) {
+                    $primaryRowId = intval($row['id']);
+                }
+            }
+            if (!$hasTarget) {
+                if ($primaryRowId > 0) {
+                    $this->query(sprintf("UPDATE %s SET customer_id = %d WHERE id = %d", $link, $customerId, $primaryRowId));
+                } else {
+                    $this->query(sprintf(
+                        "INSERT INTO %s (parent_project_id, customer_id, is_primary, sort_order, created_at) VALUES (%d, %d, 1, 0, '%s')",
+                        $link,
+                        $parentProjectId,
+                        $customerId,
+                        date('Y-m-d H:i:s')
+                    ));
+                }
+            }
+            $this->query(sprintf(
+                "UPDATE %s SET is_primary = IF(customer_id = %d, 1, 0) WHERE parent_project_id = %d",
+                $link,
+                $customerId,
+                $parentProjectId
+            ));
+        } catch (Exception $e) {
+            error_log('syncPrimaryCustomerLink failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * After inserting/updating a parent project row: store the posted customer list,
+     * or (no list posted) keep the link table in step with the customer_id that was written.
+     * @param array|null $customerSave result of resolveCustomersForSave()
+     */
+    private function saveParentProjectCustomerLinks($parentProjectId, $customerSave, $customerId) {
+        if (is_array($customerSave)) {
+            try {
+                $this->replaceParentProjectCustomers($parentProjectId, $customerSave['rows']);
+            } catch (Exception $e) {
+                error_log('replaceParentProjectCustomers failed: ' . $e->getMessage());
+            }
+            return;
+        }
+        $this->syncPrimaryCustomerLink($parentProjectId, $customerId);
+    }
+
+    /**
+     * Search condition matching any customer of the parent project's list (alias p = parent_projects).
+     */
+    private function buildLinkedCustomerSearchExists($search) {
+        $like = $this->buildFlexibleLikeWhere($search, array('lc.company_name', 'lc.branch', 'lc.name'));
+        if ($like === '') {
+            return '';
+        }
+        return sprintf(
+            "EXISTS (SELECT 1 FROM %s l INNER JOIN %scustomer lc ON lc.id = l.customer_id WHERE l.parent_project_id = p.id AND %s)",
+            $this->parentProjectCustomersTable(),
+            DB_PREFIX,
+            $like
+        );
     }
 
     /**
@@ -191,6 +561,11 @@ class ParentProject extends ApplicationModel {
                 'CAST(p.id AS CHAR)',
             ], 'p.id');
             if ($searchWhere !== '') {
+                // Also match the non-primary customers of the parent project's customer list
+                $linkedCustomerWhere = $this->buildLinkedCustomerSearchExists($search);
+                if ($linkedCustomerWhere !== '') {
+                    $searchWhere = '(' . $searchWhere . ' OR ' . $linkedCustomerWhere . ')';
+                }
                 $whereArr[] = $searchWhere;
             }
         }
@@ -268,8 +643,9 @@ class ParentProject extends ApplicationModel {
         }
         
         $query = sprintf(
-            "SELECT p.*, u.realname as created_by_name
-             FROM %s p 
+            "SELECT p.*, u.realname as created_by_name,
+                    (SELECT COUNT(*) FROM " . $this->parentProjectCustomersTable() . " ppc_l WHERE ppc_l.parent_project_id = p.id) AS customer_count
+             FROM %s p
              LEFT JOIN " . DB_PREFIX . "user u ON p.created_by = u.userid
              %s
              %s
@@ -556,6 +932,24 @@ class ParentProject extends ApplicationModel {
             'created_at' => date('Y-m-d H:i:s')
         );
 
+        // Customer list (optional): the primary customer drives the four mirror columns
+        $customerSave = null;
+        $customerItems = $this->parseCustomersPayload(isset($_POST['customers']) ? $_POST['customers'] : null);
+        if ($customerItems !== null) {
+            $customerSave = $this->resolveCustomersForSave($customerItems);
+            if ($customerSave === null) {
+                return [
+                    'status' => 'error',
+                    'message' => '顧客を1件以上選択してください',
+                    'error' => '顧客を1件以上選択してください'
+                ];
+            }
+            $data['company_name'] = $this->validateUTF8MB4(trim((string)$customerSave['primary']['company_name']));
+            $data['branch_name'] = (string)$customerSave['primary']['branch'];
+            $data['contact_name'] = (string)$customerSave['primary']['name'];
+            $data['customer_id'] = intval($customerSave['primary']['id']);
+        }
+
         // Validate required fields
         if (empty($data['company_name'])) {
             return [
@@ -582,6 +976,8 @@ class ParentProject extends ApplicationModel {
                 ];
             }
             
+            $this->saveParentProjectCustomerLinks($parent_project_id, $customerSave, $data['customer_id']);
+
             // Log the creation
             $this->logParentProjectAction($parent_project_id, 'created', '建物作成', '', '');
 
@@ -601,6 +997,7 @@ class ParentProject extends ApplicationModel {
                     );
                     $parent_project_id = $this->query_insert($data);
                     if ($parent_project_id) {
+                        $this->saveParentProjectCustomerLinks($parent_project_id, $customerSave, $data['customer_id']);
                         $this->logParentProjectAction($parent_project_id, 'created', '建物作成', '', '');
                         return [
                             'status' => 'success',
@@ -698,10 +1095,27 @@ class ParentProject extends ApplicationModel {
             $data['request_date'] = $requestDate;
         }
 
+        // Customer list (optional): the primary customer drives the four mirror columns.
+        // Without it, only a customer_id sent by the client is synced into the list.
+        $customerSave = null;
+        $customerItems = $this->parseCustomersPayload(isset($_POST['customers']) ? $_POST['customers'] : null);
+        if ($customerItems !== null) {
+            $customerSave = $this->resolveCustomersForSave($customerItems);
+            if ($customerSave === null) {
+                return ['status' => 'error', 'error' => '顧客を1件以上選択してください'];
+            }
+            $data['company_name'] = $this->validateUTF8MB4(trim((string)$customerSave['primary']['company_name']));
+            $data['branch_name'] = (string)$customerSave['primary']['branch'];
+            $data['contact_name'] = (string)$customerSave['primary']['name'];
+            $data['customer_id'] = intval($customerSave['primary']['id']);
+        }
+        $customerIdToSync = isset($_POST['customer_id']) ? $data['customer_id'] : null;
+
         try {
             $result = $this->query_update($data, ['id' => $id]);
-            
+
             if ($result) {
+                $this->saveParentProjectCustomerLinks($id, $customerSave, $customerIdToSync);
                 // Log the update action
                 $this->logParentProjectAction($id, 'updated', '建物情報を変更');
                 return ['status' => 'success', 'message' => '建物を更新しました'];
@@ -718,6 +1132,7 @@ class ParentProject extends ApplicationModel {
                     );
                     $result = $this->query_update($data, ['id' => $id]);
                     if ($result) {
+                        $this->saveParentProjectCustomerLinks($id, $customerSave, $customerIdToSync);
                         $this->logParentProjectAction($id, 'updated', '建物情報を変更');
                         return ['status' => 'success', 'message' => '建物を更新しました'];
                     }
@@ -955,6 +1370,7 @@ class ParentProject extends ApplicationModel {
             }
             $result = $this->query_update($data, array('id' => $existing['id']));
             if ($result) {
+                $this->syncPrimaryCustomerLink($existing['id'], $customer_id);
                 $hash['status'] = 'success';
                 $hash['message_code'] = 'updated';
                 $hash['id'] = (int) $existing['id'];
@@ -998,6 +1414,7 @@ class ParentProject extends ApplicationModel {
        
         $new_id = $this->query_insert($data);
         if ($new_id) {
+            $this->syncPrimaryCustomerLink($new_id, $customer_id);
             $hash['status'] = 'success';
             $hash['message_code'] = 'created';
             $hash['id'] = (int) $new_id;
@@ -1469,7 +1886,18 @@ class ParentProject extends ApplicationModel {
             $this->table,
             intval($id)
         );
-        return $this->fetchOne($query);
+        $row = $this->fetchOne($query);
+        if (!empty($row['id'])) {
+            // Customer list (primary first flagged with is_primary = 1); additive for existing callers
+            try {
+                $row['customers'] = $this->fetchParentProjectCustomers(intval($row['id']), $row);
+            } catch (Exception $e) {
+                error_log('fetchParentProjectCustomers failed: ' . $e->getMessage());
+                $row['customers'] = array();
+            }
+            $row['customer_count'] = count($row['customers']);
+        }
+        return $row;
     }
 
     /**
@@ -2958,6 +3386,10 @@ class ParentProject extends ApplicationModel {
             'CAST(p.id AS CHAR)',
         ], 'p.id');
         if ($searchWhere !== '') {
+            $linkedCustomerWhere = $this->buildLinkedCustomerSearchExists($q);
+            if ($linkedCustomerWhere !== '') {
+                $searchWhere = '(' . $searchWhere . ' OR ' . $linkedCustomerWhere . ')';
+            }
             $whereArr[] = $searchWhere;
         }
         $where = 'WHERE ' . implode(' AND ', $whereArr);

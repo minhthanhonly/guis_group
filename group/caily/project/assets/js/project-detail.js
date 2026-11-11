@@ -1266,6 +1266,21 @@ const vueApp = createApp({
         },
     },
     methods: {
+        // 建物情報: shared building modal (parent_project/assets/js/parent-project-quick-modal.js)
+        openParentProjectInfoModal() {
+            if (!this.project || !this.project.parent_project_id || typeof window.openParentProjectModal !== 'function') {
+                return;
+            }
+            window.openParentProjectModal(this.project.parent_project_id, {
+                mode: 'view',
+                onSaved: () => {
+                    // Building data is copied into this.project on load: reload it (not while this project is being edited)
+                    if (!this.isEditMode) {
+                        this.loadProject();
+                    }
+                }
+            });
+        },
         isAdministrator() {
             return typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator';
         },

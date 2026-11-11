@@ -57,7 +57,7 @@ $view->heading('建物詳細');
 
         <!-- Left Column - Parent Project Details -->
         <div class="col-12 mb-3">
-            <div class="card" :class="{ 'edit-mode': isEditMode }">
+            <div class="card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div class="d-flex align-items-center gap-2">
@@ -69,28 +69,20 @@ $view->heading('建物詳細');
                             <h5 class="card-title mb-0"><span data-i18n="建物詳細">建物詳細</span></h5>
                         </div>
                         <div>
-                            <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2"
+                            <button v-if="canAddProject" class="btn btn-outline-info btn-sm me-2"
                                 @click="copyParentProject" title="建物をコピー">
                                 <i class="fa fa-copy me-1"></i><span data-i18n="建物をコピー">建物をコピー</span>
                             </button>
                             <template v-if="isProjectManager">
-                                <button v-if="!isEditMode" class="btn btn-outline-warning btn-sm me-2"
-                                    @click="toggleEditMode" title="編集">
+                                <button class="btn btn-outline-warning btn-sm me-2"
+                                    @click="openParentProjectEditModal" title="編集">
                                     <i class="fa fa-pencil-alt me-1"></i><span data-i18n="編集">編集</span>
                                 </button>
-                                <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveParentProject"
-                                    title="保存">
-                                    <i class="fa fa-save me-1"></i><span data-i18n="保存">保存</span>
-                                </button>
-                                <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit"
-                                    title="キャンセル">
-                                    <i class="fa fa-times me-1"></i><span data-i18n="キャンセル">キャンセル</span>
-                                </button>
-                                <button v-if="!isEditMode" class="btn btn-outline-secondary btn-sm me-2"
+                                <button class="btn btn-outline-secondary btn-sm me-2"
                                     @click="showLogs" title="アクティビティログ">
                                     <i class="fa fa-history me-1"></i><span data-i18n="アクティビティログ">アクティビティログ</span>
                                 </button>
-                                <!-- <button v-if="!isEditMode && childProjects.length == 0" class="btn btn-outline-danger btn-sm"
+                                <!-- <button v-if="childProjects.length == 0" class="btn btn-outline-danger btn-sm"
                                     @click="deleteParentProject" title="削除">
                                     <i class="fa fa-trash me-1"></i><span data-i18n="削除">削除</span>
                                 </button> -->
@@ -98,128 +90,27 @@ $view->heading('建物詳細');
                         </div>
                     </div>
                     <div v-if="parentProject" class="row g-3">
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="会社名">会社名</span> <span
-                                        class="text-danger">*</span></label>
-                                <template v-if="isEditMode">
-                                    <select id="company_name" class="form-select select2"
-                                        v-model="parentProject.company_name" name="company_name" required
-                                        @change="onCompanyChange">
-                                        <option value="">選択してください</option>
-                                        <option v-for="company in companies" :key="company.company_name"
-                                            :value="company.company_name">
-                                            {{ company.company_name }}
-                                        </option>
-                                    </select>
-                                    <div v-if="validationErrors.company_name" class="invalid-feedback d-block">
-                                        {{ validationErrors.company_name }}
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="customerDisplay.company_name || parentProject.company_name"
-                                        readonly>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="支店名">支店名</span></label>
-                                <template v-if="isEditMode">
-                                    <select id="branch_name" class="form-select select2"
-                                        v-model="parentProject.branch_name" name="branch_name" @change="onBranchChange">
-                                        <option value="">選択してください</option>
-                                        <option v-for="branch in branches" :key="branch.branch" :value="branch.branch">
-                                            {{ branch.branch }}
-                                        </option>
-                                    </select>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="customerDisplay.branch_name || parentProject.branch_name || '-'"
-                                        readonly>
-                                </template>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label">
-                                    <span data-i18n="担当様">担当様</span>
-                                    <button v-if="isEditMode" type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="openNewCustomerModal" title="新規顧客追加">
-                                        <i class="fa fa-plus me-1"></i> 新規顧客
-                                    </button>
-                                    <button v-if="parentProject.contact_name || parentProject.customer_id" type="button"
-                                        class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerInfoModal"
-                                        title="顧客情報表示・編集">
-                                        <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
-                                    </button>
-                                </label>
-                                <template v-if="isEditMode">
-                                    <select id="contact_name" class="form-select select2"
-                                        v-model="parentProject.contact_name" name="contact_name">
-                                        <option value="">選択してください</option>
-                                        <option v-for="contact in contacts" :key="contact.id" :value="contact.name">
-                                            {{ contact.name }}
-                                        </option>
-                                    </select>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="customerDisplay.contact_name || parentProject.contact_name || '-'"
-                                        readonly>
-                                </template>
-                            </div>
-                        </div>
+                        <?php include __DIR__ . '/partials/customer-list-view.php'; ?>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
-                                <template v-if="isEditMode">
-                                    <select id="guis_receiver" class="form-select select2"
-                                        v-model="parentProject.guis_receiver" name="guis_receiver">
-                                        <option value="">選択してください</option>
-                                        <option v-for="user in users" :key="user.id" :value="user.user_name">
-                                            {{ user.user_name }}
-                                        </option>
-                                    </select>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="guisReceiverDisplayName || '-'"
-                                        readonly>
-                                </template>
+                                <input type="text" class="form-control" :value="guisReceiverDisplayName || '-'"
+                                    readonly>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span
                                         class="text-danger">*</span></label>
-                                <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="parentProject.project_name"
-                                        placeholder="案件名を入力" required @blur="onDuplicateFieldBlur">
-                                    <div v-if="validationErrors.project_name" class="invalid-feedback d-block">
-                                        {{ validationErrors.project_name }}
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="parentProject.project_name"
-                                        readonly>
-                                </template>
+                                <input type="text" class="form-control" :value="parentProject.project_name"
+                                    readonly>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="input-group">
-                                        <input type="text" class="form-control" v-model="parentProject.request_date"
-                                            id="request_date_picker" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
-                                        <button class="btn btn-outline-secondary" type="button"
-                                            @click="setCurrentDateTime" title="現在時刻">
-                                            現在時刻
-                                        </button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control"
-                                        :value="formatDateTime(parentProject.request_date)" readonly>
-                                </template>
+                                <input type="text" class="form-control"
+                                    :value="formatDateTime(parentProject.request_date)" readonly>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
@@ -234,14 +125,8 @@ $view->heading('建物詳細');
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
-                                <template v-if="isEditMode">
-                                    <input type="text" class="form-control" v-model="parentProject.construction_number"
-                                        placeholder="工事番号を入力" @blur="onDuplicateFieldBlur">
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control"
-                                        :value="parentProject.construction_number || '-'" readonly>
-                                </template>
+                                <input type="text" class="form-control"
+                                    :value="parentProject.construction_number || '-'" readonly>
                             </div>
                         </div>
                         
@@ -249,395 +134,162 @@ $view->heading('建物詳細');
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" id="scale_tags" name="scale_tags"
-                                            placeholder="規模を入力">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button"
-                                            @click="clearTagifyTags('scale')" title="すべて削除"><i
-                                                class="fa fa-times"></i></button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="parentProject.scale || '-'"
-                                        readonly>
-                                </template>
+                                <input type="text" class="form-control" :value="parentProject.scale || '-'"
+                                    readonly>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" id="city_tags" name="city_tags"
-                                            placeholder="市区町村を入力">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button"
-                                            @click="clearTagifyTags('city')" title="すべて削除"><i
-                                                class="fa fa-times"></i></button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control" :value="parentProject.city || '-'"
-                                        readonly>
-                                </template>
+                                <input type="text" class="form-control" :value="parentProject.city || '-'"
+                                    readonly>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" id="structural_office_tags"
-                                            name="structural_office_tags" placeholder="構造事務所を入力">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button"
-                                            @click="clearTagifyTags('structural_office')" title="すべて削除"><i
-                                                class="fa fa-times"></i></button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <input type="text" class="form-control"
-                                        :value="parentProject.structural_office || '-'" readonly>
-                                </template>
+                                <input type="text" class="form-control"
+                                    :value="parentProject.structural_office || '-'" readonly>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="種類1">種類1</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" v-model="parentProject.type1"
-                                            id="type1_tags" name="type1_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button"
-                                            @click="clearTagifyTags('type1')" title="すべて削除"><i
-                                                class="fa fa-times"></i></button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div style="min-height:38px;">
-                                        <span v-if="parentProject.type1 && parentProject.type1.split(',').length > 0">
-                                            <span v-for="item in parentProject.type1.split(',')" :key="item.trim()"
-                                                class="badge bg-primary me-1">{{ item.trim() }}</span>
-                                        </span>
-                                        <span v-else>-</span>
-                                    </div>
-                                </template>
+                                <div style="min-height:38px;">
+                                    <span v-if="parentProject.type1 && parentProject.type1.split(',').length > 0">
+                                        <span v-for="item in parentProject.type1.split(',')" :key="item.trim()"
+                                            class="badge bg-primary me-1">{{ item.trim() }}</span>
+                                    </span>
+                                    <span v-else>-</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="住宅種類">住宅種類</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" v-model="parentProject.type2"
-                                            id="type2_tags" name="type2_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button"
-                                            @click="clearTagifyTags('type2')" title="すべて削除"><i
-                                                class="fa fa-times"></i></button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div style="min-height:38px;">
-                                        <span v-if="parentProject.type2 && parentProject.type2.split(',').length > 0">
-                                            <span v-for="item in parentProject.type2.split(',')" :key="item.trim()"
-                                                class="badge bg-primary me-1">{{ item.trim() }}</span>
-                                        </span>
-                                        <span v-else>-</span>
-                                    </div>
-                                </template>
+                                <div style="min-height:38px;">
+                                    <span v-if="parentProject.type2 && parentProject.type2.split(',').length > 0">
+                                        <span v-for="item in parentProject.type2.split(',')" :key="item.trim()"
+                                            class="badge bg-primary me-1">{{ item.trim() }}</span>
+                                    </span>
+                                    <span v-else>-</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-4 col-xl-3" v-if="hasNonResidentialType">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="非住宅の主要用途">非住宅の主要用途</span></label>
-                                <template v-if="isEditMode">
-                                    <select class="form-select" v-model="parentProject.type3">
-                                        <option value="">選択してください</option>
-                                        <option v-for="opt in nonResidentialMainUseOptions" :key="opt.value" :value="opt.value">
-                                            {{ opt.label }}
-                                        </option>
-                                    </select>
-                                </template>
-                                <template v-else>
-                                    <div style="min-height:38px;">
-                                        {{ nonResidentialMainUseLabel || '-' }}
-                                    </div>
-                                </template>
+                                <div style="min-height:38px;">
+                                    {{ nonResidentialMainUseLabel || '-' }}
+                                </div>
                             </div>
                         </div>
                         
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="依頼">依頼</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="row">
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="request_design"
-                                                    v-model="request_design">
-                                                <label class="form-check-label" for="request_design">
-                                                    意匠
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="request_equipment"
-                                                    v-model="request_equipment">
-                                                <label class="form-check-label" for="request_equipment">
-                                                    設備
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="request_3d_equipment"
-                                                    v-model="request_3d_equipment">
-                                                <label class="form-check-label" for="request_3d_equipment">
-                                                    3D設備
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="request_energy_saving"
-                                                    v-model="request_energy_saving">
-                                                <label class="form-check-label" for="request_energy_saving">
-                                                    省エネ
-                                                </label>
-                                            </div>
-                                        </div>
-                                        <!-- <div class="col-md-3">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="request_3d"
-                                                    v-model="request_3d">
-                                                <label class="form-check-label" for="request_3d">
-                                                    3D
-                                                </label>
-                                            </div>
-                                        </div> -->
+                                <div class="form-control-plaintext">
+                                    <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
+                                        <span v-for="item in parentRequestTypes" :key="item"
+                                              class="badge me-1"
+                                              :class="isParentRequestFulfilled(item) ? getParentRequestBadgeClass(item) : getParentRequestUnfulfilledBadgeClass(item)"
+                                              :title="isParentRequestFulfilled(item) ? '' : '未作成'">
+                                            <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
+                                            <i v-else class="fa fa-check me-1"></i>
+                                            {{ item }}
+                                        </span>
                                     </div>
-                                </template>
-                                <template v-else>
-                                    <div class="form-control-plaintext">
-                                        <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
-                                            <span v-for="item in parentRequestTypes" :key="item"
-                                                  class="badge me-1"
-                                                  :class="isParentRequestFulfilled(item) ? getParentRequestBadgeClass(item) : getParentRequestUnfulfilledBadgeClass(item)"
-                                                  :title="isParentRequestFulfilled(item) ? '' : '未作成'">
-                                                <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
-                                                <i v-else class="fa fa-check me-1"></i>
-                                                {{ item }}
-                                            </span>
-                                        </div>
-                                        <span v-else class="text-muted">-</span>
-                                    </div>
-                                </template>
+                                    <span v-else class="text-muted">-</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="お客様提供資料">お客様提供資料</span></label>
-                                <template v-if="isEditMode">
+                                <div class="form-control-plaintext">
                                     <div class="row">
-                                        <div class="col-md-4">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="materials_layout"
-                                                    v-model="materials_layout">
-                                                <label class="form-check-label" for="materials_layout">
-                                                    配置図
-                                                </label>
-                                            </div>
+                                        <div class="col-md-4"
+                                            v-if="parentProject.materials && parentProject.materials.includes('配置図')">
+                                            <i class="fa fa-check text-success me-2"></i>配置図
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="materials_rental"
-                                                    v-model="materials_rental">
-                                                <label class="form-check-label" for="materials_rental">
-                                                    家賃審査書
-                                                </label>
-                                            </div>
+                                        <div class="col-md-4"
+                                            v-if="parentProject.materials && parentProject.materials.includes('家賃審査書')">
+                                            <i class="fa fa-check text-success me-2"></i>家賃審査書
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="materials_contract"
-                                                    v-model="materials_contract">
-                                                <label class="form-check-label" for="materials_contract">
-                                                    契約図
-                                                </label>
-                                            </div>
+                                        <div class="col-md-4"
+                                            v-if="parentProject.materials && parentProject.materials.includes('契約図')">
+                                            <i class="fa fa-check text-success me-2"></i>契約図
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="materials_tac"
-                                                    v-model="materials_tac">
-                                                <label class="form-check-label" for="materials_tac">
-                                                    TAC図
-                                                </label>
-                                            </div>
+                                        <div class="col-md-4"
+                                            v-if="parentProject.materials && parentProject.materials.includes('TAC図')">
+                                            <i class="fa fa-check text-success me-2"></i>TAC図
                                         </div>
-                                        <div class="col-md-4">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox" id="materials_other"
-                                                    v-model="materials_other">
-                                                <label class="form-check-label" for="materials_other">
-                                                    その他
-                                                </label>
-                                            </div>
+                                        <div class="col-md-4"
+                                            v-if="parentProject.materials && parentProject.materials.includes('その他')">
+                                            <i class="fa fa-check text-success me-2"></i>その他
+                                            <span v-if="parentProject.materials_memo" class="small text-muted ms-1">
+                                                ({{ parentProject.materials_memo }})
+                                            </span>
                                         </div>
                                     </div>
-                                    <div class="mt-2" v-if="materials_other">
-                                        <input type="text" class="form-control"
-                                            v-model="parentProject.materials_memo"
-                                            placeholder="その他メモ"
-                                            maxlength="500">
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div class="form-control-plaintext">
-                                        <div class="row">
-                                            <div class="col-md-4"
-                                                v-if="parentProject.materials && parentProject.materials.includes('配置図')">
-                                                <i class="fa fa-check text-success me-2"></i>配置図
-                                            </div>
-                                            <div class="col-md-4"
-                                                v-if="parentProject.materials && parentProject.materials.includes('家賃審査書')">
-                                                <i class="fa fa-check text-success me-2"></i>家賃審査書
-                                            </div>
-                                            <div class="col-md-4"
-                                                v-if="parentProject.materials && parentProject.materials.includes('契約図')">
-                                                <i class="fa fa-check text-success me-2"></i>契約図
-                                            </div>
-                                            <div class="col-md-4"
-                                                v-if="parentProject.materials && parentProject.materials.includes('TAC図')">
-                                                <i class="fa fa-check text-success me-2"></i>TAC図
-                                            </div>
-                                            <div class="col-md-4"
-                                                v-if="parentProject.materials && parentProject.materials.includes('その他')">
-                                                <i class="fa fa-check text-success me-2"></i>その他
-                                                <span v-if="parentProject.materials_memo" class="small text-muted ms-1">
-                                                    ({{ parentProject.materials_memo }})
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </template>
+                                </div>
                             </div>
                         </div>
                         <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="特徴">特徴</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="row">
-                                        <div class="col-md-4" v-for="opt in visibleFeatureOptions" :key="opt">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox"
-                                                    :id="'features_' + opt"
-                                                    v-model="featureFlags[opt]">
-                                                <label class="form-check-label" :for="'features_' + opt">{{ opt }}</label>
-                                            </div>
-                                        </div>
+                                <div class="form-control-plaintext">
+                                    <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedFeatureLabels.length">
+                                        <span v-for="opt in selectedFeatureLabels" :key="opt" class="badge badge-outline-primary me-1">
+                                            {{ opt }}
+                                        </span>
                                     </div>
-                                </template>
-                                <template v-else>
-                                    <div class="form-control-plaintext">
-                                        <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedFeatureLabels.length">
-                                            <span v-for="opt in selectedFeatureLabels" :key="opt" class="badge badge-outline-primary me-1">
-                                                {{ opt }}
-                                            </span>
-                                        </div>
-                                        <span v-else class="text-muted">-</span>
-                                    </div>
-                                </template>
+                                    <span v-else class="text-muted">-</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-12" v-if="hasEnergySavingRequest">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="row">
-                                        <div class="col-md-4" v-for="opt in energyMaterialOptions" :key="'em_' + opt">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox"
-                                                    :id="'energy_materials_' + opt"
-                                                    v-model="energyMaterialFlags[opt]">
-                                                <label class="form-check-label" :for="'energy_materials_' + opt">{{ opt }}</label>
-                                            </div>
-                                        </div>
+                                <div class="form-control-plaintext">
+                                    <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedEnergyMaterialLabels.length">
+                                        <span v-for="opt in selectedEnergyMaterialLabels" :key="'emv_' + opt"
+                                              class="badge badge-outline-primary me-1">
+                                            {{ opt }}
+                                        </span>
+                                        <span v-if="parentProject.energy_materials_memo
+                                            && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
+                                              class="small text-muted ms-1">
+                                            ({{ parentProject.energy_materials_memo }})
+                                        </span>
                                     </div>
-                                    <div class="mt-2" v-if="energyMaterialFlags['その他']">
-                                        <input type="text" class="form-control"
-                                            v-model="parentProject.energy_materials_memo"
-                                            placeholder="その他メモ"
-                                            maxlength="500">
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div class="form-control-plaintext">
-                                        <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedEnergyMaterialLabels.length">
-                                            <span v-for="opt in selectedEnergyMaterialLabels" :key="'emv_' + opt"
-                                                  class="badge badge-outline-primary me-1">
-                                                {{ opt }}
-                                            </span>
-                                            <span v-if="parentProject.energy_materials_memo
-                                                && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
-                                                  class="small text-muted ms-1">
-                                                ({{ parentProject.energy_materials_memo }})
-                                            </span>
-                                        </div>
-                                        <span v-else class="text-muted">-</span>
-                                    </div>
-                                </template>
+                                    <span v-else class="text-muted">-</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6" v-if="hasEnergySavingRequest">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
-                                <template v-if="isEditMode">
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" id="application_review_agency_tags" name="application_review_agency_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button"
-                                            @click="clearTagifyTags('application_review_agency')" title="すべて削除">
-                                            <i class="fa fa-times"></i>
-                                        </button>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div style="min-height:38px;">
-                                        <span v-if="parentProject.application_review_agency">
-                                            <span v-for="item in parentProject.application_review_agency.split(',').map(v => v.trim()).filter(v => v)"
-                                                :key="item" class="badge bg-primary me-1">{{ item }}</span>
-                                        </span>
-                                        <span v-else class="text-muted">-</span>
-                                    </div>
-                                </template>
+                                <div style="min-height:38px;">
+                                    <span v-if="parentProject.application_review_agency">
+                                        <span v-for="item in parentProject.application_review_agency.split(',').map(v => v.trim()).filter(v => v)"
+                                            :key="item" class="badge bg-primary me-1">{{ item }}</span>
+                                    </span>
+                                    <span v-else class="text-muted">-</span>
+                                </div>
                             </div>
                         </div>
                         <div class="col-md-6" v-if="hasEnergySavingRequest">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
-                                <template v-if="isEditMode">
-                                    <select class="form-select" v-model="parentProject.bels_zeh_grade">
-                                        <option v-for="opt in belsZehGradeOptions" :key="opt.value" :value="opt.value">
-                                            {{ opt.label }}
-                                        </option>
-                                    </select>
-                                </template>
-                                <template v-else>
-                                    <div class="form-control-plaintext">{{ belsZehGradeLabel || '-' }}</div>
-                                </template>
+                                <div class="form-control-plaintext">{{ belsZehGradeLabel || '-' }}</div>
                             </div>
                         </div>
                         <!-- <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="備考">備考</span></label>
-                                <template v-if="isEditMode">
-                                    <textarea class="form-control" v-model="parentProject.notes" rows="3"
-                                        placeholder="備考を入力してください"></textarea>
-                                </template>
-                                <template v-else>
-                                    <div class="form-control-plaintext" style="white-space: pre-wrap;">{{
-                                        parentProject.notes || '-' }}</div>
-                                </template>
+                                <div class="form-control-plaintext" style="white-space: pre-wrap;">{{
+                                    parentProject.notes || '-' }}</div>
                             </div>
                         </div> -->
                     </div>
@@ -713,7 +365,6 @@ $view->heading('建物詳細');
                                     <th class="col-order-type"><span data-i18n="受注形態">受注形態</span></th>
                                     <th class="col-name"><span data-i18n="案件名">案件名</span></th>
                                     <th class="col-desc"><span data-i18n="説明">説明</span></th>
-                                    <th class="col-customer"><span data-i18n="顧客情報">顧客情報</span></th>
                                     <th class="col-receiver"><span data-i18n="GUIS受付者">GUIS受付者</span></th>
                                     <th class="col-dept"><span data-i18n="部署">部署</span></th>
                                     <th class="col-manager"><span data-i18n="管理">管理</span></th>
@@ -772,19 +423,6 @@ $view->heading('建物詳細');
                                         <span :class="{ 'text-muted': !project.description }">
                                             {{ formatDescriptionPreview(project.description) }}
                                         </span>
-                                    </td>
-                                    <td class="col-customer" :title="shouldShowChildProjectCustomer(project) ? formatChildProjectCustomerLabel(project) : ''">
-                                        <template v-if="shouldShowChildProjectCustomer(project)">
-                                            <span class="d-block small">{{ getChildProjectCustomerDisplay(project).company_name }}</span>
-                                            <span v-if="getChildProjectCustomerDisplay(project).branch_name !== '-'" class="d-block small text-muted">{{ getChildProjectCustomerDisplay(project).branch_name }}</span>
-                                            <span v-if="getChildProjectCustomerDisplay(project).contact_name !== '-'" class="d-block small text-muted">{{ getChildProjectCustomerDisplay(project).contact_name }}</span>
-                                            <button type="button" class="btn btn-sm btn-outline-info py-0 px-1 mt-1"
-                                                @click.stop="openChildProjectCustomerInfoModal(project)"
-                                                title="顧客情報表示・編集">
-                                                <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
-                                            </button>
-                                        </template>
-                                        <span v-else class="text-muted">-</span>
                                     </td>
                                     <td class="col-receiver">{{ getChildProjectGuisReceiverDisplay(project) }}</td>
                                     <td class="col-dept">{{ project.department_name || '-' }}</td>
@@ -912,7 +550,7 @@ $view->heading('建物詳細');
                                     </td>
                                 </tr>
                                 <tr v-if="childProjects.length === 0">
-                                    <td colspan="19" class="text-center text-muted py-4">
+                                    <td colspan="18" class="text-center text-muted py-4">
                                         案件依頼がありません
                                     </td>
                                 </tr>
@@ -1637,57 +1275,6 @@ $view->heading('建物詳細');
                             <div class="col-12">
                                 <div class="mb-2">
                                     <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="create_use_parent_customer"
-                                            v-model="newChildProject.use_parent_customer" @change="onChildProjectUseParentCustomerChange(false)">
-                                        <label class="form-check-label" for="create_use_parent_customer">
-                                            <span data-i18n="顧客情報は建物と同じ">顧客情報は建物と同じ</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div v-if="newChildProject.use_parent_customer" class="small text-muted border rounded p-2 mb-2">
-                                    <div><span data-i18n="会社名">会社名</span>: {{ getParentCustomerSummary().company_name }}</div>
-                                    <div><span data-i18n="支店名">支店名</span>: {{ getParentCustomerSummary().branch_name }}</div>
-                                    <div><span data-i18n="担当様">担当様</span>: {{ getParentCustomerSummary().contact_name }}</div>
-                                </div>
-                            </div>
-                            <template v-if="!newChildProject.use_parent_customer">
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label"><span data-i18n="会社名">会社名</span> <span class="text-danger">*</span></label>
-                                        <select id="create_child_company_name" class="form-select select2"></select>
-                                        <div v-if="childProjectValidationErrors.company_name" class="invalid-feedback d-block">
-                                            {{ childProjectValidationErrors.company_name }}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label"><span data-i18n="支店名">支店名</span> <span class="text-danger">*</span></label>
-                                        <select id="create_child_branch_name" class="form-select select2"></select>
-                                        <div v-if="childProjectValidationErrors.branch_name" class="invalid-feedback d-block">
-                                            {{ childProjectValidationErrors.branch_name }}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">
-                                            <span data-i18n="担当様">担当様</span> <span class="text-danger">*</span>
-                                            <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2"
-                                                @click="openChildProjectNewCustomerModal(false)" title="新規顧客追加">
-                                                <i class="fa fa-plus me-1"></i> <span data-i18n="新規顧客">新規顧客</span>
-                                            </button>
-                                        </label>
-                                        <select id="create_child_contact_name" class="form-select select2"></select>
-                                        <div v-if="childProjectValidationErrors.contact_name" class="invalid-feedback d-block">
-                                            {{ childProjectValidationErrors.contact_name }}
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
-                            <div class="col-12">
-                                <div class="mb-2">
-                                    <div class="form-check">
                                         <input class="form-check-input" type="checkbox" id="create_use_parent_guis_receiver"
                                             v-model="newChildProject.use_parent_guis_receiver" @change="onChildProjectUseParentGuisReceiverChange(false)">
                                         <label class="form-check-label" for="create_use_parent_guis_receiver">
@@ -1950,63 +1537,6 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12">
-                                <div class="mb-2">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" id="edit_use_parent_customer"
-                                            v-model="editingChildProject.use_parent_customer" @change="onChildProjectUseParentCustomerChange(true)">
-                                        <label class="form-check-label" for="edit_use_parent_customer">
-                                            <span data-i18n="顧客情報は建物と同じ">顧客情報は建物と同じ</span>
-                                        </label>
-                                    </div>
-                                </div>
-                                <div v-if="editingChildProject.use_parent_customer" class="small text-muted border rounded p-2 mb-2">
-                                    <div><span data-i18n="会社名">会社名</span>: {{ getParentCustomerSummary().company_name }}</div>
-                                    <div><span data-i18n="支店名">支店名</span>: {{ getParentCustomerSummary().branch_name }}</div>
-                                    <div><span data-i18n="担当様">担当様</span>: {{ getParentCustomerSummary().contact_name }}</div>
-                                </div>
-                            </div>
-                            <template v-if="!editingChildProject.use_parent_customer">
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label"><span data-i18n="会社名">会社名</span> <span class="text-danger">*</span></label>
-                                        <select id="edit_child_company_name" class="form-select select2"></select>
-                                        <div v-if="editChildProjectValidationErrors.company_name" class="invalid-feedback d-block">
-                                            {{ editChildProjectValidationErrors.company_name }}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label"><span data-i18n="支店名">支店名</span> <span class="text-danger">*</span></label>
-                                        <select id="edit_child_branch_name" class="form-select select2"></select>
-                                        <div v-if="editChildProjectValidationErrors.branch_name" class="invalid-feedback d-block">
-                                            {{ editChildProjectValidationErrors.branch_name }}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3 form-control-validation">
-                                        <label class="form-label">
-                                            <span data-i18n="担当様">担当様</span> <span class="text-danger">*</span>
-                                            <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2"
-                                                @click="openChildProjectNewCustomerModal(true)" title="新規顧客追加">
-                                                <i class="fa fa-plus me-1"></i> <span data-i18n="新規顧客">新規顧客</span>
-                                            </button>
-                                            <button v-if="editingChildProject.customer_id" type="button"
-                                                class="btn btn-sm btn-outline-info py-0 small ms-2"
-                                                @click="openEditingChildProjectCustomerInfoModal"
-                                                title="顧客情報表示・編集">
-                                                <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
-                                            </button>
-                                        </label>
-                                        <select id="edit_child_contact_name" class="form-select select2"></select>
-                                        <div v-if="editChildProjectValidationErrors.contact_name" class="invalid-feedback d-block">
-                                            {{ editChildProjectValidationErrors.contact_name }}
-                                        </div>
-                                    </div>
-                                </div>
-                            </template>
                             <div class="col-12">
                                 <div class="mb-2">
                                     <div class="form-check">
@@ -3718,6 +3248,9 @@ $view->heading('建物詳細');
         </div>
     </div>
 
+    <!-- Customer List Modal (顧客情報 of the building customer list) -->
+    <?php include __DIR__ . '/partials/customer-list-modal.php'; ?>
+
     <!-- Customer Info Modal -->
     <div class="modal fade" id="customerInfoModal" tabindex="-1">
         <div class="modal-dialog modal-xl">
@@ -3863,116 +3396,6 @@ $view->heading('建物詳細');
         </div>
     </div>
 
-    <!-- New Customer Modal (建物詳細 edit mode) -->
-    <div class="modal fade" id="newCustomerModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">新規顧客追加</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form @submit.prevent="saveNewCustomer">
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">カテゴリー</label>
-                                <select class="form-select" v-model="newCustomer.category_id" required>
-                                    <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">会社名 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" v-model="newCustomer.company_name" required>
-                                <div v-if="customerErrors.company_name" class="text-danger small mt-1">{{ customerErrors.company_name }}</div>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">会社名(ふりがな)</label>
-                                <input type="text" class="form-control" v-model="newCustomer.company_name_kana" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">担当者名 <span class="text-danger">*</span></label>
-                                <input type="text" class="form-control" v-model="newCustomer.name" required>
-                                <div v-if="customerErrors.name" class="text-danger small mt-1">{{ customerErrors.name }}</div>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">担当者名(ふりがな)</label>
-                                <input type="text" class="form-control" v-model="newCustomer.name_kana" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">支店名</label>
-                                <input type="text" class="form-control" v-model="newCustomer.branch" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">担当部署</label>
-                                <input type="text" class="form-control" v-model="newCustomer.department" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">役職</label>
-                                <input type="text" class="form-control" v-model="newCustomer.position" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">敬称</label>
-                                <select class="form-select" v-model="newCustomer.title" required>
-                                    <option>様</option>
-                                    <option>御社</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">メールアドレス</label>
-                                <input type="text" class="form-control" v-model="newCustomer.email" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">電話番号</label>
-                                <input type="text" class="form-control" v-model="newCustomer.tel" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">FAX</label>
-                                <input type="text" class="form-control" v-model="newCustomer.fax" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">携帯番号</label>
-                                <input type="text" class="form-control" v-model="newCustomer.phone" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">郵便番号</label>
-                                <div class="input-group">
-                                    <input type="text" class="form-control" v-model="newCustomer.zip" required>
-                                    <button class="btn btn-outline-primary waves-effect" type="button" @click.prevent="searchAddressNewCustomer">住所検索</button>
-                                </div>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">住所1</label>
-                                <input type="text" class="form-control" v-model="newCustomer.address1" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">住所2</label>
-                                <input type="text" class="form-control" v-model="newCustomer.address2" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">状況</label>
-                                <select class="form-select" v-model="newCustomer.status" required>
-                                    <option value="1">有効</option>
-                                    <option value="0">無効</option>
-                                </select>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label">自社担当部署名 <span class="text-danger">*</span></label>
-                                <select ref="newCustomerGuisDepartmentSelect" class="form-select select2" v-model="newCustomer.guis_department" required multiple>
-                                    <option v-for="department in departments" :key="department.id" :value="department.id">{{ department.name }}</option>
-                                </select>
-                                <div v-if="customerErrors.guis_department" class="text-danger small mt-1">{{ customerErrors.guis_department }}</div>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">キャンセル</button>
-                    <button type="button" class="btn btn-primary" @click="saveNewCustomer">保存</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Context menu: child project list -->
     <div v-if="childProjectContextMenuVisible"
          class="dropdown-menu show child-project-context-menu"
@@ -3994,10 +3417,30 @@ $view->heading('建物詳細');
 
 
 <?php
+// 建物編集 modal (shared standalone app, outside #app)
+include __DIR__ . '/partials/parent-project-quick-modal.php';
 $view->footing();
 ?>
 
 <style>
+    .customer-search-results {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .customer-search-row {
+        cursor: pointer;
+    }
+
+    .customer-search-row:hover {
+        background-color: rgba(var(--bs-primary-rgb), 0.08);
+    }
+
+    .customer-search-row.customer-search-row-added {
+        cursor: default;
+        opacity: 0.65;
+    }
+
     .form-control-validation .invalid-feedback {
         display: block;
     }
@@ -4449,12 +3892,6 @@ $view->footing();
         white-space: normal;
         word-break: break-word;
     }
-    #childProjectsTable .col-customer {
-        min-width: 130px;
-        max-width: 170px;
-        white-space: normal;
-        word-break: break-word;
-    }
     #childProjectsTable .col-receiver { min-width: 90px; max-width: 110px; }
     #childProjectsTable .col-dept { min-width: 88px; max-width: 120px; white-space: normal; }
     #childProjectsTable .col-manager { width: 56px; min-width: 56px; }
@@ -4656,4 +4093,6 @@ $view->footing();
 <script src="../project/assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/energy-fee-payment.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-customers-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-quick-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

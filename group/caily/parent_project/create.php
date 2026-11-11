@@ -33,65 +33,7 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                     </div>
 
                     <div class="row g-3" v-if="parentProject">
-                        <div class="col-md-6">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label">
-                                    <span data-i18n="会社名">会社名</span> <span class="text-danger">*</span>
-                                    <button type="button" class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerSearchModal" title="顧客検索">
-                                        <i class="fa fa-search me-1"></i> 検索
-                                    </button>
-                                </label>
-                                <select id="company_name" class="form-select select2" v-model="parentProject.company_name" @change="onCompanyNameChange" required>
-                                    <option value="" data-i18n="選択してください">選択してください</option>
-                                </select>
-                                <div v-if="validationErrors.company_name" class="invalid-feedback d-block">
-                                    {{ validationErrors.company_name }}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="支店名">支店名</span> <span class="text-danger">*</span></label>
-                                <select id="branch_name" class="form-select select2" v-model="parentProject.branch_name" @change="onBranchNameChange" required>
-                                    <option value="" data-i18n="選択してください">選択してください</option>
-                                </select>
-                                <div v-if="validationErrors.branch_name" class="invalid-feedback d-block">
-                                    {{ validationErrors.branch_name }}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label">
-                                    <span data-i18n="担当様">担当様</span> <span class="text-danger">*</span>
-                                    <button type="button" class="btn btn-sm btn-outline-primary py-0 small ms-2" @click="openNewCustomerModal" title="新規顧客追加">
-                                        <i class="fa fa-plus me-1"></i> 新規顧客
-                                    </button>
-                                    <button v-if="parentProject.contact_name || parentProject.customer_id" type="button"
-                                        class="btn btn-sm btn-outline-info py-0 small ms-2" @click="openCustomerInfoModal"
-                                        title="顧客情報表示・編集">
-                                        <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
-                                    </button>
-                                </label>
-                                <select id="contact_name" class="form-select select2" v-model="parentProject.contact_name" @change="onContactNameChange" :disabled="!parentProject.company_name || !parentProject.branch_name" required>
-                                    <option value="" data-i18n="選択してください">
-                                        {{ !parentProject.company_name || !parentProject.branch_name ? '会社名と支店名を選択してください' : '選択してください' }}
-                                    </option>
-                                    <option v-for="customer in customers" :key="customer.id" :value="customer.name" :data-customer-id="customer.id">
-                                        {{ customer.name }}
-                                    </option>
-                                </select>
-                                <div v-if="validationErrors.contact_name" class="invalid-feedback d-block">
-                                    {{ validationErrors.contact_name }}
-                                </div>
-                                <div v-if="!parentProject.company_name || !parentProject.branch_name" class="form-text text-muted">
-                                    会社名と支店名を選択すると担当様が表示されます
-                                </div>
-                                <div v-else-if="customers.length === 0 && parentProject.company_name && parentProject.branch_name && !parentProject.contact_name" class="form-text text-muted">
-                                    選択した会社・支店に担当者が見つかりません
-                                </div>
-                            </div>
-                        </div>
+                        <?php include __DIR__ . '/partials/customer-list-editor.php'; ?>
                         <div class="col-md-6">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="GUIS　受付者">GUIS　受付者</span> <span class="text-danger">*</span></label>
@@ -685,71 +627,9 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
         </div>
     </div>
 
-    <!-- Customer Search Modal -->
-    <div class="modal fade" id="customerSearchModal" tabindex="-1">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">顧客検索</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">キーワード</label>
-                        <input
-                            type="text"
-                            class="form-control"
-                            v-model="customerSearchKeyword"
-                            @input="searchCustomersByKeyword"
-                            placeholder="会社名・支店名・担当者名・電話・メール..."
-                            autocomplete="off">
-                    </div>
-                    <div v-if="customerSearchLoading" class="text-center py-4">
-                        <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">読み込み中...</span>
-                        </div>
-                    </div>
-                    <div v-else-if="!customerSearchKeyword.trim()" class="text-muted text-center py-3">
-                        キーワードを入力してください
-                    </div>
-                    <div v-else-if="customerSearchResults.length === 0" class="text-muted text-center py-3">
-                        該当する顧客が見つかりません
-                    </div>
-                    <div v-else class="table-responsive customer-search-results">
-                        <table class="table table-hover table-sm mb-0">
-                            <thead class="table-light sticky-top">
-                                <tr>
-                                    <th>会社名</th>
-                                    <th>支店名</th>
-                                    <th>担当者名</th>
-                                    <th class="text-nowrap">自社担当部署名</th>
-                                    <th>電話</th>
-                                    <th>メール</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr
-                                    v-for="customer in customerSearchResults"
-                                    :key="customer.id"
-                                    class="customer-search-row"
-                                    @click="selectCustomerFromSearch(customer)">
-                                    <td>{{ customer.company_name }}</td>
-                                    <td>{{ customer.branch }}</td>
-                                    <td class="text-nowrap">{{ customer.name }}</td>
-                                    <td class="text-nowrap">{{ formatGuisDepartmentNames(customer) }}</td>
-                                    <td class="text-nowrap">{{ customer.tel || customer.phone }}</td>
-                                    <td>{{ customer.email }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Customer Search Modal / Customer List Modal -->
+    <?php include __DIR__ . '/partials/customer-search-modal.php'; ?>
+    <?php include __DIR__ . '/partials/customer-list-modal.php'; ?>
 </div>
 
 <?php
@@ -777,6 +657,11 @@ $view->footing();
 .customer-search-row:hover {
     background-color: rgba(var(--bs-primary-rgb), 0.08);
 }
+
+.customer-search-row.customer-search-row-added {
+    cursor: default;
+    opacity: 0.65;
+}
 </style>
 
 <script>
@@ -790,4 +675,5 @@ window.currentUser = {
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-tagify-options.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-customers-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-create.js?v=<?=PROJECT_CACHE_VERSION?>"></script> 

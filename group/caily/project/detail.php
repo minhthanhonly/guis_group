@@ -135,175 +135,11 @@ if($_SESSION['show_project'] == 0){
                         <div class="row g-3" v-if="project">
 
                             
-                            <!-- Parent Project Information Accordion (for child projects) -->
-                            <div v-if="project.parent_project_id" class="col-12 mb-4">
-                                <div class="accordion" id="parentProjectAccordion">
-                                    <div class="accordion-item border-primary">
-                                        <h2 class="accordion-header">
-                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#parentProjectCollapse" aria-expanded="false" aria-controls="parentProjectCollapse">
-                                                <span data-i18n="建物情報">建物情報</span>
-                                            </button>
-                                        </h2>
-                                        <div id="parentProjectCollapse" class="accordion-collapse collapse" data-bs-parent="#parentProjectAccordion">
-                                            <div class="accordion-body">
-                                                <div class="row">
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="会社名">会社名</span></label>
-                                                        <input type="text" class="form-control" :value="project.company_name || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="支店名">支店名</span></label>
-                                                        <input type="text" class="form-control" :value="project.branch_name || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="担当様">担当様</span></label>
-                                                        <input type="text" class="form-control" :value="project.contact_name || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
-                                                        <input type="text" class="form-control" :value="project.guis_receiver_display_name || project.guis_receiver || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="お施主様名">お施主様名</span></label>
-                                                        <input type="text" class="form-control" :value="project.building_name || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
-                                                        <input type="text" class="form-control" :value="formatDateTime(project.parent_request_date) || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="管理番号">管理番号</span></label>
-                                                        <input type="text" class="form-control" :value="project.parent_project_number || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
-                                                        <input type="text" class="form-control" :value="project.building_number || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
-                                                        <input type="text" class="form-control" :value="project.building_size || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                                        <input type="text" class="form-control" :value="project.structural_office || '-'" readonly>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="種類1">種類1</span></label>
-                                                        <div style="min-height:38px;">
-                                                            <span v-if="project.type1 && project.type1.split(',').length > 0">
-                                                                <span v-for="item in project.type1.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
-                                                            </span>
-                                                            <span v-else>-</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3">
-                                                        <label class="form-label"><span data-i18n="住宅種類">住宅種類</span></label>
-                                                        <div style="min-height:38px;">
-                                                            <span v-if="project.type2 && project.type2.split(',').length > 0">
-                                                                <span v-for="item in project.type2.split(',')" :key="item.trim()" class="badge bg-info me-1">{{ item.trim() }}</span>
-                                                            </span>
-                                                            <span v-else>-</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-4 mb-3" v-if="hasNonResidentialType">
-                                                        <label class="form-label"><span data-i18n="非住宅の主要用途">非住宅の主要用途</span></label>
-                                                        <div style="min-height:38px;">
-                                                            {{ nonResidentialMainUseLabel || '-' }}
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-12 mb-3">
-                                                        <label class="form-label"><span data-i18n="依頼">依頼</span></label>
-                                                        <div class="form-control-plaintext">
-                                                            <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
-                                                                <span v-for="item in parentRequestTypes" :key="item"
-                                                                      class="badge me-1 mb-1"
-                                                                      :class="isParentRequestFulfilled(item) ? getRequestBadgeClass(item) : getRequestUnfulfilledBadgeClass(item)"
-                                                                      :title="isParentRequestFulfilled(item) ? '' : '未作成'">
-                                                                    <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
-                                                                    <i v-else class="fa fa-check me-1"></i>
-                                                                    {{ item }}
-                                                                </span>
-                                                            </div>
-                                                            <span v-else class="text-muted">-</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-12 mb-3">
-                                                        <label class="form-label"><span data-i18n="お客様提供資料">お客様提供資料</span></label>
-                                                        <div class="form-control-plaintext">
-                                                            <div class="row">
-                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('配置図')">
-                                                                    <i class="fa fa-check text-success me-2"></i>配置図
-                                                                </div>
-                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('家賃審査書')">
-                                                                    <i class="fa fa-check text-success me-2"></i>家賃審査書
-                                                                </div>
-                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('契約図')">
-                                                                    <i class="fa fa-check text-success me-2"></i>契約図
-                                                                </div>
-                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('TAC図')">
-                                                                    <i class="fa fa-check text-success me-2"></i>TAC図
-                                                                </div>
-                                                                <div class="col-md-4" v-if="project.materials && project.materials.includes('その他')">
-                                                                    <i class="fa fa-check text-success me-2"></i>その他
-                                                                    <span v-if="project.materials_memo" class="small text-muted ms-1">
-                                                                        ({{ project.materials_memo }})
-                                                                    </span>
-                                                                </div>
-                                                                <div v-if="!project.materials || project.materials.length === 0" class="col-12">
-                                                                    <span class="text-muted">-</span>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-12 mb-3">
-                                                        <label class="form-label"><span data-i18n="特徴">特徴</span></label>
-                                                        <div class="form-control-plaintext">
-                                                            <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedFeatureLabels.length">
-                                                                <span v-for="opt in selectedFeatureLabels" :key="opt" class="badge badge-outline-primary me-1">
-                                                                    {{ opt }}
-                                                                </span>
-                                                            </div>
-                                                            <span v-else class="text-muted">-</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-12 mb-3" v-if="hasEnergySavingRequest">
-                                                        <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
-                                                        <div class="form-control-plaintext">
-                                                            <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedEnergyMaterialLabels.length">
-                                                                <span v-for="opt in selectedEnergyMaterialLabels" :key="'em_' + opt"
-                                                                      class="badge badge-outline-primary me-1">
-                                                                    {{ opt }}
-                                                                </span>
-                                                                <span v-if="project.energy_materials_memo
-                                                                    && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
-                                                                      class="small text-muted ms-1">
-                                                                    ({{ project.energy_materials_memo }})
-                                                                </span>
-                                                            </div>
-                                                            <span v-else class="text-muted">-</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-6 mb-3" v-if="hasEnergySavingRequest">
-                                                        <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
-                                                        <div style="min-height:38px;">
-                                                            <span v-if="project.application_review_agency">
-                                                                <span v-for="item in project.application_review_agency.split(',').map(v => v.trim()).filter(v => v)"
-                                                                    :key="item" class="badge badge-outline-primary me-1">{{ item }}</span>
-                                                            </span>
-                                                            <span v-else class="text-muted">-</span>
-                                                        </div>
-                                                    </div>
-                                                    <div class="col-md-6 mb-3" v-if="hasEnergySavingRequest">
-                                                        <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
-                                                        <div style="min-height:38px;">
-                                                            {{ belsZehGradeLabel || '-' }}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
+                            <!-- 建物情報: opens the shared building modal (read-only; 編集 inside it when permitted) -->
+                            <div v-if="project.parent_project_id" class="col-12 mb-2">
+                                <button type="button" class="btn btn-outline-primary btn-sm" @click="openParentProjectInfoModal" title="建物情報">
+                                    <i class="fa fa-building me-1"></i> <span data-i18n="建物情報">建物情報</span>
+                                </button>
                             </div>
 
                             <div v-if="project.parent_project_id && (project.show_child_customer_info || project.show_child_guis_receiver)" class="col-12 mt-3">
@@ -1823,6 +1659,8 @@ if($_SESSION['show_project'] == 0){
 </div>
 
 <?php
+// 建物情報 modal (shared standalone app, outside #app)
+include dirname(__DIR__) . '/parent_project/partials/parent-project-quick-modal.php';
 $view->footing();
 ?>
 
@@ -2139,5 +1977,9 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-fee-payment.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../parent_project/assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../parent_project/assets/js/parent-project-tagify-options.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../parent_project/assets/js/parent-project-customers-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../parent_project/assets/js/parent-project-quick-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 

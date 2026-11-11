@@ -421,6 +421,7 @@ function handleProjectVersionConflict(responseData, onReload) {
 window.handleProjectVersionConflict = handleProjectVersionConflict;
 
 createApp({
+    mixins: [window.ParentProjectCustomersMixin],
     data() {
         return {
             isAdmin: typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator',
@@ -435,8 +436,8 @@ createApp({
             workloadChartRenderTimer: null,
             workloadChartRenderToken: 0,
             loading: true,
-            isEditMode: false,
             originalParentProject: null,
+            originalCustomerList: [],
             companies: [],
             branches: [],
             contacts: [],
@@ -619,7 +620,6 @@ createApp({
                 { value: 'paused', label: '一時停止', color: 'warning' },
                 { value: 'cancelled', label: '中止', color: 'danger' }
             ],
-            childCustomerModalContext: null,
             // Child project modal data
             newChildProject: {
                 name: '',
@@ -641,11 +641,6 @@ createApp({
                 caily_nouki: '',
                 guis_nouki: '',
                 yotei: { from_month: '', from_part: '', to_month: '', to_part: '' },
-                use_parent_customer: true,
-                company_name: '',
-                branch_name: '',
-                contact_name: '',
-                customer_id: '',
                 use_parent_guis_receiver: true,
                 guis_receiver: ''
             },
@@ -671,11 +666,6 @@ createApp({
                 caily_nouki: '',
                 guis_nouki: '',
                 yotei: { from_month: '', from_part: '', to_month: '', to_part: '' },
-                use_parent_customer: true,
-                company_name: '',
-                branch_name: '',
-                contact_name: '',
-                customer_id: '',
                 use_parent_guis_receiver: true,
                 guis_receiver: ''
             },
@@ -881,33 +871,6 @@ createApp({
         }
     },
     watch: {
-        'parentProject.type2'() {
-            if (!this.hasSharedHousingType && this.featureFlags) {
-                this.featureFlags[this.sharedHousingFeatureLabel] = false;
-            }
-        },
-        request_energy_saving(enabled) {
-            if (!enabled && this.parentProject) {
-                this.parentProject.application_review_agency = '';
-                this.parentProject.bels_zeh_grade = '';
-                this.parentProject.energy_materials = '';
-                this.parentProject.energy_materials_memo = '';
-                this.energyMaterialFlags = this.createEmptyEnergyMaterialFlags();
-                this.destroyApplicationReviewAgencyTagify();
-            } else if (enabled && this.isEditMode) {
-                this.$nextTick(() => this.initApplicationReviewAgencyTagify());
-            }
-        },
-        'energyMaterialFlags.その他'(enabled) {
-            if (!enabled && this.parentProject) {
-                this.parentProject.energy_materials_memo = '';
-            }
-        },
-        materials_other(enabled) {
-            if (!enabled && this.parentProject) {
-                this.parentProject.materials_memo = '';
-            }
-        },
         'newQuotation.items': {
             handler(newItems, oldItems) {
                 // Allow product_code to be freely entered even for set products
@@ -1097,9 +1060,6 @@ createApp({
             return found ? found.label : code;
         },
         hasEnergySavingRequest() {
-            if (this.isEditMode) {
-                return !!this.request_energy_saving;
-            }
             return String(this.parentProject && this.parentProject.requests ? this.parentProject.requests : '')
                 .split(',')
                 .map(function(v) { return v.trim(); })
@@ -1447,6 +1407,8 @@ createApp({
                 const response = await axios.get(`/api/index.php?model=parentproject&method=getById&id=${PARENT_PROJECT_ID}`);
                 if (response.data) {
                     this.parentProject = response.data;
+                    // Customer list of the building (one primary customer)
+                    this.setCustomerListFromServer(this.parentProject.customers || []);
                     this.parentProject.bels_zeh_grade = (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '')
                         ? ''
                         : String(this.parentProject.bels_zeh_grade);
@@ -2164,24 +2126,6 @@ createApp({
             const materials = materialsString.split(',').map(m => m.trim());
             return materials.includes(materialName);
         },
-        onBeforeUnload(e) {
-            if (this.isEditMode) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        },
-        addBeforeUnloadWarning() {
-            if (!this._boundBeforeUnload) {
-                this._boundBeforeUnload = this.onBeforeUnload.bind(this);
-                window.addEventListener('beforeunload', this._boundBeforeUnload);
-            }
-        },
-        removeBeforeUnloadWarning() {
-            if (this._boundBeforeUnload) {
-                window.removeEventListener('beforeunload', this._boundBeforeUnload);
-                this._boundBeforeUnload = null;
-            }
-        },
         buildCopyParentProjectPayload(src) {
             const source = src || this.parentProject || {};
             const requests = String(source.requests || '').trim();
@@ -2191,6 +2135,7 @@ createApp({
                 branch_name: source.branch_name || '',
                 contact_name: source.contact_name || '',
                 customer_id: source.customer_id || '',
+                customers: Array.isArray(source.customers) ? source.customers : [],
                 construction_number: source.construction_number || '',
                 project_name: source.project_name || '',
                 construction_branch: source.construction_branch || '',
@@ -2232,340 +2177,17 @@ createApp({
                 showMessage(this.tText('建物のコピーに失敗しました。'), true);
             }
         },
-        toggleEditMode() {
-            this.isEditMode = true;
-            this.duplicateDismissedKey = '';
-            this.addBeforeUnloadWarning();
-            this.originalParentProject = JSON.parse(JSON.stringify(this.parentProject));
-            this.loadInitialData();
-            this.parseRequests();
-            this.parseMaterials();
-            this.parseFeatures();
-            this.parseEnergyMaterials();
-            this.parentProject.bels_zeh_grade = (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '')
-                ? ''
-                : String(this.parentProject.bels_zeh_grade);
-            this.$nextTick(async () => {
-                await this.loadBranches();
-                await this.loadContacts();
-                this.initSelect2();
-                this.initDatePickers();
-                this.initTagify();
+        // 編集: the building is edited in the shared modal (parent-project-quick-modal.js)
+        openParentProjectEditModal() {
+            if (!this.parentProject || !this.parentProject.id || typeof window.openParentProjectModal !== 'function') {
+                return;
+            }
+            window.openParentProjectModal(this.parentProject.id, {
+                mode: 'edit',
+                onSaved: () => {
+                    this.loadParentProject();
+                }
             });
-        },
-        cancelEdit() {
-            this.isEditMode = false;
-            this.duplicateDismissedKey = '';
-            this.removeBeforeUnloadWarning();
-            this.parentProject = JSON.parse(JSON.stringify(this.originalParentProject));
-            this.validationErrors = {
-                company_name: '',
-                project_name: ''
-            };
-            
-            // Destroy Select2 instances to prevent duplicates
-            this.destroySelect2Instances();
-        },
-        async loadInitialData() {
-            await Promise.all([
-                this.loadCompanies(),
-                this.loadUsers()
-            ]);
-        },
-        async loadCompanies() {
-            try {
-                const response = await axios.get('/api/index.php?model=customer&method=list_companies');
-                if (response.data && response.data.status === 'success') {
-                    const list = response.data.data || [];
-                    this.companies = list.slice().sort((a, b) => {
-                        const nameA = (a.company_name || '').toString();
-                        const nameB = (b.company_name || '').toString();
-                        const hasA = nameA.includes('大東');
-                        const hasB = nameB.includes('大東');
-                        if (hasA && !hasB) return -1;
-                        if (!hasA && hasB) return 1;
-                        return nameA.localeCompare(nameB);
-                    });
-                }
-            } catch (error) {
-                console.error('Error loading companies:', error);
-            }
-        },
-        async loadUsers() {
-            try {
-                const response = await axios.get('/api/index.php?model=user&method=searchMembers');
-                if (response.data && response.data.status === 'success') {
-                    this.users = response.data.data || [];
-                }
-                // Ensure current GUIS receiver value is included
-                if (this.parentProject.guis_receiver && !this.users.find(u => u.user_name === this.parentProject.guis_receiver)) {
-                    this.users.push({ id: 0, user_name: this.parentProject.guis_receiver });
-                }
-            } catch (error) {
-                console.error('Error loading users:', error);
-            }
-        },
-        onCompanyChange() {
-            // Clear branch and contact when company changes
-            this.parentProject.branch_name = '';
-            this.parentProject.contact_name = '';
-            
-            // Update branch select2 - trigger to reload data
-            const $branch = $('#branch_name');
-            if ($branch.length && $branch.data('select2')) {
-                $branch.val(null).trigger('change');
-                // Force reload of branch data
-                $branch.select2('destroy');
-                this.initBranchSelect2();
-            }
-            
-            // Update contact select2
-            const $contact = $('#contact_name');
-            if ($contact.length && $contact.data('select2')) {
-                $contact.val(null).trigger('change');
-                $contact.select2('destroy');
-                this.initContactSelect2();
-            }
-        },
-        async loadBranches() {
-            if (!this.parentProject.company_name) {
-                this.branches = [];
-                return;
-            }
-            try {
-                const response = await axios.get(`/api/index.php?model=customer&method=list_branches_by_company&company_name=${encodeURIComponent(this.parentProject.company_name)}`);
-                if (response.data && response.data.status === 'success') {
-                    this.branches = response.data.data || [];
-                }
-                // Don't include current branch value when company changes - let user select fresh
-            } catch (error) {
-                console.error('Error loading branches:', error);
-                this.branches = [];
-            }
-        },
-        onBranchChange() {
-            // Clear contact when branch changes
-            this.parentProject.contact_name = '';
-            
-            // Update contact select2
-            const $contact = $('#contact_name');
-            if ($contact.length && $contact.data('select2')) {
-                $contact.val(null).trigger('change');
-                $contact.select2('destroy');
-                this.initContactSelect2();
-            }
-        },
-        async loadContacts() {
-            if (!this.parentProject.company_name || !this.parentProject.branch_name) {
-                this.contacts = [];
-                return;
-            }
-            try {
-                const response = await axios.get(`/api/index.php?model=customer&method=list_contacts_by_company_branch&company_name=${encodeURIComponent(this.parentProject.company_name)}&branch_name=${encodeURIComponent(this.parentProject.branch_name)}`);
-                if (response.data && response.data.status === 'success') {
-                    this.contacts = response.data.data || [];
-                }
-                // Don't include current contact value when branch changes - let user select fresh
-            } catch (error) {
-                console.error('Error loading contacts:', error);
-                this.contacts = [];
-            }
-        },
-        initSelect2() {
-            // Initialize Select2 dropdowns
-            this.initCompanySelect2();
-            this.initBranchSelect2();
-            this.initContactSelect2();
-            this.initGuisReceiverSelect2();
-        },
-        initCompanySelect2() {
-            const $company = $('#company_name');
-            if ($company.length) {
-                $company.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $company.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_companies',
-                        dataType: 'json',
-                        delay: 250,
-                        data: function(params) {
-                            return {
-                                search: params.term,
-                                page: params.page || 1
-                            };
-                        },
-                        processResults: function(data) {
-                            const list = (data.data || []).slice().sort((a, b) => {
-                                const nameA = (a.company_name || '').toString();
-                                const nameB = (b.company_name || '').toString();
-                                const hasA = nameA.includes('大東');
-                                const hasB = nameB.includes('大東');
-                                if (hasA && !hasB) return -1;
-                                if (!hasA && hasB) return 1;
-                                return nameA.localeCompare(nameB);
-                            });
-                            return {
-                                results: list.map(function(item) {
-                                    return {
-                                        id: item.company_name,
-                                        text: item.company_name
-                                    };
-                                })
-                            };
-                        }
-                    }
-                }).on('select2:select', (e) => {
-                    this.parentProject.company_name = e.params.data.id;
-                    this.onCompanyChange();
-                }).on('select2:clear', () => {
-                    this.parentProject.company_name = '';
-                    this.onCompanyChange();
-                });
-
-                // Set current value if exists
-                if (this.parentProject.company_name) {
-                    // Add the current option to the select
-                    const option = new Option(this.parentProject.company_name, this.parentProject.company_name, true, true);
-                    $company.append(option).trigger('change');
-                }
-            }
-        },
-        initBranchSelect2() {
-            const $branch = $('#branch_name');
-            if ($branch.length) {
-                $branch.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $branch.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_branches_by_company',
-                        dataType: 'json',
-                        delay: 250,
-                        data: (params) => {
-                            return {
-                                search: params.term,
-                                page: params.page || 1,
-                                company_name: this.parentProject.company_name
-                            };
-                        },
-                        processResults: function(data) {
-                            return {
-                                results: data.data.map(function(item) {
-                                    return {
-                                        id: item.branch,
-                                        text: item.branch
-                                    };
-                                })
-                            };
-                        }
-                    }
-                }).on('select2:select', (e) => {
-                    this.parentProject.branch_name = e.params.data.id;
-                    this.onBranchChange();
-                }).on('select2:clear', () => {
-                    this.parentProject.branch_name = '';
-                    this.onBranchChange();
-                });
-
-                // Set current value if exists
-                if (this.parentProject.branch_name) {
-                    // Add the current option to the select
-                    const option = new Option(this.parentProject.branch_name, this.parentProject.branch_name, true, true);
-                    $branch.append(option).trigger('change');
-                }
-            }
-        },
-        initContactSelect2() {
-            const $contact = $('#contact_name');
-            if ($contact.length) {
-                $contact.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $contact.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    ajax: {
-                        url: '/api/index.php?model=customer&method=list_contacts_by_company_branch',
-                        dataType: 'json',
-                        delay: 250,
-                        data: (params) => {
-                            return {
-                                search: params.term,
-                                page: params.page || 1,
-                                company_name: this.parentProject.company_name,
-                                branch_name: this.parentProject.branch_name
-                            };
-                        },
-                        processResults: function(data) {
-                            return {
-                                results: data.data.map(function(item) {
-                                    return {
-                                        id: item.id,
-                                        text: item.name
-                                    };
-                                })
-                            };
-                        }
-                    }
-                }).on('select2:select', (e) => {
-                    this.parentProject.contact_name = e.params.data.text;
-                    this.parentProject.customer_id = e.params.data.id;
-                }).on('select2:clear', () => {
-                    this.parentProject.contact_name = '';
-                    this.parentProject.customer_id = '';
-                });
-
-                // Set current value if exists
-                if (this.parentProject.contact_name) {
-                    // Add the current option to the select using customer_id as value
-                    const optionValue = this.parentProject.customer_id || this.parentProject.contact_name;
-                    const option = new Option(this.parentProject.contact_name, optionValue, true, true);
-                    $contact.append(option).trigger('change');
-                }
-            }
-        },
-        initGuisReceiverSelect2() {
-            const $guisReceiver = $('#guis_receiver');
-            if ($guisReceiver.length) {
-                $guisReceiver.select2({
-                    placeholder: '選択してください',
-                    dropdownParent: $guisReceiver.parent(),
-                    allowClear: true,
-                    minimumResultsForSearch: 0,
-                    ajax: {
-                        url: '/api/index.php?model=user&method=searchMembers',
-                        dataType: 'json',
-                        delay: 250,
-                        data: function(params) {
-                            return {
-                                search: params.term,
-                                page: params.page || 1
-                            };
-                        },
-                        processResults: function(data) {
-                            return {
-                                results: data.data.map(function(item) {
-                                    return {
-                                        id: item.userid,
-                                        text: item.realname
-                                    };
-                                })
-                            };
-                        }
-                    }
-                }).on('select2:select', (e) => {
-                    this.parentProject.guis_receiver = e.params.data.id;
-                }).on('select2:clear', () => {
-                    this.parentProject.guis_receiver = '';
-                });
-
-                // Set current value if exists - load the user name from API
-                if (this.parentProject.guis_receiver) {
-                    this.loadGuisReceiverDisplayName();
-                }
-            }
         },
         async loadGuisReceiverDisplayName() {
             try {
@@ -2590,50 +2212,6 @@ createApp({
                 console.error('Error loading GUIS receiver display name:', error);
             }
         },
-        initDatePickers() {
-            // Request date picker (with time)
-            const requestDateOptions = {
-                enableTime: true,
-                dateFormat: "Y/m/d H:i",
-                time_24hr: true,
-                allowInput: true,
-                locale: "ja",
-                defaultHour: 9,
-                defaultMinute: 0,
-                onChange: (selectedDates, dateStr, instance) => {
-                    // Only update if this is actually the request date picker
-                    if (instance.input && instance.input.id === 'request_date_picker') {
-                        this.parentProject.request_date = dateStr;
-                    }
-                }
-            };
-
-            const requestDateEl = document.getElementById('request_date_picker');
-            if (requestDateEl) {
-                if (requestDateEl._flatpickr) requestDateEl._flatpickr.destroy();
-                flatpickr(requestDateEl, requestDateOptions);
-            }
-
-            // Desired delivery date picker (date only)
-            const desiredDeliveryOptions = {
-                enableTime: false,
-                dateFormat: "Y/m/d",
-                allowInput: true,
-                locale: "ja",
-                onChange: (selectedDates, dateStr, instance) => {
-                    // Only update if this is actually the desired delivery date picker
-                    if (instance.input && instance.input.id === 'desired_delivery_date_picker') {
-                        this.parentProject.desired_delivery_date = dateStr;
-                    }
-                }
-            };
-
-            const desiredDeliveryEl = document.getElementById('desired_delivery_date_picker');
-            if (desiredDeliveryEl) {
-                if (desiredDeliveryEl._flatpickr) desiredDeliveryEl._flatpickr.destroy();
-                flatpickr(desiredDeliveryEl, desiredDeliveryOptions);
-            }
-        },
         // Helper method to safely update Flatpickr instances
         _safeUpdateFlatpickr(elementId, dateStr, dataField) {
             const targetEl = document.getElementById(elementId);
@@ -2646,17 +2224,6 @@ createApp({
             }
         },
         
-        // Set current date and time for request date
-        setCurrentDateTime() {
-            const now = new Date();
-            const dateStr = now.getFullYear() + '/' + 
-                String(now.getMonth() + 1).padStart(2, '0') + '/' + 
-                String(now.getDate()).padStart(2, '0') + ' ' + 
-                String(now.getHours()).padStart(2, '0') + ':' + 
-                String(now.getMinutes()).padStart(2, '0');
-            
-            this._safeUpdateFlatpickr('request_date_picker', dateStr, 'request_date');
-        },
         
         // Set today's date for desired delivery date
         setTodayDate() {
@@ -2755,297 +2322,6 @@ createApp({
                 }
             }
         },
-        destroyApplicationReviewAgencyTagify() {
-            if (this.applicationReviewAgencyTagify) {
-                try { this.applicationReviewAgencyTagify.destroy(); } catch (e) { /* ignore */ }
-                this.applicationReviewAgencyTagify = null;
-            }
-            const input = document.querySelector('#application_review_agency_tags');
-            if (input) {
-                input.value = '';
-                if (input._tagify) {
-                    try { input._tagify.destroy(); } catch (e) { /* ignore */ }
-                    input._tagify = null;
-                }
-            }
-        },
-        async refreshApplicationReviewAgencyWhitelist() {
-            if (window.ParentProjectReviewAgency && typeof window.ParentProjectReviewAgency.loadMergedWhitelist === 'function') {
-                this.applicationReviewAgencyWhitelist = await window.ParentProjectReviewAgency.loadMergedWhitelist();
-            }
-            return this.applicationReviewAgencyWhitelist;
-        },
-        async initApplicationReviewAgencyTagify() {
-            const input = document.querySelector('#application_review_agency_tags');
-            if (!input || !window.Tagify) return;
-            await this.refreshApplicationReviewAgencyWhitelist();
-            this.destroyApplicationReviewAgencyTagify();
-            input.value = '';
-            this.applicationReviewAgencyTagify = new Tagify(input, {
-                whitelist: this.applicationReviewAgencyWhitelist.slice(),
-                enforceWhitelist: false,
-                maxTags: 1,
-                dropdown: {
-                    maxItems: 40,
-                    classname: 'tags-look-review-agency',
-                    enabled: 0,
-                    closeOnSelect: true
-                }
-            });
-            const updateAgency = () => {
-                this.parentProject.application_review_agency = this.applicationReviewAgencyTagify.value
-                    .map(tag => tag.value)
-                    .join(',');
-            };
-            this.applicationReviewAgencyTagify.on('add', (e) => {
-                updateAgency();
-                const value = e && e.detail && e.detail.data ? e.detail.data.value : '';
-                if (value && window.ParentProjectReviewAgency) {
-                    window.ParentProjectReviewAgency.saveLocalCustom(value);
-                    this.applicationReviewAgencyWhitelist = window.ParentProjectReviewAgency.buildWhitelist(
-                        this.applicationReviewAgencyWhitelist
-                    );
-                    this.applicationReviewAgencyTagify.settings.whitelist = this.applicationReviewAgencyWhitelist.slice();
-                    this.applicationReviewAgencyTagify.whitelist = this.applicationReviewAgencyWhitelist.slice();
-                }
-            });
-            this.applicationReviewAgencyTagify.on('remove', updateAgency);
-            const current = String(this.parentProject.application_review_agency || '').trim();
-            if (current) {
-                this.applicationReviewAgencyTagify.addTags(current);
-            }
-        },
-        async loadTagifyWhitelists() {
-            const T = window.ParentProjectTagifyOptions;
-            if (!T || typeof T.loadMergedWhitelist !== 'function') {
-                return {
-                    type2: ['長屋', '共同', '戸建', '非住宅', '集合'],
-                    scale: ['W2F3J', 'W2F4J', 'W2F5J', 'W2F6J', 'W3F3J', 'W3F4J', 'W3F5J', 'W3F6J', 'RC3F3J', 'RC3F4J', 'RC3F5J', 'RC3F6J', 'RC3F7J', 'RC3F8J'],
-                    city: [],
-                    structural_office: []
-                };
-            }
-            const [type2, scale, city, structural_office] = await Promise.all([
-                T.loadMergedWhitelist('type2'),
-                T.loadMergedWhitelist('scale'),
-                T.loadMergedWhitelist('city'),
-                T.loadMergedWhitelist('structural_office')
-            ]);
-            return { type2, scale, city, structural_office };
-        },
-        bindTagifyField(tagify, field, onUpdate) {
-            if (!tagify) return;
-            if (window.ParentProjectTagifyOptions && typeof window.ParentProjectTagifyOptions.bindSaveOnAdd === 'function') {
-                window.ParentProjectTagifyOptions.bindSaveOnAdd(tagify, field, onUpdate);
-            } else {
-                tagify.on('add', onUpdate);
-                tagify.on('remove', onUpdate);
-            }
-        },
-        applyTagifyValue(tagify, value) {
-            if (!tagify) return;
-            try {
-                tagify.removeAllTags();
-                const tags = String(value || '').split(',').map((s) => s.trim()).filter(Boolean);
-                if (tags.length) tagify.addTags(tags);
-            } catch (e) { /* ignore */ }
-        },
-        async initTagify() {
-            await this.$nextTick();
-            if (!window.Tagify) return;
-            const whitelists = await this.loadTagifyWhitelists();
-
-            const type1Input = document.querySelector('#type1_tags');
-            if (type1Input && !type1Input._tagify) {
-                if (this.type1Tagify) {
-                    try { this.type1Tagify.destroy(); } catch (e) { /* ignore */ }
-                }
-                this.type1Tagify = new Tagify(type1Input, {
-                    whitelist: ['TAC', '特注'],
-                    maxTags: 5,
-                    dropdown: { maxItems: 20, classname: 'tags-look-type1', enabled: 0, closeOnSelect: true }
-                });
-                const updateType1 = () => {
-                    this.parentProject.type1 = this.type1Tagify.value.map(tag => tag.value).join(',');
-                };
-                this.type1Tagify.on('add', updateType1);
-                this.type1Tagify.on('remove', updateType1);
-                this.applyTagifyValue(this.type1Tagify, this.parentProject.type1);
-            }
-
-            const type2Input = document.querySelector('#type2_tags');
-            if (type2Input && !type2Input._tagify) {
-                if (this.type2Tagify) {
-                    try { this.type2Tagify.destroy(); } catch (e) { /* ignore */ }
-                }
-                this.type2Tagify = new Tagify(type2Input, {
-                    whitelist: whitelists.type2.slice(),
-                    enforceWhitelist: false,
-                    maxTags: 1,
-                    dropdown: { maxItems: 40, classname: 'tags-look-type2', enabled: 0, closeOnSelect: true }
-                });
-                this.bindTagifyField(this.type2Tagify, 'type2', () => {
-                    this.parentProject.type2 = this.type2Tagify.value.map(tag => tag.value).join(',');
-                    if (!this.hasNonResidentialType) {
-                        this.parentProject.type3 = '';
-                    }
-                });
-                this.applyTagifyValue(this.type2Tagify, this.parentProject.type2);
-            }
-
-            const constructionBranchInput = document.querySelector('#construction_branch_tags');
-            if (constructionBranchInput && !constructionBranchInput._tagify) {
-                if (this.constructionBranchTagify) {
-                    try { this.constructionBranchTagify.destroy(); } catch (e) { /* ignore */ }
-                }
-                this.constructionBranchTagify = new Tagify(constructionBranchInput, {
-                    whitelist: ['北海道', '青森県', '岩手県', '宮城県', '秋田県', '山形県', '福島県',
-                        '茨城県', '栃木県', '群馬県', '埼玉県', '千葉県', '東京都', '神奈川県',
-                        '新潟県', '富山県', '石川県', '福井県', '山梨県', '長野県', '岐阜県',
-                        '静岡県', '愛知県', '三重県', '滋賀県', '京都府', '大阪府', '兵庫県',
-                        '奈良県', '和歌山県', '鳥取県', '島根県', '岡山県', '広島県', '山口県',
-                        '徳島県', '香川県', '愛媛県', '高知県', '福岡県', '佐賀県', '長崎県',
-                        '熊本県', '大分県', '宮崎県', '鹿児島県', '沖縄県'],
-                    maxTags: 5,
-                    dropdown: { maxItems: 20, classname: 'tags-look-construction-branch', enabled: 0, closeOnSelect: true }
-                });
-                const updateConstructionBranch = () => {
-                    this.parentProject.construction_branch = this.constructionBranchTagify.value.map(tag => tag.value).join(',');
-                };
-                this.constructionBranchTagify.on('add', updateConstructionBranch);
-                this.constructionBranchTagify.on('remove', updateConstructionBranch);
-                this.applyTagifyValue(this.constructionBranchTagify, this.parentProject.construction_branch);
-            }
-
-            const scaleInput = document.querySelector('#scale_tags');
-            if (scaleInput && !scaleInput._tagify) {
-                if (this.scaleTagify) {
-                    try { this.scaleTagify.destroy(); } catch (e) { /* ignore */ }
-                }
-                this.scaleTagify = new Tagify(scaleInput, {
-                    whitelist: whitelists.scale.slice(),
-                    enforceWhitelist: false,
-                    maxTags: 5,
-                    dropdown: { maxItems: 40, classname: 'tags-look-scale', enabled: 0, closeOnSelect: true }
-                });
-                this.bindTagifyField(this.scaleTagify, 'scale', () => {
-                    this.parentProject.scale = this.scaleTagify.value.map(tag => tag.value).join(',');
-                });
-                this.applyTagifyValue(this.scaleTagify, this.parentProject.scale);
-            }
-
-            const cityInput = document.querySelector('#city_tags');
-            if (cityInput && !cityInput._tagify) {
-                if (this.cityTagify) {
-                    try { this.cityTagify.destroy(); } catch (e) { /* ignore */ }
-                }
-                this.cityTagify = new Tagify(cityInput, {
-                    whitelist: whitelists.city.slice(),
-                    enforceWhitelist: false,
-                    maxTags: 1,
-                    dropdown: { maxItems: 40, classname: 'tags-look-city', enabled: 0, closeOnSelect: true }
-                });
-                this.bindTagifyField(this.cityTagify, 'city', () => {
-                    this.parentProject.city = this.cityTagify.value.map(tag => tag.value).join(',');
-                });
-                this.applyTagifyValue(this.cityTagify, this.parentProject.city);
-            }
-
-            const structuralOfficeInput = document.querySelector('#structural_office_tags');
-            if (structuralOfficeInput && !structuralOfficeInput._tagify) {
-                if (this.structuralOfficeTagify) {
-                    try { this.structuralOfficeTagify.destroy(); } catch (e) { /* ignore */ }
-                }
-                this.structuralOfficeTagify = new Tagify(structuralOfficeInput, {
-                    whitelist: whitelists.structural_office.slice(),
-                    enforceWhitelist: false,
-                    maxTags: 1,
-                    dropdown: { maxItems: 40, classname: 'tags-look-structural-office', enabled: 0, closeOnSelect: true }
-                });
-                this.bindTagifyField(this.structuralOfficeTagify, 'structural_office', () => {
-                    this.parentProject.structural_office = this.structuralOfficeTagify.value.map(tag => tag.value).join(',');
-                });
-                this.applyTagifyValue(this.structuralOfficeTagify, this.parentProject.structural_office);
-            }
-
-            if (this.hasEnergySavingRequest) {
-                this.initApplicationReviewAgencyTagify();
-            }
-        },
-        clearTagifyTags(fieldName) {
-            if (fieldName === 'type1' && this.type1Tagify) {
-                this.type1Tagify.removeAllTags();
-            } else if (fieldName === 'type2' && this.type2Tagify) {
-                this.type2Tagify.removeAllTags();
-            } else if (fieldName === 'construction_branch' && this.constructionBranchTagify) {
-                this.constructionBranchTagify.removeAllTags();
-            } else if (fieldName === 'application_review_agency' && this.applicationReviewAgencyTagify) {
-                this.applicationReviewAgencyTagify.removeAllTags();
-            } else if (fieldName === 'scale' && this.scaleTagify) {
-                this.scaleTagify.removeAllTags();
-            } else if (fieldName === 'city' && this.cityTagify) {
-                this.cityTagify.removeAllTags();
-            } else if (fieldName === 'structural_office' && this.structuralOfficeTagify) {
-                this.structuralOfficeTagify.removeAllTags();
-            }
-        },
-        destroySelect2Instances() {
-            // Destroy company Select2
-            const $company = $('#company_name');
-            if ($company.length && $company.data('select2')) {
-                $company.select2('destroy');
-            }
-            
-            // Destroy branch Select2
-            const $branch = $('#branch_name');
-            if ($branch.length && $branch.data('select2')) {
-                $branch.select2('destroy');
-            }
-            
-            // Destroy contact Select2
-            const $contact = $('#contact_name');
-            if ($contact.length && $contact.data('select2')) {
-                $contact.select2('destroy');
-            }
-            
-            // Destroy GUIS receiver Select2
-            const $guisReceiver = $('#guis_receiver');
-            if ($guisReceiver.length && $guisReceiver.data('select2')) {
-                $guisReceiver.select2('destroy');
-            }
-        },
-        parseRequests() {
-            if (!this.parentProject.requests) {
-                this.request_design = false;
-                this.request_equipment = false;
-                this.request_3d_equipment = false;
-                this.request_energy_saving = false;
-                this.request_3d = false;
-                return;
-            }
-            const requests = this.parentProject.requests.split(',').map(r => r.trim());
-            this.request_design = requests.includes('意匠');
-            this.request_equipment = requests.includes('設備');
-            this.request_3d_equipment = requests.includes('3D設備');
-            this.request_energy_saving = requests.includes('省エネ');
-            this.request_3d = requests.includes('3D');
-        },
-        parseMaterials() {
-            if (!this.parentProject.materials) {
-                this.materials_layout = false;
-                this.materials_rental = false;
-                this.materials_contract = false;
-                this.materials_tac = false;
-                this.materials_other = false;
-                return;
-            }
-            const materials = this.parentProject.materials.split(',').map(m => m.trim());
-            this.materials_layout = materials.includes('配置図');
-            this.materials_rental = materials.includes('家賃審査書');
-            this.materials_contract = materials.includes('契約図');
-            this.materials_tac = materials.includes('TAC図');
-            this.materials_other = materials.includes('その他');
-        },
         createEmptyFeatureFlags() {
             const flags = {};
             this.featureOptions.forEach((opt) => { flags[opt] = false; });
@@ -3062,47 +2338,6 @@ createApp({
             }
             this.featureFlags = flags;
         },
-        createEmptyEnergyMaterialFlags() {
-            const flags = {};
-            this.energyMaterialOptions.forEach((opt) => { flags[opt] = false; });
-            return flags;
-        },
-        buildEnergyMaterialsString() {
-            return this.energyMaterialOptions.filter((opt) => this.energyMaterialFlags[opt]).join(',');
-        },
-        parseEnergyMaterials() {
-            const flags = this.createEmptyEnergyMaterialFlags();
-            if (this.parentProject && this.parentProject.energy_materials) {
-                this.parentProject.energy_materials.split(',').map(m => m.trim()).filter(Boolean).forEach((item) => {
-                    if (Object.prototype.hasOwnProperty.call(flags, item)) {
-                        flags[item] = true;
-                    }
-                });
-            }
-            this.energyMaterialFlags = flags;
-            if (!flags['その他'] && this.parentProject) {
-                this.parentProject.energy_materials_memo = this.parentProject.energy_materials_memo || '';
-            }
-        },
-        validateParentProjectForm() {
-            this.validationErrors = {
-                company_name: '',
-                project_name: ''
-            };
-            let valid = true;
-            
-            if (!this.parentProject.company_name) {
-                this.validationErrors.company_name = '会社名は必須です';
-                valid = false;
-            }
-            
-            if (!this.parentProject.project_name) {
-                this.validationErrors.project_name = '案件名は必須です';
-                valid = false;
-            }
-            
-            return valid;
-        },
         tText(key) {
             if (typeof i18next !== 'undefined' && typeof i18next.t === 'function') {
                 return i18next.t(key) || key;
@@ -3116,256 +2351,6 @@ createApp({
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
-        },
-        getDuplicateCheckKey() {
-            if (!this.parentProject) {
-                return '|';
-            }
-            const construction = String(this.parentProject.construction_number || '').trim();
-            const projectName = String(this.parentProject.project_name || '').trim();
-            return construction + '|' + projectName;
-        },
-        getDuplicateMatchedLabels(duplicate) {
-            const labels = [];
-            const inputConstruction = String(this.parentProject?.construction_number || '').trim();
-            const inputName = String(this.parentProject?.project_name || '').trim();
-            const matchedBy = Array.isArray(duplicate?.matched_by) ? duplicate.matched_by : [];
-            const matchedConstruction = matchedBy.includes('construction_number')
-                || (inputConstruction && String(duplicate?.construction_number || '').trim() === inputConstruction);
-            const matchedName = matchedBy.includes('project_name')
-                || (inputName && String(duplicate?.project_name || '').trim() === inputName);
-            if (matchedName) {
-                labels.push(this.tText('お施主様名'));
-            }
-            if (matchedConstruction) {
-                labels.push(this.tText('工事番号'));
-            }
-            return labels;
-        },
-        buildDuplicateWarningHtml(duplicate, questionKey) {
-            const matchedLabels = this.getDuplicateMatchedLabels(duplicate);
-            const rows = [
-                matchedLabels.length
-                    ? `<div><strong>${this.escapeHtml(this.tText('一致項目'))}:</strong> ${this.escapeHtml(matchedLabels.join(' / '))}</div>`
-                    : '',
-                `<div><strong>${this.escapeHtml(this.tText('お施主様名'))}:</strong> ${this.escapeHtml(duplicate?.project_name || '-')}</div>`,
-                `<div><strong>${this.escapeHtml(this.tText('工事番号'))}:</strong> ${this.escapeHtml(duplicate?.construction_number || '-')}</div>`,
-                `<div><strong>${this.escapeHtml(this.tText('管理番号'))}:</strong> ${this.escapeHtml(duplicate?.project_number || '-')}</div>`
-            ].filter(Boolean).join('');
-            return `
-                <p class="mb-2">${this.escapeHtml(this.tText(questionKey))}</p>
-                <div class="text-start small">${rows}</div>
-            `;
-        },
-        async findDuplicateBuilding() {
-            if (!this.parentProject) {
-                return null;
-            }
-            const construction = String(this.parentProject.construction_number || '').trim();
-            const projectName = String(this.parentProject.project_name || '').trim();
-            if (!construction && !projectName) {
-                return null;
-            }
-            try {
-                const response = await axios.get('/api/index.php', {
-                    params: {
-                        model: 'parentproject',
-                        method: 'findDuplicate',
-                        construction_number: construction,
-                        project_name: projectName,
-                        exclude_id: this.parentProject.id || ''
-                    }
-                });
-                const data = response && response.data ? response.data : {};
-                if (data.status === 'success' && data.duplicate && data.duplicate.id) {
-                    if (!Array.isArray(data.duplicate.matched_by) && Array.isArray(data.matched_by)) {
-                        data.duplicate.matched_by = data.matched_by;
-                    }
-                    return data.duplicate;
-                }
-            } catch (error) {
-                console.error('Error checking duplicate parent project:', error);
-            }
-            return null;
-        },
-        async confirmDuplicateBuilding(duplicate, questionKey) {
-            const message = this.tText(questionKey);
-            if (typeof Swal === 'undefined' || !Swal.fire) {
-                return window.confirm(message);
-            }
-            const result = await Swal.fire({
-                icon: 'warning',
-                title: this.tText('確認'),
-                html: this.buildDuplicateWarningHtml(duplicate || {}, questionKey),
-                showCancelButton: true,
-                confirmButtonText: this.tText('はい'),
-                cancelButtonText: this.tText('いいえ'),
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#6c757d',
-                reverseButtons: true
-            });
-            return !!(result && result.isConfirmed);
-        },
-        async promptDuplicateBuildingIfNeeded(questionKey) {
-            if (!this.isEditMode) {
-                return { duplicate: null, proceed: true };
-            }
-            if (this.duplicatePromptPromise) {
-                return this.duplicatePromptPromise;
-            }
-            this.duplicatePromptPromise = (async () => {
-                const checkKey = this.getDuplicateCheckKey();
-                if (checkKey === '|' || checkKey === this.duplicateDismissedKey) {
-                    return { duplicate: null, proceed: true };
-                }
-                const duplicate = await this.findDuplicateBuilding();
-                if (!duplicate || !duplicate.id) {
-                    return { duplicate: null, proceed: true };
-                }
-                const proceed = await this.confirmDuplicateBuilding(
-                    duplicate,
-                    questionKey || '既に同じ建物があります。このまま保存しますか？'
-                );
-                if (!proceed) {
-                    return { duplicate: duplicate, proceed: false };
-                }
-                this.duplicateDismissedKey = checkKey;
-                return { duplicate: duplicate, proceed: true };
-            })();
-            try {
-                return await this.duplicatePromptPromise;
-            } finally {
-                this.duplicatePromptPromise = null;
-            }
-        },
-        async onDuplicateFieldBlur() {
-            if (!this.isEditMode || this.duplicatePromptPromise) {
-                return;
-            }
-            const checkKey = this.getDuplicateCheckKey();
-            if (checkKey === '|' || checkKey === this.duplicateDismissedKey) {
-                return;
-            }
-            const duplicate = await this.findDuplicateBuilding();
-            if (!duplicate || !duplicate.id) {
-                return;
-            }
-            const infoKey = 'お施主様名または工事番号が既に登録されています。';
-            const message = this.tText(infoKey);
-            if (typeof Swal !== 'undefined' && Swal.fire) {
-                await Swal.fire({
-                    icon: 'warning',
-                    title: this.tText('確認'),
-                    html: this.buildDuplicateWarningHtml(duplicate, infoKey),
-                    confirmButtonText: this.tText('OK'),
-                    confirmButtonColor: '#3085d6'
-                });
-            } else {
-                window.alert(message);
-            }
-            this.duplicateDismissedKey = checkKey;
-        },
-        async saveParentProject() {
-            if (!this.validateParentProjectForm()) {
-                return;
-            }
-
-            const duplicateResult = await this.promptDuplicateBuildingIfNeeded('既に同じ建物があります。このまま保存しますか？');
-            if (!duplicateResult.proceed) {
-                return;
-            }
-
-            // Convert checkbox requests to comma-separated string
-            const requestsArray = [];
-            if (this.request_design) requestsArray.push('意匠');
-            if (this.request_equipment) requestsArray.push('設備');
-            if (this.request_3d_equipment) requestsArray.push('3D設備');
-            if (this.request_energy_saving) requestsArray.push('省エネ');
-            if (this.request_3d) requestsArray.push('3D');
-            this.parentProject.requests = requestsArray.join(',');
-
-            // Convert checkbox materials to comma-separated string
-            const materialsArray = [];
-            if (this.materials_layout) materialsArray.push('配置図');
-            if (this.materials_rental) materialsArray.push('家賃審査書');
-            if (this.materials_contract) materialsArray.push('契約図');
-            if (this.materials_tac) materialsArray.push('TAC図');
-            if (this.materials_other) materialsArray.push('その他');
-            this.parentProject.materials = materialsArray.join(',');
-            if (!this.materials_other) {
-                this.parentProject.materials_memo = '';
-            }
-
-            this.parentProject.features = this.visibleFeatureOptions
-                .filter((opt) => this.featureFlags[opt])
-                .join(',');
-            this.parentProject.energy_materials = this.hasEnergySavingRequest
-                ? this.buildEnergyMaterialsString()
-                : '';
-            if (!this.hasEnergySavingRequest || !this.energyMaterialFlags['その他']) {
-                this.parentProject.energy_materials_memo = '';
-            }
-
-            try {
-                const formData = new FormData();
-                formData.append('id', this.parentProject.id);
-                formData.append('company_name', this.parentProject.company_name || '');
-                formData.append('branch_name', this.parentProject.branch_name || '');
-                formData.append('contact_name', this.parentProject.contact_name || '');
-                formData.append('customer_id', this.parentProject.customer_id || '');
-                formData.append('guis_receiver', this.parentProject.guis_receiver || '');
-                formData.append('request_date', this.parentProject.request_date || '');
-                formData.append('construction_number', this.parentProject.construction_number || '');
-                formData.append('project_number', this.parentProject.project_number || '');
-                formData.append('project_name', this.parentProject.project_name || '');
-                formData.append('construction_branch', this.parentProject.construction_branch || '');
-                formData.append('scale', this.parentProject.scale || '');
-                formData.append('city', this.parentProject.city || '');
-                formData.append('type1', this.parentProject.type1 || '');
-                formData.append('type2', this.parentProject.type2 || '');
-                formData.append('type3', this.hasNonResidentialType ? (this.parentProject.type3 || '') : '');
-                formData.append('request_type', this.parentProject.request_type || '');
-                formData.append('desired_delivery_date', this.parentProject.desired_delivery_date || '');
-                formData.append('materials', this.parentProject.materials);
-                formData.append('materials_memo', this.parentProject.materials_memo || '');
-                formData.append('features', this.parentProject.features || '');
-                formData.append(
-                    'application_review_agency',
-                    this.hasEnergySavingRequest ? (this.parentProject.application_review_agency || '') : ''
-                );
-                formData.append(
-                    'bels_zeh_grade',
-                    this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '') : ''
-                );
-                formData.append('energy_materials', this.parentProject.energy_materials || '');
-                formData.append('energy_materials_memo', this.parentProject.energy_materials_memo || '');
-                formData.append('structural_office', this.parentProject.structural_office || '');
-                formData.append('notes', this.parentProject.notes || '');
-                formData.append('status', this.parentProject.status || 'draft');
-                formData.append('requests', this.parentProject.requests || '');
-                
-                const response = await axios.post('/api/index.php?model=parentproject&method=update', formData);
-                if (response.data && response.data.status == 'success') {
-                    // Show success message with SweetAlert2
-                    Swal.fire({
-                        title: '成功',
-                        text: '建物情報を更新しました。',
-                        icon: 'success',
-                        confirmButtonText: 'OK',
-                        confirmButtonColor: '#3085d6'
-                    }).then(() => {
-                        this.isEditMode = false;
-                        this.removeBeforeUnloadWarning();
-                        this.destroySelect2Instances();
-                        this.loadParentProject();
-                    });
-                } else {
-                    showParentProjectError(response.data?.error || '更新に失敗しました。', response && response.data);
-                }
-            } catch (error) {
-                console.error('Error saving parent project:', error);
-                showParentProjectError('更新に失敗しました。', error);
-            }
         },
         getParentProjectStatusButtonClass(status) {
             if (!status) return 'btn-secondary';
@@ -3469,41 +2454,6 @@ createApp({
 
         // Child project modal methods
 
-        getChildProjectCustomerModel(isEdit) {
-            return isEdit ? this.editingChildProject : this.newChildProject;
-        },
-        getParentCustomerSummary() {
-            const display = this.customerDisplay || {};
-            const parent = this.parentProject || {};
-            return {
-                company_name: display.company_name || parent.company_name || '-',
-                branch_name: display.branch_name || parent.branch_name || '-',
-                contact_name: display.contact_name || parent.contact_name || '-'
-            };
-        },
-        shouldShowChildProjectCustomer(project) {
-            const parentId = String((this.parentProject && this.parentProject.customer_id) || '').trim();
-            const childId = String((project && project.customer_id) || '').trim();
-            return childId !== '' && childId !== parentId;
-        },
-        getChildProjectCustomerDisplay(project) {
-            const company = (project && project.company_name) ? String(project.company_name).trim() : '';
-            const branch = (project && project.branch_name) ? String(project.branch_name).trim() : '';
-            const contact = (project && project.contact_name) ? String(project.contact_name).trim() : '';
-            return {
-                company_name: company || '-',
-                branch_name: branch || '-',
-                contact_name: contact || '-'
-            };
-        },
-        formatChildProjectCustomerLabel(project) {
-            if (!this.shouldShowChildProjectCustomer(project)) {
-                return '-';
-            }
-            const c = this.getChildProjectCustomerDisplay(project);
-            const parts = [c.company_name, c.branch_name, c.contact_name].filter((p) => p && p !== '-');
-            return parts.length ? parts.join(' / ') : '-';
-        },
         getChildProjectGuisReceiverDisplay(project) {
             if (project && project.guis_receiver_name) {
                 return project.guis_receiver_name;
@@ -3524,290 +2474,6 @@ createApp({
                 return this.guisReceiverDisplayName;
             }
             return effectiveUserid;
-        },
-        applyParentCustomerToChildModel(model) {
-            const display = this.customerDisplay || {};
-            const parent = this.parentProject || {};
-            model.company_name = display.company_name || parent.company_name || '';
-            model.branch_name = display.branch_name || parent.branch_name || '';
-            model.contact_name = display.contact_name || parent.contact_name || '';
-            model.customer_id = parent.customer_id != null && parent.customer_id !== ''
-                ? String(parent.customer_id)
-                : '';
-        },
-        getChildProjectCustomerSelectIds(isEdit) {
-            return {
-                company: isEdit ? '#edit_child_company_name' : '#create_child_company_name',
-                branch: isEdit ? '#edit_child_branch_name' : '#create_child_branch_name',
-                contact: isEdit ? '#edit_child_contact_name' : '#create_child_contact_name',
-                modal: isEdit ? '#editChildProjectModal' : '#createChildProjectModal'
-            };
-        },
-        destroyChildProjectCustomerSelect2(isEdit) {
-            const ids = this.getChildProjectCustomerSelectIds(isEdit);
-            [ids.company, ids.branch, ids.contact].forEach((selector) => {
-                const $el = $(selector);
-                if ($el.length && $el.data('select2')) {
-                    $el.select2('destroy');
-                }
-            });
-        },
-        onChildProjectUseParentCustomerChange(isEdit) {
-            const model = this.getChildProjectCustomerModel(isEdit);
-            if (model.use_parent_customer) {
-                this.destroyChildProjectCustomerSelect2(isEdit);
-                model.company_name = '';
-                model.branch_name = '';
-                model.contact_name = '';
-                model.customer_id = '';
-            } else {
-                this.applyParentCustomerToChildModel(model);
-                this.$nextTick(() => {
-                    this.initChildProjectCustomerSelect2(isEdit);
-                });
-            }
-        },
-        initChildProjectCustomerSelect2(isEdit) {
-            this.destroyChildProjectCustomerSelect2(isEdit);
-            this.initChildProjectCompanySelect2(isEdit);
-            this.initChildProjectBranchSelect2(isEdit);
-            this.initChildProjectContactSelect2(isEdit);
-        },
-        initChildProjectCompanySelect2(isEdit) {
-            const model = this.getChildProjectCustomerModel(isEdit);
-            const ids = this.getChildProjectCustomerSelectIds(isEdit);
-            const $company = $(ids.company);
-            if (!$company.length) return;
-            $company.select2({
-                placeholder: '選択してください',
-                dropdownParent: $(ids.modal),
-                allowClear: true,
-                minimumResultsForSearch: 0,
-                ajax: {
-                    url: '/api/index.php?model=customer&method=list_companies',
-                    dataType: 'json',
-                    delay: 250,
-                    data(params) {
-                        return { search: params.term, page: params.page || 1 };
-                    },
-                    processResults(data) {
-                        const list = (data.data || []).slice().sort((a, b) => {
-                            const nameA = (a.company_name || '').toString();
-                            const nameB = (b.company_name || '').toString();
-                            const hasA = nameA.includes('大東');
-                            const hasB = nameB.includes('大東');
-                            if (hasA && !hasB) return -1;
-                            if (!hasA && hasB) return 1;
-                            return nameA.localeCompare(nameB);
-                        });
-                        return {
-                            results: list.map((item) => ({
-                                id: item.company_name,
-                                text: item.company_name
-                            }))
-                        };
-                    }
-                }
-            }).on('select2:select', (e) => {
-                model.company_name = e.params.data.id;
-                model.branch_name = '';
-                model.contact_name = '';
-                model.customer_id = '';
-                this.onChildProjectCompanyChange(isEdit);
-            }).on('select2:clear', () => {
-                model.company_name = '';
-                this.onChildProjectCompanyChange(isEdit);
-            });
-            if (model.company_name) {
-                const option = new Option(model.company_name, model.company_name, true, true);
-                $company.append(option).trigger('change');
-            }
-        },
-        initChildProjectBranchSelect2(isEdit) {
-            const model = this.getChildProjectCustomerModel(isEdit);
-            const ids = this.getChildProjectCustomerSelectIds(isEdit);
-            const $branch = $(ids.branch);
-            if (!$branch.length) return;
-            if ($branch.data('select2')) {
-                $branch.select2('destroy');
-            }
-            $branch.select2({
-                placeholder: '選択してください',
-                dropdownParent: $(ids.modal),
-                allowClear: true,
-                minimumResultsForSearch: 0,
-                ajax: {
-                    url: '/api/index.php?model=customer&method=list_branches_by_company',
-                    dataType: 'json',
-                    delay: 250,
-                    data: (params) => ({
-                        search: params.term,
-                        page: params.page || 1,
-                        company_name: model.company_name
-                    }),
-                    processResults(data) {
-                        return {
-                            results: (data.data || []).map((item) => ({
-                                id: item.branch,
-                                text: item.branch
-                            }))
-                        };
-                    }
-                }
-            }).on('select2:select', (e) => {
-                model.branch_name = e.params.data.id;
-                model.contact_name = '';
-                model.customer_id = '';
-                this.onChildProjectBranchChange(isEdit);
-            }).on('select2:clear', () => {
-                model.branch_name = '';
-                this.onChildProjectBranchChange(isEdit);
-            });
-            if (model.branch_name) {
-                const option = new Option(model.branch_name, model.branch_name, true, true);
-                $branch.append(option).trigger('change');
-            }
-        },
-        initChildProjectContactSelect2(isEdit) {
-            const model = this.getChildProjectCustomerModel(isEdit);
-            const ids = this.getChildProjectCustomerSelectIds(isEdit);
-            const $contact = $(ids.contact);
-            if (!$contact.length) return;
-            if ($contact.data('select2')) {
-                $contact.select2('destroy');
-            }
-            $contact.select2({
-                placeholder: '選択してください',
-                dropdownParent: $(ids.modal),
-                allowClear: true,
-                minimumResultsForSearch: 0,
-                ajax: {
-                    url: '/api/index.php?model=customer&method=list_contacts_by_company_branch',
-                    dataType: 'json',
-                    delay: 250,
-                    data: (params) => ({
-                        search: params.term,
-                        page: params.page || 1,
-                        company_name: model.company_name,
-                        branch_name: model.branch_name
-                    }),
-                    processResults(data) {
-                        return {
-                            results: (data.data || []).map((item) => ({
-                                id: item.id,
-                                text: item.name
-                            }))
-                        };
-                    }
-                }
-            }).on('select2:select', (e) => {
-                model.contact_name = e.params.data.text;
-                model.customer_id = String(e.params.data.id);
-            }).on('select2:clear', () => {
-                model.contact_name = '';
-                model.customer_id = '';
-            });
-            if (model.contact_name) {
-                const optionValue = model.customer_id || model.contact_name;
-                const option = new Option(model.contact_name, optionValue, true, true);
-                $contact.append(option).trigger('change');
-            }
-        },
-        onChildProjectCompanyChange(isEdit) {
-            const model = this.getChildProjectCustomerModel(isEdit);
-            model.branch_name = '';
-            model.contact_name = '';
-            model.customer_id = '';
-            const ids = this.getChildProjectCustomerSelectIds(isEdit);
-            const $branch = $(ids.branch);
-            const $contact = $(ids.contact);
-            if ($branch.length && $branch.data('select2')) {
-                $branch.val(null).trigger('change');
-                $branch.select2('destroy');
-            }
-            if ($contact.length && $contact.data('select2')) {
-                $contact.val(null).trigger('change');
-                $contact.select2('destroy');
-            }
-            this.initChildProjectBranchSelect2(isEdit);
-            this.initChildProjectContactSelect2(isEdit);
-        },
-        onChildProjectBranchChange(isEdit) {
-            const model = this.getChildProjectCustomerModel(isEdit);
-            model.contact_name = '';
-            model.customer_id = '';
-            const ids = this.getChildProjectCustomerSelectIds(isEdit);
-            const $contact = $(ids.contact);
-            if ($contact.length && $contact.data('select2')) {
-                $contact.val(null).trigger('change');
-                $contact.select2('destroy');
-            }
-            this.initChildProjectContactSelect2(isEdit);
-        },
-        resolveChildProjectCustomerId(model) {
-            if (model.use_parent_customer) {
-                return (this.parentProject && this.parentProject.customer_id) ? this.parentProject.customer_id : '';
-            }
-            return model.customer_id || '';
-        },
-        validateChildProjectCustomer(model, errors) {
-            if (model.use_parent_customer) {
-                return true;
-            }
-            let isValid = true;
-            if (!model.company_name) {
-                errors.company_name = '会社名は必須です';
-                isValid = false;
-            }
-            if (!model.branch_name) {
-                errors.branch_name = '支店名は必須です';
-                isValid = false;
-            }
-            if (!model.customer_id) {
-                errors.contact_name = '担当様は必須です';
-                isValid = false;
-            }
-            return isValid;
-        },
-        async openChildProjectNewCustomerModal(isEdit) {
-            this.childCustomerModalContext = isEdit ? 'edit' : 'create';
-            const model = this.getChildProjectCustomerModel(isEdit);
-            const presetCompany = model.company_name;
-            const presetBranch = model.branch_name;
-            await this.openNewCustomerModal();
-            if (presetCompany) {
-                this.newCustomer.company_name = presetCompany;
-            }
-            if (presetBranch) {
-                this.newCustomer.branch = presetBranch;
-            }
-        },
-        async applyNewCustomerToChildProject(companyName, branchName, contactName) {
-            const isEdit = this.childCustomerModalContext === 'edit';
-            const model = this.getChildProjectCustomerModel(isEdit);
-            this.childCustomerModalContext = null;
-            model.use_parent_customer = false;
-            model.company_name = companyName;
-            model.branch_name = branchName;
-            model.contact_name = contactName;
-            model.customer_id = '';
-            try {
-                const response = await axios.get(
-                    `/api/index.php?model=customer&method=list_contacts_by_company_branch&company_name=${encodeURIComponent(companyName)}&branch_name=${encodeURIComponent(branchName)}`
-                );
-                if (response.data && response.data.data) {
-                    const found = response.data.data.find((c) => c.name === contactName);
-                    if (found) {
-                        model.customer_id = String(found.id);
-                    }
-                }
-            } catch (error) {
-                console.error('Error resolving child project customer id:', error);
-            }
-            this.destroyChildProjectCustomerSelect2(isEdit);
-            this.$nextTick(() => {
-                this.initChildProjectCustomerSelect2(isEdit);
-            });
         },
         getParentGuisReceiverDisplayName() {
             if (this.guisReceiverDisplayName) {
@@ -4016,11 +2682,6 @@ createApp({
                 caily_nouki: '',
                 guis_nouki: '',
                 yotei: this.emptyYoteiModel(),
-                use_parent_customer: true,
-                company_name: '',
-                branch_name: '',
-                contact_name: '',
-                customer_id: '',
                 use_parent_guis_receiver: true,
                 guis_receiver: ''
             };
@@ -4408,7 +3069,6 @@ createApp({
                 this.createChildProjectMembersTagify.destroy();
                 this.createChildProjectMembersTagify = null;
             }
-            this.destroyChildProjectCustomerSelect2(false);
             this.destroyChildProjectGuisReceiverSelect2(false);
         },
 
@@ -4689,9 +3349,6 @@ createApp({
                 caily_nouki: project.caily_nouki,
                 guis_nouki: project.guis_nouki
             };
-            const parentCustomerId = String((this.parentProject && this.parentProject.customer_id) || '');
-            const childCustomerId = String(project.customer_id || '');
-            const useParentCustomer = !childCustomerId || childCustomerId === parentCustomerId;
             const parentGuisReceiver = String((this.parentProject && this.parentProject.guis_receiver) || '');
             const childGuisReceiver = String(project.guis_receiver || '');
             const useParentGuisReceiver = !childGuisReceiver || childGuisReceiver === parentGuisReceiver;
@@ -4726,11 +3383,6 @@ createApp({
                 energy_drawing_share_note: project.energy_drawing_share_note || '',
                 yotei: this.parseYoteiModel(project.yotei),
                 custom_fields: project.custom_fields != null ? project.custom_fields : '',
-                use_parent_customer: useParentCustomer,
-                company_name: useParentCustomer ? '' : (project.company_name || ''),
-                branch_name: useParentCustomer ? '' : (project.branch_name || ''),
-                contact_name: useParentCustomer ? '' : (project.contact_name || ''),
-                customer_id: useParentCustomer ? '' : childCustomerId,
                 use_parent_guis_receiver: useParentGuisReceiver,
                 guis_receiver: useParentGuisReceiver ? '' : childGuisReceiver
             };
@@ -4782,11 +3434,6 @@ createApp({
                 if (typeof window.applyDataI18n === 'function') {
                     const editModal = document.getElementById('editChildProjectModal');
                     if (editModal) window.applyDataI18n(editModal);
-                }
-                if (!this.editingChildProject.use_parent_customer) {
-                    this.$nextTick(() => {
-                        this.initChildProjectCustomerSelect2(true);
-                    });
                 }
                 if (!this.editingChildProject.use_parent_guis_receiver) {
                     this.$nextTick(() => {
@@ -5108,7 +3755,6 @@ createApp({
                 this.editChildProjectMembersTagify.destroy();
                 this.editChildProjectMembersTagify = null;
             }
-            this.destroyChildProjectCustomerSelect2(true);
             this.destroyChildProjectGuisReceiverSelect2(true);
         },
 
@@ -5580,10 +4226,6 @@ createApp({
                 isValid = false;
             }
 
-            if (!this.validateChildProjectCustomer(this.editingChildProject, this.editChildProjectValidationErrors)) {
-                isValid = false;
-            }
-
             if (!this.validateChildProjectGuisReceiver(this.editingChildProject, this.editChildProjectValidationErrors)) {
                 isValid = false;
             }
@@ -5667,7 +4309,7 @@ createApp({
                 this.appendYoteiToFormData(formData, this.editingChildProject.yotei);
 
                 formData.append('is_kadai', '0');
-                formData.append('customer_id', this.resolveChildProjectCustomerId(this.editingChildProject));
+                // customer_id is not sent: the modal has no customer field, so the server keeps the project's customer
                 formData.append('guis_receiver', this.resolveChildProjectGuisReceiver(this.editingChildProject));
 
                 const editCustomFields = this.collectChildProjectCustomFields('editChildProjectCustomFieldsWrap', 'editChildProjectCustomField', 'editChildProjectCustomInput', 'editChildProjectCustomCheckbox', 'editChildProjectCustomRadio');
@@ -5936,10 +4578,6 @@ createApp({
                 isValid = false;
             }
 
-            if (!this.validateChildProjectCustomer(this.newChildProject, this.childProjectValidationErrors)) {
-                isValid = false;
-            }
-
             if (!this.validateChildProjectGuisReceiver(this.newChildProject, this.childProjectValidationErrors)) {
                 isValid = false;
             }
@@ -6013,7 +4651,8 @@ createApp({
 
                 formData.append('is_kadai', '0');
                 formData.append('status', this.newChildProject.status || 'draft');
-                formData.append('customer_id', this.resolveChildProjectCustomerId(this.newChildProject));
+                // No customer field in the modal: a new project starts with the building's primary customer
+                formData.append('customer_id', (this.parentProject && this.parentProject.customer_id) ? this.parentProject.customer_id : '');
                 const childGuisReceiver = this.resolveChildProjectGuisReceiver(this.newChildProject);
                 if (childGuisReceiver) {
                     formData.append('guis_receiver', childGuisReceiver);
@@ -10328,146 +8967,10 @@ createApp({
             }
         },
 
-        async openNewCustomerModal() {
-            if (this.categories.length === 0) {
-                await this.loadCategories();
-            }
-            if (this.departments.length === 0) {
-                await this.loadDepartments();
-            }
-            this.resetNewCustomerData();
-            const modalEl = document.getElementById('newCustomerModal');
-            if (modalEl) {
-                const onShown = () => {
-                    this.$nextTick(() => {
-                        this.initNewCustomerGuisDepartmentSelect2();
-                    });
-                };
-                modalEl.addEventListener('shown.bs.modal', onShown, { once: true });
-                const modal = bootstrap.Modal.getInstance(modalEl) || new bootstrap.Modal(modalEl);
-                modal.show();
-            }
-        },
 
-        initNewCustomerGuisDepartmentSelect2() {
-            const el = this.$refs.newCustomerGuisDepartmentSelect;
-            if (!el) return;
-            const $el = $(el);
-            if ($el.data('select2')) {
-                $el.select2('destroy');
-            }
-            $el.select2({ placeholder: '選択してください', allowClear: true });
-            $el.off('change').on('change', (event) => {
-                const val = $(event.target).val();
-                this.newCustomer.guis_department = val ? val : [];
-            });
-            const ids = Array.isArray(this.newCustomer.guis_department) ? this.newCustomer.guis_department : [];
-            $el.val(ids).trigger('change');
-        },
 
-        resetNewCustomerData() {
-            this.newCustomer = {
-                company_name: '大東建託株式会社',
-                company_name_kana: '',
-                name: '',
-                name_kana: '',
-                branch: '本社',
-                position: '',
-                department: '',
-                title: '',
-                tel: '',
-                fax: '',
-                phone: '',
-                email: '',
-                zip: '',
-                address1: '',
-                address2: '',
-                memo: '',
-                status: 1,
-                category_id: this.categories.length > 0 ? this.categories[0].id : 0,
-                guis_department: []
-            };
-            this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
-        },
 
-        async saveNewCustomer() {
-            this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
-            let hasError = false;
-            if (!this.newCustomer.company_name) {
-                this.customerErrors.company_name = '会社名は必須です。';
-                hasError = true;
-            }
-            if (!this.newCustomer.name) {
-                this.customerErrors.name = '担当者名は必須です。';
-                hasError = true;
-            }
-            if (!this.newCustomer.guis_department || this.newCustomer.guis_department.length === 0) {
-                this.customerErrors.guis_department = '自社担当部署名は必須です。';
-                hasError = true;
-            }
-            if (hasError) return;
-            if (!this.newCustomer.branch || this.newCustomer.branch.trim() === '') {
-                this.newCustomer.branch = '本社';
-            }
-            try {
-                const response = await axios.post('/api/index.php?model=customer&method=add_customer', this.newCustomer, {
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-                });
-                if (response.data.status === 'success') {
-                    showMessage('顧客を保存しました。');
-                    const company_name = this.newCustomer.company_name;
-                    const branch_name = this.newCustomer.branch;
-                    const contact_name = this.newCustomer.name;
-                    $('#newCustomerModal').modal('hide');
-                    this.resetNewCustomerData();
-                    if (this.childCustomerModalContext) {
-                        await this.applyNewCustomerToChildProject(company_name, branch_name, contact_name);
-                        return;
-                    }
-                    this.parentProject.company_name = company_name;
-                    this.parentProject.branch_name = branch_name;
-                    this.parentProject.contact_name = contact_name;
-                    this.customerDisplay = this.customerDisplay || {};
-                    this.customerDisplay.company_name = company_name;
-                    this.customerDisplay.branch_name = branch_name;
-                    this.customerDisplay.contact_name = contact_name;
-                    await this.loadCompanies();
-                    this.$nextTick(() => {
-                        this.initCompanySelect2();
-                        this.initBranchSelect2();
-                        this.initContactSelect2();
-                    });
-                } else {
-                    showParentProjectError(response.data.message_code || '顧客の保存に失敗しました。', response && response.data);
-                }
-            } catch (error) {
-                console.error('Error saving customer:', error);
-                showParentProjectError('顧客の保存に失敗しました。', error);
-            }
-        },
 
-        searchAddressNewCustomer() {
-            const postalCode = (this.newCustomer.zip || '').toString().replace(/\D/g, '');
-            if (postalCode.length >= 7) {
-                const apiUrl = `https://zipcloud.ibsnet.co.jp/api/search?zipcode=${postalCode}`;
-                axios.get(apiUrl)
-                    .then(response => {
-                        if (response.data.results && response.data.results.length > 0) {
-                            const result = response.data.results[0];
-                            this.newCustomer.address1 = result.address1 || '';
-                            this.newCustomer.address2 = result.address2 || '';
-                        } else {
-                            showMessage('郵便番号が見つかりません。', true);
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error searching address:', error);
-                        showMessage('住所の検索に失敗しました。', true);
-                    });
-            } else {
-                showMessage('郵便番号が正しくありません。', true);
-            }
-        },
 
         async loadCustomerDataByProject() {
             // 優先的にcustomer_idで顧客情報を取得する
@@ -10573,66 +9076,6 @@ createApp({
             }, 300);
         },
 
-        async openCustomerInfoModal() {
-            if (!this.parentProject || (!this.parentProject.contact_name && !this.parentProject.customer_id)) {
-                showMessage('担当者が選択されていません。', true);
-                return;
-            }
-
-            try {
-                const customer = await this.loadCustomerDataByProject();
-                if (customer) {
-                    this.customerInfoModalContext = 'parent';
-                    this.customerInfoModalChildProjectId = null;
-                    await this.showCustomerInfoModal(customer);
-                } else {
-                    showMessage('顧客情報が見つかりません。', true);
-                }
-            } catch (error) {
-                console.error('Error loading customer info:', error);
-                showMessage('顧客情報の読み込みに失敗しました。', true);
-            }
-        },
-
-        async openChildProjectCustomerInfoModal(project) {
-            if (!project || !this.shouldShowChildProjectCustomer(project)) {
-                return;
-            }
-
-            await this.openChildProjectCustomerInfoById(project.customer_id, project.id);
-        },
-
-        async openEditingChildProjectCustomerInfoModal() {
-            const customerId = this.editingChildProject && this.editingChildProject.customer_id;
-            const projectId = this.editingChildProject && this.editingChildProject.id;
-            if (!customerId) {
-                showMessage('担当者が選択されていません。', true);
-                return;
-            }
-            await this.openChildProjectCustomerInfoById(customerId, projectId);
-        },
-
-        async openChildProjectCustomerInfoById(customerId, projectId = null) {
-            if (!customerId) {
-                showMessage('担当者が選択されていません。', true);
-                return;
-            }
-
-            try {
-                const response = await axios.get(`/api/index.php?model=customer&method=get&id=${customerId}`);
-                if (response.data && response.data.status === 'success' && response.data.data) {
-                    this.customerInfoModalContext = 'child';
-                    this.customerInfoModalChildProjectId = projectId || null;
-                    await this.showCustomerInfoModal(response.data.data);
-                } else {
-                    showMessage('顧客情報が見つかりません。', true);
-                }
-            } catch (error) {
-                console.error('Error loading child project customer info:', error);
-                showMessage('顧客情報の読み込みに失敗しました。', true);
-            }
-        },
-
         async updateCustomer() {
             // Reset errors
             this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
@@ -10696,13 +9139,22 @@ createApp({
                         return;
                     }
                     
-                    // Always update customerDisplay with the latest customer info
-                    this.customerDisplay.company_name = this.selectedCustomer.company_name || '';
-                    this.customerDisplay.branch_name = this.selectedCustomer.branch || '';
-                    this.customerDisplay.contact_name = this.selectedCustomer.name || '';
-                    
+                    this.applyCustomerMasterUpdateToList(this.selectedCustomer);
+                    this.customerSearchLoaded = false;
+                    const isPrimaryCustomer = !this.parentProject.customer_id
+                        || String(this.selectedCustomer.id) === String(this.parentProject.customer_id);
+
+                    // Customer display follows the primary customer only
+                    if (isPrimaryCustomer) {
+                        this.customerDisplay.company_name = this.selectedCustomer.company_name || '';
+                        this.customerDisplay.branch_name = this.selectedCustomer.branch || '';
+                        this.customerDisplay.contact_name = this.selectedCustomer.name || '';
+                    }
+
                     // Update all parent projects with the same customer_id if customer info changed
-                    if (this.selectedCustomer.name !== this.parentProject.contact_name ||
+                    // (also run for a non-primary customer: other buildings may use it as their primary)
+                    if (!isPrimaryCustomer ||
+                        this.selectedCustomer.name !== this.parentProject.contact_name ||
                         this.selectedCustomer.company_name !== this.parentProject.company_name ||
                         this.selectedCustomer.branch !== this.parentProject.branch_name) {
                         
@@ -10732,15 +9184,16 @@ createApp({
                             if (updateAllResponse.data.status === 'success') {
                                 console.log(`Updated ${updateAllResponse.data.affected_rows} parent project(s)`);
                                 
-                                // Update current parent project data in memory
-                                this.parentProject.contact_name = this.selectedCustomer.name;
-                                this.parentProject.company_name = this.selectedCustomer.company_name;
-                                this.parentProject.branch_name = this.selectedCustomer.branch;
-                                
-                                // Update customer display info directly from selectedCustomer
-                                this.customerDisplay.company_name = this.selectedCustomer.company_name || '';
-                                this.customerDisplay.branch_name = this.selectedCustomer.branch || '';
-                                this.customerDisplay.contact_name = this.selectedCustomer.name || '';
+                                // Update current parent project data in memory (primary customer only)
+                                if (isPrimaryCustomer) {
+                                    this.parentProject.contact_name = this.selectedCustomer.name;
+                                    this.parentProject.company_name = this.selectedCustomer.company_name;
+                                    this.parentProject.branch_name = this.selectedCustomer.branch;
+
+                                    this.customerDisplay.company_name = this.selectedCustomer.company_name || '';
+                                    this.customerDisplay.branch_name = this.selectedCustomer.branch || '';
+                                    this.customerDisplay.contact_name = this.selectedCustomer.name || '';
+                                }
                             } else {
                                 console.error('Failed to update all parent projects:', updateAllResponse.data.message);
                             }

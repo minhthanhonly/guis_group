@@ -7783,6 +7783,30 @@ var projectTable;
                 scheduleHide();
             });
 
+            // 建物詳細 button: open the shared building modal instead of leaving the list.
+            // Ctrl / Shift / Meta / middle click keep the normal link (open the building page in a new tab).
+            $('#projectTable').on('click', '.project-hover-parent-trigger', function(ev) {
+                if (ev.ctrlKey || ev.metaKey || ev.shiftKey || ev.altKey || ev.which === 2) {
+                    return;
+                }
+                var parentId = parseInt($(this).data('parent-project-id'), 10);
+                if (!parentId || typeof window.openParentProjectModal !== 'function') {
+                    return;
+                }
+                ev.preventDefault();
+                cancelHide();
+                var popupEl = document.getElementById('projectParentPopup');
+                if (popupEl) {
+                    popupEl.style.display = 'none';
+                }
+                window.openParentProjectModal(parentId, {
+                    mode: 'view',
+                    onSaved: function() {
+                        reloadProjectTable(false);
+                    }
+                });
+            });
+
             $(document).on('mouseenter', '#projectParentPopup', cancelHide);
             $(document).on('mouseleave', '#projectParentPopup', scheduleHide);
         })();
