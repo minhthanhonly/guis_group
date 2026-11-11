@@ -3426,11 +3426,21 @@ $view->footing();
 /* View mode: read-only values look like text, not like editable boxes */
 #app .card input.form-control[readonly]:not(.modal *),
 #app .card textarea.form-control[readonly]:not(.modal *) {
-    background-color: transparent;
+    background-color: rgba(75, 70, 92, 0.06);
     border-color: transparent !important;
     box-shadow: none;
-    padding-left: 0;
+    font-weight: 600;
     cursor: default;
+}
+[data-bs-theme="dark"] #app .card input.form-control[readonly]:not(.modal *),
+[data-bs-theme="dark"] #app .card textarea.form-control[readonly]:not(.modal *) {
+    background-color: rgba(255, 255, 255, 0.07);
+}
+/* Field captions: smaller and muted so they read as labels, not values */
+#app .card .form-label:not(.modal *) {
+    font-size: 0.75rem;
+    opacity: 0.75;
+    margin-bottom: 0.2rem;
 }
     .customer-search-results {
         max-height: 400px;
