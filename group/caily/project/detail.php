@@ -1667,7 +1667,8 @@ $view->footing();
 <style>
 /* View mode: read-only values look like text, not like editable boxes */
 #app .card input.form-control[readonly]:not(.modal *),
-#app .card textarea.form-control[readonly]:not(.modal *) {
+#app .card textarea.form-control[readonly]:not(.modal *),
+#app .card div.form-control:not(.modal *) {
     background-color: rgba(75, 70, 92, 0.06);
     border-color: transparent !important;
     box-shadow: none;
@@ -1675,7 +1676,8 @@ $view->footing();
     cursor: default;
 }
 [data-bs-theme="dark"] #app .card input.form-control[readonly]:not(.modal *),
-[data-bs-theme="dark"] #app .card textarea.form-control[readonly]:not(.modal *) {
+[data-bs-theme="dark"] #app .card textarea.form-control[readonly]:not(.modal *),
+[data-bs-theme="dark"] #app .card div.form-control:not(.modal *) {
     background-color: rgba(255, 255, 255, 0.07);
 }
 /* Field captions: smaller and muted so they read as labels, not values */
