@@ -579,6 +579,7 @@ createApp({
                 '用途変更': false
             },
             belsZehGradeOptions: [
+                { value: '', label: '' },
                 { value: '0', label: '0 : 該当なし（非ZEH）' },
                 { value: '1', label: '1 : ZEH' },
                 { value: '2', label: '2 : Nearly ZEH' },
@@ -888,7 +889,7 @@ createApp({
         request_energy_saving(enabled) {
             if (!enabled && this.parentProject) {
                 this.parentProject.application_review_agency = '';
-                this.parentProject.bels_zeh_grade = '0';
+                this.parentProject.bels_zeh_grade = '';
                 this.parentProject.energy_materials = '';
                 this.parentProject.energy_materials_memo = '';
                 this.energyMaterialFlags = this.createEmptyEnergyMaterialFlags();
@@ -1446,11 +1447,9 @@ createApp({
                 const response = await axios.get(`/api/index.php?model=parentproject&method=getById&id=${PARENT_PROJECT_ID}`);
                 if (response.data) {
                     this.parentProject = response.data;
-                    if (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '') {
-                        this.parentProject.bels_zeh_grade = '0';
-                    } else {
-                        this.parentProject.bels_zeh_grade = String(this.parentProject.bels_zeh_grade);
-                    }
+                    this.parentProject.bels_zeh_grade = (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '')
+                        ? ''
+                        : String(this.parentProject.bels_zeh_grade);
                     this.parseFeatures();
                     
                     // Load GUIS receiver display name if exists
@@ -2206,7 +2205,7 @@ createApp({
                 application_review_agency: source.application_review_agency || '',
                 bels_zeh_grade: (source.bels_zeh_grade != null && source.bels_zeh_grade !== '')
                     ? String(source.bels_zeh_grade)
-                    : '0',
+                    : '',
                 energy_materials: source.energy_materials || '',
                 energy_materials_memo: source.energy_materials_memo || '',
                 materials_memo: source.materials_memo || '',
@@ -2243,11 +2242,9 @@ createApp({
             this.parseMaterials();
             this.parseFeatures();
             this.parseEnergyMaterials();
-            if (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '') {
-                this.parentProject.bels_zeh_grade = '0';
-            } else {
-                this.parentProject.bels_zeh_grade = String(this.parentProject.bels_zeh_grade);
-            }
+            this.parentProject.bels_zeh_grade = (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '')
+                ? ''
+                : String(this.parentProject.bels_zeh_grade);
             this.$nextTick(async () => {
                 await this.loadBranches();
                 await this.loadContacts();
@@ -3338,7 +3335,7 @@ createApp({
                 );
                 formData.append(
                     'bels_zeh_grade',
-                    this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '0') : '0'
+                    this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '') : ''
                 );
                 formData.append('energy_materials', this.parentProject.energy_materials || '');
                 formData.append('energy_materials_memo', this.parentProject.energy_materials_memo || '');

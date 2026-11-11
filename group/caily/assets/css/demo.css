@@ -134,20 +134,21 @@
   padding-top: 72px !important;
 }
 
-html.has-test-env-banner {
-  --env-test-banner-height: 32px;
-}
 .env-test-banner {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  bottom: 0;
+  left: 50%;
+  right: auto;
+  top: auto;
   z-index: 1090;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: var(--env-test-banner-height);
+  width: max-content;
+  max-width: calc(100vw - 1.5rem);
+  height: 32px;
   padding: 0 1rem;
+  transform: translateX(-50%);
   background: #f59e0b;
   color: #111;
   font-size: 0.8125rem;
@@ -155,20 +156,7 @@ html.has-test-env-banner {
   letter-spacing: 0.02em;
   text-align: center;
   line-height: 1.2;
-}
-html.has-test-env-banner.layout-navbar-fixed .layout-navbar {
-  inset-block-start: var(--env-test-banner-height);
-}
-html.has-test-env-banner .layout-menu-collapsed-wrapper {
-  top: var(--env-test-banner-height) !important;
-  height: calc(100vh - var(--env-test-banner-height));
-}
-html.has-test-env-banner.layout-navbar-fixed .layout-wrapper:not(.layout-without-menu) .layout-page,
-html.has-test-env-banner.layout-navbar-fixed .layout-wrapper:not(.layout-horizontal):not(.layout-without-menu) .layout-page {
-  padding-top: calc(72px + var(--env-test-banner-height)) !important;
-}
-html.has-test-env-banner.layout-navbar-fixed .layout-wrapper:not(.layout-horizontal) .layout-page::before {
-  inset-block-start: var(--env-test-banner-height);
+  pointer-events: none;
 }
 /* Navbar page z-index issue solution */
 .content-wrapper .navbar {

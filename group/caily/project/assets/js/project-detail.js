@@ -1496,7 +1496,7 @@ const vueApp = createApp({
                 this.project.application_review_agency = parentProject.application_review_agency || '';
                 this.project.bels_zeh_grade = (parentProject.bels_zeh_grade != null && parentProject.bels_zeh_grade !== '')
                     ? String(parentProject.bels_zeh_grade)
-                    : '0';
+                    : '';
 
                 // Additional fields from parent project
                 this.project.guis_receiver = parentProject.guis_receiver; // GUIS　受付者

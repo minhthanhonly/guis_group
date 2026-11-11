@@ -3433,6 +3433,7 @@ var projectTable;
     var SHARED_HOUSING_FEATURE_LABEL = '共同住宅（共用部計算なし）';
 
     var BELS_ZEH_GRADE_OPTIONS = [
+        { value: '', label: '' },
         { value: '0', label: '0 : 該当なし（非ZEH）' },
         { value: '1', label: '1 : ZEH' },
         { value: '2', label: '2 : Nearly ZEH' },

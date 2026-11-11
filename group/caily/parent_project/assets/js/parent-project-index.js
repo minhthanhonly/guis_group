@@ -109,9 +109,10 @@ createApp({
                 materials: '',
                 features: '',
                 application_review_agency: '',
-                bels_zeh_grade: '0'
+                bels_zeh_grade: ''
             },
             belsZehGradeOptions: [
+                { value: '', label: '' },
                 { value: '0', label: '0 : 該当なし（非ZEH）' },
                 { value: '1', label: '1 : ZEH' },
                 { value: '2', label: '2 : Nearly ZEH' },
@@ -290,7 +291,7 @@ createApp({
         'editParentRequestFlags.energy'(enabled) {
             if (!enabled && this.editingParentProject) {
                 this.editingParentProject.application_review_agency = '';
-                this.editingParentProject.bels_zeh_grade = '0';
+                this.editingParentProject.bels_zeh_grade = '';
                 this.destroyEditParentReviewAgencyTagify();
             } else if (enabled) {
                 this.$nextTick(() => this.initEditParentReviewAgencyTagify());
@@ -987,7 +988,7 @@ createApp({
                 materials: '',
                 features: '',
                 application_review_agency: '',
-                bels_zeh_grade: '0'
+                bels_zeh_grade: ''
             };
             this.parseEditParentRequests('');
             this.parseEditParentMaterials('');
@@ -1022,7 +1023,7 @@ createApp({
                     application_review_agency: data.application_review_agency || '',
                     bels_zeh_grade: (data.bels_zeh_grade != null && data.bels_zeh_grade !== '')
                         ? String(data.bels_zeh_grade)
-                        : '0'
+                        : ''
                 };
                 this.parseEditParentRequests(this.editingParentProject.requests);
                 this.parseEditParentMaterials(this.editingParentProject.materials);
@@ -1091,7 +1092,7 @@ createApp({
                 );
                 formData.append(
                     'bels_zeh_grade',
-                    this.editHasEnergySavingRequest ? (this.editingParentProject.bels_zeh_grade || '0') : '0'
+                    this.editHasEnergySavingRequest ? (this.editingParentProject.bels_zeh_grade || '') : ''
                 );
                 const response = await axios.post('/api/index.php?model=parentproject&method=update', formData);
                 if (response.data && response.data.status === 'success') {
@@ -1768,7 +1769,7 @@ createApp({
                 application_review_agency: source.application_review_agency || '',
                 bels_zeh_grade: (source.bels_zeh_grade != null && source.bels_zeh_grade !== '')
                     ? String(source.bels_zeh_grade)
-                    : '0',
+                    : '',
                 notes: source.notes || '',
                 requests: String(source.requests || '').trim(),
                 materials: String(source.materials || '').trim(),
@@ -1931,17 +1932,15 @@ createApp({
             if (!container || !this._stickyHeadWrap) return;
             this._stickyHeadWrap.scrollLeft = container.scrollLeft;
         },
-        /** Pixels below fixed navbar (and test banner) — same idea as project list 4.6rem */
+        /** Pixels below fixed navbar — same idea as project list 4.6rem */
         getStickyHeaderTopOffset() {
             const navbar = document.querySelector('.layout-navbar');
             if (navbar) {
                 const bottom = navbar.getBoundingClientRect().bottom;
                 if (bottom > 0) return Math.ceil(bottom);
             }
-            const banner = document.querySelector('.env-test-banner');
-            const bannerH = banner ? banner.getBoundingClientRect().height : 0;
             const rootFs = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-            return Math.ceil(bannerH + 4.6 * rootFs);
+            return Math.ceil(4.6 * rootFs);
         },
         updateStickyTableHeader(forceRebuild) {
             const container = document.getElementById('parentProjectsTableScroll');

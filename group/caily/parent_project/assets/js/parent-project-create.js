@@ -33,7 +33,7 @@ createApp({
                 materials_other: false,
                 materials_memo: '',
                 application_review_agency: '',
-                bels_zeh_grade: '0',
+                bels_zeh_grade: '',
                 energy_materials_memo: '',
                 structural_office: '',
                 notes: '',
@@ -83,6 +83,7 @@ createApp({
                 '用途変更': false
             },
             belsZehGradeOptions: [
+                { value: '', label: '' },
                 { value: '0', label: '0 : 該当なし（非ZEH）' },
                 { value: '1', label: '1 : ZEH' },
                 { value: '2', label: '2 : Nearly ZEH' },
@@ -226,7 +227,7 @@ createApp({
         'parentProject.request_energy_saving'(enabled) {
             if (!enabled) {
                 this.parentProject.application_review_agency = '';
-                this.parentProject.bels_zeh_grade = '0';
+                this.parentProject.bels_zeh_grade = '';
                 this.parentProject.energy_materials_memo = '';
                 this.energyMaterialFlags = this.createEmptyEnergyMaterialFlags();
                 this.destroyApplicationReviewAgencyTagify();
@@ -524,7 +525,7 @@ createApp({
                 );
                 formData.append(
                     'bels_zeh_grade',
-                    this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '0') : '0'
+                    this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '') : ''
                 );
                 formData.append(
                     'energy_materials',
@@ -1972,7 +1973,7 @@ createApp({
                 this.parentProject.application_review_agency = data.application_review_agency || '';
                 this.parentProject.bels_zeh_grade = (data.bels_zeh_grade != null && data.bels_zeh_grade !== '')
                     ? String(data.bels_zeh_grade)
-                    : '0';
+                    : '';
                 this.parentProject.materials_memo = data.materials_memo || '';
                 this.parentProject.energy_materials_memo = data.energy_materials_memo || '';
                 this.parentProject.notes = data.notes || '';
@@ -2115,7 +2116,7 @@ createApp({
             materials: '',
             materials_memo: '',
             application_review_agency: '',
-            bels_zeh_grade: '0',
+            bels_zeh_grade: '',
             energy_materials_memo: '',
             structural_office: '',
             notes: '',
