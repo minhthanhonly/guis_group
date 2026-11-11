@@ -327,6 +327,12 @@ $view->heading('建物一覧');
                     <div class="d-flex justify-content-between align-items-center mt-3">
                         <div class="text-muted">
                             全 {{ totalRecords }} 件中 {{ startRecord }}-{{ endRecord }} 件を表示
+                            <span v-if="hasActiveFilters" class="ms-2">
+                                <span class="badge bg-label-warning"><i class="fa fa-filter me-1"></i><span data-i18n="絞り込み中">絞り込み中</span></span>
+                                <button type="button" class="btn btn-sm btn-outline-secondary ms-1" @click="clearAllFilters">
+                                    <i class="fa fa-times me-1"></i><span data-i18n="絞り込みを解除">絞り込みを解除</span>
+                                </button>
+                            </span>
                         </div>
                         <nav v-if="totalPages > 1">
                             <ul class="pagination pagination-sm mb-0">

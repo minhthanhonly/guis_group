@@ -3423,6 +3423,15 @@ $view->footing();
 ?>
 
 <style>
+/* View mode: read-only values look like text, not like editable boxes */
+#app .card input.form-control[readonly]:not(.modal *),
+#app .card textarea.form-control[readonly]:not(.modal *) {
+    background-color: transparent;
+    border-color: transparent !important;
+    box-shadow: none;
+    padding-left: 0;
+    cursor: default;
+}
     .customer-search-results {
         max-height: 400px;
         overflow-y: auto;

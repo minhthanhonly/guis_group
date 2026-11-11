@@ -8100,7 +8100,7 @@ var projectTable;
         // Khôi phục filter từ localStorage khi load trang
         // Khi thay đổi filter thì lưu lại
         let timer2= null;
-        $('#projectFilterForm select, #projectFilterForm input').on('change keyup', function() {
+        $('#projectFilterForm select, #projectFilterForm input').on('change keyup input', function() {
             if (suppressProjectListFilterReload) return;
             clearTimeout(timer2);
             timer2 = setTimeout(function() {

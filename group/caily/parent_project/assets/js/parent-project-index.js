@@ -111,6 +111,9 @@ createApp({
         }
     },
     computed: {
+        hasActiveFilters() {
+            return !!(this.normalizeSearchKeyword(this.searchKeyword) || this.requestFilter || this.favoritesOnly);
+        },
         filteredParentProjects() {
             return this.parentProjects;
         },
@@ -548,6 +551,15 @@ createApp({
         clearSearch() {
             this.searchKeyword = '';
             this.onSearch();
+        },
+        clearAllFilters() {
+            clearTimeout(this.searchTimer);
+            this.searchKeyword = '';
+            this.requestFilter = '';
+            this.favoritesOnly = false;
+            this.currentPage = 1;
+            this.saveFiltersToStorage();
+            this.loadParentProjects();
         },
         selectRequestFilter(value) {
             this.requestFilter = value;
