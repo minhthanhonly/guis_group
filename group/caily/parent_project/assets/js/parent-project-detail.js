@@ -2638,7 +2638,28 @@ createApp({
             }
         },
 
+        // 受注形態 suggestions: a 省エネ department only offers 新規 / 修正
+        getChildProjectOrderTypeWhitelist(departmentId) {
+            const dept = (this.departments || []).find((d) => String(d.id) === String(departmentId));
+            const name = dept && dept.name ? String(dept.name) : '';
+            if (name.indexOf('省エネ') !== -1) {
+                return ['新規', '修正'];
+            }
+            return ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'];
+        },
+        applyChildProjectOrderTypeWhitelist(tagify, departmentId) {
+            if (!tagify) {
+                return;
+            }
+            const whitelist = this.getChildProjectOrderTypeWhitelist(departmentId);
+            tagify.settings.whitelist = whitelist.slice();
+            tagify.whitelist = whitelist.slice();
+            if (tagify.dropdown && typeof tagify.dropdown.hide === 'function') {
+                tagify.dropdown.hide();
+            }
+        },
         onCreateChildProjectDepartmentChange() {
+            this.applyChildProjectOrderTypeWhitelist(this.childProjectOrderTypeTagify, this.newChildProject.department_id);
             this.loadCreateChildProjectCustomFields(this.newChildProject.department_id);
             this.clearEnergyOnlyStatusIfNeeded(
                 this.newChildProject,
@@ -2647,6 +2668,7 @@ createApp({
         },
 
         onEditChildProjectDepartmentChange() {
+            this.applyChildProjectOrderTypeWhitelist(this.editChildProjectOrderTypeTagify, this.editingChildProject.department_id);
             const dept = (this.departments || []).find((d) =>
                 String(d.id) === String(this.editingChildProject.department_id)
             );
@@ -2869,7 +2891,7 @@ createApp({
                 orderTypeInput.value = '';
                 
                 this.childProjectOrderTypeTagify = new Tagify(orderTypeInput, {
-                    whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                    whitelist: this.getChildProjectOrderTypeWhitelist(this.newChildProject.department_id),
                     maxTags: 5,
                     dropdown: {
                         maxItems: 20,
@@ -3462,7 +3484,7 @@ createApp({
                 orderTypeInput.value = '';
                 
                 this.editChildProjectOrderTypeTagify = new Tagify(orderTypeInput, {
-                    whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                    whitelist: this.getChildProjectOrderTypeWhitelist(this.editingChildProject.department_id),
                     maxTags: 5,
                     dropdown: {
                         maxItems: 20,
