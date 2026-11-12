@@ -76,6 +76,7 @@ app_print_stylesheet(
     <?php endif; ?>
     <script src="<?=$root?>assets/vendor/js/helpers.js?v=<?=CACHE_VERSION?>"></script>
     <script src="<?=$root?>assets/js/config.js?v=<?=CACHE_VERSION?>"></script>
+    <script src="<?=$root?>assets/js/font-zoom.js?v=<?=CACHE_VERSION?>"></script>
   </head>
 
   <body<?=$onload?>>

@@ -1330,6 +1330,29 @@ body.pl-col-resizing * {
     }
 }
 
+/* Cell text wraps instead of being cut off or forced onto one line (text-nowrap /
+   text-truncate / inline nowrap set by the renderers in project-list.js). Badges and
+   buttons stay on one line. Switched off while column widths are auto-measured
+   (.pl-measuring-natural) so "natural width" still means the unwrapped width. */
+#projectTable:not(.pl-measuring-natural) tbody td,
+#projectTable:not(.pl-measuring-natural) tbody td .text-nowrap,
+#projectTable:not(.pl-measuring-natural) tbody td .text-truncate,
+#projectTable:not(.pl-measuring-natural) tbody td [style*="white-space: nowrap"] {
+    white-space: normal !important;
+    overflow-wrap: break-word;
+}
+#projectTable:not(.pl-measuring-natural) tbody td .text-truncate {
+    text-overflow: clip;
+}
+#projectTable#projectTable tbody td .badge,
+#projectTable#projectTable tbody td .badge *,
+#projectTable#projectTable tbody td .btn,
+#projectTable#projectTable tbody td .btn *,
+#projectTable#projectTable tbody td .note-label-chip,
+#projectTable#projectTable tbody td .note-label-chip * {
+    white-space: nowrap !important;
+}
+
 /* Cột 受注形態: chiều ngang tối thiểu 60px, không khoá max */
 #projectTable th.project-order-type-column,
 #projectTable td.project-order-type-column,

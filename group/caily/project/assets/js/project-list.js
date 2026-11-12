@@ -1871,6 +1871,8 @@ var projectTable;
         var headTables = $wrapper.find('.dt-scroll-head table, .dataTables_scrollHead table');
         if (bodyTable) bodyTable.style.tableLayout = 'auto';
         headTables.each(function() { this.style.tableLayout = 'auto'; });
+        // Cell text is allowed to wrap (CSS in project/index.php); measure it unwrapped.
+        if (bodyTable) bodyTable.classList.add('pl-measuring-natural');
         if (bodyTable) { void bodyTable.offsetWidth; } // force reflow before measuring
 
         var naturalWidths = {};
@@ -1880,6 +1882,7 @@ var projectTable;
             if (w) naturalWidths[idx] = w;
         });
 
+        if (bodyTable) bodyTable.classList.remove('pl-measuring-natural');
         forceProjectListFixedTableLayout();
         Object.keys(naturalWidths).forEach(function(idx) {
             setProjectTableColumnWidthPx(table, parseInt(idx, 10), naturalWidths[idx], { skipTableWidthSync: true });
