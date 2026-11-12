@@ -999,7 +999,7 @@ if($_SESSION['show_project'] == 0){
                                 <option value="cancelled" data-i18n="中止">中止</option>
                             </select>
                         </div>
-                        <div class="col-md-6 col-xl-3">
+                        <div class="col-md-6 col-xl-3 quick-edit-hide-for-energy">
                             <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
                             <input type="number" class="form-control" name="progress" id="quickEditProgress" min="0" max="100" step="5" value="0" placeholder="0">
                             <div class="invalid-feedback" id="quickEditProgressError"></div>
@@ -2175,7 +2175,7 @@ body:not(.project-notes-one-line) #projectTable .note-more-lines-icon,
 #quickEditCustomFieldsSection:has(+ #quickEditCustomFieldsWrap:not(:has(.quick-edit-custom-field))) {
     display: none;
 }
-/* 省エネ departments do not use 担当 / チーム / メンバー, and call 管理 "担当者" */
+/* 省エネ departments do not use 担当 / チーム / メンバー / 進捗率, and call 管理 "担当者" */
 #quickEditProjectForm.quick-edit-energy-dept .quick-edit-hide-for-energy {
     display: none !important;
 }

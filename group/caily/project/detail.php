@@ -261,7 +261,8 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div v-else class="fw-semibold">{{ project.tantou || '—' }}</div>
                             </div>
-                            <div class="col-md-4">
+                            <!-- 進捗率 is not used by 省エネ departments (progress is followed by tasks) -->
+                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
                                 <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
                                 <div class="position-relative">
                                     <input

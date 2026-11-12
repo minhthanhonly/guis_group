@@ -4244,7 +4244,10 @@ createApp({
                 formData.append('parent_project_id', this.editingChildProject.parent_project_id);
                 formData.append('status', this.editingChildProject.status || 'draft');
                 formData.append('amount', this.editingChildProject.amount || 0);
-                formData.append('progress', this.editingChildProject.progress != null ? parseInt(this.editingChildProject.progress, 10) : 0);
+                // 進捗率 is hidden for 省エネ departments: not sent, the stored value is kept
+                if (!this.isEditChildEnergyDept) {
+                    formData.append('progress', this.editingChildProject.progress != null ? parseInt(this.editingChildProject.progress, 10) : 0);
+                }
                 // 省エネ departments: 担当 / チーム / メンバー are hidden, so they are not sent and keep their stored values
                 const editHidesTantouAndTeam = this.isEditChildEnergyDept;
                 if (!editHidesTantouAndTeam) {
@@ -4594,7 +4597,8 @@ createApp({
                 // Luôn gửi managers (kể cả rỗng) để backend lưu đúng
                 formData.append('managers', (this.newChildProject.managers && this.newChildProject.managers.length > 0) ? this.newChildProject.managers.join(',') : '');
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
-                formData.append('progress', this.newChildProject.progress != null ? parseInt(this.newChildProject.progress, 10) : 0);
+                // 進捗率 is hidden for 省エネ departments: new projects start at 0
+                formData.append('progress', (!this.isCreateChildEnergyDept && this.newChildProject.progress != null) ? parseInt(this.newChildProject.progress, 10) : 0);
                 // 省エネ departments: 担当 / チーム / メンバー are hidden and stored empty
                 const createHidesTantouAndTeam = this.isCreateChildEnergyDept;
                 formData.append('teams', createHidesTantouAndTeam ? '' : (this.newChildProject.teams || ''));

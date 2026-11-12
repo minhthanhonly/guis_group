@@ -1299,7 +1299,8 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-xl-3">
+                            <!-- 進捗率 is not used by 省エネ departments (progress is followed by tasks): hidden -->
+                            <div class="col-md-6 col-xl-3" v-show="!isChildProjectEnergyDept('create')">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
                                     <input type="number" class="form-control" v-model.number="newChildProject.progress" step="5" min="0" max="100" value="0" placeholder="0">
@@ -1576,7 +1577,8 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-6 col-xl-3">
+                            <!-- 進捗率 is not used by 省エネ departments (progress is followed by tasks): hidden -->
+                            <div class="col-md-6 col-xl-3" v-show="!isChildProjectEnergyDept('edit')">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
                                     <input type="number" class="form-control" v-model.number="editingChildProject.progress" step="5" min="0" max="100" placeholder="0">

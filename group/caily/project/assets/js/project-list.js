@@ -269,6 +269,50 @@ var projectTable;
         return String(name || '').trim().indexOf('省エネ') !== -1;
     }
 
+    /**
+     * 省エネ departments follow progress by tasks only: the 進捗率 column is titled タスク進捗 and
+     * shows just the task button (no bar / percentage).
+     */
+    var ENERGY_PROGRESS_COLUMN_LABEL = 'タスク進捗';
+    /** Column titles that differ on the 省エネ department tab (key -> label). */
+    var ENERGY_COLUMN_LABELS = {
+        progress: ENERGY_PROGRESS_COLUMN_LABEL,
+        manager: '担当者',
+        confirmation_notes_caily: '入力注意点項目'
+    };
+    /** Columns 省エネ departments do not use: never shown on that tab, not offered in 列の表示. */
+    var ENERGY_HIDDEN_COLUMN_KEYS = { teams: true, members: true };
+
+    function getProjectBaseColumnLabel(col) {
+        if (!col) return '';
+        if (isEnergyDepartmentSelectedForStatus()
+            && Object.prototype.hasOwnProperty.call(ENERGY_COLUMN_LABELS, col.key)) {
+            return ENERGY_COLUMN_LABELS[col.key];
+        }
+        return col.label;
+    }
+    /** Header title of a base column for the selected department tab. */
+    function getProjectBaseColumnTitle(key, defaultLabel) {
+        return getProjectBaseColumnLabel({ key: key, label: defaultLabel });
+    }
+    function isColumnHiddenForEnergyDepartment(columnKey) {
+        return !!ENERGY_HIDDEN_COLUMN_KEYS[columnKey] && isEnergyDepartmentSelectedForStatus();
+    }
+    /** A column the current user / department tab must not see (CAILY branch rules or 省エネ tab). */
+    function isProjectColumnUnavailable(columnKey) {
+        return isColumnHiddenForCailyBranch(columnKey) || isColumnHiddenForEnergyDepartment(columnKey);
+    }
+    function isEnergyDepartmentProjectRow(row) {
+        var name = row && row.department_name != null ? String(row.department_name) : '';
+        if (name.trim() === '') {
+            return isEnergyDepartmentSelectedForStatus();
+        }
+        if (window.EnergyDrawingShare && typeof window.EnergyDrawingShare.isEnergyDepartmentName === 'function') {
+            return window.EnergyDrawingShare.isEnergyDepartmentName(name);
+        }
+        return name.indexOf('省エネ') !== -1;
+    }
+
     function getVisibleProjectStatuses() {
         if (isEnergyDepartmentSelectedForStatus()) {
             return statuses.slice();
@@ -1358,7 +1402,7 @@ var projectTable;
         var k = String(key || '').trim();
         if (!k) return '';
         var found = COLUMN_DEFINITIONS.find(function(c) { return c.key === k; });
-        if (found) return found.label;
+        if (found) return getProjectBaseColumnLabel(found);
         found = (namedDefaultTaskColumnDefinitions || []).find(function(c) { return c.key === k; });
         if (found) return found.label;
         found = (customFieldColumnDefinitions || []).find(function(c) { return c.key === k; });
@@ -1735,7 +1779,7 @@ var projectTable;
     function getShowAllProjectColumnVisibility(customColDefs) {
         const visibility = {};
         COLUMN_DEFINITIONS.forEach(col => {
-            if (isColumnHiddenForCailyBranch(col.key)) return;
+            if (isProjectColumnUnavailable(col.key)) return;
             if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
             visibility[col.key] = true;
         });
@@ -3009,8 +3053,9 @@ var projectTable;
     }
 
     function filterColumnKeysForCailyBranch(keys) {
-        if (!isCailyBranchUser()) return keys;
-        return (keys || []).filter(function(k) { return !isColumnHiddenForCailyBranch(k); });
+        // also drops the columns the 省エネ tab does not use
+        if (!isCailyBranchUser() && !isEnergyDepartmentSelectedForStatus()) return keys;
+        return (keys || []).filter(function(k) { return !isProjectColumnUnavailable(k); });
     }
 
     function renderBusinessDocumentStatusBadge(status, statusList) {
@@ -3258,7 +3303,7 @@ var projectTable;
     function buildAvailableColumnsList(customColDefs, departmentId, columnVisibility) {
         var vis = columnVisibility || {};
         var labelMap = {};
-        COLUMN_DEFINITIONS.forEach(function(c) { labelMap[c.key] = c.label; });
+        COLUMN_DEFINITIONS.forEach(function(c) { labelMap[c.key] = getProjectBaseColumnLabel(c); });
         (customColDefs || []).forEach(function(c) { labelMap[c.key] = c.label; });
         (namedDefaultTaskColumnDefinitions || []).forEach(function(c) { labelMap[c.key] = c.label; });
         var keys = getMergedProjectColumnKeys(customColDefs, departmentId);
@@ -3271,7 +3316,7 @@ var projectTable;
                     : true
             };
         }).filter(function(col) {
-            if (isColumnHiddenForCailyBranch(col.key)) return false;
+            if (isProjectColumnUnavailable(col.key)) return false;
             if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return false;
             return true;
         });
@@ -4296,7 +4341,7 @@ var projectTable;
         var defaults = getDefaultColumnVisibility(customDefs);
         var out = Object.assign({}, visibility || {});
         Object.keys(defaults).forEach(function(key) {
-            if (isColumnHiddenForCailyBranch(key)) {
+            if (isProjectColumnUnavailable(key)) {
                 out[key] = false;
                 return;
             }
@@ -4353,7 +4398,7 @@ var projectTable;
     function getDefaultColumnVisibility(customColDefs) {
         const visibility = {};
         COLUMN_DEFINITIONS.forEach(col => {
-            if (isColumnHiddenForCailyBranch(col.key)) return;
+            if (isProjectColumnUnavailable(col.key)) return;
             if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
             visibility[col.key] = col.defaultVisible;
         });
@@ -4368,7 +4413,7 @@ var projectTable;
             Object.keys(deptDef.visibility).forEach(function(key) {
                 var migratedKey = migrateNamedDefaultTaskColumnKey(key);
                 if (visibility[migratedKey] === undefined && visibility[key] === undefined) return;
-                if (isColumnHiddenForCailyBranch(migratedKey)) return;
+                if (isProjectColumnUnavailable(migratedKey)) return;
                 if (isProjectDirectorColumn(migratedKey) && !canViewProjectDirectorColumns()) return;
                 visibility[migratedKey] = normalizeColumnVisibilityBool(
                     deptDef.visibility[key],
@@ -4404,7 +4449,15 @@ var projectTable;
         }
         const customDefs = customColDefs || customFieldColumnDefinitions || [];
         COLUMN_DEFINITIONS.forEach(col => {
-            if (isColumnHiddenForCailyBranch(col.key)) return;
+            // 省エネ tab: these columns exist in the table but must stay hidden whatever was saved
+            if (isColumnHiddenForEnergyDepartment(col.key)) {
+                const hiddenIdx = getDataTableColumnIndexByKey(col.key, customDefs);
+                if (hiddenIdx !== null) {
+                    table.column(hiddenIdx).visible(false, false);
+                }
+                return;
+            }
+            if (isProjectColumnUnavailable(col.key)) return;
             if (isProjectDirectorColumn(col.key) && !canViewProjectDirectorColumns()) return;
             const isVisible = normalizeColumnVisibilityBool(visibility[col.key], col.defaultVisible !== false);
             const dtIndex = getDataTableColumnIndexByKey(col.key, customDefs);
@@ -5958,7 +6011,7 @@ var projectTable;
                         $(td).empty().append($wrap);
                         initConfirmationNotesSortable($wrap);
                     },
-                    title: buildI18nHeaderTitle('CAILYメモ'),
+                    title: buildI18nHeaderTitle(getProjectBaseColumnTitle('confirmation_notes_caily', 'CAILYメモ')),
                     orderable: false
                 },
                 { 
@@ -6039,6 +6092,14 @@ var projectTable;
                         const total = parseInt(row.task_count, 10) || 0;
                         const projectId = row && row.id != null ? String(row.id) : '';
                         const taskLabel = typeof translateText === 'function' ? translateText('タスク') : 'タスク';
+                        if (isEnergyDepartmentProjectRow(row)) {
+                            // タスク進捗: task button only (kept in the Excel export as "done/total")
+                            return projectId
+                                ? `<a href="task.php?project_id=${projectId}" class="btn btn-xs btn-outline-primary project-hover-tasks-trigger" data-project-id="${projectId}" title="${taskLabel}">` +
+                                  `<i class="fas fa-tasks me-1"></i>` +
+                                  `<span>${completed}/${total}</span></a>`
+                                : '';
+                        }
                         const taskBtn = projectId
                             ? `<a href="task.php?project_id=${projectId}" class="btn btn-xs btn-outline-primary mt-1 project-hover-tasks-trigger ${REMOVE_FOR_EXCEL_CLASS}" data-project-id="${projectId}" title="${taskLabel}">` +
                               `<i class="fas fa-tasks me-1"></i>` +
@@ -6053,7 +6114,9 @@ var projectTable;
                                 <small class="text-muted d-block">${progress}%</small>
                                 ${taskBtn}`;
                     },
-                    title: '<span data-i18n="進捗率">進捗率</span>'
+                    title: isEnergyDepartmentSelectedForStatus()
+                        ? '<span data-i18n="' + ENERGY_PROGRESS_COLUMN_LABEL + '">' + ENERGY_PROGRESS_COLUMN_LABEL + '</span>'
+                        : '<span data-i18n="進捗率">進捗率</span>'
                 },
                 { 
                     name: 'tantou',
@@ -6110,7 +6173,7 @@ var projectTable;
                         html += '</div>';
                         return html;
                     },
-                    title: '<span data-i18n="管理">管理</span>'
+                    title: buildI18nHeaderTitle(getProjectBaseColumnTitle('manager', '管理'))
                 },
                 {
                     name: 'teams',
@@ -6854,6 +6917,10 @@ var projectTable;
                 && !canViewEndDateColumn()) {
                 isVisible = false;
             }
+            // 省エネ tab: チーム / メンバー stay in the table definition but are never shown
+            if (isColumnHiddenForEnergyDepartment(k)) {
+                isVisible = false;
+            }
             var out = Object.assign({}, col, { visible: isVisible });
             if (savedColumnWidths[k]) {
                 out.width = savedColumnWidths[k] + 'px';
@@ -7045,7 +7112,7 @@ var projectTable;
             var customDefs = customFieldColumnDefinitions || [];
             var noteColumnConfigs = []; // { colIndex, displayColumnKey }
             (NOTE_DISPLAY_COLUMNS || []).forEach(function(c) {
-                if (isColumnHiddenForCailyBranch(c.key)) return;
+                if (isProjectColumnUnavailable(c.key)) return;
                 if (isProjectDirectorColumn(c.key) && !canViewProjectDirectorColumns()) return;
                 var idx = getDataTableColumnIndexByKey(c.key, customDefs);
                 if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });

@@ -13,7 +13,7 @@
         let quickEditOrderTypeTagify = null, quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
         let quickEditQuillInstance = null;
         let quickEditIsManagerOnly = false;
-        // 省エネ departments: 担当 / チーム / メンバー are hidden, not validated and not sent (stored values stay as they are)
+        // 省エネ departments: 担当 / チーム / メンバー / 進捗率 are hidden, not validated and not sent (stored values stay as they are)
         let quickEditIsEnergyDept = false;
         let quickEditOriginalStatus = '';
         let quickEditOriginalCailyNoukiStatus = '';
@@ -947,7 +947,9 @@
             formData.append('guis_nouki', getQuickEditDateFieldValue('#quickEditGuisNouki'));
             formData.append('caily_nouki_status', newCailyNouki);
             formData.append('guis_nouki_status', newGuisNouki);
-            formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
+            if (!quickEditIsEnergyDept) {
+                formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
+            }
             formData.append('project_order_type', getQuickEditOrderTypeValue());
             if (!quickEditIsEnergyDept) {
                 formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
