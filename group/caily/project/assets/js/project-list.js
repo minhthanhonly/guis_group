@@ -4558,7 +4558,7 @@ var projectTable;
         }
         if (type === 'textarea' || type === 'text') {
             var short = v.length > 40 ? v.substring(0, 40) + '...' : v;
-            return '<span data-bs-toggle="tooltip" data-bs-title="' + escapeHtmlForNote(v) + '" class="small" style="white-space: pre-wrap; width: 100px; display: block;">' + escapeHtmlForNote(short) + '</span>';
+            return '<span data-bs-toggle="tooltip" data-bs-title="' + escapeHtmlForNote(v) + '" class="small" style="white-space: pre-wrap; width: 100px; max-width: 100%; display: block;">' + escapeHtmlForNote(short) + '</span>';
         }
         // Text field: nếu giống ngày (yyyy/m/d, m/d, yyyy/mm/dd hoặc có thời gian) thì format
         if (typeof moment !== 'undefined') {
@@ -7941,6 +7941,55 @@ var projectTable;
             });
         })();
 
+        // Horizontal header follow without JS lag.
+        // DataTables scrollX keeps the header in its own overflow:hidden box and copies
+        // body.scrollLeft into it from a scroll event, so the header trails the body by a
+        // frame or more. Where the browser supports named scroll timelines, the header is
+        // shifted by a transform driven by the body's scroll position instead (CSS in
+        // index.php, class "pl-head-timeline"); other browsers keep DataTables' own sync.
+        var plHeadTimelineSupported = !!(window.CSS && CSS.supports
+            && CSS.supports('animation-timeline: --x')
+            && CSS.supports('timeline-scope: --x'));
+        function applyScrollHeadTimeline(wrapper) {
+            if (!plHeadTimelineSupported || !wrapper) return;
+            var head = wrapper.querySelector('.dt-scroll-head');
+            var body = wrapper.querySelector('.dt-scroll-body');
+            var inner = head && head.querySelector('.dt-scroll-headInner');
+            if (!head || !body || !inner) return;
+
+            function updateMax() {
+                var max = Math.max(0, body.scrollWidth - body.clientWidth);
+                var value = max + 'px';
+                if (inner.style.getPropertyValue('--pl-head-max') !== value) {
+                    inner.style.setProperty('--pl-head-max', value);
+                }
+                if (head.scrollLeft !== 0) head.scrollLeft = 0;
+            }
+
+            if (!body._plHeadTimelineBound) {
+                body._plHeadTimelineBound = true;
+                // The transform replaces DataTables' scrollLeft copy (both would double the shift).
+                $(body).off('scroll.DT');
+                // DataTables copies head.scrollLeft back into the body when a header cell is
+                // focused; the header box now stays at 0, so that would jump the body to the start.
+                head.addEventListener('focus', function(e) {
+                    if (e.target !== head) e.stopImmediatePropagation();
+                }, true);
+                // Focus/find-in-page can still scroll the header box itself — keep it at 0.
+                head.addEventListener('scroll', function() {
+                    if (head.scrollLeft !== 0) head.scrollLeft = 0;
+                });
+                if (typeof ResizeObserver !== 'undefined') {
+                    var ro = new ResizeObserver(updateMax);
+                    ro.observe(body);
+                    var bodyTable = body.querySelector('table');
+                    if (bodyTable) ro.observe(bodyTable);
+                }
+                wrapper.classList.add('pl-head-timeline');
+            }
+            updateMax();
+        }
+
         var fixedScrollHeadUpdate = null;
         function applyStickyScrollHead(tableEl) {
             if (!tableEl) tableEl = document.getElementById('projectTable');
@@ -7954,6 +8003,7 @@ var projectTable;
                 if (scroll && scroll.firstElementChild) scrollHead = scroll.firstElementChild;
             }
             if (!scrollHead) return;
+            applyScrollHeadTimeline(wrapper);
             scrollHead.style.zIndex = '10';
             scrollHead.style.backgroundColor = scrollHead.style.backgroundColor || '#fff';
             scrollHead.style.boxShadow = '0 2px 4px rgba(0,0,0,0.08)';

@@ -1279,6 +1279,25 @@ body.pl-col-resizing * {
     padding: 0.4rem!important;
 }
 
+/* Header follows the body's horizontal scroll through a scroll timeline (no JS lag).
+   Enabled by applyScrollHeadTimeline() in project-list.js, which sets --pl-head-max. */
+@supports (animation-timeline: --x) and (timeline-scope: --x) {
+    #projectTable_wrapper.pl-head-timeline .dt-scroll {
+        timeline-scope: --pl-table-x;
+    }
+    #projectTable_wrapper.pl-head-timeline .dt-scroll-body {
+        scroll-timeline: --pl-table-x x;
+    }
+    #projectTable_wrapper.pl-head-timeline .dt-scroll-headInner {
+        animation: pl-head-follow linear both;
+        animation-timeline: --pl-table-x;
+    }
+    @keyframes pl-head-follow {
+        from { transform: translateX(0); }
+        to { transform: translateX(calc(-1 * var(--pl-head-max, 0px))); }
+    }
+}
+
 /* Cột 受注形態: chiều ngang tối thiểu 60px, không khoá max */
 #projectTable th.project-order-type-column,
 #projectTable td.project-order-type-column,
