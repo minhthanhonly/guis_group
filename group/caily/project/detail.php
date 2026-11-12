@@ -348,7 +348,8 @@ if($_SESSION['show_project'] == 0){
                                 </template>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" :data-time="project.end_date || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' 期限日'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)" readonly>
                             </div>
-                            <div class="col-md-4">
+                            <!-- 実終了日 only makes sense once the project is 完了 (v-show keeps the date picker input alive in edit mode) -->
+                            <div class="col-md-4" v-show="project.status === 'completed'">
                                 <label class="form-label"><span data-i18n="実終了日">実終了日</span></label>
                                 <div v-if="isEditMode" class="input-group">
                                     <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
