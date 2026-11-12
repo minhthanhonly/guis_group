@@ -1382,6 +1382,15 @@ const vueApp = createApp({
                 if (this.project) {
                     this.project.version = normalizeProjectVersion(this.project.version);
                     this.project.payment_version = normalizeProjectVersion(this.project.payment_version);
+                    // The API entity-encodes every value. These plain-text fields are only shown
+                    // through Vue text bindings and form inputs (never as HTML), so give them
+                    // their real text: otherwise "A & B" is displayed and re-saved as "A &amp; B".
+                    ['name', 'project_number', 'tags', 'project_order_type', 'payment_note', 'energy_drawing_share_note'].forEach((field) => {
+                        const value = this.project[field];
+                        if (typeof value === 'string' && value.indexOf('&') !== -1) {
+                            this.project[field] = this.decodeHtmlEntities(value);
+                        }
+                    });
                 }
                 // Cho phép AI lấy dữ liệu dự án hiện tại đang xem
                 if (typeof window !== 'undefined' && this.project) {
@@ -2395,17 +2404,39 @@ const vueApp = createApp({
                     window.EnergyDrawingShare.appendEnergyDrawingShareToFormData(formData, shareAnswer);
                 }
                 const response = await axios.post('/api/index.php?model=project&method=updateStatus', formData);
-                if (response.data && response.data.success !== false) {
+                if (this.isQuickEditSaved(response.data)) {
                     if (window.EnergyDrawingShare && shareAnswer) {
                         window.EnergyDrawingShare.applyEnergyDrawingShareToProject(this.project, shareAnswer);
                     }
                     showMessage('ステータスの更新に完了しました。');
+                    // The server also changes progress / actual start date with the status
+                    this.loadProject({ silent: true });
                 } else {
                     showMessage('ステータスの更新に失敗しました。', true);
+                    this.restoreProjectAfterFailedQuickEdit();
                 }
             } catch (error) {
                 console.error('Error updating status:', error);
                 showMessage('ステータスの更新に失敗しました。', true);
+                this.restoreProjectAfterFailedQuickEdit();
+            }
+        },
+        /**
+         * Result of updateStatus / updatePriority / updateProgress. The API answers with
+         * {status: 'success'|'error'} or with the number of updated rows (sent as a string,
+         * so "0" must not count as success), or an empty value when nothing was saved.
+         */
+        isQuickEditSaved(data) {
+            if (data && typeof data === 'object') {
+                if (data.status === 'error' || data.success === false || data.error) return false;
+                return data.status === 'success' || data.success === true;
+            }
+            return Number(data) > 0;
+        },
+        /** The value was applied on screen before saving; put the stored one back. */
+        restoreProjectAfterFailedQuickEdit() {
+            if (!this.isEditMode) {
+                this.loadProject({ silent: true });
             }
         },
         async selectStatus(status) {
@@ -2468,12 +2499,16 @@ const vueApp = createApp({
                 formData.append('id', this.projectId);
                 formData.append('priority', this.project.priority);
                 const response = await axios.post('/api/index.php?model=project&method=updatePriority', formData);
-                if (response.data) {
+                if (this.isQuickEditSaved(response.data)) {
                     showMessage('優先度を更新しました。');
+                } else {
+                    showMessage('優先度の更新に失敗しました。', true);
+                    this.restoreProjectAfterFailedQuickEdit();
                 }
             } catch (error) {
                 console.error('Error updating priority:', error);
                 showMessage('優先度の更新に失敗しました。', true);
+                this.restoreProjectAfterFailedQuickEdit();
             }
         },
         getAvatarSrc(member) {
@@ -2581,12 +2616,16 @@ const vueApp = createApp({
                 formData.append('id', this.projectId);
                 formData.append('progress', this.project.progress);
                 const response = await axios.post('/api/index.php?model=project&method=updateProgress', formData);
-                if (response.data) {
+                if (this.isQuickEditSaved(response.data)) {
                     showMessage('進捗率を更新しました。');
+                } else {
+                    showMessage('進捗率の更新に失敗しました。', true);
+                    this.restoreProjectAfterFailedQuickEdit();
                 }
             } catch (error) {
                 console.error('Error updating progress:', error);
                 showMessage('進捗率の更新に失敗しました。', true);
+                this.restoreProjectAfterFailedQuickEdit();
             }
         },
         async updateProjectStatus() {

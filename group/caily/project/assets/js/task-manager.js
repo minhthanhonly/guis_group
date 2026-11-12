@@ -1836,7 +1836,7 @@ const TaskApp = createApp({
                 if (response.data) {
                     this.showMessage('タスクを削除しました。');
                     this.loadTasks();
-                    if (this.selectedTask && this.selectedTask.id == id) {
+                    if (this.selectedTask && this.selectedTask.id == task.id) {
                         this.selectedTask = null;
                     }
                 }

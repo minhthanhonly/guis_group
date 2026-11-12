@@ -3180,6 +3180,7 @@ class Project extends ApplicationModel {
         }
 
         // Insert project data
+        $this->decodePostedPlainText($data);
         $project_id = $this->query_insert($data);
         
         if (!$project_id) {
@@ -3347,6 +3348,49 @@ class Project extends ApplicationModel {
     /**
      * UPDATE with version increment; fails when row version changed concurrently.
      */
+    /** Plain-text project columns that edit forms post back (never HTML such as description). */
+    private static $plainTextProjectFields = array(
+        'name', 'project_number', 'building_branch', 'building_size', 'building_type', 'building_number',
+        'project_order_type', 'tags', 'payment_note', 'estimate_number', 'invoice_number',
+        'caily_nouki_status', 'guis_nouki_status', 'guis_receiver',
+        'energy_drawing_share_reason', 'energy_drawing_share_note',
+    );
+
+    /**
+     * Every API response is entity-encoded (Model::sanitize), and edit forms post the text
+     * they were given, so "A & B" came back as "A &amp; B", was stored like that and gained
+     * another "amp;" on each save. Undo exactly that encoding once before writing. Text that
+     * was posted unencoded contains no such entities and is left as it is.
+     */
+    private function decodePostedPlainText(array &$data) {
+        foreach (self::$plainTextProjectFields as $field) {
+            if (isset($data[$field]) && is_string($data[$field]) && strpos($data[$field], '&') !== false) {
+                $data[$field] = htmlspecialchars_decode($data[$field], ENT_QUOTES);
+            }
+        }
+        // custom_fields is a JSON list of {label, value}: decode inside the values so the
+        // JSON syntax itself is never touched. &quot; is left alone: the client already
+        // restores quotes before parsing, and a composite value may hold nested JSON.
+        if (isset($data['custom_fields']) && is_string($data['custom_fields']) && strpos($data['custom_fields'], '&') !== false) {
+            $fields = json_decode($data['custom_fields'], true);
+            if (is_array($fields)) {
+                array_walk_recursive($fields, function (&$value) {
+                    if (is_string($value) && strpos($value, '&') !== false) {
+                        $value = str_replace(
+                            array('&lt;', '&gt;', '&#039;', '&#39;', '&amp;'),
+                            array('<', '>', "'", "'", '&'),
+                            $value
+                        );
+                    }
+                });
+                $encoded = json_encode($fields, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                if ($encoded !== false) {
+                    $data['custom_fields'] = $encoded;
+                }
+            }
+        }
+    }
+
     private function performVersionedProjectUpdate($id, array $data, $expectedVersion) {
         $newVersion = intval($expectedVersion) + 1;
         $data['version'] = $newVersion;
@@ -3596,6 +3640,7 @@ class Project extends ApplicationModel {
             }
         }
         
+        $this->decodePostedPlainText($data);
         try {
         $versionedUpdate = $this->performVersionedProjectUpdate($id, $data, $expectedVersion);
         if (!$versionedUpdate['ok']) {
@@ -3650,93 +3695,92 @@ class Project extends ApplicationModel {
 
       
       
-        $exist_managers = $this->getMembers(['project_id' => $id, 'role' => 'manager']);
-        $exist_members = $this->getMembers(['project_id' => $id, 'role' => 'member']);
-        $managers = [];
-        $members = [];
-        if ($result && isset($_POST['managers'])) {
-            $managers = array_filter(array_map('intval', explode(',', $_POST['managers'])));
-        }
-        if ($result && isset($_POST['members'])) {
-            $members = explode(',', $_POST['members']);
-            $members = array_diff($members, $managers);
+        // Members / managers. Only the rows that actually change are touched, inside one
+        // transaction: the old "delete every row, then insert again" lost all members and
+        // managers when the request failed half way, and dropped the managers whenever
+        // only `members` was posted.
+        $membersPosted = $result && isset($_POST['members']);
+        $managersPosted = $result && isset($_POST['managers']);
+        if ($membersPosted || $managersPosted) {
+            $toIdList = function ($csv) {
+                return array_values(array_unique(array_filter(array_map('intval', explode(',', (string)$csv)))));
+            };
+            $projectNumberForNotify = isset($data['project_number']) ? $data['project_number'] : ($old['project_number'] ?? '');
+            $projectNameForNotify = isset($data['name']) ? $data['name'] : ($old['name'] ?? '');
 
-            $exist_members_ids = array_column($exist_members, 'user_id');
-            $new_members = array_diff($members, $exist_members_ids);
-            $removed_members = array_diff($exist_members_ids, $members);
-            
-            // Get all users in one query
-            $listAllUserIds = array_merge($new_members, $removed_members);
-            $listAllUserIds = array_unique($listAllUserIds);
-            $listAllUserIds = array_map('intval', $listAllUserIds);
-            $listAllUsers = [];
-            if (!empty($listAllUserIds)) {
-                $placeholders = str_repeat('%d,', count($listAllUserIds) - 1) . '%d';
-                $query = sprintf("SELECT id, userid FROM " . DB_PREFIX . "user WHERE id IN ($placeholders)", ...$listAllUserIds);
-                $listAllUsers = $this->fetchAll($query);
+            $exist_managers = $this->getMembers(['project_id' => $id, 'role' => 'manager']);
+            $exist_members = $this->getMembers(['project_id' => $id, 'role' => 'member']);
+            $exist_managers_ids = array_map('intval', array_column($exist_managers, 'user_id'));
+            $exist_members_ids = array_map('intval', array_column($exist_members, 'user_id'));
+
+            $managers = $managersPosted ? $toIdList($_POST['managers']) : [];
+            // A user posted in both lists is a manager
+            $members = $membersPosted ? array_values(array_diff($toIdList($_POST['members']), $managers)) : [];
+
+            $new_members = $membersPosted ? array_values(array_diff($members, $exist_members_ids)) : [];
+            $removed_members = $membersPosted ? array_values(array_diff($exist_members_ids, $members)) : [];
+            $new_managers = $managersPosted ? array_values(array_diff($managers, $exist_managers_ids)) : [];
+            $removed_managers = $managersPosted ? array_values(array_diff($exist_managers_ids, $managers)) : [];
+
+            // userid (login name) of everyone added or removed, keyed by numeric id
+            $useridById = [];
+            $changedIds = array_values(array_unique(array_merge($new_members, $removed_members, $new_managers, $removed_managers)));
+            if (!empty($changedIds)) {
+                $rows = $this->fetchAll("SELECT id, userid FROM " . DB_PREFIX . "user WHERE id IN (" . implode(',', $changedIds) . ")");
+                foreach ($rows as $row) {
+                    $useridById[intval($row['id'])] = $row['userid'];
+                }
+            }
+            $useridsOf = function (array $ids) use ($useridById) {
+                $list = [];
+                foreach ($ids as $uid) {
+                    if (isset($useridById[$uid])) {
+                        $list[] = $useridById[$uid];
+                    }
+                }
+                return $list;
+            };
+
+            $memberTable = DB_PREFIX . "project_members";
+            $projectWhere = " WHERE project_id = " . intval($id);
+            mysqli_begin_transaction($this->handler);
+            try {
+                if (!empty($removed_managers)) {
+                    $this->query("DELETE FROM " . $memberTable . $projectWhere . " AND role = 'manager' AND user_id IN (" . implode(',', $removed_managers) . ")");
+                }
+                if (!empty($removed_members)) {
+                    $this->query("DELETE FROM " . $memberTable . $projectWhere . " AND role = 'member' AND user_id IN (" . implode(',', $removed_members) . ")");
+                }
+                // A new manager who still has a member row is promoted: drop the member row first
+                if (!empty($new_managers)) {
+                    $this->query("DELETE FROM " . $memberTable . $projectWhere . " AND role = 'member' AND user_id IN (" . implode(',', $new_managers) . ")");
+                }
+                // addMember() skips users who already have a row, so only the new ones are inserted
+                foreach ($new_members as $user_id) {
+                    $this->addMember($id, $user_id, $useridById[$user_id] ?? '', 'member', true);
+                }
+                foreach ($new_managers as $user_id) {
+                    $this->addMember($id, $user_id, $useridById[$user_id] ?? '', 'manager', true);
+                }
+                mysqli_commit($this->handler);
+            } catch (Throwable $e) {
+                mysqli_rollback($this->handler);
+                $this->table = DB_PREFIX . 'projects';
+                throw $e;
             }
 
-            $new_users = array_filter($listAllUsers, function($user) use ($new_members) {
-                return in_array($user['id'], $new_members);
-            });
-            $removed_users = array_filter($listAllUsers, function($user) use ($removed_members) {
-                return in_array($user['id'], $removed_members);
-            });
-            
-            // Xóa members cũ
-            $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id));
-            // Thêm members mới
-            foreach ($members as $user_id) {
-                $should_log = in_array($user_id, $new_members);
-                $this->addMember($id, $user_id, $new_users[$user_id]['userid'] ?? '', 'member', $should_log);
+            // Notifications call an external service: send them only after the commit
+            if (!empty($new_members)) {
+                $this->notifyMemberAdded($projectNumberForNotify, $id, $projectNameForNotify, $useridsOf($new_members), 'member');
             }
-
-            if (!empty($members)) {
-                $this->notifyMemberAdded($data['project_number'], $id, $data['name'], array_column($new_users, 'userid'), 'member');
-            }
-            if (!empty($removed_users)) {
-                $this->notifyMemberRemoved($data['project_number'], $id, $data['name'], array_column($removed_users, 'userid'), 'member');
-            }
-        }
-       
-        if ($result && isset($_POST['managers'])) {
-            $exist_managers_ids = array_column($exist_managers, 'user_id');
-            $new_managers = array_diff($managers, $exist_managers_ids);
-            $removed_managers = array_diff($exist_managers_ids, $managers);
-
-            // Khi danh sách managers rỗng, xóa toàn bộ manager của dự án
-            if (empty($managers) && !empty($exist_managers_ids)) {
-                $this->query("DELETE FROM " . DB_PREFIX . "project_members WHERE project_id = " . intval($id) . " AND role = 'manager'");
-                $this->notifyMemberRemoved($data['project_number'], $id, $data['name'], array_column($exist_managers, 'userid'), 'manager');
-            } else {
-
-            $listAllUserIds = array_merge($new_managers, $removed_managers);
-            $listAllUserIds = array_unique($listAllUserIds);
-            $listAllUserIds = array_map('intval', $listAllUserIds);
-            $listAllUsers = [];
-            if (!empty($listAllUserIds)) {
-                $placeholders = str_repeat('%d,', count($listAllUserIds) - 1) . '%d';
-                $query = sprintf("SELECT id, userid FROM " . DB_PREFIX . "user WHERE id IN ($placeholders)", ...$listAllUserIds);
-                $listAllUsers = $this->fetchAll($query);
-            }
-
-            //always add managers
-            $new_users = array_filter($listAllUsers, function($user) use ($managers) {
-                return in_array($user['id'], $managers);
-            });
-            $removed_users = array_filter($listAllUsers, function($user) use ($removed_managers) {
-                return in_array($user['id'], $removed_managers);
-            });
-            foreach ($managers as $user_id) {
-                $should_log = in_array($user_id, $new_managers);
-                $this->addMember($id, $user_id, $new_users[$user_id]['userid'] ?? '', 'manager', $should_log);
+            if (!empty($removed_members)) {
+                $this->notifyMemberRemoved($projectNumberForNotify, $id, $projectNameForNotify, $useridsOf($removed_members), 'member');
             }
             if (!empty($new_managers)) {
-                $this->notifyMemberAdded($data['project_number'], $id, $data['name'], array_column($new_users, 'userid'), 'manager');
+                $this->notifyMemberAdded($projectNumberForNotify, $id, $projectNameForNotify, $useridsOf($new_managers), 'manager');
             }
             if (!empty($removed_managers)) {
-                $this->notifyMemberRemoved($data['project_number'], $id, $data['name'], array_column($removed_users, 'userid'), 'manager');
-            }
+                $this->notifyMemberRemoved($projectNumberForNotify, $id, $projectNameForNotify, $useridsOf($removed_managers), 'manager');
             }
         }
         if ($result) {
@@ -7130,6 +7174,7 @@ class Project extends ApplicationModel {
             }
         }
         
+        $this->decodePostedPlainText($data);
         $versionedUpdate = $this->performVersionedPaymentUpdate($id, $data, $expectedPaymentVersion);
         if (!$versionedUpdate['ok']) {
             return $versionedUpdate['response'];
