@@ -254,6 +254,8 @@ var projectTable;
     // Filter state sent with the last list request; lets the filter handler skip reloads
     // that would repeat the same request (blur after typing, arrow / Tab keyups).
     var lastRequestedFilterSignature = null;
+    // A reload asked for while the 決済情報 modal was open (reloadProjectTable postpones it)
+    var reloadPendingAfterBusinessDocumentModal = false;
     /** Current value of every control the filter-form handler listens to, as one string. */
     function getProjectFilterFormSignature() {
         var values = [];
@@ -267,6 +269,8 @@ var projectTable;
     function reloadProjectTable(resetPaging, options) {
         options = options || {};
         if (businessDocumentModalOpen && options.allowWhileBdModalOpen !== true) {
+            // Postponed, not dropped: the modal's close handler runs it
+            reloadPendingAfterBusinessDocumentModal = true;
             return;
         }
         if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
@@ -3460,7 +3464,10 @@ var projectTable;
     function escapeHtmlForNote(s) {
         if (s == null || s === '') return '';
         const t = String(s);
-        return t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        // Row data arrives already entity-encoded by the API, and this helper is also used on
+        // raw text. An "&" that starts one of the entities the API produces is kept, so encoded
+        // input is not escaped a second time ("A &amp; B" used to be shown literally).
+        return t.replace(/&(?!(?:amp|lt|gt|quot|#0?39);)/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function getParentProjectDetailUrl(parentProjectId) {
@@ -3998,7 +4005,8 @@ var projectTable;
         var company = String(companyName || '').trim();
         if (!company) return '';
 
-        var text = Array.from(company).slice(0, 4).join('');
+        // Count real characters, not the characters of an entity ("A&amp;B社" is 4 characters)
+        var text = Array.from(decodeHtmlForNote(company).replace(/&#0?39;/g, "'")).slice(0, 4).join('');
         var style = 'font-size: 0.65rem; vertical-align: middle;';
         if (company.indexOf('大東建託') !== -1) {
             text = '大東';
@@ -8647,10 +8655,16 @@ var projectTable;
             });
             plInitListen(businessDocumentModalEl, 'hidden.bs.modal', function() {
                 businessDocumentModalOpen = false;
+                // Closing without having saved anything leaves the list as it is; reload only
+                // when the modal saved something or a reload was postponed while it was open.
+                // (An app without the flag keeps the old always-reload behaviour.)
+                var savedInModal = !window.app || window.app.businessDocumentSavedSinceOpen !== false;
                 if (window.app && typeof window.app.closeBusinessDocumentModal === 'function') {
                     window.app.closeBusinessDocumentModal();
                 }
-                if (projectTable) {
+                var needsReload = savedInModal || reloadPendingAfterBusinessDocumentModal;
+                reloadPendingAfterBusinessDocumentModal = false;
+                if (projectTable && needsReload) {
                     reloadProjectTable(false, { preserveScroll: true });
                 }
             });

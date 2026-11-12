@@ -345,6 +345,9 @@
                 businessDocumentSaveStatus: null,
                 businessDocumentSaveHideTimer: null,
                 businessDocumentDirty: false,
+                // true once something was saved while the modal is open; the project list
+                // reads it on close to decide whether the table has to be reloaded
+                businessDocumentSavedSinceOpen: false,
                 businessDocumentError: '',
                 businessDocumentUpdateTimer: null,
                 isUpdatingBusinessDocument: false,
@@ -415,6 +418,7 @@
                         self.businessDocumentSaveStatus = null;
                         self.businessDocumentError = '';
                         self.businessDocumentDirty = false;
+                        self.businessDocumentSavedSinceOpen = false;
                         var modalEl = document.getElementById('businessDocumentModal');
                         var modal = bootstrap.Modal.getInstance(modalEl);
                         if (!modal) {
@@ -881,6 +885,7 @@
                         if (response.data && response.data.status === 'success') {
                             applyPaymentVersionFromResponse(self.businessDocumentProject, response.data);
                             self.businessDocumentDirty = false;
+                            self.businessDocumentSavedSinceOpen = true;
                             self.businessDocumentError = '';
                             self._bdSuppressAutoSave = true;
                             // Keep cleared amounts as empty so placeholder 未入力 stays visible

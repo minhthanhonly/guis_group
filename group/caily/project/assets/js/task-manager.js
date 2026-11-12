@@ -467,6 +467,7 @@ const TaskApp = createApp({
         // Auto-refresh task list every 10 seconds if no task is in edit mode
         // A hidden tab does not poll, and a slow response is not overlapped by the next tick.
         let autoRefreshBusy = false;
+        let autoRefreshCount = 0;
         let lastAutoRefreshAt = Date.now();
         const autoRefreshTasks = async () => {
             if (document.hidden || autoRefreshBusy) return;
@@ -477,8 +478,11 @@ const TaskApp = createApp({
             if (!hasEditMode) {
                 autoRefreshBusy = true;
                 lastAutoRefreshAt = Date.now();
+                autoRefreshCount++;
                 try {
-                    await this.loadTasks();
+                    // Keep the list when the server returned the same data; once a minute it is
+                    // replaced regardless, which restores a value changed on screen but not saved.
+                    await this.loadTasks({ onlyIfChanged: autoRefreshCount % 6 !== 0 });
                 } finally {
                     autoRefreshBusy = false;
                 }
@@ -732,7 +736,10 @@ const TaskApp = createApp({
             }
         },
         
-        async loadTasks() {
+        async loadTasks(options) {
+            // Only the background poll asks for onlyIfChanged; every other caller (and a click
+            // handler passing an event) gets a full refresh.
+            const onlyIfChanged = !!(options && options.onlyIfChanged === true);
             try {
                 const response = await axios.get(`/api/index.php?model=task&method=list&project_id=${this.projectId}&include_subtasks=1`);
                 let tasks = response.data || [];
@@ -746,7 +753,11 @@ const TaskApp = createApp({
                 
                 // Most refreshes return what is already on screen. Replacing the list anyway
                 // re-renders every row and rebuilds Sortable, tooltips and date pickers.
-                const tasksChanged = JSON.stringify(tasks) !== JSON.stringify(this.tasks);
+                // Compared with the previous server payload, not with this.tasks: the page changes
+                // fields on the loaded objects (timer_active), so those never compare equal.
+                const payloadSignature = JSON.stringify(tasks);
+                const tasksChanged = !(onlyIfChanged && payloadSignature === this._lastTasksPayload);
+                this._lastTasksPayload = payloadSignature;
                 if (tasksChanged) {
                     this.tasks = tasks;
                 }

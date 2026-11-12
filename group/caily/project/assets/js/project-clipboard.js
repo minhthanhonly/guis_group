@@ -139,16 +139,26 @@
         return String(v).trim();
     }
 
+    // API values are entity-encoded; the clipboard gets plain text ("A & B", not "A &amp; B").
+    function decodeEntitiesForClipboard(value) {
+        var text = String(value == null ? '' : value);
+        if (text.indexOf('&') === -1) return text;
+        var area = document.createElement('textarea');
+        area.innerHTML = text;
+        return area.value;
+    }
+
     function normalizeProjectForClipboard(data) {
         if (!data) return {};
+        var plain = decodeEntitiesForClipboard;
         return {
             id: data.id,
-            parent_construction_number: data.parent_construction_number || data.building_number || '',
-            building_branch_name: data.parent_project_branch_name || '',
-            project_branch_name: data.project_branch_name || data.child_customer_branch || data.branch_name || '',
-            name: data.name || data.building_name || '',
-            parent_scale: data.parent_scale || data.building_size || '',
-            project_order_type: data.project_order_type || '',
+            parent_construction_number: plain(data.parent_construction_number || data.building_number || ''),
+            building_branch_name: plain(data.parent_project_branch_name || ''),
+            project_branch_name: plain(data.project_branch_name || data.child_customer_branch || data.branch_name || ''),
+            name: plain(data.name || data.building_name || ''),
+            parent_scale: plain(data.parent_scale || data.building_size || ''),
+            project_order_type: plain(data.project_order_type || ''),
             teams: data.teams || '',
             caily_nouki: data.caily_nouki || '',
             team_list: data.team_list || []
