@@ -215,6 +215,55 @@ var projectTable;
         }
     }
 
+    // initializeProjectTable() runs again on every department switch, and part of what it
+    // binds lives on elements that outlive the table (document, the filter form, modals).
+    // Those bindings go through plInitOn / plInitListen so the previous run's handlers are
+    // removed first; otherwise each switch adds another copy and one filter change fires
+    // several list requests.
+    var plInitBoundElements = $();
+    var plInitNativeListeners = [];
+    $.fn.plInitOn = function(events) {
+        var args = Array.prototype.slice.call(arguments);
+        args[0] = String(events).split(/\s+/).filter(Boolean).map(function(name) {
+            return name + '.plInit';
+        }).join(' ');
+        plInitBoundElements = plInitBoundElements.add(this);
+        return this.on.apply(this, args);
+    };
+    function plInitListen(el, type, handler) {
+        if (!el) return;
+        el.addEventListener(type, handler);
+        plInitNativeListeners.push({ el: el, type: type, handler: handler });
+    }
+    function teardownProjectListInitBindings() {
+        plInitBoundElements.off('.plInit');
+        plInitBoundElements = $();
+        plInitNativeListeners.forEach(function(l) {
+            l.el.removeEventListener(l.type, l.handler);
+        });
+        plInitNativeListeners = [];
+        // Body-level popups and context menus created by the previous run
+        $('#projectTasksPopup, #projectParentPopup, #projectNoteHoverPopup, #confirmationNoteContextMenu, #projectRowContextMenu').remove();
+        if (projectListTooltip) {
+            try { projectListTooltip.dispose(); } catch (e) { /* ignore */ }
+            projectListTooltip = null;
+        }
+    }
+    // One delegated Bootstrap tooltip for the whole table (see the draw.dt handler)
+    var projectListTooltip = null;
+    // Filter state sent with the last list request; lets the filter handler skip reloads
+    // that would repeat the same request (blur after typing, arrow / Tab keyups).
+    var lastRequestedFilterSignature = null;
+    /** Current value of every control the filter-form handler listens to, as one string. */
+    function getProjectFilterFormSignature() {
+        var values = [];
+        $('#projectFilterForm select, #projectFilterForm input').each(function(index) {
+            var value = (this.type === 'checkbox' || this.type === 'radio') ? this.checked : $(this).val();
+            values.push([this.id || this.name || index, value]);
+        });
+        return JSON.stringify(values);
+    }
+
     function reloadProjectTable(resetPaging, options) {
         options = options || {};
         if (businessDocumentModalOpen && options.allowWhileBdModalOpen !== true) {
@@ -4211,7 +4260,24 @@ var projectTable;
         });
     }
 
+    // Called for every note cell on every draw. Creating a Sortable per cell up front costs
+    // hundreds of instances per draw that are never destroyed, so the cell only gets one
+    // when the pointer first reaches it (pointerenter fires before pointerdown, for touch too).
     function initConfirmationNotesSortable($wrapper) {
+        if (!$wrapper || !$wrapper.length) return;
+        var el = $wrapper.get(0);
+        if (!el || el._noteSortable || el._noteSortableLazy) return;
+        el._noteSortableLazy = true;
+        var activate = function() {
+            el.removeEventListener('pointerenter', activate);
+            el.removeEventListener('focusin', activate);
+            createConfirmationNotesSortable($wrapper);
+        };
+        el.addEventListener('pointerenter', activate);
+        el.addEventListener('focusin', activate);
+    }
+
+    function createConfirmationNotesSortable($wrapper) {
         if (!$wrapper || !$wrapper.length) return;
         var el = $wrapper.get(0);
         if (!el) return;
@@ -4511,20 +4577,39 @@ var projectTable;
         return 'custom_' + normalized.replace(/\s+/g, '_').replace(/[^\w\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FAF]/g, '_');
     }
 
-    function getCustomFieldValueFromRow(row, label) {
-        if (!row || !row.custom_fields) return '';
-        var raw = row.custom_fields;
+    // Renderers ask for several labels per custom column per row; parse each row's
+    // custom_fields JSON once and keep a label -> value map for as long as the row object lives.
+    var customFieldValueMapCache = typeof WeakMap !== 'undefined' ? new WeakMap() : null;
+    function getCustomFieldValueMapForRow(row) {
+        var source = row.custom_fields;
+        var cached = customFieldValueMapCache ? customFieldValueMapCache.get(row) : null;
+        if (cached && cached.source === source) return cached.map;
+        var raw = source;
         if (typeof raw === 'string' && raw.indexOf('&quot;') !== -1) {
             raw = raw.replace(/&quot;/g, '"');
         }
         var arr = [];
         try {
-            arr = typeof raw === 'string' ? JSON.parse(raw) : (Array.isArray(raw) ? raw : []);
+            arr = typeof raw === 'string' ? JSON.parse(raw) : raw;
         } catch (e) {
-            return '';
+            arr = [];
         }
-        var found = arr.find(function (f) { return f && f.label && String(f.label).trim() === String(label).trim(); });
-        return found && found.value !== undefined ? found.value : '';
+        var map = Object.create(null);
+        if (Array.isArray(arr)) {
+            arr.forEach(function (f) {
+                if (!f || !f.label) return;
+                var key = String(f.label).trim();
+                // First field with a label wins, like the Array.find this replaces
+                if (!(key in map)) map[key] = f.value;
+            });
+        }
+        if (customFieldValueMapCache) customFieldValueMapCache.set(row, { source: source, map: map });
+        return map;
+    }
+    function getCustomFieldValueFromRow(row, label) {
+        if (!row || !row.custom_fields) return '';
+        var value = getCustomFieldValueMapForRow(row)[String(label).trim()];
+        return value !== undefined ? value : '';
     }
 
     function formatCustomFieldForList(value, type, options, row, label) {
@@ -6962,6 +7047,7 @@ var projectTable;
                 url: '/api/index.php',
                 type: 'GET',
                 data: function(d) {
+                    lastRequestedFilterSignature = getProjectFilterFormSignature();
                     // Thu thập filter từ form
                     const filterBusinessDocumentStatus = canViewProjectDirectorColumns() ? $('#filterBusinessDocumentStatus').val() : '';
                     const filterDeliveryStatus = $('#filterDeliveryStatus').val();
@@ -7217,6 +7303,9 @@ var projectTable;
         if (!isProjectTableInitStillValid(initId) || !projectTable || !$.fn.DataTable.isDataTable('#projectTable')) {
             return;
         }
+
+        // Drop what the previous run bound outside the table before binding again
+        teardownProjectListInitBindings();
 
         // Popup tasks khi hover cột ID hoặc name (neo theo nút, tự nằm trong màn hình)
         (function initProjectTasksPopup() {
@@ -7515,8 +7604,8 @@ var projectTable;
                 scheduleHide();
             });
 
-            $(document).on('mouseenter', '#projectTasksPopup', cancelHide);
-            $(document).on('mouseleave', '#projectTasksPopup', scheduleHide);
+            $(document).plInitOn('mouseenter', '#projectTasksPopup', cancelHide);
+            $(document).plInitOn('mouseleave', '#projectTasksPopup', scheduleHide);
         })();
 
         // Popup thông tin tòa nhà khi hover nút 建物詳細
@@ -7841,8 +7930,8 @@ var projectTable;
                 });
             });
 
-            $(document).on('mouseenter', '#projectParentPopup', cancelHide);
-            $(document).on('mouseleave', '#projectParentPopup', scheduleHide);
+            $(document).plInitOn('mouseenter', '#projectParentPopup', cancelHide);
+            $(document).plInitOn('mouseleave', '#projectParentPopup', scheduleHide);
         })();
 
         // Full note content popup on hover (1-line clamp) — non-interactive, never cover action buttons
@@ -8087,11 +8176,18 @@ var projectTable;
             }
             var table = document.getElementById('projectTable');
             if (!table || !window.bootstrap || !bootstrap.Tooltip) return;
-            var triggers = table.querySelectorAll('[data-bs-toggle="tooltip"]');
-            triggers.forEach(function(el) {
-                var t = bootstrap.Tooltip.getInstance(el);
-                if (t) t.dispose();
-                new bootstrap.Tooltip(el);
+            // One delegated tooltip on the table instead of one instance per cell per draw:
+            // Bootstrap creates the per-cell instance only when a cell is actually hovered.
+            if (!projectListTooltip || projectListTooltip._element !== table) {
+                if (projectListTooltip) {
+                    try { projectListTooltip.dispose(); } catch (e) { /* ignore */ }
+                }
+                projectListTooltip = new bootstrap.Tooltip(table, { selector: '[data-bs-toggle="tooltip"]' });
+            }
+            // A tooltip left open on a cell that this draw just replaced can never be hidden by it
+            document.querySelectorAll('body > .tooltip.show').forEach(function(tip) {
+                var owner = tip.id ? document.querySelector('[aria-describedby="' + tip.id + '"]') : null;
+                if (!owner) tip.remove();
             });
             if (!silentDraw) {
                 applyStickyScrollHead(table);
@@ -8139,7 +8235,7 @@ var projectTable;
                 }
                 return el.parentElement;
             }
-            $(document).on('keydown', function(e) {
+            $(document).plInitOn('keydown', function(e) {
                 if (e.key === ' ' || e.which === 32) {
                     var target = e.target || e.srcElement;
                     var tag = target.tagName.toLowerCase();
@@ -8152,13 +8248,13 @@ var projectTable;
                     spaceHeld = true;
                 }
             });
-            $(document).on('keyup', function(e) {
+            $(document).plInitOn('keyup', function(e) {
                 if (e.key === ' ' || e.which === 32) {
                     spaceHeld = false;
                     dragging = false;
                 }
             });
-            $('#projectTable').closest('.card-body').on('mousedown', function(e) {
+            $('#projectTable').closest('.card-body').plInitOn('mousedown', function(e) {
                 if (!spaceHeld || e.which !== 1) return;
                 var container = getScrollContainer();
                 if (!container) return;
@@ -8169,14 +8265,14 @@ var projectTable;
                 startScrollLeft = container.scrollLeft;
                 startScrollTop = container.scrollTop;
             });
-            $(document).on('mousemove', function(e) {
+            $(document).plInitOn('mousemove', function(e) {
                 if (!dragging) return;
                 var container = getScrollContainer();
                 if (!container) return;
                 container.scrollLeft = startScrollLeft + (startX - e.clientX);
                 container.scrollTop = startScrollTop + (startY - e.clientY);
             });
-            $(document).on('mouseup', function() {
+            $(document).plInitOn('mouseup', function() {
                 dragging = false;
             });
         })();
@@ -8184,35 +8280,38 @@ var projectTable;
         // Khôi phục filter từ localStorage khi load trang
         // Khi thay đổi filter thì lưu lại
         let timer2= null;
-        $('#projectFilterForm select, #projectFilterForm input').on('change keyup input', function() {
+        $('#projectFilterForm select, #projectFilterForm input').plInitOn('change keyup input', function(e) {
             if (suppressProjectListFilterReload) return;
+            // Enter still forces a refresh; any other event reloads only when a value changed
+            var forceReload = e && e.type === 'keyup' && e.key === 'Enter';
             clearTimeout(timer2);
             timer2 = setTimeout(function() {
                 if (suppressProjectListFilterReload) return;
+                if (!forceReload && getProjectFilterFormSignature() === lastRequestedFilterSignature) return;
                 saveFiltersToLocalStorage();
                 renderActiveFilters();
                 if (projectTable) reloadProjectTable(true);
             }, 500);
         });
-        $('#showInactiveSwitch').on('change', function() {
+        $('#showInactiveSwitch').plInitOn('change', function() {
             if (suppressProjectListFilterReload) return;
             saveFiltersToLocalStorage();
             renderActiveFilters();
             if (projectTable) reloadProjectTable(true);
         });
-        $('#keepFiltersWithKeywordSwitch').on('change', function() {
+        $('#keepFiltersWithKeywordSwitch').plInitOn('change', function() {
             if (suppressProjectListFilterReload) return;
             saveFiltersToLocalStorage();
             renderActiveFilters();
             if (projectTable) reloadProjectTable(true);
         });
-        $('#sortByStatusSwitch').on('change', function() {
+        $('#sortByStatusSwitch').plInitOn('change', function() {
             if (suppressProjectListFilterReload) return;
             saveFiltersToLocalStorage();
             renderActiveFilters();
             if (projectTable) reloadProjectTable(true);
         });
-        $('#projectListSortColumn, #projectListSortDir').on('change', function() {
+        $('#projectListSortColumn, #projectListSortDir').plInitOn('change', function() {
             if (suppressProjectListFilterReload) return;
             refreshProjectListSortFieldOptions();
             saveFiltersToLocalStorage();
@@ -8232,7 +8331,7 @@ var projectTable;
         // });
 
         // イベントハンドラー
-        $(document).on('click', '.item-edit', function() {
+        $(document).plInitOn('click', '.item-edit', function() {
             const id = $(this).data('id');
             console.log('Looking for project with id:', id);
             
@@ -8248,7 +8347,7 @@ var projectTable;
             }
         });
 
-        $(document).on('click', '.item-delete', function() {
+        $(document).plInitOn('click', '.item-delete', function() {
             const id = $(this).data('id');
             app.deleteProject(id);
         });
@@ -8372,7 +8471,7 @@ var projectTable;
                 .show();
         });
 
-        $(document).on('click.projectRowMenuHide', function() {
+        $(document).plInitOn('click.projectRowMenuHide', function() {
             $rowContextMenu.hide();
         });
         $rowContextMenu.on('click', '#copyProjectInfoRowBtn', async function(ev) {
@@ -8480,7 +8579,7 @@ var projectTable;
         };
 
         if (editParentConstructionSaveBtn) {
-            editParentConstructionSaveBtn.addEventListener('click', async function() {
+            plInitListen(editParentConstructionSaveBtn, 'click', async function() {
                 var projectId = editParentConstructionProjectIdInput ? String(editParentConstructionProjectIdInput.value || '').trim() : '';
                 var constructionNumber = editParentConstructionNumberInput ? String(editParentConstructionNumberInput.value || '').trim() : '';
                 if (!projectId) return;
@@ -8523,10 +8622,10 @@ var projectTable;
 
         var businessDocumentModalEl = document.getElementById('businessDocumentModal');
         if (businessDocumentModalEl) {
-            businessDocumentModalEl.addEventListener('shown.bs.modal', function() {
+            plInitListen(businessDocumentModalEl, 'shown.bs.modal', function() {
                 businessDocumentModalOpen = true;
             });
-            businessDocumentModalEl.addEventListener('hidden.bs.modal', function() {
+            plInitListen(businessDocumentModalEl, 'hidden.bs.modal', function() {
                 businessDocumentModalOpen = false;
                 if (window.app && typeof window.app.closeBusinessDocumentModal === 'function') {
                     window.app.closeBusinessDocumentModal();
@@ -8538,7 +8637,7 @@ var projectTable;
         }
 
         // Hide context menu on click elsewhere
-        $(document).on('click', function() {
+        $(document).plInitOn('click', function() {
             $noteContextMenu.hide();
             $rowContextMenu.hide();
         });
@@ -8659,10 +8758,10 @@ var projectTable;
                         };
                     }
                 }
-            }).on('select2:select', function(e) {
+            }).plInitOn('select2:select', function(e) {
                 console.log('Category selected:', e.params.data);
                 app.newProject.category_id = e.params.data.id;
-            }).on('select2:unselect', function() {
+            }).plInitOn('select2:unselect', function() {
                 console.log('Category unselected');
                 app.newProject.category_id = '';
             });
@@ -8774,10 +8873,10 @@ var projectTable;
                         };
                     }
                 }
-            }).on('select2:select', function(e) {
+            }).plInitOn('select2:select', function(e) {
                 console.log('Company selected:', e.params.data);
                 app.newProject.company_name = e.params.data.id;
-            }).on('select2:unselect', function() {
+            }).plInitOn('select2:unselect', function() {
                 console.log('Company unselected');
                 app.newProject.company_name = '';
             });
@@ -8840,10 +8939,10 @@ var projectTable;
                         };
                     }
                 }
-            }).on('select2:select', function(e) {
+            }).plInitOn('select2:select', function(e) {
                 console.log('Customer selected:', e.params.data);
                 app.newProject.customer_id = e.params.data.id;
-            }).on('select2:unselect', function() {
+            }).plInitOn('select2:unselect', function() {
                 console.log('Customer unselected');
                 app.newProject.customer_id = '';
             });
@@ -8862,11 +8961,11 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterDateField, #filterDateFrom, #filterDateTo, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch, #keepFiltersWithKeywordSwitch').on('change input', function() {
+        $('#filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterDateField, #filterDateFrom, #filterDateTo, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch, #keepFiltersWithKeywordSwitch').plInitOn('change input', function() {
            renderActiveFilters();
         });
         let timer = null;
-        $('#filterKeyword').on('input', function() {
+        $('#filterKeyword').plInitOn('input', function() {
             clearTimeout(timer);
             timer = setTimeout(function() {
                 renderActiveFilters();
@@ -8875,7 +8974,7 @@ var projectTable;
         initFilterCompanySelect2();
         initProjectListFilterResetPrefsOffcanvas();
 
-        $('#filterReset').on('click', function() {
+        $('#filterReset').plInitOn('click', function() {
             resetProjectListFilters();
         });
 

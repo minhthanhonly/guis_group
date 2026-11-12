@@ -465,15 +465,29 @@ const TaskApp = createApp({
         });
         
         // Auto-refresh task list every 10 seconds if no task is in edit mode
-        setInterval(() => {
+        // A hidden tab does not poll, and a slow response is not overlapped by the next tick.
+        let autoRefreshBusy = false;
+        let lastAutoRefreshAt = Date.now();
+        const autoRefreshTasks = async () => {
+            if (document.hidden || autoRefreshBusy) return;
             // Check if any task is in edit mode
             const hasEditMode = this.inlineTasks.length > 0 || this.editingInlineId !== null;
-            
+
             // Only refresh if no task is being edited
             if (!hasEditMode) {
-                this.loadTasks();
+                autoRefreshBusy = true;
+                lastAutoRefreshAt = Date.now();
+                try {
+                    await this.loadTasks();
+                } finally {
+                    autoRefreshBusy = false;
+                }
             }
-        }, 10000); // 10 seconds
+        };
+        setInterval(autoRefreshTasks, 10000); // 10 seconds
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && Date.now() - lastAutoRefreshAt >= 10000) autoRefreshTasks();
+        });
         
         // Warn user when navigating away if in edit mode
         window.addEventListener('beforeunload', (e) => {
@@ -730,11 +744,19 @@ const TaskApp = createApp({
                     return posA - posB;
                 });
                 
-                this.tasks = tasks;
-                this.unreadComments = {};
+                // Most refreshes return what is already on screen. Replacing the list anyway
+                // re-renders every row and rebuilds Sortable, tooltips and date pickers.
+                const tasksChanged = JSON.stringify(tasks) !== JSON.stringify(this.tasks);
+                if (tasksChanged) {
+                    this.tasks = tasks;
+                }
+                const unreadComments = {};
                 tasks.forEach(task => {
-                    this.unreadComments[task.id] = task.unread_count || 0;
+                    unreadComments[task.id] = task.unread_count || 0;
                 });
+                if (JSON.stringify(unreadComments) !== JSON.stringify(this.unreadComments)) {
+                    this.unreadComments = unreadComments;
+                }
                 // Cho phép AI lấy dữ liệu task hiện tại đang hiển thị
                 if (typeof window !== 'undefined') {
                     window.__chatPageContext = window.__chatPageContext || {};
@@ -742,9 +764,11 @@ const TaskApp = createApp({
                     window.__chatPageContext.page_tasks = this.tasks;
                 }
                 // Reinitialize sortable after tasks are loaded
-                this.$nextTick(() => {
-                    this.initSortable();
-                });
+                if (tasksChanged) {
+                    this.$nextTick(() => {
+                        this.initSortable();
+                    });
+                }
 
                 await this.refreshNavbarCounts();
 
