@@ -266,6 +266,77 @@ var projectTable;
         return JSON.stringify(values);
     }
 
+    /**
+     * Refresh one project's row after a change that touches only that project (a note
+     * saved, deleted or pinned) instead of re-querying and redrawing the whole page.
+     * Asks the list API for just that project with the table's current parameters, swaps
+     * the row data and re-runs the cell/row callbacks DataTables only runs on creation.
+     * Falls back to a full reload whenever the row cannot be refreshed in place.
+     */
+    async function refreshProjectRow(projectId) {
+        var fallback = function() { reloadProjectTable(false); };
+        var id = parseInt(projectId, 10);
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable') || !(id > 0)) {
+            return fallback();
+        }
+        var rowIndex = null;
+        projectTable.rows().every(function() {
+            var d = this.data();
+            if (rowIndex === null && d && parseInt(d.id, 10) === id) rowIndex = this.index();
+        });
+        var lastParams = projectTable.ajax.params();
+        if (rowIndex === null || !lastParams) {
+            return fallback();
+        }
+        var generation = projectTableInitId;
+        try {
+            var params = Object.assign({}, lastParams, {
+                // By id only: the row is already listed, it must not drop out because a
+                // keyword or filter no longer matches a detail of it
+                filterProjectId: id,
+                filterKeyword: '',
+                keepFiltersWithKeyword: 0,
+                start: 0,
+                length: 1
+            });
+            var response = await axios.get('/api/index.php', { params: params });
+            var rows = response && response.data && Array.isArray(response.data.data) ? response.data.data : [];
+            var fresh = rows.length === 1 && parseInt(rows[0].id, 10) === id ? rows[0] : null;
+            // The table may have been rebuilt or reloaded while the request was running
+            var row = fresh && generation === projectTableInitId && projectTable ? projectTable.row(rowIndex) : null;
+            var current = row && row.data();
+            if (!fresh || !current || parseInt(current.id, 10) !== id) {
+                return fallback();
+            }
+            row.data(fresh);
+            var tr = row.node();
+            var settings = projectTable.settings()[0];
+            (settings.aoColumns || []).forEach(function(column, colIndex) {
+                if (typeof column.fnCreatedCell !== 'function') return;
+                var cell = projectTable.cell(rowIndex, colIndex);
+                var td = cell.node();
+                if (td) column.fnCreatedCell.call(projectTable, td, cell.data(), fresh, rowIndex, colIndex);
+            });
+            var init = projectTable.init();
+            if (tr && init && typeof init.createdRow === 'function') {
+                // Status colour classes are added by createdRow and never removed by it
+                tr.className = tr.className.split(/\s+/).filter(function(name) {
+                    return name.indexOf('table-row-status-') !== 0;
+                }).join(' ');
+                init.createdRow.call(projectTable, tr, fresh, rowIndex);
+            }
+            if (tr && typeof window.applyDataI18n === 'function') {
+                window.applyDataI18n(tr);
+            }
+        } catch (e) {
+            console.error('Row refresh failed, reloading the table', e);
+            fallback();
+        }
+    }
+
+    // Lazy-loaded list modules (quick edit, ...) live outside this closure
+    window.__refreshProjectListRow = refreshProjectRow;
+
     function reloadProjectTable(resetPaging, options) {
         options = options || {};
         if (businessDocumentModalOpen && options.allowWhileBdModalOpen !== true) {
@@ -1327,12 +1398,16 @@ var projectTable;
     function snapshotProjectListVisibleColumnWidths(table) {
         if (!table) return;
         try {
+            // Measure every column first, then write. Alternating a measurement with the
+            // style writes of the previous column forced one full table layout per column.
+            var measured = [];
             table.columns(':visible').every(function() {
                 var idx = this.index();
                 var w = getProjectTableColumnWidthPx(table, idx);
-                if (w) {
-                    setProjectTableColumnWidthPx(table, idx, w, { skipTableWidthSync: true });
-                }
+                if (w) measured.push([idx, w]);
+            });
+            measured.forEach(function(entry) {
+                setProjectTableColumnWidthPx(table, entry[0], entry[1], { skipTableWidthSync: true });
             });
             syncProjectListScrollTableWidth(table);
         } catch (e) { /* ignore */ }
@@ -1401,6 +1476,17 @@ var projectTable;
         $('body').removeClass('pl-col-resizing');
     }
 
+    function applyPendingProjectListColumnResize(drag) {
+        if (!drag || !drag.table || drag.pendingWidth == null) return;
+        var width = drag.pendingWidth;
+        drag.pendingWidth = null;
+        var tableWidthPx = Math.max(1, (drag.startTableWidth || 0) + (width - drag.startWidth));
+        var newW = setProjectTableColumnWidthPx(drag.table, drag.colIdx, width, {
+            tableWidthPx: tableWidthPx
+        });
+        if (newW) drag.currentWidth = newW;
+    }
+
     function bindProjectListColumnResizeDocumentEvents() {
         if (window.__projectListColumnResizeDocBound) return;
         window.__projectListColumnResizeDocBound = true;
@@ -1411,15 +1497,26 @@ var projectTable;
             var rawW = drag.startWidth + (e.pageX - drag.startX);
             var clampedW = Math.max(PROJECT_LIST_COL_MIN_WIDTH, Math.min(PROJECT_LIST_COL_MAX_WIDTH, parseInt(rawW, 10)));
             if (isNaN(clampedW)) return;
-            var tableWidthPx = Math.max(1, (drag.startTableWidth || 0) + (clampedW - drag.startWidth));
-            var newW = setProjectTableColumnWidthPx(drag.table, drag.colIdx, clampedW, {
-                tableWidthPx: tableWidthPx
-            });
-            if (newW) drag.currentWidth = newW;
+            // The width is written to the header, the <col>s and every cell of the column.
+            // A mouse can report several moves per frame, so keep only the latest width and
+            // apply it once per animation frame.
+            drag.pendingWidth = clampedW;
+            if (!drag.frameId) {
+                drag.frameId = requestAnimationFrame(function() {
+                    drag.frameId = 0;
+                    applyPendingProjectListColumnResize(drag);
+                });
+            }
         }, { passive: false });
         document.addEventListener('mouseup', function() {
             var drag = projectListColumnResizeDrag;
             if (!drag) return;
+            // Apply a width that is still waiting for its frame before saving
+            if (drag.frameId) {
+                cancelAnimationFrame(drag.frameId);
+                drag.frameId = 0;
+            }
+            applyPendingProjectListColumnResize(drag);
             $('body').removeClass('pl-col-resizing');
             var finalW = drag.currentWidth || getProjectTableColumnWidthPx(drag.table, drag.colIdx);
             if (finalW && drag.colName) {
@@ -4343,7 +4440,11 @@ var projectTable;
             formData.append('id', noteId);
             var response = await axios.post('/api/index.php?model=project&method=' + method, formData);
             if (response.data && response.data.status === 'success') {
-                if (projectTable) reloadProjectTable(false);
+                if (projectTable) {
+                    // Only this project's row changed
+                    var pinnedRow = projectTable.row($item.closest('tr')).data();
+                    refreshProjectRow(pinnedRow && pinnedRow.id);
+                }
             } else {
                 showProjectListError('ピンの更新に失敗しました', response.data);
             }
@@ -10435,7 +10536,8 @@ var projectTable;
                             showMessage('メモが保存されました');
                             this.closeNoteModal();
                             if (projectTable) {
-                                reloadProjectTable(false);
+                                // Only this project's row changed
+                                refreshProjectRow(this.currentNoteProjectId);
                             }
                         } else {
                             showProjectListError('メモの保存に失敗しました', response.data);
@@ -10458,7 +10560,8 @@ var projectTable;
                             showMessage('メモが削除されました');
                             this.closeNoteModal();
                             if (projectTable) {
-                                reloadProjectTable(false);
+                                // Only this project's row changed
+                                refreshProjectRow(this.currentNoteProjectId);
                             }
                         } else {
                             showProjectListError('メモの削除に失敗しました', response.data);

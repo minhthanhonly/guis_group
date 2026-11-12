@@ -3977,8 +3977,11 @@ const vueApp = createApp({
                             ? isCustomFieldCompositeReceivedChecked(receivedSaved.value)
                             : false,
                         memoLabel: memoLabel,
+                        // The memo is free text (see the note on text fields below)
                         memoValue: selected && memoSaved && memoSaved.value != null
-                            ? String(memoSaved.value)
+                            ? (String(memoSaved.value).indexOf('&') !== -1
+                                ? this.decodeHtmlEntities(String(memoSaved.value))
+                                : String(memoSaved.value))
                             : ''
                     });
                     return;
@@ -4007,6 +4010,14 @@ const vueApp = createApp({
                     one_row: oneRow,
                     value: savedField ? (savedField.value || '') : ''
                 };
+                // Free text arrives entity-encoded from the API and is only shown through
+                // text bindings and inputs: give it its real characters (it's -> not it&#039;s).
+                // Choice types are left alone: their value is matched against the options,
+                // which are encoded the same way.
+                if ((!f.type || f.type === 'text' || f.type === 'textarea')
+                    && typeof row.value === 'string' && row.value.indexOf('&') !== -1) {
+                    row.value = this.decodeHtmlEntities(row.value);
+                }
                 if (f.type === 'datetime' && savedField && savedField.value) {
                     row._serverDatetime = savedField.value;
                 }

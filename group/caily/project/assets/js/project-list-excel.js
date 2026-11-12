@@ -623,65 +623,88 @@ function exportProjectListToExcelAfterJszip() {
         return;
     }
 
-    isProjectListExporting = true;
-    if (window.app) window.app.loading = true;
-
     var pageInfo = dt.page.info();
     var oldPage = pageInfo.page || 0;
     var exportLength = pageInfo.recordsDisplay || pageInfo.recordsTotal || dt.page.len();
-    if (!exportLength || exportLength < 1) {
-        isProjectListExporting = false;
-        if (window.app) window.app.loading = false;
+    var requestParams = dt.ajax.params();
+    if (!exportLength || exportLength < 1 || !requestParams) {
         if (typeof showMessage === 'function') {
             showProjectListError('出力するデータがありません。');
         }
         return;
     }
 
+    isProjectListExporting = true;
+    if (window.app) window.app.loading = true;
+
     function finishExport() {
         isProjectListExporting = false;
         if (window.app) window.app.loading = false;
     }
 
+    function failExport(err) {
+        if (err) console.error('Excel export failed:', err);
+        if (typeof showMessage === 'function') {
+            showProjectListError('Excel出力に失敗しました。', err);
+        }
+    }
+
     // Back to the page the user was on. Paging goes through the API so the pager and the
-    // rows agree (overriding only the request's start left page-N rows under "page 1").
+    // rows agree; this draw also rebuilds the row nodes for the data it loads.
     function restorePagination() {
         dt.one('draw', finishExport);
         dt.page(oldPage).draw('page');
     }
 
-    // Exactly one of the two handlers below runs; whichever does removes the other, so a
-    // failed export cannot leave a draw handler armed that downloads on the next reload.
-    function onExportDraw() {
-        dt.off('dt-error', onExportError);
+    // The export needs every filtered row in the table, but only as data: the Excel button
+    // reads cell values through the column renderers, never from the DOM. So the rows are
+    // fetched separately and put into the table WITHOUT drawing it. Drawing thousands of
+    // rows (the old way: reload with length = all) froze the page for the whole export.
+    $.ajax({
+        url: '/api/index.php',
+        type: 'GET',
+        dataType: 'json',
+        data: $.extend({}, requestParams, { start: 0, length: exportLength })
+    }).done(function(json) {
+        var rows = json && Array.isArray(json.data) ? json.data : null;
+        if (!rows || !rows.length) {
+            failExport(rows ? null : json);
+            finishExport();
+            return;
+        }
+
+        dt.clear();
+        dt.rows.add(rows);
+
+        // The button's action runs asynchronously (Buttons defers it and then builds the
+        // file), so the table must keep the export rows until it reports it has finished.
+        // Restoring the page straight after trigger() exported only the current page
+        // whenever the reload came back first.
+        var restored = false;
+        var fallbackTimer = null;
+        function onProcessing(e, processing) {
+            if (!processing) afterExport();
+        }
+        function afterExport() {
+            if (restored) return;
+            restored = true;
+            clearTimeout(fallbackTimer);
+            dt.off('buttons-processing', onProcessing);
+            restorePagination();
+        }
+        dt.on('buttons-processing', onProcessing);
+        fallbackTimer = setTimeout(afterExport, 120000);
+
         try {
             dt.button(0).trigger();
         } catch (err) {
-            console.error('Excel export failed:', err);
-            if (typeof showMessage === 'function') {
-                showProjectListError('Excel出力に失敗しました。', err);
-            }
+            failExport(err);
+            afterExport();
         }
-        restorePagination();
-    }
-
-    // DataTables 2 reports ajax / JSON failures as "dt-error" (1.x used "error")
-    function onExportError() {
-        dt.off('draw', onExportDraw);
+    }).fail(function(xhr) {
+        failExport(xhr && xhr.statusText ? xhr.statusText : null);
         finishExport();
-        if (typeof showMessage === 'function') {
-            showProjectListError('Excel出力に失敗しました。');
-        }
-    }
-
-    dt.one('preXhr', function(e, settings, data) {
-        data.start = 0;
-        data.length = exportLength;
     });
-    dt.one('dt-error', onExportError);
-    dt.one('draw', onExportDraw);
-
-    dt.ajax.reload();
 }
 
     window.exportProjectListToExcel = exportProjectListToExcel;
