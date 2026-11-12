@@ -1,0 +1,28 @@
+# User-uploaded files: never execute anything here, never render it as a page.
+# (Apache only. On nginx add the equivalent rules to the server block.)
+
+Options -ExecCGI -Indexes
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .pht .phar .cgi .pl .py .sh
+RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .pht .phar
+
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php5.c>
+    php_flag engine off
+</IfModule>
+
+<FilesMatch "(?i)\.(php\d?|phtml|pht|phps|phar|cgi|pl|py|sh|asp|aspx|jsp)(\.|$)">
+    Require all denied
+</FilesMatch>
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    <FilesMatch "(?i)\.(html?|xhtml|svg|xml|js|mjs)$">
+        Header set Content-Disposition "attachment"
+        Header set Content-Security-Policy "default-src 'none'; sandbox"
+    </FilesMatch>
+</IfModule>
