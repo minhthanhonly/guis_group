@@ -1235,7 +1235,6 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <?php $childEnergyKey = 'create'; include __DIR__ . '/partials/child-project-energy-fields.php'; ?>
                             <div class="col-12">
                                 <div class="mb-2">
                                     <div class="form-check">
@@ -1433,6 +1432,7 @@ $view->heading('建物詳細');
                                     <!-- Custom fields rendered by JS when department is selected -->
                                 </div>
                             </div>
+                            <?php $childEnergyKey = 'create'; include __DIR__ . '/partials/child-project-energy-fields.php'; ?>
                             <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label"><span data-i18n="説明">説明</span></label>
@@ -1501,7 +1501,6 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
-                            <?php $childEnergyKey = 'edit'; include __DIR__ . '/partials/child-project-energy-fields.php'; ?>
                             <div class="col-12">
                                 <div class="mb-2">
                                     <div class="form-check">
@@ -1695,6 +1694,7 @@ $view->heading('建物詳細');
                                     <!-- Custom fields rendered by JS when department is selected -->
                                 </div>
                             </div>
+                            <?php $childEnergyKey = 'edit'; include __DIR__ . '/partials/child-project-energy-fields.php'; ?>
                              <div class="col-12">
                                 <div class="mb-3">
                                     <label class="form-label"><span data-i18n="説明">説明</span></label>
