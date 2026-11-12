@@ -958,7 +958,8 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     transform: translateY(-2px);
 }
 :root {
-	--bs-root-font-size: clamp(12px, 1.1vw, 15px) !important;
+	/* --app-font-zoom is set on <html> by assets/js/font-zoom.js (site-wide font zoom) */
+	--bs-root-font-size: calc(clamp(12px, 1.1vw, 15px) * var(--app-font-zoom, 1)) !important;
 }
 
 .prevent-click{

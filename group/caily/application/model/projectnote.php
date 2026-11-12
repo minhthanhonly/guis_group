@@ -177,6 +177,12 @@ class ProjectNote extends ApplicationModel {
         return $label;
     }
 
+    /** Note content is Quill HTML that every viewer's browser renders: strip anything executable before saving. */
+    private function cleanNoteContent($content) {
+        require_once DIR_LIBRARY . 'HtmlSanitizer.php';
+        return HtmlSanitizer::clean($content);
+    }
+
     function create($params = null) {
         $projectId = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
         $needsConfirmation = isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0;
@@ -184,7 +190,7 @@ class ProjectNote extends ApplicationModel {
             'project_id' => $projectId,
             'user_id' => $_SESSION['userid'],
             'title' => $this->defaultNoteTitle(),
-            'content' => isset($_POST['content']) ? $_POST['content'] : '',
+            'content' => $this->cleanNoteContent(isset($_POST['content']) ? $_POST['content'] : ''),
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
             'needs_confirmation' => $needsConfirmation,
             'display_column' => isset($_POST['display_column']) ? trim((string)$_POST['display_column']) : '',
@@ -227,7 +233,7 @@ class ProjectNote extends ApplicationModel {
         }
         
         $data = array(
-            'content' => isset($_POST['content']) ? $_POST['content'] : '',
+            'content' => $this->cleanNoteContent(isset($_POST['content']) ? $_POST['content'] : ''),
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
             'needs_confirmation' => isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0,
             'display_column' => isset($_POST['display_column']) ? trim((string)$_POST['display_column']) : '',

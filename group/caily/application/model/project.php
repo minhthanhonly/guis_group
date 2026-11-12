@@ -2156,6 +2156,112 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * Whether the current user is involved in the project: any project_members row, or a
+     * 業務担当 (project_director*) flag on the project's department. Mirrors is_member of
+     * Task::resolveProjectTaskPermissions for users that canUserEditProject() does not cover.
+     * Returns the user's user_department row for the project's department (or true when
+     * involved without one), false when not involved.
+     */
+    private function getCurrentUserProjectInvolvement($project_id) {
+        $project_id = intval($project_id);
+        $uid = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        $userid = isset($_SESSION['userid']) ? $this->escape($_SESSION['userid']) : '';
+        if ($project_id <= 0 || (!$uid && $userid === '')) {
+            return false;
+        }
+        $project = $this->fetchOne("SELECT department_id FROM " . $this->table . " WHERE id = " . $project_id);
+        if (!$project) {
+            return false;
+        }
+        $rule = null;
+        if ($userid !== '' && intval($project['department_id']) > 0) {
+            $rule = $this->fetchOne(
+                "SELECT * FROM " . DB_PREFIX . "user_department WHERE department_id = " . intval($project['department_id']) .
+                " AND userid = '" . $userid . "' LIMIT 1"
+            );
+        }
+        $isDirector = $rule && (
+            ($rule['project_director'] ?? 0) == 1 || ($rule['project_director_stat'] ?? 0) == 1
+            || ($rule['project_director_view'] ?? 0) == 1 || ($rule['project_director_edit'] ?? 0) == 1
+        );
+        $member = $this->fetchOne(
+            "SELECT COUNT(*) as c FROM " . DB_PREFIX . "project_members WHERE project_id = " . $project_id . " AND user_id = " . $uid
+        );
+        $isMember = $member && (int)$member['c'] > 0;
+        if (!$isMember && !$isDirector) {
+            return false;
+        }
+        return $rule ? $rule : true;
+    }
+
+    /**
+     * Server-side twin of the UI's canEditProject (status / priority / tags / dates / teams):
+     * canUserEditProject(), or an involved user whose department rule has project_edit = 1.
+     */
+    private function canUserQuickEditProject($project_id) {
+        if ($this->canUserEditProject($project_id)) {
+            return true;
+        }
+        $rule = $this->getCurrentUserProjectInvolvement($project_id);
+        return is_array($rule) && isset($rule['project_edit']) && (int)$rule['project_edit'] === 1;
+    }
+
+    /** Server-side twin of the UI's canUpdateProgress: anyone involved in the project. */
+    private function canUserUpdateProjectProgress($project_id) {
+        return $this->canUserEditProject($project_id) || $this->getCurrentUserProjectInvolvement($project_id) !== false;
+    }
+
+    /**
+     * May the current user add to the project (upload / remove attachments): editors, people
+     * involved in it, and anyone belonging to the project's department.
+     */
+    private function canUserContributeToProject($project_id) {
+        $project_id = intval($project_id);
+        if ($this->canUserEditProject($project_id) || $this->getCurrentUserProjectInvolvement($project_id) !== false) {
+            return true;
+        }
+        $userid = isset($_SESSION['userid']) ? $this->escape($_SESSION['userid']) : '';
+        if ($project_id <= 0 || $userid === '') {
+            return false;
+        }
+        $row = $this->fetchOne(
+            "SELECT COUNT(*) as c FROM " . $this->table . " p JOIN " . DB_PREFIX . "user_department ud " .
+            "ON ud.department_id = p.department_id WHERE p.id = " . $project_id . " AND ud.userid = '" . $userid . "'"
+        );
+        return $row && (int)$row['c'] > 0;
+    }
+
+    /**
+     * Uploaded files land in a web-served directory under their own name, so refuse names the
+     * web server could execute or that reconfigure it. Every dot-separated part is checked
+     * because Apache also runs "x.php.jpg" under some handler configurations.
+     */
+    private function isSafeUploadFileName($name) {
+        $name = trim((string)$name);
+        if ($name === '' || $name[0] === '.' || strpos($name, "\0") !== false || preg_match('#[/\\\\]#', $name)) {
+            return false;
+        }
+        $blocked = array(
+            'php', 'php3', 'php4', 'php5', 'php7', 'php8', 'phtml', 'pht', 'phps', 'phar', 'inc',
+            'cgi', 'pl', 'py', 'rb', 'sh', 'bash', 'asp', 'aspx', 'ashx', 'jsp', 'jspx', 'cfm',
+            'shtml', 'shtm', 'htaccess', 'htpasswd', 'ini',
+        );
+        $parts = explode('.', strtolower($name));
+        array_shift($parts);
+        foreach ($parts as $part) {
+            if (in_array(trim($part), $blocked, true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Response for a write the current user may not perform (api/index.php turns http_status into the HTTP code). */
+    private function forbiddenResponse() {
+        return ['status' => 'error', 'success' => false, 'error' => 'Forbidden', 'message' => 'Forbidden', 'http_status' => 403];
+    }
+
+    /**
      * Returns true if the current user may edit sensitive project fields (amount, name, start_date, end_date, caily_nouki, guis_nouki, tantou).
      * Only administrator or department project_manager (user_department.project_manager = 1); project member manager is not enough.
      *
@@ -2964,7 +3070,8 @@ class Project extends ApplicationModel {
             // Get data from $_POST if no params provided
         // Validate and sanitize input to ensure UTF-8 MB4 compatibility
         $name = isset($_POST['name']) ? $this->validateUTF8MB4($_POST['name']) : '';
-        $description = isset($_POST['description']) ? $this->validateUTF8MB4($_POST['description']) : '';
+        require_once DIR_LIBRARY . 'HtmlSanitizer.php';
+        $description = isset($_POST['description']) ? HtmlSanitizer::clean($this->validateUTF8MB4($_POST['description'])) : '';
         
         $data = array(
             'parent_project_id' => isset($_POST['parent_project_id']) ? intval($_POST['parent_project_id']) : null,
@@ -3312,7 +3419,8 @@ class Project extends ApplicationModel {
             $data['name'] = $this->validateUTF8MB4($_POST['name']);
         }
         if (array_key_exists('description', $_POST)) {
-            $data['description'] = $this->validateUTF8MB4($_POST['description']);
+            require_once DIR_LIBRARY . 'HtmlSanitizer.php';
+            $data['description'] = HtmlSanitizer::clean($this->validateUTF8MB4($_POST['description']));
         }
         if (array_key_exists('building_branch', $_POST)) {
             $data['building_branch'] = $_POST['building_branch'];
@@ -3958,13 +4066,18 @@ class Project extends ApplicationModel {
 
     function getMembers($params = null) {
         // Handle both direct project_id parameter and params array from API
+        $role = '';
         if (is_array($params)) {
             $project_id = isset($params['project_id']) ? $params['project_id'] : 0;
             $role = isset($params['role']) ? $params['role'] : '';
         } else {
             $project_id = $params;
         }
-        
+        // role comes straight from the request and is interpolated into the SQL below
+        if (!in_array($role, array('manager', 'member', 'viewer'), true)) {
+            $role = '';
+        }
+
         $query = sprintf(
             "SELECT pm.*, u.realname as user_name, user_image, u.userid, u.user_ruby
             FROM " . DB_PREFIX . "project_members pm 
@@ -4064,10 +4177,26 @@ class Project extends ApplicationModel {
                 'message' => 'Project ID and User ID are required'
             ];
         }
-        // Phase 4.3 – Permission check for project member/team assignment
-        // if (!$this->canUserEditProject($project_id)) {
-        //     return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
-        // }
+        // Editors may add anyone or change roles. Everyone else may only add themselves as a
+        // plain member (the 参加 button); the same-department rule below still applies.
+        // Self-join as 管理 exists only for 省エネ departments (their UI has no plain members),
+        // and only for a first join: an existing member cannot promote themselves.
+        $isSelfJoin = isset($_SESSION['id']) && intval($_SESSION['id']) === $user_id;
+        if ($isSelfJoin && $role === 'manager') {
+            $joinInfo = $this->fetchOne(
+                "SELECT d.name AS department_name, " .
+                "(SELECT COUNT(*) FROM " . DB_PREFIX . "project_members pm WHERE pm.project_id = p.id AND pm.user_id = " . $user_id . ") AS already_member " .
+                "FROM " . DB_PREFIX . "projects p LEFT JOIN " . DB_PREFIX . "departments d ON d.id = p.department_id " .
+                "WHERE p.id = " . $project_id
+            );
+            $isEnergyDepartment = $joinInfo && strpos((string)$joinInfo['department_name'], '省エネ') !== false;
+            if (!$isEnergyDepartment || (int)$joinInfo['already_member'] > 0) {
+                $isSelfJoin = false;
+            }
+        }
+        if (!$isSelfJoin && !$this->canUserEditProject($project_id)) {
+            return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        }
         
         // Get project to check department
         $project = $this->fetchOne("SELECT department_id FROM " . DB_PREFIX . "projects WHERE id = " . intval($project_id));
@@ -4377,6 +4506,9 @@ class Project extends ApplicationModel {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         $progress = isset($_POST['progress']) ? intval($_POST['progress']) : 0;
         if (!$id) return false;
+        if (!$this->canUserUpdateProjectProgress($id)) {
+            return $this->forbiddenResponse();
+        }
 
         // Lấy giá trị cũ để ghi log
         $old = $this->getById($id);
@@ -4408,6 +4540,9 @@ class Project extends ApplicationModel {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         $tags = isset($_POST['tags']) ? $_POST['tags'] : '';
         if (!$id) return false;
+        if (!$this->canUserQuickEditProject($id)) {
+            return $this->forbiddenResponse();
+        }
 
         $data = array(
             'tags' => $tags,
@@ -4588,7 +4723,10 @@ class Project extends ApplicationModel {
         if (!$id || !$status) {
             return false;
         }
-        
+        if (!$this->canUserQuickEditProject($id)) {
+            return $this->forbiddenResponse();
+        }
+
         $old = $this->getById($id);
         $data = array(
             'status' => $status,
@@ -4654,6 +4792,9 @@ class Project extends ApplicationModel {
             'status' => 'error',
             'error' => 'No project id or start date or end date'
         ];
+        if (!$this->canUserQuickEditProject($id)) {
+            return $this->forbiddenResponse();
+        }
         $old = $this->getById($id);
         $data = array(
             'start_date' => $start_date,
@@ -4676,6 +4817,9 @@ class Project extends ApplicationModel {
         
         if (!$id || !$priority) {
             return false;
+        }
+        if (!$this->canUserQuickEditProject($id)) {
+            return $this->forbiddenResponse();
         }
         
         $old = $this->getById($id);
@@ -7085,6 +7229,9 @@ class Project extends ApplicationModel {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         $teams = isset($_POST['teams']) ? $_POST['teams'] : '';
         if (!$id) return ['success' => false, 'error' => 'No project id'];
+        if (!$this->canUserQuickEditProject($id)) {
+            return $this->forbiddenResponse();
+        }
         $data = array(
             'teams' => $teams,
             'updated_at' => date('Y-m-d H:i:s')
@@ -8194,12 +8341,20 @@ class Project extends ApplicationModel {
             return ['success' => false, 'error' => 'Project ID is required'];
         }
         
+        if (!$this->canUserContributeToProject($project_id)) {
+            return $this->forbiddenResponse();
+        }
+
         if (!isset($_FILES['image']) || $_FILES['image']['error'] !== UPLOAD_ERR_OK) {
             return ['success' => false, 'error' => 'No file uploaded or upload error'];
         }
-        
+
         $file = $_FILES['image'];
-        $originalName = $file['name'];
+        // The name becomes a file inside the web-served upload directory.
+        $originalName = basename(str_replace('\\', '/', (string)$file['name']));
+        if (!$this->isSafeUploadFileName($originalName)) {
+            return ['success' => false, 'error' => 'このファイル形式はアップロードできません。'];
+        }
         $fileSize = $file['size'];
         $tmpName = $file['tmp_name'];
         
@@ -8318,18 +8473,27 @@ class Project extends ApplicationModel {
         
         // Get file info
         $fileQuery = sprintf(
-            "SELECT file_path FROM " . DB_PREFIX . "project_attachments WHERE id = %d",
+            "SELECT file_path, project_id, uploaded_by FROM " . DB_PREFIX . "project_attachments WHERE id = %d",
             $id
         );
         $file = $this->fetchOne($fileQuery);
-        
+
         if (!$file) {
             return ['status' => 'error', 'message' => 'Attachment not found'];
         }
-        
-        // Delete file from filesystem
-        if (file_exists($file['file_path'])) {
-            unlink($file['file_path']);
+
+        $isUploader = isset($_SESSION['userid']) && (string)$file['uploaded_by'] === (string)$_SESSION['userid'];
+        if (!$isUploader && !$this->canUserContributeToProject($file['project_id'])) {
+            return $this->forbiddenResponse();
+        }
+
+        // Delete file from filesystem. file_path is a URL path (ROOT . 'assets/upload/...'),
+        // so resolve it the way serveSecureFile() does and never leave the upload directory.
+        $uploadRoot = realpath('../assets/upload');
+        $realFilePath = realpath('..' . $file['file_path']);
+        if ($uploadRoot && $realFilePath && is_file($realFilePath)
+            && strpos($realFilePath, $uploadRoot . DIRECTORY_SEPARATOR) === 0) {
+            unlink($realFilePath);
         }
         
         // Delete from database
@@ -8923,7 +9087,13 @@ class Project extends ApplicationModel {
         $fileName = $file['original_name'];
         $fileSize = filesize($filePath);
         $mimeType = $file['mime_type'] ?: 'application/octet-stream';
-        
+        // mime_type was supplied by the uploader. Anything a browser would run as a page or
+        // script (HTML, SVG, XML, JS) is sent as plain text so it cannot execute on this origin.
+        if (preg_match('#html|svg|xml|javascript|ecmascript#i', $mimeType)) {
+            $mimeType = 'text/plain';
+        }
+        header('X-Content-Type-Options: nosniff');
+
         // For text-based content, ensure UTF-8 charset so Japanese/Vietnamese display correctly
         $contentType = $mimeType;
         if (
@@ -8993,7 +9163,7 @@ class Project extends ApplicationModel {
             return ['success' => false, 'message' => 'Comment not found'];
         }
         // Chỉ cho phép sửa nếu là chủ comment hoặc admin
-        if ($_SESSION['authority'] != 'administrator' && $comment['user_id'] != $user_id) {
+        if ($_SESSION['authority'] != 'administrator' && !in_array((string)$comment['user_id'], array((string)($_SESSION['id'] ?? '-'), (string)($_SESSION['userid'] ?? '-')), true)) {
             $this->table = DB_PREFIX . 'projects';
             return ['success' => false, 'message' => 'Permission denied'];
         }
@@ -9025,7 +9195,7 @@ class Project extends ApplicationModel {
             return ['success' => false, 'message' => 'Comment not found'];
         }
         // Chỉ cho phép xóa nếu là chủ comment hoặc admin
-        if ($_SESSION['authority'] != 'administrator' && $comment['user_id'] != $user_id) {
+        if ($_SESSION['authority'] != 'administrator' && !in_array((string)$comment['user_id'], array((string)($_SESSION['id'] ?? '-'), (string)($_SESSION['userid'] ?? '-')), true)) {
             $this->table = DB_PREFIX . 'projects';
             return ['success' => false, 'message' => 'Permission denied'];
         }
@@ -9694,7 +9864,10 @@ class Project extends ApplicationModel {
             if ($amount < 0) {
                 return ['status' => 'error', 'message' => 'Amount cannot be negative'];
             }
-            
+            if (!$this->canUserEditBusinessDocuments($id)) {
+                return $this->forbiddenResponse();
+            }
+
             // Check if project exists
             $existingProject = $this->getById($id);
             if (!$existingProject) {
@@ -9745,7 +9918,10 @@ class Project extends ApplicationModel {
             if (!$id) {
                 return ['status' => 'error', 'message' => 'ID is required'];
             }
-            
+            if (!$this->canUserQuickEditProject($id)) {
+                return $this->forbiddenResponse();
+            }
+
             // Check if project exists
             $existingProject = $this->getById($id);
             if (!$existingProject) {

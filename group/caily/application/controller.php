@@ -102,17 +102,47 @@ class Controller {
 
 	}
 
+	/**
+	 * Whether $method of $object may be invoked through api/index.php.
+	 * Only public, non-static methods that the concrete model class (or a model-specific
+	 * parent) declares are endpoints. Everything inherited from the shared base classes
+	 * (raw SQL helpers such as query_delete, the generic insertPost/deletePost CRUD,
+	 * permit*, connection methods) is internal and must never be reachable by a request.
+	 */
+	function isApiMethodCallable($object, $method) {
+		if (!is_string($method) || !preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $method)) {
+			return false;
+		}
+		if (!method_exists($object, $method)) {
+			return false;
+		}
+		$reflection = new ReflectionMethod($object, $method);
+		if (!$reflection->isPublic() || $reflection->isStatic() || $reflection->isConstructor()) {
+			return false;
+		}
+		$declaring = strtolower($reflection->getDeclaringClass()->getName());
+		return !in_array($declaring, array('connection', 'model', 'applicationmodel'), true);
+	}
+
 	function executeApi($model, $method, $params) {
+		// The model name becomes a file path and a class name: letters, digits and underscore only.
+		if (!is_string($model) || !preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $model)) {
+			http_response_code(400);
+			return json_encode(array('error' => 'Invalid model'));
+		}
 		$modelfile = DIR_MODEL.$model.'.php';
 		$class = ucfirst($model);
 		$hash = array();
-		
+
 		if (file_exists($modelfile)) {
 			try {
 				require_once($modelfile);
 				if (class_exists($class)) {
 					$model = new $class;
-					if (method_exists($model, $method)) {
+					if (method_exists($model, $method) && !$this->isApiMethodCallable($model, $method)) {
+						http_response_code(403);
+						$hash['error'] = 'Method not allowed';
+					} else if (method_exists($model, $method)) {
 						$model->connect();
 						$hash = $model->$method($params);
 						// Phase 4 – If model returns http_status (e.g. 403 Forbidden), set response code and remove from body

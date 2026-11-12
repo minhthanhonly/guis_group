@@ -463,6 +463,33 @@
                   </ul>
                 </li>
                 <!--/ Language -->
+                <!-- Font zoom -->
+                <li class="nav-item dropdown me-3 me-xl-2">
+                  <a
+                    class="nav-link dropdown-toggle hide-arrow btn btn-icon btn-text-secondary rounded-pill"
+                    id="nav-font-zoom"
+                    href="javascript:void(0);"
+                    data-bs-toggle="dropdown"
+                    data-bs-auto-close="outside"
+                    aria-expanded="false"
+                    title="文字サイズ">
+                    <i class="fa-solid fa-text-height text-heading" style="font-size: 1.1rem;"></i>
+                  </a>
+                  <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="nav-font-zoom">
+                    <div class="small text-body-secondary mb-2" data-i18n="文字サイズ">文字サイズ</div>
+                    <div class="d-flex align-items-center gap-2 text-nowrap">
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-font-zoom="out" aria-label="文字を小さく">
+                        <i class="fa-solid fa-minus"></i>
+                      </button>
+                      <span class="fw-medium text-center" style="min-width: 3.5em;" data-font-zoom-label>100%</span>
+                      <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-font-zoom="in" aria-label="文字を大きく">
+                        <i class="fa-solid fa-plus"></i>
+                      </button>
+                      <button type="button" class="btn btn-sm btn-outline-secondary" data-font-zoom="reset" data-i18n="リセット">リセット</button>
+                    </div>
+                  </div>
+                </li>
+                <!--/ Font zoom -->
                 <!-- Style Switcher -->
                 <li class="nav-item dropdown me-3 me-xl-2">
                   <a

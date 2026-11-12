@@ -2635,15 +2635,37 @@ class Task extends ApplicationModel {
         return $tasks;
     }
 
-    private function checkPermission($projectId, $taskId = null) {
-        $project = null;
-        $project = $this->fetchOne(
-            "SELECT * FROM " . DB_PREFIX . "projects p" .  " WHERE p.id = " . intval($projectId)
-        );
-        
-        $task = $this->getById($taskId);
+    /**
+     * Gantt / drag-and-drop writes on a project's tasks: project managers and anyone
+     * involved in the project (same rule the task page uses to let a user add tasks,
+     * minus the department-wide task_add flag).
+     */
+    private function canUserModifyProjectTasks($projectId) {
+        $perm = $this->resolveProjectTaskPermissions($projectId);
+        return $perm && (!empty($perm['can_manage_project']) || !empty($perm['is_member']));
+    }
 
-        if (!$project || !$task) return false;
+    /** project_id of a task row, 0 when the task does not exist. Never trust the id sent by the client. */
+    private function getTaskProjectId($taskId) {
+        $row = $this->fetchOne("SELECT project_id FROM " . DB_PREFIX . "tasks WHERE id = " . intval($taskId));
+        return $row ? intval($row['project_id']) : 0;
+    }
+
+    private function forbiddenResponse() {
+        return ['status' => 'error', 'success' => false, 'message' => 'Forbidden', 'http_status' => 403];
+    }
+
+    private function checkPermission($projectId, $taskId = null) {
+        $task = $this->getById($taskId);
+        if (!$task) return false;
+
+        // The department-manager check below must use the task's own project, not the
+        // project id sent by the client.
+        $project = $this->fetchOne(
+            "SELECT * FROM " . DB_PREFIX . "projects p" .  " WHERE p.id = " . intval($task['project_id'])
+        );
+
+        if (!$project) return false;
         
         $currentUserIdNumber = $_SESSION['id'];
         $currentUserId = $_SESSION['userid'];
@@ -2867,7 +2889,15 @@ class Task extends ApplicationModel {
         $projectId = $_POST['project_id'];
         $draggedTaskId = isset($_POST['dragged_task_id']) ? intval($_POST['dragged_task_id']) : null;
         $newParentId = isset($_POST['new_parent_id']) ? (empty($_POST['new_parent_id']) ? null : intval($_POST['new_parent_id'])) : null;
-        
+
+        $projectId = intval($projectId);
+        if (!is_array($taskIds) || !$this->canUserModifyProjectTasks($projectId)) {
+            return $this->forbiddenResponse();
+        }
+        if ($draggedTaskId && $this->getTaskProjectId($draggedTaskId) !== $projectId) {
+            return $this->forbiddenResponse();
+        }
+
         // Update positions
         $position = 0;
         foreach ($taskIds as $taskId) {
@@ -3028,10 +3058,15 @@ class Task extends ApplicationModel {
             ];
         }
         
+        $taskProjectId = $this->getTaskProjectId($id);
+        if (!$this->canUserModifyProjectTasks($taskProjectId) && !$this->checkPermission($taskProjectId, $id)) {
+            return $this->forbiddenResponse();
+        }
+
         $data = [
             'updated_at' => date('Y-m-d H:i:s')
         ];
-        
+
         if ($start_date !== null) {
             $data['start_date'] = $this->normalize_datetime_with_default($start_date, '09:00');
         }
@@ -3076,7 +3111,10 @@ class Task extends ApplicationModel {
                 'message' => 'タスクが見つかりません'
             ];
         }
-        
+        if (!$this->canUserModifyProjectTasks($task['project_id'])) {
+            return $this->forbiddenResponse();
+        }
+
         // If setting a parent, check for circular reference
         if ($parent_id) {
             if ($task_id == $parent_id) {
@@ -3148,6 +3186,13 @@ class Task extends ApplicationModel {
         $target = intval($_POST['target_task_id']);
         $type = isset($_POST['link_type']) ? $_POST['link_type'] : '0';
         if (!$source || !$target) return ['success' => false, 'message' => 'Thiếu thông tin'];
+        // Both ends must be tasks of one project the user may modify; the link is stored under that project.
+        $sourceProjectId = $this->getTaskProjectId($source);
+        if (!$sourceProjectId || $sourceProjectId !== $this->getTaskProjectId($target)
+            || !$this->canUserModifyProjectTasks($sourceProjectId)) {
+            return $this->forbiddenResponse();
+        }
+        $project_id = $sourceProjectId;
         $data = [
             'source_task_id' => $source,
             'project_id' => $project_id,
@@ -3165,6 +3210,11 @@ class Task extends ApplicationModel {
     function deleteTaskLink() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'message' => 'No link id'];
+        $link = $this->fetchOne("SELECT source_task_id FROM " . DB_PREFIX . "task_links WHERE id = " . $id);
+        if (!$link) return ['status' => 'error', 'message' => 'Delete failed'];
+        if (!$this->canUserModifyProjectTasks($this->getTaskProjectId($link['source_task_id']))) {
+            return $this->forbiddenResponse();
+        }
         $this->table = DB_PREFIX . 'task_links';
         $result = $this->query_delete(['id' => $id]);
         $this->table = DB_PREFIX . 'tasks';
@@ -3626,7 +3676,7 @@ class Task extends ApplicationModel {
             return ['success' => false, 'message' => 'Comment not found'];
         }
         // Chỉ cho phép sửa nếu là chủ comment hoặc admin
-        if ($_SESSION['authority'] != 'administrator' && $comment['user_id'] != $user_id) {
+        if ($_SESSION['authority'] != 'administrator' && !in_array((string)$comment['user_id'], array((string)($_SESSION['id'] ?? '-'), (string)($_SESSION['userid'] ?? '-')), true)) {
             $this->table = DB_PREFIX . 'tasks';
             return ['success' => false, 'message' => 'Permission denied'];
         }
@@ -3653,7 +3703,7 @@ class Task extends ApplicationModel {
             return ['success' => false, 'message' => 'Comment not found'];
         }
         // Chỉ cho phép xóa nếu là chủ comment hoặc admin
-        if ($_SESSION['authority'] != 'administrator' && $comment['user_id'] != $user_id) {
+        if ($_SESSION['authority'] != 'administrator' && !in_array((string)$comment['user_id'], array((string)($_SESSION['id'] ?? '-'), (string)($_SESSION['userid'] ?? '-')), true)) {
             $this->table = DB_PREFIX . 'tasks';
             return ['success' => false, 'message' => 'Permission denied'];
         }
