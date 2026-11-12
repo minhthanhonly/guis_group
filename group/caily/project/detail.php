@@ -132,16 +132,13 @@ if($_SESSION['show_project'] == 0){
 
 
                         
-                        <div class="row g-3" v-if="project">
-
-                            
+                        <div class="row g-3 project-detail-grid" v-if="project">
                             <!-- 建物情報: opens the shared building modal (read-only; 編集 inside it when permitted) -->
                             <div v-if="project.parent_project_id" class="col-12 mb-2">
                                 <button type="button" class="btn btn-outline-primary btn-sm" @click="openParentProjectInfoModal" title="建物情報">
                                     <i class="fa fa-building me-1"></i> <span data-i18n="建物情報">建物情報</span>
                                 </button>
                             </div>
-
                             <div v-if="project.parent_project_id && (project.show_child_customer_info || project.show_child_guis_receiver)" class="col-12 mt-3">
                                 <div class="border rounded p-3 border-primary">
                                     <div v-if="project.show_child_customer_info" :class="{ 'mb-3': project.show_child_guis_receiver }">
@@ -158,13 +155,15 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                        
-                            <div class="col-md-4  mt-4">
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
+                            </div>
+                            <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="ID">ID</span></label>
                                 <input type="text" class="form-control" :value="project?.id || '-'" readonly>
                             </div>
                             <input v-if="isEditMode && project" type="hidden" v-model.number="project.version">
-                            <div class="col-md-4">
+                            <div class="col-md-8">
                                 <label class="form-label"><span data-i18n="案件名">案件名</span>  <span class="text-danger">*</span></label>
                                 <template v-if="isEditMode">
                                     <input type="text" class="form-control" v-model="project.name">
@@ -176,15 +175,37 @@ if($_SESSION['show_project'] == 0){
                                     <input type="text" class="form-control" :value="project.name || '-'" readonly>
                                 </template>
                             </div>
-                            
                             <div class="col-md-4">
-                                <!-- <label class="form-label"><span data-i18n="部署">部署</span></label>
-                                <input type="text" class="form-control" :value="department?.name || '-'" readonly> -->
+                                <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
+                                <div>
+                                    <!-- For Kadai projects, show waiting status -->
+                                    <div v-if="project.is_kadai == 1 && project.status !== 'cancelled'">
+                                        <span class="badge bg-warning">承認待ち</span>
+                                    </div>
+                                    <!-- For normal projects, show actual status -->
+                                    <div v-else>
+                                        <div class="btn-group" v-if="canEditProject">
+                                            <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
+                                                    :class="getStatusButtonClass(project.status)"
+                                                    id="statusDropdown"
+                                                    data-bs-toggle="dropdown" aria-expanded="false">
+                                                {{ getStatusLabel(project.status) }}
+                                            </button>
+                                            <ul class="dropdown-menu">
+                                                <li v-for="status in editableStatuses" :key="status.value">
+                                                    <a class="dropdown-item waves-effect" href="javascript:void(0);" 
+                                                    @click="selectStatus(status.value)">
+                                                        {{ translateLabel(status.label) }}
+                                                    </a>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div v-else>
+                                            <span class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            
-
-                            
-                            
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
                                 <template v-if="isEditMode">
@@ -226,7 +247,38 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                            
+                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
+                                <label class="form-label"><span data-i18n="担当">担当</span></label>
+                                <div v-if="isEditMode && !isCailyBranchUser" class="d-flex gap-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" v-model="project.tantou" value="CAILY" id="tantou_caily">
+                                        <label class="form-check-label" for="tantou_caily">CAILY</label>
+                                    </div>
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" v-model="project.tantou" value="GUIS" id="tantou_guis">
+                                        <label class="form-check-label" for="tantou_guis">GUIS</label>
+                                    </div>
+                                </div>
+                                <div v-else class="fw-semibold">{{ project.tantou || '—' }}</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
+                                <div class="position-relative">
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        step="5"
+                                        v-model="project.progress"
+                                        @change="updateProgress"
+                                        class="form-range"
+                                        :class="{'prevent-click': !canUpdateProgress}"
+                                    >
+                                    <div class="progress-value-label text-center">
+                                        {{ project.progress }}%
+                                    </div>
+                                </div>
+                            </div>
                             <!-- <div class="col-md-4">
                                 <label class="form-label">予定時間</label>
                                 <input type="text" class="form-control" :value="project.estimated_hours + 'h'" readonly>
@@ -239,109 +291,8 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label">金額</label>
                                 <input type="text" class="form-control" :value="formatCurrency(project.amount)" readonly>
                             </div> -->
-                            <!-- チーム / 担当 are not used by 省エネ departments -->
-                            <div class="col-4" v-show="!isEnergyDepartmentProject">
-                                <label class="form-label"><span data-i18n="チーム">チーム</span></label>
-                                <div class="d-flex align-items-center gap-2">
-                                    <input v-if="isEditMode" id="team_tags" class="form-control" />
-                                    <button v-if="isEditMode" class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('team')" title="すべて削除"><i class="fa fa-times"></i></button>
-                                    <div v-else>
-                                        <span v-if="project.team_list && project.team_list.length > 0" class="d-flex flex-wrap gap-1">
-                                            <span v-for="team in project.team_list" :key="team.id" class="badge bg-info">{{ team.name }}</span>
-                                        </span>
-                                        <span v-else class="text-muted">-</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-4">
-                                <!-- 省エネ departments call 管理 "担当者" and do not use メンバー -->
-                                <label class="form-label"><span v-show="!isEnergyDepartmentProject" data-i18n="管理">管理</span><span v-show="isEnergyDepartmentProject" data-i18n="担当者">担当者</span></label>
-                                <div v-if="isEditMode" class="d-flex align-items-center gap-2">
-                                    <input class="form-control" type="text" id="manager_tags" name="manager_tags">
-                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('manager')" title="すべて削除"><i class="fa fa-times"></i></button>
-                                </div>
-                                <div class="d-flex align-items-center flex-wrap gap-2" v-else-if="managers && managers.length > 0">
-                                    <div v-for="member in managers" :key="member.userid"
-                                        class="avatar"
-                                        :data-userid="member.userid"
-                                        data-bs-toggle="tooltip"
-                                        data-popup="tooltip-custom"
-                                        data-bs-placement="top"
-                                        :aria-label="member.user_name"
-                                        :data-bs-original-title="member.user_name">
-                                        <span v-if="showAvatarInitials(member)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
-                                        <img v-if="!member.avatarError && getAvatarSrc(member)"
-                                            class="rounded-circle"
-                                            :class="{ 'd-none': !member.avatarLoaded }"
-                                            :src="getAvatarSrc(member)"
-                                            :alt="member.user_name"
-                                            @load="handleAvatarLoad(member)"
-                                            @error="handleAvatarError(member)">
-                                    </div>
-                                </div>
-                                <div v-else class="text-muted">
-                                    <span data-i18n="メンバーがいません">メンバーがいません</span>
-                                </div>
-                            </div>
-                            <div class="col-4" v-show="!isEnergyDepartmentProject">
-                                <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
-                                <div v-if="isEditMode" class="d-flex align-items-center gap-2">
-                                    <input class="form-control" type="text" id="members_tags" name="members_tags">
-                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('members')" title="すべて削除"><i class="fa fa-times"></i></button>
-                                </div>
-                                <div class="d-flex flex-wrap gap-2 align-items-center" v-else-if="members.length > 0">
-                                    <div v-for="member in members" :key="member.userid"
-                                        class="avatar"
-                                        data-bs-toggle="tooltip"
-                                        :data-userid="member.userid"
-                                        data-popup="tooltip-custom"
-                                        data-bs-placement="top"
-                                        :aria-label="member.user_name"
-                                        :data-bs-original-title="member.user_name">
-                                        <span v-if="showAvatarInitials(member)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
-                                        <img v-if="!member.avatarError && getAvatarSrc(member)"
-                                            class="rounded-circle"
-                                            :class="{ 'd-none': !member.avatarLoaded }"
-                                            :src="getAvatarSrc(member)"
-                                            :alt="member.user_name"
-                                            @load="handleAvatarLoad(member)"
-                                            @error="handleAvatarError(member)">
-                                    </div>
-                                </div>
-                                <div v-else class="text-muted">
-                                    <span data-i18n="メンバーがいません">メンバーがいません</span>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
-                                <div>
-                                    <!-- For Kadai projects, show waiting status -->
-                                    <div v-if="project.is_kadai == 1 && project.status !== 'cancelled'">
-                                        <span class="badge bg-warning">承認待ち</span>
-                                    </div>
-                                    <!-- For normal projects, show actual status -->
-                                    <div v-else>
-                                        <div class="btn-group" v-if="canEditProject">
-                                            <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light" 
-                                                    :class="getStatusButtonClass(project.status)"
-                                                    id="statusDropdown"
-                                                    data-bs-toggle="dropdown" aria-expanded="false">
-                                                {{ getStatusLabel(project.status) }}
-                                            </button>
-                                            <ul class="dropdown-menu">
-                                                <li v-for="status in editableStatuses" :key="status.value">
-                                                    <a class="dropdown-item waves-effect" href="javascript:void(0);" 
-                                                    @click="selectStatus(status.value)">
-                                                        {{ translateLabel(status.label) }}
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                        <div v-else>
-                                            <span class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
-                                        </div>
-                                    </div>
-                                </div>
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="スケジュール">スケジュール</span></h6>
                             </div>
                             <div class="col-12">
                                 <label class="form-label"><span data-i18n="予定工程">予定工程</span></label>
@@ -397,39 +348,14 @@ if($_SESSION['show_project'] == 0){
                                 </template>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" :data-time="project.end_date || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' 期限日'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)" readonly>
                             </div>
-                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
-                                <label class="form-label"><span data-i18n="担当">担当</span></label>
-                                <div v-if="isEditMode && !isCailyBranchUser" class="d-flex gap-3">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" v-model="project.tantou" value="CAILY" id="tantou_caily">
-                                        <label class="form-check-label" for="tantou_caily">CAILY</label>
-                                    </div>
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" v-model="project.tantou" value="GUIS" id="tantou_guis">
-                                        <label class="form-check-label" for="tantou_guis">GUIS</label>
-                                    </div>
+                            <div class="col-md-4">
+                                <label class="form-label"><span data-i18n="実終了日">実終了日</span></label>
+                                <div v-if="isEditMode" class="input-group">
+                                    <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
                                 </div>
-                                <div v-else class="fw-semibold">{{ project.tantou || '—' }}</div>
+                                <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
                             </div>
-                            <div class="col-4">
-                                <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
-                                <div class="position-relative">
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        step="5"
-                                        v-model="project.progress"
-                                        @change="updateProgress"
-                                        class="form-range"
-                                        :class="{'prevent-click': !canUpdateProgress}"
-                                    >
-                                    <div class="progress-value-label text-center">
-                                        {{ project.progress }}%
-                                    </div>
-                                </div>
-                            </div>
-                            
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span>
                                     <span v-if="isEditMode && project.end_date && project.tantou === 'CAILY' && !isEnergyDepartmentProject" class="text-danger">*</span>
@@ -504,17 +430,86 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div class="col-md-4">
-                                <label class="form-label"><span data-i18n="実終了日">実終了日</span></label>
-                                <div v-if="isEditMode" class="input-group">
-                                    <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                    <span class="input-group-text"><i class="fa fa-calendar"></i></span>
-                                </div>
-                                <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="チーム・メンバー">チーム・メンバー</span></h6>
                             </div>
-                            <hr class="mt-4 border-primary">
-                            <div class="col-12 mt-3">
+                            <!-- チーム / 担当 are not used by 省エネ departments -->
+                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
+                                <label class="form-label"><span data-i18n="チーム">チーム</span></label>
+                                <div class="d-flex align-items-center gap-2">
+                                    <input v-if="isEditMode" id="team_tags" class="form-control" />
+                                    <button v-if="isEditMode" class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('team')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    <div v-else>
+                                        <span v-if="project.team_list && project.team_list.length > 0" class="d-flex flex-wrap gap-1">
+                                            <span v-for="team in project.team_list" :key="team.id" class="badge bg-info">{{ team.name }}</span>
+                                        </span>
+                                        <span v-else class="text-muted">-</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <!-- 省エネ departments call 管理 "担当者" and do not use メンバー -->
+                                <label class="form-label"><span v-show="!isEnergyDepartmentProject" data-i18n="管理">管理</span><span v-show="isEnergyDepartmentProject" data-i18n="担当者">担当者</span></label>
+                                <div v-if="isEditMode" class="d-flex align-items-center gap-2">
+                                    <input class="form-control" type="text" id="manager_tags" name="manager_tags">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('manager')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                </div>
+                                <div class="d-flex align-items-center flex-wrap gap-2" v-else-if="managers && managers.length > 0">
+                                    <div v-for="member in managers" :key="member.userid"
+                                        class="avatar"
+                                        :data-userid="member.userid"
+                                        data-bs-toggle="tooltip"
+                                        data-popup="tooltip-custom"
+                                        data-bs-placement="top"
+                                        :aria-label="member.user_name"
+                                        :data-bs-original-title="member.user_name">
+                                        <span v-if="showAvatarInitials(member)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
+                                        <img v-if="!member.avatarError && getAvatarSrc(member)"
+                                            class="rounded-circle"
+                                            :class="{ 'd-none': !member.avatarLoaded }"
+                                            :src="getAvatarSrc(member)"
+                                            :alt="member.user_name"
+                                            @load="handleAvatarLoad(member)"
+                                            @error="handleAvatarError(member)">
+                                    </div>
+                                </div>
+                                <div v-else class="text-muted">
+                                    <span data-i18n="メンバーがいません">メンバーがいません</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
+                                <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
+                                <div v-if="isEditMode" class="d-flex align-items-center gap-2">
+                                    <input class="form-control" type="text" id="members_tags" name="members_tags">
+                                    <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('members')" title="すべて削除"><i class="fa fa-times"></i></button>
+                                </div>
+                                <div class="d-flex flex-wrap gap-2 align-items-center" v-else-if="members.length > 0">
+                                    <div v-for="member in members" :key="member.userid"
+                                        class="avatar"
+                                        data-bs-toggle="tooltip"
+                                        :data-userid="member.userid"
+                                        data-popup="tooltip-custom"
+                                        data-bs-placement="top"
+                                        :aria-label="member.user_name"
+                                        :data-bs-original-title="member.user_name">
+                                        <span v-if="showAvatarInitials(member)" class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(member) }}</span>
+                                        <img v-if="!member.avatarError && getAvatarSrc(member)"
+                                            class="rounded-circle"
+                                            :class="{ 'd-none': !member.avatarLoaded }"
+                                            :src="getAvatarSrc(member)"
+                                            :alt="member.user_name"
+                                            @load="handleAvatarLoad(member)"
+                                            @error="handleAvatarError(member)">
+                                    </div>
+                                </div>
+                                <div v-else class="text-muted">
+                                    <span data-i18n="メンバーがいません">メンバーがいません</span>
+                                </div>
+                            </div>
+                            <div class="col-12 project-form-section" v-if="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || isEnergyDepartmentProject">
+                                <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span></h6>
+                            </div>
+                            <div class="col-12">
                                 <template v-if="isEditMode">
                                     <div v-if="customFields && customFields.length > 0" class="mt-3">
                                         <div class="row">
@@ -716,7 +711,9 @@ if($_SESSION['show_project'] == 0){
                                     <div style="min-height:38px;">{{ belsZehGradeLabel || '-' }}</div>
                                 </div>
                             </template>
-                            <hr class="mt-4 border-primary">
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="その他">その他</span></h6>
+                            </div>
                             <div class="col-md-12">
                                 <label class="form-label"><span data-i18n="タグ">タグ</span><i class="fa fa-question-circle text-muted ms-2" 
                                 data-bs-toggle="tooltip" 
@@ -738,8 +735,6 @@ if($_SESSION['show_project'] == 0){
                                     <div class="form-control ql-editor" style="min-height:100px;" v-html="decodeHtmlEntities(project.description)"></div>
                                 </template>
                             </div>
-                            
-
                         </div>
                         <div v-else class="text-center py-5">
                             <div class="spinner-border" role="status">
@@ -1692,6 +1687,19 @@ $view->footing();
 ?>
 
 <style>
+/* Project detail card: fields grouped under section titles (same grouping as the project form modals) */
+.project-detail-grid .project-form-section {
+    margin-top: 1.75rem;
+}
+.project-detail-grid .project-form-section-title {
+    margin: 0;
+    padding-bottom: 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--bs-primary);
+    border-bottom: 1px solid var(--bs-border-color);
+}
 /* View mode: read-only values look like text, not like editable boxes */
 #app .card input.form-control[readonly]:not(.modal *),
 #app .card textarea.form-control[readonly]:not(.modal *),
