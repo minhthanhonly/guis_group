@@ -594,6 +594,8 @@ const TASK_KINDS = [
 ];
 
 const vueApp = createApp({
+    // 省エネ fields edit mode (省エネ向け資料 / 申請提出先の審査機関 / BELSのZEH等級)
+    mixins: [window.ProjectDetailEnergyMixin],
     data() {
         return {
             permission: {},
@@ -4131,6 +4133,7 @@ const vueApp = createApp({
                 // No need to send department_custom_fields_set_id since we use all sets from department
                 formData.append('custom_fields', this.project.custom_fields);
                 formData.append('description', this.project.description || '');
+                this.appendEnergyFieldsToFormData(formData);
                 appendProjectVersionToFormData(formData, this.project);
                 if (window.EnergyDrawingShare) {
                     window.EnergyDrawingShare.appendEnergyDrawingShareToFormData(formData, shareAnswer);

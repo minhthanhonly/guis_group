@@ -686,11 +686,28 @@ if($_SESSION['show_project'] == 0){
                                     </template>
                                 </template>
                             </div>
-                            <!-- 省エネ部署の案件: 省エネ向け資料 / 申請提出先の審査機関 / BELSのZEH等級 (edited in the 案件依頼 modal on the building page) -->
+                            <!-- 省エネ部署の案件: 省エネ向け資料 / 申請提出先の審査機関 / BELSのZEH等級
+                                 (edit state: energyEdit, see assets/js/project-energy-fields-mixin.js) -->
                             <template v-if="isEnergyDepartmentProject">
                                 <div class="col-12">
                                     <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
-                                    <div class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
+                                    <template v-if="isEditMode">
+                                        <div class="row">
+                                            <div class="col-md-4" v-for="opt in energyEditMaterialOptions" :key="'em_edit_' + opt">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox"
+                                                        :id="'project_energy_materials_' + opt"
+                                                        v-model="energyEdit.flags[opt]">
+                                                    <label class="form-check-label" :for="'project_energy_materials_' + opt">{{ opt }}</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2" v-if="energyEdit.flags['その他']">
+                                            <input type="text" class="form-control" v-model="energyEdit.memo"
+                                                   placeholder="その他メモ" maxlength="500">
+                                        </div>
+                                    </template>
+                                    <div v-else class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
                                         <span v-for="opt in selectedEnergyMaterialLabels" :key="'em_' + opt"
                                               class="badge badge-outline-primary me-1">{{ opt }}</span>
                                         <span v-if="project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
@@ -700,7 +717,11 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
-                                    <div class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
+                                    <div v-if="isEditMode" class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control tagify" id="project_energy_review_agency_tags" name="project_energy_review_agency_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEnergyAgencyTags" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                    <div v-else class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
                                         <span v-for="item in energyReviewAgencyList" :key="'ag_' + item"
                                               class="badge badge-outline-primary me-1">{{ item }}</span>
                                         <span v-if="energyReviewAgencyList.length === 0" class="text-muted">-</span>
@@ -708,7 +729,12 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
-                                    <div style="min-height:38px;">{{ belsZehGradeLabel || '-' }}</div>
+                                    <select v-if="isEditMode" class="form-select" v-model="energyEdit.grade">
+                                        <option v-for="opt in energyEditGradeOptions" :key="'zeh_edit_' + opt.value" :value="opt.value">
+                                            {{ opt.label }}
+                                        </option>
+                                    </select>
+                                    <div v-else style="min-height:38px;">{{ belsZehGradeLabel || '-' }}</div>
                                 </div>
                             </template>
                             <div class="col-12 project-form-section">
@@ -2037,5 +2063,6 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="../parent_project/assets/js/parent-project-tagify-options.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../parent_project/assets/js/parent-project-customers-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../parent_project/assets/js/parent-project-quick-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-energy-fields-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 
