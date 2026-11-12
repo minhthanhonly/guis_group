@@ -1427,7 +1427,11 @@ const vueApp = createApp({
                 
             } catch (error) {
                 console.error('Error loading project:', error);
-                alert('プロジェクトの読み込みに失敗しました。');
+                // The background refresh must not raise a blocking dialog every minute
+                // (offline laptop, expired session); only a load the user started reports it.
+                if (!options.silent) {
+                    alert('プロジェクトの読み込みに失敗しました。');
+                }
             }
         },
         
@@ -6259,12 +6263,21 @@ const vueApp = createApp({
         this.addZoomToDescriptionImages();
         
         // Auto-refresh project information and history every 60 seconds if not in edit mode
-        this.autoRefreshTimer = setInterval(() => {
+        // A hidden tab does not refresh; it catches up as soon as it is shown again.
+        let lastAutoRefreshAt = Date.now();
+        const autoRefresh = () => {
+            if (document.hidden) return;
             if (!this.isEditMode && !this.hasPendingBusinessDocumentChanges()) {
-                this.loadProject();
+                lastAutoRefreshAt = Date.now();
+                this.loadProject({ silent: true });
                 this.loadLogs();
             }
-        }, 60000); // 60 seconds
+        };
+        this.autoRefreshTimer = setInterval(autoRefresh, 60000); // 60 seconds
+        this._onAutoRefreshVisibility = () => {
+            if (!document.hidden && Date.now() - lastAutoRefreshAt >= 60000) autoRefresh();
+        };
+        document.addEventListener('visibilitychange', this._onAutoRefreshVisibility);
 
     },
     updated() {
@@ -6281,6 +6294,9 @@ const vueApp = createApp({
         // Clean up timers
         if (this.timeRemainingTimer) {
             clearInterval(this.timeRemainingTimer);
+        }
+        if (this._onAutoRefreshVisibility) {
+            document.removeEventListener('visibilitychange', this._onAutoRefreshVisibility);
         }
         if (this.autoRefreshTimer) {
             clearInterval(this.autoRefreshTimer);
