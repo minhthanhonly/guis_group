@@ -76,7 +76,7 @@
     updateControls();
   }
 
-  /** Show a size without saving it: used while the slider is being dragged. */
+  /** Apply a size to the page without saving it yet. */
   function preview(percent) {
     var next = clamp(percent);
     if (next === current) return current;
@@ -93,8 +93,7 @@
       if (current === DEFAULT) localStorage.removeItem(STORAGE_KEY);
       else localStorage.setItem(STORAGE_KEY, String(current));
     } catch (e) { /* storage unavailable: zoom still applies for this page */ }
-    // Tables, charts and calendars measure text. Doing this once per change, not on
-    // every step of a drag, keeps the slider smooth on heavy pages.
+    // Tables, charts and calendars measure text: let them re-layout at the new size.
     window.dispatchEvent(new Event('resize'));
     return current;
   }
@@ -122,12 +121,22 @@
     return !!(target && target.matches && target.matches('[data-font-zoom-range]'));
   }
   // "input" fires for every step while dragging, "change" once when the thumb is released
-  // (and after each keyboard step).
+  // (and after each keyboard step, so arrow keys still apply immediately).
   function isNumberBox(target) {
     return !!(target && target.matches && target.matches('[data-font-zoom-number]'));
   }
+  /** While the slider is dragged only the number changes; the page keeps its size. */
+  function showPendingValue(percent) {
+    var pending = clamp(percent);
+    var labels = document.querySelectorAll('[data-font-zoom-label]');
+    for (var i = 0; i < labels.length; i++) labels[i].textContent = pending + '%';
+    var numbers = document.querySelectorAll('[data-font-zoom-number]');
+    for (var n = 0; n < numbers.length; n++) numbers[n].value = pending;
+  }
   document.addEventListener('input', function (e) {
-    if (isRange(e.target)) preview(e.target.value);
+    // The font size is applied when the thumb is released ("change"), not during the drag:
+    // resizing the page under the pointer makes the slider itself move.
+    if (isRange(e.target)) showPendingValue(e.target.value);
     // Typing "1" on the way to "125" must not jump to 80%: the number box applies on change
     else if (isNumberBox(e.target)) typingIn = e.target;
   });

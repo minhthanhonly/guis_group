@@ -479,8 +479,14 @@
                     <div class="small text-body-secondary mb-2" data-i18n="文字サイズ">文字サイズ</div>
                     <!-- Sizes are in px: the control must not grow or shrink with the zoom it sets -->
                     <div class="d-flex align-items-center text-nowrap" style="gap: 10px;">
+                      <button type="button" class="btn btn-sm btn-outline-secondary p-0 flex-shrink-0" style="width: 28px; height: 28px; font-size: 12px;" data-font-zoom="out" aria-label="文字を小さく (-1%)">
+                        <i class="fa-solid fa-minus"></i>
+                      </button>
                       <input type="range" class="form-range" style="width: 180px;" min="80" max="150" step="1" value="100"
                              data-font-zoom-range aria-label="文字サイズ">
+                      <button type="button" class="btn btn-sm btn-outline-secondary p-0 flex-shrink-0" style="width: 28px; height: 28px; font-size: 12px;" data-font-zoom="in" aria-label="文字を大きく (+1%)">
+                        <i class="fa-solid fa-plus"></i>
+                      </button>
                       <div class="input-group input-group-sm flex-nowrap" style="width: 84px;">
                         <input type="number" class="form-control text-end px-1" style="font-size: 13px;" min="80" max="150" step="1" value="100"
                                inputmode="numeric" data-font-zoom-number aria-label="文字サイズ (%)">
