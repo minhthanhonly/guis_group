@@ -477,14 +477,15 @@
                   </a>
                   <div class="dropdown-menu dropdown-menu-end p-3" aria-labelledby="nav-font-zoom">
                     <div class="small text-body-secondary mb-2" data-i18n="文字サイズ">文字サイズ</div>
-                    <div class="d-flex align-items-center gap-2 text-nowrap">
-                      <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-font-zoom="out" aria-label="文字を小さく">
-                        <i class="fa-solid fa-minus"></i>
-                      </button>
-                      <span class="fw-medium text-center" style="min-width: 3.5em;" data-font-zoom-label>100%</span>
-                      <button type="button" class="btn btn-sm btn-icon btn-outline-secondary" data-font-zoom="in" aria-label="文字を大きく">
-                        <i class="fa-solid fa-plus"></i>
-                      </button>
+                    <!-- Sizes are in px: the control must not grow or shrink with the zoom it sets -->
+                    <div class="d-flex align-items-center text-nowrap" style="gap: 10px;">
+                      <input type="range" class="form-range" style="width: 180px;" min="80" max="150" step="1" value="100"
+                             data-font-zoom-range aria-label="文字サイズ">
+                      <div class="input-group input-group-sm flex-nowrap" style="width: 84px;">
+                        <input type="number" class="form-control text-end px-1" style="font-size: 13px;" min="80" max="150" step="1" value="100"
+                               inputmode="numeric" data-font-zoom-number aria-label="文字サイズ (%)">
+                        <span class="input-group-text px-1" style="font-size: 13px;">%</span>
+                      </div>
                       <button type="button" class="btn btn-sm btn-outline-secondary" data-font-zoom="reset" data-i18n="リセット">リセット</button>
                     </div>
                   </div>
