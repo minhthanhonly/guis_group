@@ -1279,6 +1279,13 @@ body.pl-col-resizing * {
     padding: 0.4rem!important;
 }
 
+/* Opaque background so Chromium (Chrome/Edge) scrolls the table body as a cached
+   compositor layer. On 100%-scale displays a scroller with a transparent background is
+   not promoted, and every horizontal scroll frame re-rasters all visible cells. */
+#projectTable_wrapper .dt-scroll-body {
+    background-color: var(--bs-card-bg, #fff);
+}
+
 /* Header follows the body's horizontal scroll through a scroll timeline (no JS lag).
    Enabled by applyScrollHeadTimeline() in project-list.js, which sets --pl-head-max. */
 @supports (animation-timeline: --x) and (timeline-scope: --x) {
