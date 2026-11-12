@@ -90,7 +90,7 @@ $view->heading('建物詳細');
                         </div>
                     </div>
                     <div v-if="parentProject" class="row g-3">
-                        <?php include __DIR__ . '/partials/customer-list-view.php'; ?>
+                        <?php $customerListViewRowDetail = true; include __DIR__ . '/partials/customer-list-view.php'; unset($customerListViewRowDetail); ?>
                         <div class="col-md-4 col-xl-3">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
@@ -3242,9 +3242,6 @@ $view->heading('建物詳細');
             </div>
         </div>
     </div>
-
-    <!-- Customer List Modal (顧客情報 of the building customer list) -->
-    <?php include __DIR__ . '/partials/customer-list-modal.php'; ?>
 
     <!-- Customer Info Modal -->
     <div class="modal fade" id="customerInfoModal" tabindex="-1">

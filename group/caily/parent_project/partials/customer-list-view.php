@@ -3,16 +3,21 @@
  * Read-only customer list of a parent project (建物): same table as customer-list-editor.php,
  * without the editing controls. Rendered inside the Vue root of detail.php (view mode).
  * Needs ParentProjectCustomersMixin.
+ * $customerListViewRowDetail = true: no 顧客情報 button; each row gets a 詳細 button that opens the
+ * customer detail modal directly (the host must provide showCustomerInfoModal).
  */
+$customerListViewRowDetail = !empty($customerListViewRowDetail);
 ?>
 <div class="col-12">
     <div class="mb-3">
         <label class="form-label d-flex flex-wrap align-items-center gap-2">
             <span><span data-i18n="顧客">顧客</span></span>
+<?php if (!$customerListViewRowDetail): ?>
             <button v-if="customerList.length > 0" type="button" class="btn btn-sm btn-outline-info py-0 small"
                 @click="openCustomerListModal" title="顧客情報表示・編集">
                 <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
             </button>
+<?php endif; ?>
         </label>
         <div class="table-responsive border rounded">
             <table class="table table-sm align-middle mb-0 parent-project-customer-table">
@@ -22,11 +27,14 @@
                         <th><span data-i18n="会社名">会社名</span></th>
                         <th><span data-i18n="支店名">支店名</span></th>
                         <th><span data-i18n="担当様">担当様</span></th>
+<?php if ($customerListViewRowDetail): ?>
+                        <th style="width: 96px;"></th>
+<?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-if="customerList.length === 0">
-                        <td colspan="4" class="text-muted text-center py-3">
+                        <td colspan="<?php echo $customerListViewRowDetail ? 5 : 4; ?>" class="text-muted text-center py-3">
                             <span data-i18n="顧客が登録されていません">顧客が登録されていません</span>
                         </td>
                     </tr>
@@ -41,6 +49,14 @@
                         </td>
                         <td>{{ customer.branch_name || '-' }}</td>
                         <td>{{ customer.contact_name || '-' }}</td>
+<?php if ($customerListViewRowDetail): ?>
+                        <td class="text-end">
+                            <button v-if="customer.customer_id" type="button" class="btn btn-sm btn-outline-info py-0 text-nowrap"
+                                @click="openCustomerInfoFromList(customer)" title="顧客情報表示・編集">
+                                <i class="fa fa-info-circle me-1"></i> <span data-i18n="詳細">詳細</span>
+                            </button>
+                        </td>
+<?php endif; ?>
                     </tr>
                 </tbody>
             </table>

@@ -39,14 +39,14 @@
                     <span data-i18n="該当する顧客が見つかりません">該当する顧客が見つかりません</span>
                 </div>
                 <div v-else class="table-responsive customer-search-results">
-                    <table class="table table-hover table-sm mb-0">
+                    <table class="table table-hover table-sm mb-0" style="table-layout: fixed; width: 100%; overflow-wrap: anywhere;">
                         <thead class="table-light sticky-top">
                             <tr>
-                                <th style="min-width: 11em;"><span data-i18n="会社名">会社名</span></th>
-                                <th style="min-width: 7em;"><span data-i18n="支店名">支店名</span></th>
-                                <th><span data-i18n="担当者名">担当者名</span></th>
-                                <th class="text-nowrap"><span data-i18n="自社担当部署名">自社担当部署名</span></th>
-                                <th><span data-i18n="電話">電話</span></th>
+                                <th style="width: 19%;"><span data-i18n="会社名">会社名</span></th>
+                                <th style="width: 13%;"><span data-i18n="支店名">支店名</span></th>
+                                <th style="width: 10%;"><span data-i18n="担当者名">担当者名</span></th>
+                                <th style="width: 12%;"><span data-i18n="自社担当部署名">自社担当部署名</span></th>
+                                <th style="width: 13%;"><span data-i18n="電話">電話</span></th>
                                 <th><span data-i18n="メール">メール</span></th>
                                 <th style="width: 88px;"></th>
                             </tr>
@@ -60,9 +60,9 @@
                                 @click="selectCustomerFromSearch(customer)">
                                 <td>{{ customer.company_name }}</td>
                                 <td>{{ customer.branch }}</td>
-                                <td class="text-nowrap">{{ customer.name }}</td>
-                                <td class="text-nowrap">{{ customerSearchDepartmentLabel(customer) }}</td>
-                                <td class="text-nowrap">{{ customer.tel || customer.phone }}</td>
+                                <td>{{ customer.name }}</td>
+                                <td>{{ customerSearchDepartmentLabel(customer) }}</td>
+                                <td>{{ customer.tel || customer.phone }}</td>
                                 <td>{{ customer.email }}</td>
                                 <td class="text-end text-nowrap">
                                     <span v-if="isCustomerInList(customer.id)" class="badge bg-label-success"><span data-i18n="追加済み">追加済み</span></span>
