@@ -1282,7 +1282,7 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label small mb-1">区分</label>
                                 <select class="form-select form-select-sm" v-model="noteFilterType">
                                     <option value="">すべて</option>
-                                    <option value="1">CAILYメモ</option>
+                                    <option value="1">{{ cailyNoteLabel }}</option>
                                     <option value="2">GUISメモ</option>
                                     <option value="0">未分類</option>
                                 </select>
@@ -1327,7 +1327,7 @@ if($_SESSION['show_project'] == 0){
                                     <div v-if="note.label || note.needs_confirmation == 1 || note.needs_confirmation == 2 || note.display_column"
                                          class="d-flex flex-wrap align-items-center gap-1 mb-2">
                                         <span v-if="note.label" class="note-label-chip" :style="getNoteLabelStyle(note.label)"><i class="fa fa-tag note-label-chip-icon" aria-hidden="true"></i><span class="note-label-chip-text">{{ note.label }}</span></span>
-                                        <span v-if="note.needs_confirmation == 1" class="badge bg-primary">CAILYメモ</span>
+                                        <span v-if="note.needs_confirmation == 1" class="badge bg-primary">{{ cailyNoteLabel }}</span>
                                         <span v-else-if="note.needs_confirmation == 2" class="badge bg-dark">GUISメモ</span>
                                         <span v-if="note.display_column" class="badge bg-secondary">関連項目: {{ getNoteDisplayColumnLabel(note.display_column) }}</span>
                                     </div>
@@ -1612,7 +1612,7 @@ if($_SESSION['show_project'] == 0){
                             <div class="mb-3" v-if="editingNote.needs_confirmation">
                                 <label class="form-label"><span>区分</span></label>
                                 <div>
-                                    <span class="badge bg-primary" v-if="String(editingNote.needs_confirmation) === '1'">CAILYメモ</span>
+                                    <span class="badge bg-primary" v-if="String(editingNote.needs_confirmation) === '1'">{{ cailyNoteLabel }}</span>
                                     <span class="badge bg-dark" v-else-if="String(editingNote.needs_confirmation) === '2'">GUISメモ</span>
                                     <span class="badge bg-primary" v-else>確認必要</span>
                                 </div>
@@ -1670,7 +1670,7 @@ if($_SESSION['show_project'] == 0){
                                 <div class="form-check form-check-inline">
                                     <input class="form-check-input" type="radio" :value="1" v-model="editingNote.needs_confirmation" id="needsConfirmationCaily">
                                     <label class="form-check-label" for="needsConfirmationCaily">
-                                        CAILYメモ
+                                        {{ cailyNoteLabel }}
                                     </label>
                                 </div>
                                 <div class="form-check form-check-inline">

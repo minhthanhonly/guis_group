@@ -795,6 +795,11 @@ const vueApp = createApp({
                 .filter(Boolean)
                 .includes('共同');
         },
+        /** Note type 1 is CAILYメモ; 省エネ departments call it 入力注意点項目 (same name as the list column). */
+        cailyNoteLabel() {
+            const label = this.isEnergyDepartmentProject ? '入力注意点項目' : 'CAILYメモ';
+            return typeof translateText === 'function' ? translateText(label) : label;
+        },
         /** 申請提出先の審査機関 of this (省エネ) child project as a list. */
         energyReviewAgencyList() {
             return String(this.project && this.project.application_review_agency ? this.project.application_review_agency : '')

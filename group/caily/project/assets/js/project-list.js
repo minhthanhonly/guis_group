@@ -9391,6 +9391,12 @@ var projectTable;
                 }
             },
             computed: {
+                /** Note type 1 is CAILYメモ; 省エネ departments call it 入力注意点項目 (same name as the list column). */
+                cailyNoteLabel() {
+                    const name = this.selectedDepartment && this.selectedDepartment.name ? String(this.selectedDepartment.name) : '';
+                    const label = name.indexOf('省エネ') !== -1 ? '入力注意点項目' : 'CAILYメモ';
+                    return typeof translateText === 'function' ? translateText(label) : label;
+                },
                 isCailyBranchUser() {
                     return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
                 },
