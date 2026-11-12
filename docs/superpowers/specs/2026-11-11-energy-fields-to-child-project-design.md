@@ -41,7 +41,7 @@ Người dùng chọn 1, và chọn bỏ hẳn khỏi form công trình.
 
 **DB.** Thêm vào `groupware_projects`: `energy_materials` TEXT, `energy_materials_memo` VARCHAR(500), `application_review_agency` VARCHAR(255), `bels_zeh_grade` VARCHAR(10), đều NULL mặc định. Tự thêm khi chạy theo kiểu `ensureProgressStartedAtColumn`, kèm file `sql/add_energy_fields_to_projects.sql`.
 
-**Chuyển dữ liệu.** Trong cùng file SQL, một câu UPDATE chép từ công trình sang mọi dự án con có `parent_project_id` khớp và 部署 `LIKE '%省エネ%'`, chỉ khi cột đích còn trống (chạy lại không ghi đè). Chạy tay một lần. Công trình có dữ liệu nhưng chưa có dự án con 省エネ: giá trị chỉ còn trong cột cũ, không hiển thị.
+**Chuyển dữ liệu.** Trong cùng file SQL, một câu UPDATE chép từ công trình sang mọi dự án con có `parent_project_id` khớp và 部署 `LIKE '%省エネ%'`, chỉ khi cột đích còn trống (chạy lại không ghi đè). Chạy tay một lần. *Bổ sung sau rà soát (2026-11-12): chỉ chép từ công trình có 依頼 chứa 省エネ — đúng điều kiện mà giao diện cũ dùng để hiện 3 hạng mục — vì cột `bels_zeh_grade` của công trình có mặc định `'0'` nên chép tất cả sẽ làm hiện 「0 : 該当なし（非ZEH）」 trên hàng nghìn dự án trước đây không hiển thị gì.* Công trình có dữ liệu nhưng chưa có dự án con 省エネ: giá trị chỉ còn trong cột cũ, không hiển thị.
 
 **Model `project.php`.** `create()` và `update()` nhận 4 trường; nếu 部署 không phải 省エネ thì lưu rỗng. Câu SELECT danh sách, ánh xạ cột `parent_application_review_agency` / `parent_bels_zeh_grade` và tìm kiếm từ khoá đổi nguồn từ `pp.*` sang `p.*` (giữ nguyên key cột để không hỏng bố cục cột người dùng đã lưu). Ghi lịch sử thay đổi cho 3 hạng mục như các trường khác.
 

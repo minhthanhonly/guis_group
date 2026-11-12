@@ -79,9 +79,95 @@ class Project extends ApplicationModel {
             'tags' => array(), //project tags for search and organization
             'is_kadai' => array(), //boolean field to identify child projects
             'yotei' => array(), //予定工程 JSON
+            // 省エネ部署の案件のみ (moved from parent_projects)
+            'energy_materials' => array(), //省エネ向け資料 (comma-separated)
+            'energy_materials_memo' => array(), //省エネ向け資料・その他メモ
+            'application_review_agency' => array(), //申請提出先の審査機関 (comma-separated)
+            'bels_zeh_grade' => array(), //BELSのZEH等級 ('' or 0-9)
         );
         $this->connect();
         $this->ensureProgressStartedAtColumn();
+        $this->ensureEnergyFieldColumns();
+    }
+
+    /**
+     * Ensure 省エネ fields (moved from parent_projects to child projects) exist.
+     */
+    private function ensureEnergyFieldColumns() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+        if ($table === '') {
+            $table = DB_PREFIX . 'projects';
+        }
+        $columns = array(
+            'energy_materials' => "TEXT NULL DEFAULT NULL COMMENT '省エネ向け資料 (comma-separated)'",
+            'energy_materials_memo' => "VARCHAR(500) NULL DEFAULT NULL COMMENT '省エネ向け資料・その他メモ'",
+            'application_review_agency' => "VARCHAR(255) NULL DEFAULT NULL COMMENT '申請提出先の審査機関'",
+            'bels_zeh_grade' => "VARCHAR(10) NULL DEFAULT NULL COMMENT 'BELSのZEH等級 (0-9, empty=未選択)'",
+        );
+        try {
+            foreach ($columns as $name => $definition) {
+                $row = $this->fetchOne(
+                    "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                    . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+                    . "AND COLUMN_NAME = '" . $this->quote($name) . "'"
+                );
+                if (empty($row['cnt'])) {
+                    $this->query("ALTER TABLE `{$table}` ADD COLUMN `{$name}` {$definition}");
+                }
+            }
+        } catch (Exception $e) {
+            error_log('ensureEnergyFieldColumns failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * 省エネ向け資料 / 申請提出先の審査機関 / BELSのZEH等級 belong to child projects of a 省エネ department.
+     * - Non-省エネ department: fields are cleared (on update only when they hold a value).
+     * - 省エネ department: only keys present in $_POST are written on update; create defaults to ''.
+     *
+     * @param array      $data         Insert/update payload (by ref)
+     * @param int        $departmentId Final department of the project
+     * @param array|null $old          Existing row on update, null on create
+     */
+    private function applyEnergyFields(array &$data, $departmentId, $old = null) {
+        $fields = array('energy_materials', 'energy_materials_memo', 'application_review_agency', 'bels_zeh_grade');
+        $isCreate = empty($old);
+        if (!$this->isEnergyDepartmentById($departmentId)) {
+            foreach ($fields as $field) {
+                if ($isCreate || (isset($old[$field]) && trim((string)$old[$field]) !== '')) {
+                    $data[$field] = '';
+                }
+            }
+            return;
+        }
+        foreach ($fields as $field) {
+            if (array_key_exists($field, $_POST)) {
+                $value = trim((string)$_POST[$field]);
+                if ($field === 'bels_zeh_grade') {
+                    $data[$field] = preg_match('/^[0-9]$/', $value) ? $value : '';
+                } else {
+                    $data[$field] = $this->validateUTF8MB4($value);
+                }
+            } elseif ($isCreate) {
+                $data[$field] = '';
+            }
+        }
+        // その他メモ is only meaningful while その他 is selected
+        $materials = array_key_exists('energy_materials', $data)
+            ? $data['energy_materials']
+            : (isset($old['energy_materials']) ? $old['energy_materials'] : '');
+        $hasOther = in_array('その他', array_map('trim', explode(',', (string)$materials)), true);
+        if (!$hasOther) {
+            $oldMemo = ($isCreate || !isset($old['energy_materials_memo'])) ? '' : trim((string)$old['energy_materials_memo']);
+            if (array_key_exists('energy_materials_memo', $data) || $oldMemo !== '') {
+                $data['energy_materials_memo'] = '';
+            }
+        }
     }
 
     /**
@@ -417,8 +503,9 @@ class Project extends ApplicationModel {
             'parent_type2' => 'pp.type2',
             'parent_type3' => 'pp.type3',
             'parent_features' => 'pp.features',
-            'parent_application_review_agency' => 'pp.application_review_agency',
-            'parent_bels_zeh_grade' => 'pp.bels_zeh_grade',
+            // 省エネ fields now live on the child project (keys kept for saved column layouts)
+            'parent_application_review_agency' => 'p.application_review_agency',
+            'parent_bels_zeh_grade' => 'p.bels_zeh_grade',
         );
         if (isset($parentColumns[$order_column])) {
             return $parentColumns[$order_column];
@@ -1490,8 +1577,8 @@ class Project extends ApplicationModel {
             pp.company_name as parent_company_name, pp.contact_name as parent_contact_name, pp.construction_number as parent_construction_number,
             pp.scale as parent_scale, pp.type1 as parent_type1, pp.type2 as parent_type2, pp.type3 as parent_type3,
             pp.features as parent_features,
-            pp.application_review_agency as parent_application_review_agency,
-            pp.bels_zeh_grade as parent_bels_zeh_grade,
+            p.application_review_agency as parent_application_review_agency,
+            p.bels_zeh_grade as parent_bels_zeh_grade,
             pp.requests as parent_requests,
             gu.realname as parent_guis_receiver
             FROM {$this->table} p
@@ -1906,7 +1993,7 @@ class Project extends ApplicationModel {
     /**
      * Label text for BELSのZEH等級 so keyword search matches UI labels, not only codes.
      */
-    private function sqlBelsZehGradeLabelExpr($column = 'pp.bels_zeh_grade') {
+    private function sqlBelsZehGradeLabelExpr($column = 'p.bels_zeh_grade') {
         return "CASE CAST({$column} AS CHAR)
             WHEN '0' THEN '0 : 該当なし（非ZEH）'
             WHEN '1' THEN '1 : ZEH'
@@ -1961,11 +2048,12 @@ class Project extends ApplicationModel {
             'pp.scale',
             'pp.type1',
             'pp.type2',
-            // Building (parent_projects): 特徴 / 申請提出先の審査機関 / BELSのZEH等級
+            // Building (parent_projects): 特徴
             'pp.features',
-            'pp.application_review_agency',
-            'pp.bels_zeh_grade',
-            $this->sqlBelsZehGradeLabelExpr('pp.bels_zeh_grade'),
+            // Child project (省エネ): 申請提出先の審査機関 / BELSのZEH等級
+            'p.application_review_agency',
+            'p.bels_zeh_grade',
+            $this->sqlBelsZehGradeLabelExpr('p.bels_zeh_grade'),
         ]);
         $notesContentWhere = $this->buildFlexibleLikeWhere($rawKeyword, ['pn.content']);
         if ($notesContentWhere === '') {
@@ -2962,6 +3050,7 @@ class Project extends ApplicationModel {
         $data['amount'] = (array_key_exists('amount', $_POST) && $_POST['amount'] !== '' && $_POST['amount'] !== null)
             ? floatval($_POST['amount'])
             : 0;
+        $this->applyEnergyFields($data, $data['department_id'], null);
        
 
         // Validate required fields
@@ -3347,6 +3436,11 @@ class Project extends ApplicationModel {
             $data['guis_nouki_status'] = trim((string)$_POST['guis_nouki_status']);
         }
         $this->applyEnergyDrawingShareFromPost($data, $old);
+        $this->applyEnergyFields(
+            $data,
+            isset($data['department_id']) ? $data['department_id'] : (isset($old['department_id']) ? $old['department_id'] : 0),
+            $old
+        );
         if (array_key_exists('actual_end_date', $_POST)) {
             $val = isset($_POST['actual_end_date']) ? trim($_POST['actual_end_date']) : '';
             if ($val !== '') {
@@ -3729,6 +3823,10 @@ class Project extends ApplicationModel {
             'energy_drawing_share_reason' => '省エネ図面共有理由を変更',
             'energy_drawing_share_note' => '省エネ図面共有備考を変更',
             'yotei' => '予定工程を変更',
+            'energy_materials' => '省エネ向け資料を変更',
+            'energy_materials_memo' => '省エネ向け資料メモを変更',
+            'application_review_agency' => '申請提出先の審査機関を変更',
+            'bels_zeh_grade' => 'BELSのZEH等級を変更',
         ];
         $skipKeys = ['updated_at', 'updated_by'];
         foreach ($data as $key => $newVal) {

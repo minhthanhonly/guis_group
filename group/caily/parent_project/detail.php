@@ -248,43 +248,6 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12" v-if="hasEnergySavingRequest">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
-                                <div class="form-control-plaintext">
-                                    <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedEnergyMaterialLabels.length">
-                                        <span v-for="opt in selectedEnergyMaterialLabels" :key="'emv_' + opt"
-                                              class="badge badge-outline-primary me-1">
-                                            {{ opt }}
-                                        </span>
-                                        <span v-if="parentProject.energy_materials_memo
-                                            && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
-                                              class="small text-muted ms-1">
-                                            ({{ parentProject.energy_materials_memo }})
-                                        </span>
-                                    </div>
-                                    <span v-else class="text-muted">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" v-if="hasEnergySavingRequest">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
-                                <div style="min-height:38px;">
-                                    <span v-if="parentProject.application_review_agency">
-                                        <span v-for="item in parentProject.application_review_agency.split(',').map(v => v.trim()).filter(v => v)"
-                                            :key="item" class="badge bg-primary me-1">{{ item }}</span>
-                                    </span>
-                                    <span v-else class="text-muted">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" v-if="hasEnergySavingRequest">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
-                                <div class="form-control-plaintext">{{ belsZehGradeLabel || '-' }}</div>
-                            </div>
-                        </div>
                         <!-- <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="備考">備考</span></label>
@@ -1272,6 +1235,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            <?php $childEnergyKey = 'create'; include __DIR__ . '/partials/child-project-energy-fields.php'; ?>
                             <div class="col-12">
                                 <div class="mb-2">
                                     <div class="form-check">
@@ -1537,6 +1501,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            <?php $childEnergyKey = 'edit'; include __DIR__ . '/partials/child-project-energy-fields.php'; ?>
                             <div class="col-12">
                                 <div class="mb-2">
                                     <div class="form-check">
@@ -4113,5 +4078,6 @@ $view->footing();
 <script src="../project/assets/js/energy-fee-payment.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-customers-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/parent-project-child-energy-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-quick-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

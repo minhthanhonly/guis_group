@@ -140,31 +140,6 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12" v-if="viewHasEnergySavingRequest">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
-                                <div class="d-flex flex-wrap gap-1 align-items-center">
-                                    <span v-for="opt in viewEnergyMaterialLabels" :key="'em_' + opt" class="badge badge-outline-primary me-1">{{ opt }}</span>
-                                    <span v-if="editingParentProject.energy_materials_memo && viewEnergyMaterialLabels.indexOf('その他') !== -1" class="small text-muted ms-1">({{ editingParentProject.energy_materials_memo }})</span>
-                                    <span v-if="viewEnergyMaterialLabels.length === 0" class="text-muted">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" v-if="viewHasEnergySavingRequest">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
-                                <div style="min-height: 38px;">
-                                    <span v-for="item in splitList(editingParentProject.application_review_agency)" :key="'ag_' + item" class="badge badge-outline-primary me-1">{{ item }}</span>
-                                    <span v-if="splitList(editingParentProject.application_review_agency).length === 0" class="text-muted">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" v-if="viewHasEnergySavingRequest">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
-                                <div style="min-height: 38px;">{{ viewBelsZehGradeLabel || '-' }}</div>
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Edit mode -->
@@ -367,46 +342,6 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                             </div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>
-                            <div class="col-12" v-if="editHasEnergySavingRequest">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
-                                    <div class="row">
-                                        <div class="col-md-4" v-for="opt in energyMaterialOptions" :key="'edit_em_' + opt">
-                                            <div class="form-check">
-                                                <input class="form-check-input" type="checkbox"
-                                                    :id="'edit_pp_energy_materials_' + opt"
-                                                    v-model="editParentEnergyMaterialFlags[opt]">
-                                                <label class="form-check-label" :for="'edit_pp_energy_materials_' + opt">{{ opt }}</label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="mt-2" v-if="editParentEnergyMaterialFlags['その他']">
-                                        <input type="text" class="form-control" v-model="editingParentProject.energy_materials_memo"
-                                               placeholder="その他メモ" maxlength="500">
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6" v-if="editHasEnergySavingRequest">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" id="edit_pp_application_review_agency_tags" name="edit_pp_application_review_agency_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditParentTagifyTags('application_review_agency')" title="すべて削除">
-                                            <i class="fa fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-md-6" v-if="editHasEnergySavingRequest">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
-                                    <select class="form-select" v-model="editingParentProject.bels_zeh_grade">
-                                        <option v-for="opt in belsZehGradeOptions" :key="opt.value" :value="opt.value">
-                                            {{ opt.label }}
-                                        </option>
-                                    </select>
                                 </div>
                             </div>
                     </div>

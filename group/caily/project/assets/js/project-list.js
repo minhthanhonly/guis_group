@@ -3411,14 +3411,6 @@ var projectTable;
             .indexOf('共同') !== -1;
     }
 
-    function parentRequestsIncludeEnergySaving(requests) {
-        return String(requests || '')
-            .split(',')
-            .map(function(v) { return v.trim(); })
-            .filter(Boolean)
-            .indexOf('省エネ') !== -1;
-    }
-
     var PARENT_FEATURE_OPTIONS = [
         '施主宅付き',
         'マルチルームあり',
@@ -6397,9 +6389,6 @@ var projectTable;
                     name: 'parent_application_review_agency',
                     data: 'parent_application_review_agency',
                     render: function(data, type, row) {
-                        if (!parentRequestsIncludeEnergySaving(row && row.parent_requests)) {
-                            return '<span class="text-muted">-</span>';
-                        }
                         var value = String(data || '').trim();
                         if (!value) {
                             return '<span class="text-muted">-</span>';
@@ -6419,9 +6408,6 @@ var projectTable;
                     name: 'parent_bels_zeh_grade',
                     data: 'parent_bels_zeh_grade',
                     render: function(data, type, row) {
-                        if (!parentRequestsIncludeEnergySaving(row && row.parent_requests)) {
-                            return '<span class="text-muted">-</span>';
-                        }
                         var label = formatBelsZehGradeLabel(data);
                         if (!label) {
                             return '<span class="text-muted">-</span>';
@@ -7688,28 +7674,6 @@ var projectTable;
                         }).join(''));
                     } else {
                         html += fieldRow('特徴', textOrEmpty(''));
-                    }
-                    if (parentRequestsIncludeEnergySaving(parent.requests)) {
-                        var energyMaterials = String(parent.energy_materials || '').split(',').map(function(m) { return m.trim(); }).filter(Boolean);
-                        if (energyMaterials.length) {
-                            var energyHtml = energyMaterials.map(function(item) {
-                                var label = escapeHtmlForNote(item);
-                                if (item === 'その他' && parent.energy_materials_memo) {
-                                    label += ' <span class="small text-muted">(' + escapeHtmlForNote(parent.energy_materials_memo) + ')</span>';
-                                }
-                                return '<span class="badge badge-outline-primary me-1">' + label + '</span>';
-                            }).join('');
-                            html += fieldRow('省エネ向け資料', energyHtml);
-                        } else {
-                            html += fieldRow('省エネ向け資料', textOrEmpty(''));
-                        }
-                        var agency = String(parent.application_review_agency || '').trim();
-                        html += fieldRow('申請提出先の審査機関', agency
-                            ? agency.split(',').map(function(item) { return item.trim(); }).filter(Boolean).map(function(item) {
-                                return '<span class="badge badge-outline-primary me-1">' + escapeHtmlForNote(item) + '</span>';
-                            }).join('')
-                            : textOrEmpty(''));
-                        html += fieldRow('BELSのZEH等級', textOrEmpty(formatBelsZehGradeLabel(parent.bels_zeh_grade)));
                     }
                     var selectedDeptId = getSelectedDepartmentId();
                     var otherChildren = children.filter(function(c) {

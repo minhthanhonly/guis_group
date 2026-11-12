@@ -421,7 +421,7 @@ function handleProjectVersionConflict(responseData, onReload) {
 window.handleProjectVersionConflict = handleProjectVersionConflict;
 
 createApp({
-    mixins: [window.ParentProjectCustomersMixin],
+    mixins: [window.ParentProjectCustomersMixin, window.ParentProjectChildEnergyMixin],
     data() {
         return {
             isAdmin: typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator',
@@ -488,21 +488,6 @@ createApp({
             },
             type1Tagify: null,
             type2Tagify: null,
-            applicationReviewAgencyTagify: null,
-            applicationReviewAgencyWhitelist: (window.ParentProjectReviewAgency
-                && Array.isArray(window.ParentProjectReviewAgency.DEFAULT_WHITELIST))
-                ? window.ParentProjectReviewAgency.DEFAULT_WHITELIST.slice()
-                : [
-                    '日本ERI',
-                    'ERIソリューション',
-                    'ビューローベリタスジャパン',
-                    '日本住宅保証検査機構（JIO）',
-                    'ハウスプラス住宅保証',
-                    '東京建築検査機構（TBTC）',
-                    'ユーディーアイ確認検査',
-                    '日本確認検査センター',
-                    'JCI'
-                ],
             nonResidentialMainUseOptions: [
                 { value: '08340', label: '08340 工場' },
                 { value: '08440', label: '08440 物品販売店舗' },
@@ -536,26 +521,6 @@ createApp({
             materials_contract: false,
             materials_tac: false,
             materials_other: false,
-            energyMaterialOptions: [
-                '意匠図',
-                '設備図',
-                '配置図',
-                '案内図',
-                '敷地求積図',
-                '確認申請書',
-                '設備仕様書',
-                'その他'
-            ],
-            energyMaterialFlags: {
-                '意匠図': false,
-                '設備図': false,
-                '配置図': false,
-                '案内図': false,
-                '敷地求積図': false,
-                '確認申請書': false,
-                '設備仕様書': false,
-                'その他': false
-            },
             sharedHousingFeatureLabel: '共同住宅（共用部計算なし）',
             featureOptions: [
                 '施主宅付き',
@@ -579,19 +544,6 @@ createApp({
                 '増築': false,
                 '用途変更': false
             },
-            belsZehGradeOptions: [
-                { value: '', label: '' },
-                { value: '0', label: '0 : 該当なし（非ZEH）' },
-                { value: '1', label: '1 : ZEH' },
-                { value: '2', label: '2 : Nearly ZEH' },
-                { value: '3', label: '3 : ZEH Oriented' },
-                { value: '4', label: '4 : ZEH-M' },
-                { value: '5', label: '5 : Nearly ZEH-M' },
-                { value: '6', label: '6 : ZEH-M Oriented' },
-                { value: '7', label: '7 : ZEH Ready' },
-                { value: '8', label: '8 : DK-ZEH' },
-                { value: '9', label: '9 : 関西限定DK-ZEH' }
-            ],
             validationErrors: {
                 company_name: '',
                 project_name: ''
@@ -1046,37 +998,10 @@ createApp({
             });
             return found ? found.label : code;
         },
-        belsZehGradeLabel() {
-            if (!this.parentProject) {
-                return '';
-            }
-            const code = String(this.parentProject.bels_zeh_grade != null ? this.parentProject.bels_zeh_grade : '');
-            if (code === '') {
-                return '';
-            }
-            const found = this.belsZehGradeOptions.find(function(opt) {
-                return opt.value === code;
-            });
-            return found ? found.label : code;
-        },
-        hasEnergySavingRequest() {
-            return String(this.parentProject && this.parentProject.requests ? this.parentProject.requests : '')
-                .split(',')
-                .map(function(v) { return v.trim(); })
-                .filter(Boolean)
-                .includes('省エネ');
-        },
         selectedFeatureLabels() {
             const features = String(this.parentProject && this.parentProject.features ? this.parentProject.features : '');
             const selected = features.split(',').map(function(v) { return v.trim(); }).filter(Boolean);
             return this.visibleFeatureOptions.filter(function(opt) {
-                return selected.indexOf(opt) !== -1;
-            });
-        },
-        selectedEnergyMaterialLabels() {
-            const raw = String(this.parentProject && this.parentProject.energy_materials ? this.parentProject.energy_materials : '');
-            const selected = raw.split(',').map(function(v) { return v.trim(); }).filter(Boolean);
-            return this.energyMaterialOptions.filter(function(opt) {
                 return selected.indexOf(opt) !== -1;
             });
         },
@@ -1409,9 +1334,6 @@ createApp({
                     this.parentProject = response.data;
                     // Customer list of the building (one primary customer)
                     this.setCustomerListFromServer(this.parentProject.customers || []);
-                    this.parentProject.bels_zeh_grade = (this.parentProject.bels_zeh_grade == null || this.parentProject.bels_zeh_grade === '')
-                        ? ''
-                        : String(this.parentProject.bels_zeh_grade);
                     this.parseFeatures();
                     
                     // Load GUIS receiver display name if exists
@@ -2147,12 +2069,6 @@ createApp({
                 request_type: source.request_type || '',
                 structural_office: source.structural_office || '',
                 features: source.features || '',
-                application_review_agency: source.application_review_agency || '',
-                bels_zeh_grade: (source.bels_zeh_grade != null && source.bels_zeh_grade !== '')
-                    ? String(source.bels_zeh_grade)
-                    : '',
-                energy_materials: source.energy_materials || '',
-                energy_materials_memo: source.energy_materials_memo || '',
                 materials_memo: source.materials_memo || '',
                 notes: source.notes || '',
                 requests: requests,
@@ -2684,6 +2600,7 @@ createApp({
         },
 
         resetChildProjectForm() {
+            this.resetChildEnergyFields('create');
             this.newChildProject = {
                 name: '',
                 department_id: '',
@@ -3408,6 +3325,8 @@ createApp({
                 use_parent_guis_receiver: useParentGuisReceiver,
                 guis_receiver: useParentGuisReceiver ? '' : childGuisReceiver
             };
+            // 省エネ fields (child project owns them); refreshed from getById below
+            this.loadChildEnergyFields('edit', project);
 
             this.loadDepartments();
 
@@ -3440,6 +3359,9 @@ createApp({
                                 this.editingChildProject.energy_drawing_share_status = data.energy_drawing_share_status || '';
                                 this.editingChildProject.energy_drawing_share_reason = data.energy_drawing_share_reason || '';
                                 this.editingChildProject.energy_drawing_share_note = data.energy_drawing_share_note || '';
+                            }
+                            if (data.energy_materials !== undefined) {
+                                this.loadChildEnergyFields('edit', data);
                             }
                         }
                     } catch (e) { /* ignore */ }
@@ -4310,6 +4232,7 @@ createApp({
                 formData.append('id', this.editingChildProject.id);
                 formData.append('name', this.editingChildProject.name);
                 formData.append('department_id', this.editingChildProject.department_id);
+                this.appendChildEnergyFieldsToFormData(formData, 'edit');
                 formData.append('project_number', this.editingChildProject.project_number || '');
                 formData.append('description', this.editChildProjectQuillContent || '');
                 formData.append('start_date', this.toChildProjectAPIDate(this.editingChildProject.start_date));
@@ -4649,6 +4572,7 @@ createApp({
                 const formData = new FormData();
                 formData.append('name', this.newChildProject.name);
                 formData.append('department_id', this.newChildProject.department_id);
+                this.appendChildEnergyFieldsToFormData(formData, 'create');
                 formData.append('project_number', '');
                 formData.append('description', this.newChildProject.description || '');
                 formData.append('start_date', this.toChildProjectAPIDate(this.newChildProject.start_date));

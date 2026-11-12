@@ -994,10 +994,6 @@ createApp({
                 request_type: source.request_type || '',
                 structural_office: source.structural_office || '',
                 features: source.features || '',
-                application_review_agency: source.application_review_agency || '',
-                bels_zeh_grade: (source.bels_zeh_grade != null && source.bels_zeh_grade !== '')
-                    ? String(source.bels_zeh_grade)
-                    : '',
                 notes: source.notes || '',
                 requests: String(source.requests || '').trim(),
                 materials: String(source.materials || '').trim(),

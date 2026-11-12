@@ -33,32 +33,9 @@ createApp({
                 materials_tac: false,
                 materials_other: false,
                 materials_memo: '',
-                application_review_agency: '',
-                bels_zeh_grade: '',
-                energy_materials_memo: '',
                 structural_office: '',
                 notes: '',
                 status: 'draft'
-            },
-            energyMaterialOptions: [
-                '意匠図',
-                '設備図',
-                '配置図',
-                '案内図',
-                '敷地求積図',
-                '確認申請書',
-                '設備仕様書',
-                'その他'
-            ],
-            energyMaterialFlags: {
-                '意匠図': false,
-                '設備図': false,
-                '配置図': false,
-                '案内図': false,
-                '敷地求積図': false,
-                '確認申請書': false,
-                '設備仕様書': false,
-                'その他': false
             },
             sharedHousingFeatureLabel: '共同住宅（共用部計算なし）',
             featureOptions: [
@@ -83,19 +60,6 @@ createApp({
                 '増築': false,
                 '用途変更': false
             },
-            belsZehGradeOptions: [
-                { value: '', label: '' },
-                { value: '0', label: '0 : 該当なし（非ZEH）' },
-                { value: '1', label: '1 : ZEH' },
-                { value: '2', label: '2 : Nearly ZEH' },
-                { value: '3', label: '3 : ZEH Oriented' },
-                { value: '4', label: '4 : ZEH-M' },
-                { value: '5', label: '5 : Nearly ZEH-M' },
-                { value: '6', label: '6 : ZEH-M Oriented' },
-                { value: '7', label: '7 : ZEH Ready' },
-                { value: '8', label: '8 : DK-ZEH' },
-                { value: '9', label: '9 : 関西限定DK-ZEH' }
-            ],
             nonResidentialMainUseOptions: [
                 { value: '08340', label: '08340 工場' },
                 { value: '08440', label: '08440 物品販売店舗' },
@@ -128,25 +92,10 @@ createApp({
             },
             type1Tagify: null,
             type2Tagify: null,
-            applicationReviewAgencyTagify: null,
             constructionBranchTagify: null,
             scaleTagify: null,
             cityTagify: null,
             structuralOfficeTagify: null,
-            applicationReviewAgencyWhitelist: (window.ParentProjectReviewAgency
-                && Array.isArray(window.ParentProjectReviewAgency.DEFAULT_WHITELIST))
-                ? window.ParentProjectReviewAgency.DEFAULT_WHITELIST.slice()
-                : [
-                    '日本ERI',
-                    'ERIソリューション',
-                    'ビューローベリタスジャパン',
-                    '日本住宅保証検査機構（JIO）',
-                    'ハウスプラス住宅保証',
-                    '東京建築検査機構（TBTC）',
-                    'ユーディーアイ確認検査',
-                    '日本確認検査センター',
-                    'JCI'
-                ],
             // Customer modal data
             categories: [],
             departments: [],
@@ -207,31 +156,12 @@ createApp({
                 }
                 return true;
             });
-        },
-        hasEnergySavingRequest() {
-            return !!this.parentProject.request_energy_saving;
         }
     },
     watch: {
         'parentProject.type2'() {
             if (!this.hasSharedHousingType && this.featureFlags) {
                 this.featureFlags[this.sharedHousingFeatureLabel] = false;
-            }
-        },
-        'parentProject.request_energy_saving'(enabled) {
-            if (!enabled) {
-                this.parentProject.application_review_agency = '';
-                this.parentProject.bels_zeh_grade = '';
-                this.parentProject.energy_materials_memo = '';
-                this.energyMaterialFlags = this.createEmptyEnergyMaterialFlags();
-                this.destroyApplicationReviewAgencyTagify();
-            } else {
-                this.$nextTick(() => this.initApplicationReviewAgencyTagify());
-            }
-        },
-        'energyMaterialFlags.その他'(enabled) {
-            if (!enabled && this.parentProject) {
-                this.parentProject.energy_materials_memo = '';
             }
         },
         'parentProject.materials_other'(enabled) {
@@ -506,24 +436,6 @@ createApp({
                     this.parentProject.materials_other ? (this.parentProject.materials_memo || '') : ''
                 );
                 formData.append('features', this.buildFeaturesString());
-                formData.append(
-                    'application_review_agency',
-                    this.hasEnergySavingRequest ? (this.parentProject.application_review_agency || '') : ''
-                );
-                formData.append(
-                    'bels_zeh_grade',
-                    this.hasEnergySavingRequest ? (this.parentProject.bels_zeh_grade || '') : ''
-                );
-                formData.append(
-                    'energy_materials',
-                    this.hasEnergySavingRequest ? this.buildEnergyMaterialsString() : ''
-                );
-                formData.append(
-                    'energy_materials_memo',
-                    this.hasEnergySavingRequest && this.energyMaterialFlags['その他']
-                        ? (this.parentProject.energy_materials_memo || '')
-                        : ''
-                );
                 formData.append('structural_office', this.parentProject.structural_office || '');
                 formData.append('notes', this.parentProject.notes || '');
                 formData.append('status', this.parentProject.status || 'in_progress');
@@ -710,66 +622,6 @@ createApp({
             } catch (error) {
                 console.error('Error generating project number:', error);
                 showMessage('プロジェクト番号の生成に失敗しました', true);
-            }
-        },
-        destroyApplicationReviewAgencyTagify() {
-            if (this.applicationReviewAgencyTagify) {
-                try { this.applicationReviewAgencyTagify.destroy(); } catch (e) { /* ignore */ }
-                this.applicationReviewAgencyTagify = null;
-            }
-            const input = document.querySelector('#application_review_agency_tags');
-            if (input) {
-                input.value = '';
-                if (input._tagify) {
-                    try { input._tagify.destroy(); } catch (e) { /* ignore */ }
-                    input._tagify = null;
-                }
-            }
-        },
-        async refreshApplicationReviewAgencyWhitelist() {
-            if (window.ParentProjectReviewAgency && typeof window.ParentProjectReviewAgency.loadMergedWhitelist === 'function') {
-                this.applicationReviewAgencyWhitelist = await window.ParentProjectReviewAgency.loadMergedWhitelist();
-            }
-            return this.applicationReviewAgencyWhitelist;
-        },
-        async initApplicationReviewAgencyTagify() {
-            const input = document.querySelector('#application_review_agency_tags');
-            if (!input || !window.Tagify) return;
-            await this.refreshApplicationReviewAgencyWhitelist();
-            this.destroyApplicationReviewAgencyTagify();
-            input.value = '';
-            this.applicationReviewAgencyTagify = new Tagify(input, {
-                whitelist: this.applicationReviewAgencyWhitelist.slice(),
-                enforceWhitelist: false,
-                maxTags: 1,
-                dropdown: {
-                    maxItems: 40,
-                    classname: 'tags-look-review-agency',
-                    enabled: 0,
-                    closeOnSelect: true
-                }
-            });
-            const updateAgency = () => {
-                this.parentProject.application_review_agency = this.applicationReviewAgencyTagify.value
-                    .map(tag => tag.value)
-                    .join(',');
-            };
-            this.applicationReviewAgencyTagify.on('add', (e) => {
-                updateAgency();
-                const value = e && e.detail && e.detail.data ? e.detail.data.value : '';
-                if (value && window.ParentProjectReviewAgency) {
-                    window.ParentProjectReviewAgency.saveLocalCustom(value);
-                    this.applicationReviewAgencyWhitelist = window.ParentProjectReviewAgency.buildWhitelist(
-                        this.applicationReviewAgencyWhitelist
-                    );
-                    this.applicationReviewAgencyTagify.settings.whitelist = this.applicationReviewAgencyWhitelist.slice();
-                    this.applicationReviewAgencyTagify.whitelist = this.applicationReviewAgencyWhitelist.slice();
-                }
-            });
-            this.applicationReviewAgencyTagify.on('remove', updateAgency);
-            const current = String(this.parentProject.application_review_agency || '').trim();
-            if (current) {
-                this.applicationReviewAgencyTagify.addTags(current);
             }
         },
         async loadTagifyWhitelists() {
@@ -1239,24 +1091,6 @@ createApp({
             });
             this.featureFlags = flags;
         },
-        createEmptyEnergyMaterialFlags() {
-            const flags = {};
-            this.energyMaterialOptions.forEach((opt) => { flags[opt] = false; });
-            return flags;
-        },
-        buildEnergyMaterialsString() {
-            return this.energyMaterialOptions.filter((opt) => this.energyMaterialFlags[opt]).join(',');
-        },
-        parseCopiedEnergyMaterials(energyMaterials) {
-            const list = String(energyMaterials || '').split(',').map((m) => m.trim()).filter(Boolean);
-            const flags = this.createEmptyEnergyMaterialFlags();
-            list.forEach((item) => {
-                if (Object.prototype.hasOwnProperty.call(flags, item)) {
-                    flags[item] = true;
-                }
-            });
-            this.energyMaterialFlags = flags;
-        },
         applyTagifyValuesFromParentProject() {
             const apply = (tagify, value) => {
                 if (!tagify) {
@@ -1277,11 +1111,6 @@ createApp({
             apply(this.type2Tagify, this.parentProject.type2);
             apply(this.cityTagify, this.parentProject.city);
             apply(this.structuralOfficeTagify, this.parentProject.structural_office);
-            if (this.hasEnergySavingRequest) {
-                this.$nextTick(() => {
-                    this.initApplicationReviewAgencyTagify();
-                });
-            }
             apply(this.constructionBranchTagify, this.parentProject.construction_branch);
         },
         setSelect2Value($select, value, text) {
@@ -1338,12 +1167,7 @@ createApp({
                 this.parentProject.type3 = data.type3 || '';
                 this.parentProject.request_type = data.request_type || '';
                 this.parentProject.structural_office = data.structural_office || '';
-                this.parentProject.application_review_agency = data.application_review_agency || '';
-                this.parentProject.bels_zeh_grade = (data.bels_zeh_grade != null && data.bels_zeh_grade !== '')
-                    ? String(data.bels_zeh_grade)
-                    : '';
                 this.parentProject.materials_memo = data.materials_memo || '';
-                this.parentProject.energy_materials_memo = data.energy_materials_memo || '';
                 this.parentProject.notes = data.notes || '';
                 this.parentProject.status = data.status || 'draft';
                 this.parentProject.desired_delivery_date = '';
@@ -1352,7 +1176,6 @@ createApp({
                 this.parseCopiedRequests(data.requests);
                 this.parseCopiedMaterials(data.materials);
                 this.parseCopiedFeatures(data.features);
-                this.parseCopiedEnergyMaterials(data.energy_materials);
                 this.clearRequestsValidation();
 
                 await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1418,15 +1241,11 @@ createApp({
             materials_other: false,
             materials: '',
             materials_memo: '',
-            application_review_agency: '',
-            bels_zeh_grade: '',
-            energy_materials_memo: '',
             structural_office: '',
             notes: '',
             status: 'draft'
         };
         this.featureFlags = this.createEmptyFeatureFlags();
-        this.energyMaterialFlags = this.createEmptyEnergyMaterialFlags();
         
         // Auto-generate project number on page load
         await this.generateProjectNumber();

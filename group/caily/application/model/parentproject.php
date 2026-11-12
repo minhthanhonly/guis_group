@@ -1441,14 +1441,34 @@ class ParentProject extends ApplicationModel {
         if (!in_array($column, $allowed, true)) {
             return array();
         }
-        $rows = $this->fetchAll(
-            "SELECT `{$column}` AS value
-             FROM {$this->table}
-             WHERE `{$column}` IS NOT NULL
-               AND TRIM(`{$column}`) != ''
-             ORDER BY `{$column}` ASC
-             LIMIT 1000"
-        );
+        if ($column === 'application_review_agency') {
+            // 申請提出先の審査機関 is now entered on child projects (省エネ部署).
+            // Legacy building values are kept as suggestions; UNION removes duplicates before LIMIT.
+            $rows = $this->fetchAll(
+                "SELECT value FROM (
+                    SELECT `application_review_agency` AS value
+                    FROM " . DB_PREFIX . "projects
+                    WHERE `application_review_agency` IS NOT NULL
+                      AND TRIM(`application_review_agency`) != ''
+                    UNION
+                    SELECT `application_review_agency` AS value
+                    FROM {$this->table}
+                    WHERE `application_review_agency` IS NOT NULL
+                      AND TRIM(`application_review_agency`) != ''
+                 ) agency_values
+                 ORDER BY value ASC
+                 LIMIT 1000"
+            );
+        } else {
+            $rows = $this->fetchAll(
+                "SELECT `{$column}` AS value
+                 FROM {$this->table}
+                 WHERE `{$column}` IS NOT NULL
+                   AND TRIM(`{$column}`) != ''
+                 ORDER BY `{$column}` ASC
+                 LIMIT 1000"
+            );
+        }
         $values = array();
         $seen = array();
         foreach ($rows as $row) {

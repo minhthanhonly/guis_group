@@ -295,43 +295,6 @@ if (!$permModel->hasDepartmentPermission('project_add')) {
                                 </div>
                             </div>
                         </div>
-                        <div class="col-12" v-if="hasEnergySavingRequest">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
-                                <div class="row">
-                                    <div class="col-md-4" v-for="opt in energyMaterialOptions" :key="'em_' + opt">
-                                        <div class="form-check">
-                                            <input class="form-check-input" type="checkbox"
-                                                :id="'energy_materials_' + opt"
-                                                v-model="energyMaterialFlags[opt]">
-                                            <label class="form-check-label" :for="'energy_materials_' + opt">{{ opt }}</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="mt-2" v-if="energyMaterialFlags['その他']">
-                                    <input type="text" class="form-control"
-                                        v-model="parentProject.energy_materials_memo"
-                                        placeholder="その他メモ"
-                                        maxlength="500">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-6" v-if="hasEnergySavingRequest">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
-                                <input type="text" class="form-control tagify" id="application_review_agency_tags" name="application_review_agency_tags">
-                            </div>
-                        </div>
-                        <div class="col-md-6" v-if="hasEnergySavingRequest">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
-                                <select class="form-select" v-model="parentProject.bels_zeh_grade">
-                                    <option v-for="opt in belsZehGradeOptions" :key="opt.value" :value="opt.value">
-                                        {{ opt.label }}
-                                    </option>
-                                </select>
-                            </div>
-                        </div>
                         <!-- <div class="col-12">
                             <div class="mb-3 form-control-validation">
                                 <label class="form-label"><span data-i18n="備考">備考</span></label>

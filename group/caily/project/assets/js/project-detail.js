@@ -793,8 +793,12 @@ const vueApp = createApp({
                 .filter(Boolean)
                 .includes('共同');
         },
-        hasEnergySavingRequest() {
-            return this.parentRequestTypes.indexOf('省エネ') !== -1;
+        /** 申請提出先の審査機関 of this (省エネ) child project as a list. */
+        energyReviewAgencyList() {
+            return String(this.project && this.project.application_review_agency ? this.project.application_review_agency : '')
+                .split(',')
+                .map(function(v) { return v.trim(); })
+                .filter(Boolean);
         },
         nonResidentialMainUseLabel() {
             if (!this.project || !this.project.type3) {
@@ -1516,18 +1520,12 @@ const vueApp = createApp({
                 this.project.type2 = parentProject.type2;
                 this.project.type3 = parentProject.type3 || '';
                 this.project.features = parentProject.features || '';
-                this.project.application_review_agency = parentProject.application_review_agency || '';
-                this.project.bels_zeh_grade = (parentProject.bels_zeh_grade != null && parentProject.bels_zeh_grade !== '')
-                    ? String(parentProject.bels_zeh_grade)
-                    : '';
 
                 // Additional fields from parent project
                 this.project.guis_receiver = parentProject.guis_receiver; // GUIS　受付者
                 this.project.structural_office = parentProject.structural_office; // 構造事務所
                 this.project.materials = parentProject.materials; // お客様提供資料
                 this.project.materials_memo = parentProject.materials_memo || '';
-                this.project.energy_materials = parentProject.energy_materials || '';
-                this.project.energy_materials_memo = parentProject.energy_materials_memo || '';
                 this.project.parent_requests = parentProject.requests || ''; // 依頼
 
                 this.parentSiblingProjects = Array.isArray(childrenRes.data) ? childrenRes.data : [];

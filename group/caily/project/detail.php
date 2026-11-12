@@ -511,6 +511,31 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
                             </div>
+                            <!-- 省エネ部署の案件: 省エネ向け資料 / 申請提出先の審査機関 / BELSのZEH等級 (edited in the 案件依頼 modal on the building page) -->
+                            <template v-if="isEnergyDepartmentProject">
+                                <div class="col-12">
+                                    <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
+                                    <div class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
+                                        <span v-for="opt in selectedEnergyMaterialLabels" :key="'em_' + opt"
+                                              class="badge badge-outline-primary me-1">{{ opt }}</span>
+                                        <span v-if="project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
+                                              class="small text-muted ms-1">({{ project.energy_materials_memo }})</span>
+                                        <span v-if="selectedEnergyMaterialLabels.length === 0" class="text-muted">-</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
+                                    <div class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
+                                        <span v-for="item in energyReviewAgencyList" :key="'ag_' + item"
+                                              class="badge badge-outline-primary me-1">{{ item }}</span>
+                                        <span v-if="energyReviewAgencyList.length === 0" class="text-muted">-</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
+                                    <div style="min-height:38px;">{{ belsZehGradeLabel || '-' }}</div>
+                                </div>
+                            </template>
                             <hr class="mt-4 border-primary">
                             <div class="col-12 mt-3">
                                 <template v-if="isEditMode">
