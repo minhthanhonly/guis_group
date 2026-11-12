@@ -1540,6 +1540,21 @@ body.pl-col-resizing * {
     overflow: hidden;
 }
 
+/* Each note cell is a 200px-high box. Keeping every one of them a scroller made Chromium
+   promote them, and everything painted after them, to compositor layers (333 layers with
+   100 rows instead of 26), which dropped frames whenever the table was scrolled sideways.
+   Only the cell under the pointer scrolls now. !important overrides the inline
+   overflow-y:auto set in project-list.js. */
+#projectTable .confirmation-notes-wrapper {
+    overflow: hidden !important;
+    scrollbar-width: thin;
+}
+#projectTable .confirmation-notes-wrapper:hover,
+#projectTable .confirmation-notes-wrapper:focus-within,
+body.note-sorting-active #projectTable .confirmation-notes-wrapper {
+    overflow-y: auto !important;
+}
+
 /* Style for each confirmation note item */
 #projectTable .confirmation-note-item {
     background-color: #fff9e6;
