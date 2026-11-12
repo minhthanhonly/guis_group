@@ -13,6 +13,8 @@
         let quickEditOrderTypeTagify = null, quickEditTeamTagify = null, quickEditManagerTagify = null, quickEditMembersTagify = null;
         let quickEditQuillInstance = null;
         let quickEditIsManagerOnly = false;
+        // 省エネ departments: 担当 / チーム / メンバー are hidden, not validated and not sent (stored values stay as they are)
+        let quickEditIsEnergyDept = false;
         let quickEditOriginalStatus = '';
         let quickEditOriginalCailyNoukiStatus = '';
         let quickEditOriginalGuisNoukiStatus = '';
@@ -279,6 +281,8 @@
                     has_energy_sibling: !!(p.has_energy_sibling === 1 || p.has_energy_sibling === '1' || p.has_energy_sibling === true),
                     department_name: p.department_name || ''
                 };
+                quickEditIsEnergyDept = String(p.department_name || '').indexOf('省エネ') !== -1;
+                $('#quickEditProjectForm').toggleClass('quick-edit-energy-dept', quickEditIsEnergyDept);
                 quickEditEstimateStatus = p.estimate_status || '未発行';
                 quickEditInvoiceStatus = p.invoice_status || '未発行';
                 syncQuickEditStatusOptions(quickEditOriginalStatus);
@@ -388,7 +392,7 @@
                         var labelText = (typeof translateText === 'function' ? translateText(safeLabel) : safeLabel);
                         var isOneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
                         var isComposite = !!(Cfc && Cfc.isBaseLabel(label));
-                        var colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6';
+                        var colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6 col-xl-4';
                         var safeOptions = String(options).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                         var html = '<div class="' + colClass + ' mb-3 quick-edit-custom-field" data-custom-label="' + safeLabel + '" data-custom-type="' + type + '" data-custom-options="' + safeOptions + '"' + (isComposite ? ' data-custom-composite="1"' : '') + '>';
 
@@ -674,7 +678,7 @@
             var showGuisFields = !!quickEditCanViewEndDate;
             var end = ($('#quickEditEndDate').val() || '').trim();
             var endFilled = showGuisFields && hasQuickEditDateValue(end);
-            var tantou = ($('input[name="tantou"]:checked').val() || '').trim();
+            var tantou = quickEditIsEnergyDept ? '' : ($('input[name="tantou"]:checked').val() || '').trim();
             $('#quickEditCailyNoukiRequired').toggleClass('d-none', !(endFilled && tantou === 'CAILY'));
             $('#quickEditGuisNoukiRequired').toggleClass('d-none', !(endFilled && tantou === 'GUIS'));
         }
@@ -682,7 +686,7 @@
         function validateQuickEditNoukiFields() {
             var errors = [];
             var showGuisFields = !!quickEditCanViewEndDate;
-            var tantou = ($('input[name="tantou"]:checked').val() || '').trim();
+            var tantou = quickEditIsEnergyDept ? '' : ($('input[name="tantou"]:checked').val() || '').trim();
             var caily = ($('#quickEditCailyNouki').val() || '').trim();
             var guis = ($('#quickEditGuisNouki').val() || '').trim();
             var end = ($('#quickEditEndDate').val() || '').trim();
@@ -804,7 +808,7 @@
                     $('#quickEditProjectOrderTypeError').text(translateText('受注形態は必須です。'));
                     hasError = true;
                 }
-                if (!$('input[name="tantou"]:checked').length) {
+                if (!quickEditIsEnergyDept && !$('input[name="tantou"]:checked').length) {
                     $tantouWrap.addClass('is-invalid');
                     $('#quickEditTantouError').text(translateText('担当は必須です。'));
                     hasError = true;
@@ -936,16 +940,22 @@
                 shareAnswer = shareResult;
             }
             formData.append('status', quickEditStatus);
-            formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
+            if (!quickEditIsEnergyDept) {
+                formData.append('tantou', $('input[name="tantou"]:checked').val() || '');
+            }
             formData.append('caily_nouki', getQuickEditDateFieldValue('#quickEditCailyNouki'));
             formData.append('guis_nouki', getQuickEditDateFieldValue('#quickEditGuisNouki'));
             formData.append('caily_nouki_status', newCailyNouki);
             formData.append('guis_nouki_status', newGuisNouki);
             formData.append('progress', $('#quickEditProgress').val() !== '' ? parseInt($('#quickEditProgress').val(), 10) : 0);
             formData.append('project_order_type', getQuickEditOrderTypeValue());
-            formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            if (!quickEditIsEnergyDept) {
+                formData.append('teams', (quickEditTeamTagify && quickEditTeamTagify.value) ? quickEditTeamTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            }
             formData.append('managers', (quickEditManagerTagify && quickEditManagerTagify.value) ? quickEditManagerTagify.value.map(function(t) { return t.id; }).join(',') : '');
-            formData.append('members', (quickEditMembersTagify && quickEditMembersTagify.value) ? quickEditMembersTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            if (!quickEditIsEnergyDept) {
+                formData.append('members', (quickEditMembersTagify && quickEditMembersTagify.value) ? quickEditMembersTagify.value.map(function(t) { return t.id; }).join(',') : '');
+            }
             var descContent = (quickEditQuillInstance && typeof quickEditQuillInstance.getSemanticHTML === 'function') ? quickEditQuillInstance.getSemanticHTML() : ($('#quickEditQuillDescriptionTextarea').val() || '');
             formData.append('description', descContent);
             var customFieldsData = [];

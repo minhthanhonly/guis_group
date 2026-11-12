@@ -4232,9 +4232,13 @@ const vueApp = createApp({
             if (!this.canJoinProject) return;
             
             try {
+                // 省エネ departments only use 管理 (shown as 担当者): joining makes the user a manager
+                const joinAsManager = this.isEnergyDepartmentProject;
                 const swal = await Swal.fire({
                     title: 'プロジェクトに参加しますか？',
-                    text: 'このプロジェクトのメンバーとして参加します。',
+                    text: joinAsManager
+                        ? 'このプロジェクトの担当者として参加します。'
+                        : 'このプロジェクトのメンバーとして参加します。',
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonText: '参加',
@@ -4251,7 +4255,7 @@ const vueApp = createApp({
                     const formData = new FormData();
                     formData.append('project_id', this.projectId);
                     formData.append('user_id', USER_AUTH_ID);
-                    formData.append('role', 'member');
+                    formData.append('role', joinAsManager ? 'manager' : 'member');
                     
                     const response = await axios.post('/api/index.php?model=project&method=addMemberApi', formData);
                     
@@ -5634,7 +5638,8 @@ const vueApp = createApp({
         validateProjectNoukiFields() {
             const errors = this.validationErrors;
             let isValid = true;
-            const tantou = (this.project.tantou || '').trim();
+            // 省エネ departments do not use 担当 (hidden), so no 納期 becomes mandatory because of it
+            const tantou = this.isEnergyDepartmentProject ? '' : (this.project.tantou || '').trim();
             const caily = (this.project.caily_nouki || '').trim();
             const guis = (this.project.guis_nouki || '').trim();
             const end = (this.project.end_date || '').trim();

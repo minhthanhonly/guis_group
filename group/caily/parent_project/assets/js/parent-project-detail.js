@@ -3102,7 +3102,7 @@ createApp({
                 const safeLabel = String(label).replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 const isOneRow = (f.one_row === 1 || f.one_row === '1' || f.one_row === true);
                 const isComposite = !!(Cfc && Cfc.isBaseLabel(label));
-                const colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6';
+                const colClass = type === 'textarea' || isOneRow ? 'col-12' : 'col-md-6 col-xl-4';
                 const div = document.createElement('div');
                 div.className = colClass + ' mb-3 ' + fieldClass;
                 div.setAttribute('data-custom-label', safeLabel);
@@ -4160,8 +4160,9 @@ createApp({
                 isValid = false;
             }
 
-            // Validate tantou (担当) is required
-            if (!this.editingChildProject.tantou || this.editingChildProject.tantou.trim() === '') {
+            // Validate tantou (担当) is required (field is hidden for 省エネ departments)
+            if (!this.isEditChildEnergyDept
+                && (!this.editingChildProject.tantou || this.editingChildProject.tantou.trim() === '')) {
                 this.editChildProjectValidationErrors.tantou = '担当は必須です';
                 isValid = false;
             }
@@ -4244,11 +4245,17 @@ createApp({
                 formData.append('status', this.editingChildProject.status || 'draft');
                 formData.append('amount', this.editingChildProject.amount || 0);
                 formData.append('progress', this.editingChildProject.progress != null ? parseInt(this.editingChildProject.progress, 10) : 0);
-                formData.append('teams', this.editingChildProject.teams || '');
-                if (this.editingChildProject.members && this.editingChildProject.members.length > 0) {
+                // 省エネ departments: 担当 / チーム / メンバー are hidden, so they are not sent and keep their stored values
+                const editHidesTantouAndTeam = this.isEditChildEnergyDept;
+                if (!editHidesTantouAndTeam) {
+                    formData.append('teams', this.editingChildProject.teams || '');
+                }
+                if (!editHidesTantouAndTeam && this.editingChildProject.members && this.editingChildProject.members.length > 0) {
                     formData.append('members', Array.isArray(this.editingChildProject.members) ? this.editingChildProject.members.join(',') : String(this.editingChildProject.members));
                 }
-                formData.append('tantou', this.editingChildProject.tantou || '');
+                if (!editHidesTantouAndTeam) {
+                    formData.append('tantou', this.editingChildProject.tantou || '');
+                }
                 formData.append('caily_nouki', this.toChildProjectAPIDate(this.editingChildProject.caily_nouki) || '');
                 formData.append('guis_nouki', this.toChildProjectAPIDate(this.editingChildProject.guis_nouki) || '');
                 this.appendYoteiToFormData(formData, this.editingChildProject.yotei);
@@ -4416,7 +4423,11 @@ createApp({
         /** 期限日なし→納期任意。期限日あり→CAILY/GUIS納期は担当に応じて必須。GUIS納期あり→期限日必須。両方入力時はGUIS納期≥CAILY納期。 */
         validateChildProjectNoukiFields(project, errors) {
             let isValid = true;
-            const tantou = (project.tantou || '').trim();
+            // 省エネ departments do not use 担当, so no 納期 becomes mandatory because of it
+            const tantouHidden = (project === this.editingChildProject)
+                ? this.isEditChildEnergyDept
+                : this.isCreateChildEnergyDept;
+            const tantou = tantouHidden ? '' : (project.tantou || '').trim();
             const caily = (project.caily_nouki || '').trim();
             const guis = (project.guis_nouki || '').trim();
             const end = (project.end_date || '').trim();
@@ -4508,7 +4519,9 @@ createApp({
             }
 
             // Validate tantou (担当) is required
-            if (!this.newChildProject.tantou || this.newChildProject.tantou.trim() === '') {
+            // 担当 is hidden for 省エネ departments
+            if (!this.isCreateChildEnergyDept
+                && (!this.newChildProject.tantou || this.newChildProject.tantou.trim() === '')) {
                 this.childProjectValidationErrors.tantou = '担当は必須です';
                 isValid = false;
             }
@@ -4582,15 +4595,17 @@ createApp({
                 formData.append('managers', (this.newChildProject.managers && this.newChildProject.managers.length > 0) ? this.newChildProject.managers.join(',') : '');
                 formData.append('parent_project_id', this.newChildProject.parent_project_id);
                 formData.append('progress', this.newChildProject.progress != null ? parseInt(this.newChildProject.progress, 10) : 0);
-                formData.append('teams', this.newChildProject.teams || '');
-                if (this.newChildProject.members && this.newChildProject.members.length > 0) {
+                // 省エネ departments: 担当 / チーム / メンバー are hidden and stored empty
+                const createHidesTantouAndTeam = this.isCreateChildEnergyDept;
+                formData.append('teams', createHidesTantouAndTeam ? '' : (this.newChildProject.teams || ''));
+                if (!createHidesTantouAndTeam && this.newChildProject.members && this.newChildProject.members.length > 0) {
                     formData.append('members', Array.isArray(this.newChildProject.members) ? this.newChildProject.members.join(',') : String(this.newChildProject.members));
                 }
                 // 総額: 必ず数値として送信（NaN/空の場合は 0）
                 const amountVal = this.newChildProject.amount;
                 const amountNum = (typeof amountVal === 'number' && !Number.isNaN(amountVal)) ? amountVal : (parseFloat(amountVal) || 0);
                 formData.append('amount', String(amountNum));
-                formData.append('tantou', this.newChildProject.tantou || '');
+                formData.append('tantou', createHidesTantouAndTeam ? '' : (this.newChildProject.tantou || ''));
                 formData.append('caily_nouki', this.toChildProjectAPIDate(this.newChildProject.caily_nouki) || '');
                 formData.append('guis_nouki', this.toChildProjectAPIDate(this.newChildProject.guis_nouki) || '');
                 this.appendYoteiToFormData(formData, this.newChildProject.yotei);

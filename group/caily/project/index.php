@@ -944,7 +944,7 @@ if($_SESSION['show_project'] == 0){
 
 <!-- Quick Edit Project Modal (案件を編集) — outside Vue #app so DOM is not rewritten -->
 <div class="modal fade" id="quickEditProjectModal" tabindex="-1" aria-labelledby="quickEditProjectModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl project-form-modal">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="quickEditProjectModalLabel">
@@ -972,23 +972,16 @@ if($_SESSION['show_project'] == 0){
                 <form id="quickEditProjectForm">
                     <input type="hidden" name="id" id="quickEditProjectId">
                     <input type="hidden" name="version" id="quickEditProjectVersion" value="1">
-                    <div class="row g-3">
-                        <div class="col-md-12 quick-edit-full-only">
+                    <div class="row g-3 project-form-grid">
+                        <div class="col-12 project-form-section">
+                            <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
+                        </div>
+                        <div class="col-md-12 col-xl-6 quick-edit-full-only">
                             <label class="form-label"><span data-i18n="案件名">案件名</span> <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" name="name" id="quickEditName" required>
                             <div class="invalid-feedback" id="quickEditNameError"></div>
                         </div>
-                        <div class="col-md-4 quick-edit-full-only" id="quickEditStartDateWrap">
-                            <label class="form-label"><span data-i18n="開始日">開始日</span></label>
-                            <input type="text" class="form-control" name="start_date" id="quickEditStartDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
-                            <div class="invalid-feedback" id="quickEditStartDateError"></div>
-                        </div>
-                        <div class="col-md-4" id="quickEditEndDateWrap">
-                            <label class="form-label"><span data-i18n="期限日">期限日</span></label>
-                            <input type="text" class="form-control" name="end_date" id="quickEditEndDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
-                            <div class="invalid-feedback" id="quickEditEndDateError"></div>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6 col-xl-3">
                             <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                             <select class="form-select" name="status" id="quickEditStatus">
                                 <option value="draft" data-i18n="受付">受付</option>
@@ -1005,6 +998,37 @@ if($_SESSION['show_project'] == 0){
                                 <option value="paused" data-i18n="一時停止">一時停止</option>
                                 <option value="cancelled" data-i18n="中止">中止</option>
                             </select>
+                        </div>
+                        <div class="col-md-6 col-xl-3">
+                            <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
+                            <input type="number" class="form-control" name="progress" id="quickEditProgress" min="0" max="100" step="5" value="0" placeholder="0">
+                            <div class="invalid-feedback" id="quickEditProgressError"></div>
+                        </div>
+                        <div class="col-md-6 col-xl-6 quick-edit-full-only">
+                            <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="text" class="form-control tagify" name="project_order_type" id="quickEditProjectOrderType" placeholder="">
+                                <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditProjectOrderTypeClear" title="すべて削除"><i class="fa fa-times"></i></button>
+                            </div>
+                            <div class="invalid-feedback" id="quickEditProjectOrderTypeError"></div>
+                        </div>
+                        <div class="col-md-6 col-xl-3 quick-edit-full-only quick-edit-hide-for-energy">
+                            <label class="form-label"><span data-i18n="担当">担当</span></label>
+                            <div class="d-flex gap-3" id="quickEditTantouWrap">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouCaily" value="CAILY">
+                                    <label class="form-check-label" for="quickEditTantouCaily">CAILY</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouGuis" value="GUIS">
+                                    <label class="form-check-label" for="quickEditTantouGuis">GUIS</label>
+                                </div>
+                            </div>
+                            <div id="quickEditTantouDisplayText" class="fw-semibold d-none"></div>
+                            <div class="invalid-feedback" id="quickEditTantouError"></div>
+                        </div>
+                        <div class="col-12 project-form-section">
+                            <h6 class="project-form-section-title"><span data-i18n="スケジュール">スケジュール</span></h6>
                         </div>
                         <div class="col-12" id="quickEditYoteiWrap">
                             <label class="form-label"><span data-i18n="予定工程">予定工程</span></label>
@@ -1033,30 +1057,17 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="invalid-feedback" id="quickEditYoteiError"></div>
                         </div>
-                        <div class="col-md-6 quick-edit-full-only">
-                            <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
-                            <div class="d-flex align-items-center gap-2">
-                                <input type="text" class="form-control tagify" name="project_order_type" id="quickEditProjectOrderType" placeholder="">
-                                <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditProjectOrderTypeClear" title="すべて削除"><i class="fa fa-times"></i></button>
-                            </div>
-                            <div class="invalid-feedback" id="quickEditProjectOrderTypeError"></div>
+                        <div class="col-md-6 col-xl-3 quick-edit-full-only" id="quickEditStartDateWrap">
+                            <label class="form-label"><span data-i18n="開始日">開始日</span></label>
+                            <input type="text" class="form-control" name="start_date" id="quickEditStartDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                            <div class="invalid-feedback" id="quickEditStartDateError"></div>
                         </div>
-                        <div class="col-md-4 quick-edit-full-only">
-                            <label class="form-label"><span data-i18n="担当">担当</span></label>
-                            <div class="d-flex gap-3" id="quickEditTantouWrap">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouCaily" value="CAILY">
-                                    <label class="form-check-label" for="quickEditTantouCaily">CAILY</label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="radio" name="tantou" id="quickEditTantouGuis" value="GUIS">
-                                    <label class="form-check-label" for="quickEditTantouGuis">GUIS</label>
-                                </div>
-                            </div>
-                            <div id="quickEditTantouDisplayText" class="fw-semibold d-none"></div>
-                            <div class="invalid-feedback" id="quickEditTantouError"></div>
+                        <div class="col-md-6 col-xl-3" id="quickEditEndDateWrap">
+                            <label class="form-label"><span data-i18n="期限日">期限日</span></label>
+                            <input type="text" class="form-control" name="end_date" id="quickEditEndDate" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
+                            <div class="invalid-feedback" id="quickEditEndDateError"></div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6 col-xl-3">
                             <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span> <span id="quickEditCailyNoukiRequired" class="text-danger d-none">*</span></label>
                             <div class="d-flex flex-column">
                                 <input type="text" class="form-control" name="caily_nouki" id="quickEditCailyNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
@@ -1067,7 +1078,7 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="invalid-feedback" id="quickEditCailyNoukiError"></div>
                         </div>
-                        <div class="col-md-4" id="quickEditGuisNoukiWrap">
+                        <div class="col-md-6 col-xl-3" id="quickEditGuisNoukiWrap">
                             <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span> <span id="quickEditGuisNoukiRequired" class="text-danger d-none">*</span></label>
                             <div class="d-flex flex-column">
                                 <input type="text" class="form-control" name="guis_nouki" id="quickEditGuisNouki" placeholder="YYYY-MM-DD HH:mm" autocomplete="off">
@@ -1078,33 +1089,34 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="invalid-feedback" id="quickEditGuisNoukiError"></div>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label"><span data-i18n="進捗率">進捗率</span> (%)</label>
-                            <input type="number" class="form-control" name="progress" id="quickEditProgress" min="0" max="100" step="5" value="0" placeholder="0">
-                            <div class="invalid-feedback" id="quickEditProgressError"></div>
+                        <div class="col-12 project-form-section">
+                            <h6 class="project-form-section-title"><span data-i18n="チーム・メンバー">チーム・メンバー</span></h6>
                         </div>
-                        <div class="col-12">
+                        <div class="col-md-12 col-xl-4 quick-edit-hide-for-energy">
                             <label class="form-label"><span data-i18n="チーム">チーム</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control" id="quickEditTeamTags" placeholder="チームを選択">
                                 <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditTeamTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
-                        <div class="col-12">
-                            <label class="form-label"><span data-i18n="管理">管理</span></label>
+                        <div class="col-md-6 col-xl-4">
+                            <label class="form-label"><span class="quick-edit-hide-for-energy" data-i18n="管理">管理</span><span class="quick-edit-show-for-energy" data-i18n="担当者">担当者</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control" id="quickEditManagerTags" placeholder="管理者を選択">
                                 <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditManagerTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
-                        <div class="col-12">
+                        <div class="col-md-6 col-xl-4 quick-edit-hide-for-energy">
                             <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
                             <div class="d-flex align-items-center gap-2">
                                 <input type="text" class="form-control" id="quickEditMembersTags" placeholder="メンバーを選択">
                                 <button type="button" class="btn btn-outline-secondary btn-sm" id="quickEditMembersTagsClear" title="すべて削除"><i class="fa fa-times"></i></button>
                             </div>
                         </div>
-                        <div class="col-12 mt-4 row" id="quickEditCustomFieldsWrap">
+                        <div class="col-12 project-form-section" id="quickEditCustomFieldsSection">
+                            <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span></h6>
+                        </div>
+                        <div class="col-12 row" id="quickEditCustomFieldsWrap">
                             <!-- Custom fields rendered by JS -->
                         </div>
                         <div class="col-12 quick-edit-full-only">
@@ -2136,6 +2148,40 @@ body:not(.project-notes-one-line) #projectTable .note-more-lines-icon,
 }
 /* Quick edit: manager-only mode chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー, 予定工程
    (期限日 / GUIS納期 được JS bật riêng theo project_view_end_date) */
+/* Project form modals (案件依頼を作成 / 案件依頼編集 / 案件を編集): fields grouped in titled sections */
+/* wider than modal-xl on large screens so three to four fields fit per row */
+@media (min-width: 1200px) {
+    .modal-dialog.project-form-modal {
+        max-width: min(1200px, calc(100vw - 3rem));
+    }
+}
+.project-form-modal .project-form-section:not(:first-child) {
+    margin-top: 1.75rem;
+}
+.project-form-modal .project-form-section-title {
+    margin: 0;
+    padding-bottom: 0.4rem;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--bs-primary);
+    border-bottom: 1px solid var(--bs-border-color);
+}
+/* the grid gutter already spaces the rows */
+.project-form-modal .project-form-grid > [class*="col-"] > .mb-3 {
+    margin-bottom: 0 !important;
+}
+/* no 部署別項目 title while the project has no custom fields */
+#quickEditCustomFieldsSection:has(+ #quickEditCustomFieldsWrap:not(:has(.quick-edit-custom-field))) {
+    display: none;
+}
+/* 省エネ departments do not use 担当 / チーム / メンバー, and call 管理 "担当者" */
+#quickEditProjectForm.quick-edit-energy-dept .quick-edit-hide-for-energy {
+    display: none !important;
+}
+#quickEditProjectForm:not(.quick-edit-energy-dept) .quick-edit-show-for-energy {
+    display: none !important;
+}
 #quickEditProjectForm.quick-edit-manager-only-mode .quick-edit-full-only {
     display: none !important;
 }

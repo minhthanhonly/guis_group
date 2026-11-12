@@ -239,7 +239,8 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label">金額</label>
                                 <input type="text" class="form-control" :value="formatCurrency(project.amount)" readonly>
                             </div> -->
-                            <div class="col-4">
+                            <!-- チーム / 担当 are not used by 省エネ departments -->
+                            <div class="col-4" v-show="!isEnergyDepartmentProject">
                                 <label class="form-label"><span data-i18n="チーム">チーム</span></label>
                                 <div class="d-flex align-items-center gap-2">
                                     <input v-if="isEditMode" id="team_tags" class="form-control" />
@@ -253,7 +254,8 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </div>
                             <div class="col-4">
-                                <label class="form-label"><span data-i18n="管理">管理</span></label>
+                                <!-- 省エネ departments call 管理 "担当者" and do not use メンバー -->
+                                <label class="form-label"><span v-show="!isEnergyDepartmentProject" data-i18n="管理">管理</span><span v-show="isEnergyDepartmentProject" data-i18n="担当者">担当者</span></label>
                                 <div v-if="isEditMode" class="d-flex align-items-center gap-2">
                                     <input class="form-control" type="text" id="manager_tags" name="manager_tags">
                                     <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearTagifyTags('manager')" title="すべて削除"><i class="fa fa-times"></i></button>
@@ -281,7 +283,7 @@ if($_SESSION['show_project'] == 0){
                                     <span data-i18n="メンバーがいません">メンバーがいません</span>
                                 </div>
                             </div>
-                            <div class="col-4">
+                            <div class="col-4" v-show="!isEnergyDepartmentProject">
                                 <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
                                 <div v-if="isEditMode" class="d-flex align-items-center gap-2">
                                     <input class="form-control" type="text" id="members_tags" name="members_tags">
@@ -395,7 +397,7 @@ if($_SESSION['show_project'] == 0){
                                 </template>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" :data-time="project.end_date || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' 期限日'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)" readonly>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
                                 <label class="form-label"><span data-i18n="担当">担当</span></label>
                                 <div v-if="isEditMode && !isCailyBranchUser" class="d-flex gap-3">
                                     <div class="form-check">
@@ -430,7 +432,7 @@ if($_SESSION['show_project'] == 0){
                             
                             <div class="col-md-4">
                                 <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span>
-                                    <span v-if="isEditMode && project.end_date && project.tantou === 'CAILY'" class="text-danger">*</span>
+                                    <span v-if="isEditMode && project.end_date && project.tantou === 'CAILY' && !isEnergyDepartmentProject" class="text-danger">*</span>
                                     <span v-if="cailyNoukiTimeRemaining()" :class="'badge ms-2 ' + cailyNoukiTimeRemaining().class"
                                           :title="cailyNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ cailyNoukiTimeRemaining().text }}
@@ -467,7 +469,7 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <div class="col-md-4" v-if="canViewEndDate">
                                 <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span>
-                                    <span v-if="isEditMode && !isCailyBranchUser && project.end_date && project.tantou === 'GUIS'" class="text-danger">*</span>
+                                    <span v-if="isEditMode && !isCailyBranchUser && project.end_date && project.tantou === 'GUIS' && !isEnergyDepartmentProject" class="text-danger">*</span>
                                     <span v-if="guisNoukiTimeRemaining()" :class="'badge ms-2 ' + guisNoukiTimeRemaining().class"
                                           :title="guisNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ guisNoukiTimeRemaining().text }}
