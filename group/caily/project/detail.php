@@ -75,16 +75,23 @@ if($_SESSION['show_project'] == 0){
 
             <!-- Left Column - Project Details -->
             <div class="col-xl-8">
-                <div class="card" :class="{ 'edit-mode': isEditMode }">
+                <!-- The page itself is read-only. 編集 lifts this same card out of the page into a
+                     dialog (CSS on .edit-mode) where it shows its form; the placeholder keeps the
+                     column from collapsing behind the backdrop meanwhile. -->
+                <div v-if="isEditMode" class="project-edit-backdrop"></div>
+                <div v-if="isEditMode" class="project-edit-placeholder"></div>
+                <div class="card project-detail-card" :class="{ 'edit-mode': isEditMode }"
+                     :role="isEditMode ? 'dialog' : null" :aria-modal="isEditMode ? 'true' : null">
                     <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-4">
+                        <div class="d-flex justify-content-between align-items-center mb-4 project-detail-card-header">
                             <h5 class="card-title">
                                 <i class="fa fa-star me-2" 
                                    :class="project && project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
                                    style="cursor: pointer; font-size: 1.2em;"
                                    @click="toggleFavorite"
                                    :title="project && project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
-                                <span data-i18n="案件詳細">案件詳細</span>
+                                <span v-show="!isEditMode" data-i18n="案件詳細">案件詳細</span>
+                                <span v-show="isEditMode" data-i18n="案件を編集">案件を編集</span>
                                 <span v-if="project && project.department_name" class="badge border border-info bg-transparent text-info ms-2">{{ project.department_name }}</span>
                                 <span v-if="isPeriodUndecided" class="badge bg-label-warning ms-2">{{ translateLabel('期間未定') }}</span>
                             </h5>
@@ -123,49 +130,6 @@ if($_SESSION['show_project'] == 0){
 
 
                         
-                        <!-- The facts people open this page for, in one place; stays visible while scrolling.
-                             View mode only: in edit mode the same fields are being edited below. -->
-                        <div v-if="project && !isEditMode" class="project-summary-bar">
-                            <div class="psb-item">
-                                <span class="psb-label" data-i18n="ステータス">ステータス</span>
-                                <span v-if="project.is_kadai == 1 && project.status !== 'cancelled'" class="badge bg-warning">承認待ち</span>
-                                <span v-else class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
-                            </div>
-                            <div class="psb-item">
-                                <span class="psb-label" data-i18n="優先度">優先度</span>
-                                <span class="badge" :class="getPriorityBadgeClass(project.priority)">{{ getPriorityLabel(project.priority) }}</span>
-                            </div>
-                            <div class="psb-item" v-show="!isEnergyDepartmentProject">
-                                <span class="psb-label" data-i18n="担当">担当</span>
-                                <span class="psb-value">{{ project.tantou || '—' }}</span>
-                            </div>
-                            <div class="psb-item" v-show="!isEnergyDepartmentProject">
-                                <span class="psb-label" data-i18n="進捗率">進捗率</span>
-                                <span class="psb-value">{{ project.progress || 0 }}%</span>
-                            </div>
-                            <div class="psb-item">
-                                <span class="psb-label" data-i18n="CAILY納期">CAILY納期</span>
-                                <span class="psb-value">{{ formatDateTime(project.caily_nouki) || '-' }}</span>
-                                <span v-if="isNoukiDelivered(project.caily_nouki_status)" class="badge bg-success" data-i18n="納品済み">納品済み</span>
-                                <span v-else-if="getDeadlineBadge('caily')" class="badge" :class="getDeadlineBadge('caily').className">{{ getDeadlineBadge('caily').text }}</span>
-                            </div>
-                            <div class="psb-item" v-if="canViewEndDate">
-                                <span class="psb-label" data-i18n="GUIS納期">GUIS納期</span>
-                                <span class="psb-value">{{ formatDateTime(project.guis_nouki) || '-' }}</span>
-                                <span v-if="isNoukiDelivered(project.guis_nouki_status)" class="badge bg-success" data-i18n="納品済み">納品済み</span>
-                                <span v-else-if="getDeadlineBadge('guis')" class="badge" :class="getDeadlineBadge('guis').className">{{ getDeadlineBadge('guis').text }}</span>
-                            </div>
-                            <div class="psb-item" v-if="canViewEndDate">
-                                <span class="psb-label" data-i18n="期限日(実納期)">期限日(実納期)</span>
-                                <span class="psb-value">{{ formatDateTime(project.end_date) || '-' }}</span>
-                                <span v-if="getTimeRemaining()" class="badge" :class="getTimeRemaining().class">{{ getTimeRemaining().text }}</span>
-                            </div>
-                            <div class="psb-item" v-if="managers && managers.length">
-                                <span class="psb-label"><span v-show="!isEnergyDepartmentProject" data-i18n="管理">管理</span><span v-show="isEnergyDepartmentProject" data-i18n="担当者">担当者</span></span>
-                                <span class="psb-value">{{ managers.slice(0, 3).map(m => m.user_name).join('、') }}<span v-if="managers.length > 3"> +{{ managers.length - 3 }}</span></span>
-                            </div>
-                        </div>
-
                         <div class="row g-3 project-detail-grid" v-if="project">
                             <!-- 建物情報: opens the shared building modal (read-only; 編集 inside it when permitted) -->
                             <div v-if="project.parent_project_id" class="col-12 mb-2">
@@ -1762,16 +1726,13 @@ $view->footing();
     color: var(--bs-primary);
     border-bottom: 1px solid var(--bs-border-color);
 }
-/* View mode: a read-only value is plain text under its caption. No box, no fill: a tinted
-   box still reads as a disabled input, i.e. a form the user is locked out of. A hairline
-   under the value keeps the grid's rows aligned and scannable. */
+/* A read-only value is plain text. No box, no fill: a tinted box still reads as a
+   disabled input, i.e. a form the user is locked out of. */
 #app .card input.form-control[readonly]:not(.modal *),
 #app .card textarea.form-control[readonly]:not(.modal *),
 #app .card div.form-control:not(.modal *) {
     background-color: transparent !important;
     border: 0 !important;
-    /* derived from the text colour so it stays a faint line in the dark theme too */
-    border-bottom: 1px solid color-mix(in srgb, currentColor 16%, transparent) !important;
     border-radius: 0;
     box-shadow: none !important;
     padding-left: 0;
@@ -1785,48 +1746,107 @@ $view->footing();
     resize: none;
 }
 
-/* The theme's content wrapper is "overflow: hidden auto", which makes it the scroll box
-   that position: sticky measures against; it never scrolls itself (the page does), so
-   nothing inside it could stick. clip hides horizontal overflow without creating a
-   scroll box. This style block is only on the project detail page. */
-.layout-page .content-wrapper {
-    overflow-x: clip;
-    overflow-y: visible;
+/* ---- Page (read-only): every field is one table row, caption left, value right ----
+   The markup is the same grid the edit form uses (one field = one .col-* with a
+   .form-label followed by its value); only the layout differs, so the two cannot drift. */
+.project-detail-card:not(.edit-mode) .project-detail-grid {
+    --bs-gutter-y: 0;
+    --pd-caption-width: 11rem;
 }
-
-/* Summary of the key facts at the top of the project card (view mode) */
-.project-summary-bar {
-    position: sticky;
-    top: var(--project-summary-top, 4.75rem);
-    z-index: 6;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 1.5rem;
-    margin: 0 0 1.25rem;
-    padding: 0.65rem 0.9rem;
-    border: 1px solid var(--bs-border-color);
-    border-left: 3px solid var(--bs-primary);
-    border-radius: var(--bs-border-radius);
-    background: var(--bs-card-bg, var(--bs-body-bg));
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"]:not(.project-form-section),
+.project-detail-card:not(.edit-mode) .project-detail-grid .row > [class*="col-"] {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+    display: grid;
+    grid-template-columns: var(--pd-caption-width) minmax(0, 1fr);
+    column-gap: 1rem;
+    align-items: start;
+    margin: 0 !important;
+    padding-top: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
 }
-.project-summary-bar .psb-item {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem;
+/* Wrappers that only hold other rows (custom fields, energy fields) are not rows themselves */
+.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"]:has(> .row),
+.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"]:has(> .mt-3 > .row),
+.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"]:not(:has(> .form-label)) {
+    display: block;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+.project-detail-card:not(.edit-mode) .project-detail-grid .row {
+    --bs-gutter-y: 0;
+    margin-top: 0 !important;
+}
+.project-detail-card:not(.edit-mode) .project-detail-grid [class*="col-"] > .form-label {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+    padding-top: 0.15rem;
+    font-size: 0.8125rem;
+    opacity: 0.75;
+}
+.project-detail-card:not(.edit-mode) .project-detail-grid [class*="col-"] > :not(.form-label) {
+    grid-column: 2;
     min-width: 0;
 }
-.project-summary-bar .psb-label {
-    font-size: 0.75rem;
-    opacity: 0.75;
-    white-space: nowrap;
+.project-detail-card:not(.edit-mode) .project-detail-grid .form-control[readonly],
+.project-detail-card:not(.edit-mode) .project-detail-grid div.form-control {
+    padding-top: 0;
+    padding-bottom: 0;
+    min-height: 0 !important;
+    height: auto;
+    line-height: 1.5;
 }
-.project-summary-bar .psb-value {
-    font-weight: 600;
-    color: var(--bs-heading-color, inherit);
-    white-space: nowrap;
+@media (max-width: 767.98px) {
+    .project-detail-card:not(.edit-mode) .project-detail-grid {
+        --pd-caption-width: 7.5rem;
+    }
 }
+
+/* ---- 編集: the card becomes a dialog over the page ---- */
+.project-edit-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1088;
+    background: rgba(20, 20, 30, 0.5);
+}
+.project-edit-placeholder {
+    min-height: 70vh;
+}
+.project-detail-card.edit-mode {
+    position: fixed;
+    z-index: 1089;
+    top: 3vh;
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: min(880px, 94vw);
+    max-height: 94vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.35);
+}
+.project-detail-card.edit-mode > .card-body {
+    overflow-y: auto;
+    padding-top: 0;
+}
+/* Title and 保存 / キャンセル stay in view while the form scrolls */
+.project-detail-card.edit-mode .project-detail-card-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    margin: 0 calc(var(--bs-card-spacer-x, 1.5rem) * -1) 1rem !important;
+    padding: 1rem var(--bs-card-spacer-x, 1.5rem) 0.75rem;
+    background: var(--bs-card-bg, var(--bs-body-bg));
+    border-bottom: 1px solid var(--bs-border-color);
+}
+body:has(.project-detail-card.edit-mode) {
+    overflow: hidden;
+}
+
 /* Field captions: smaller and muted so they read as labels, not values */
 #app .card .form-label:not(.modal *) {
     font-size: 0.75rem;

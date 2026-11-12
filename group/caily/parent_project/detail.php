@@ -3956,10 +3956,10 @@ $view->footing();
     }
 
     /* Project form modals (案件依頼を作成 / 案件依頼編集 / 案件を編集): fields grouped in titled sections */
-    /* wider than modal-xl on large screens so three to four fields fit per row */
+    /* one field per row (caption left, control right: see demo.css), so a narrower dialog reads better */
     @media (min-width: 1200px) {
         .modal-dialog.project-form-modal {
-            max-width: min(1200px, calc(100vw - 3rem));
+            max-width: min(880px, calc(100vw - 3rem));
         }
     }
     .project-form-modal .project-form-section:not(:first-child) {

@@ -2012,13 +2012,6 @@ const vueApp = createApp({
             if (judgment.key === 'overdue' && remaining && remaining.isOverdue) return null;
             return judgment;
         },
-        /** The one badge the summary bar shows for a 納期: remaining time, else the judgment. */
-        getDeadlineBadge(kind) {
-            const remaining = kind === 'caily' ? this.cailyNoukiTimeRemaining() : this.guisNoukiTimeRemaining();
-            if (remaining) return { className: remaining.class, text: remaining.text };
-            const judgment = this.getNoukiScheduleJudgment(kind);
-            return judgment ? { className: judgment.className, text: this.translateLabel(judgment.textKey) } : null;
-        },
         cailyNoukiTimeRemaining() {
             if (!this.project) return null;
             return this.getTimeRemainingForDate(

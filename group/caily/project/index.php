@@ -2172,10 +2172,10 @@ body:not(.project-notes-one-line) #projectTable .note-more-lines-icon,
 /* Quick edit: manager-only mode chỉ hiện ステータス, 進捗率, チーム, 管理, メンバー, 予定工程
    (期限日 / GUIS納期 được JS bật riêng theo project_view_end_date) */
 /* Project form modals (案件依頼を作成 / 案件依頼編集 / 案件を編集): fields grouped in titled sections */
-/* wider than modal-xl on large screens so three to four fields fit per row */
+/* one field per row (caption left, control right: see demo.css), so a narrower dialog reads better */
 @media (min-width: 1200px) {
     .modal-dialog.project-form-modal {
-        max-width: min(1200px, calc(100vw - 3rem));
+        max-width: min(880px, calc(100vw - 3rem));
     }
 }
 .project-form-modal .project-form-section:not(:first-child) {
@@ -2208,8 +2208,9 @@ body:not(.project-notes-one-line) #projectTable .note-more-lines-icon,
 #quickEditProjectForm.quick-edit-manager-only-mode .quick-edit-full-only {
     display: none !important;
 }
+/* always shown (also in manager-only mode); grid = a row of the form table (demo.css) */
 #quickEditYoteiWrap {
-    display: block !important;
+    display: grid !important;
 }
 #quickEditProjectForm .is-invalid + .invalid-feedback,
 #quickEditProjectForm .invalid-feedback:not(:empty) {

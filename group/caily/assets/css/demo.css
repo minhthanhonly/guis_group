@@ -1121,3 +1121,59 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     white-space: nowrap;
     vertical-align: bottom;
 }
+
+/* Project forms as a table: one field per row, caption left, control right.
+   Used by the project form modals (案件依頼を作成 / 案件依頼編集 / 案件を編集) and by the
+   edit dialog of the project detail page, so they match the read-only table there.
+   A "field row" is whichever element directly holds the caption (.form-label): the grid
+   column itself, or the .form-control-validation wrapper some forms put inside it. */
+.project-form-modal .project-form-grid,
+.project-detail-card.edit-mode .project-detail-grid {
+    --bs-gutter-y: 0;
+    --pf-caption-width: 11rem;
+}
+.project-form-modal .project-form-grid > [class*="col-"]:not(.project-form-section),
+.project-detail-card.edit-mode .project-detail-grid > [class*="col-"]:not(.project-form-section),
+.project-form-modal .project-form-grid .row > [class*="col-"]:has(> .form-label),
+.project-detail-card.edit-mode .project-detail-grid .row > [class*="col-"]:has(> .form-label),
+.project-form-modal .project-form-grid .row > [class*="col-"]:has(> :is(.form-control-validation, .mb-3) > .form-label),
+.project-detail-card.edit-mode .project-detail-grid .row > [class*="col-"]:has(> :is(.form-control-validation, .mb-3) > .form-label) {
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
+}
+.project-form-modal .project-form-grid .row,
+.project-detail-card.edit-mode .project-detail-grid .row {
+    --bs-gutter-y: 0;
+}
+.project-form-modal .project-form-grid :is([class*="col-"], .form-control-validation, .mb-3):has(> .form-label),
+.project-detail-card.edit-mode .project-detail-grid :is([class*="col-"], .form-control-validation, .mb-3):has(> .form-label) {
+    display: grid;
+    grid-template-columns: var(--pf-caption-width) minmax(0, 1fr);
+    column-gap: 1rem;
+    align-items: start;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    padding-top: 0.45rem;
+    padding-bottom: 0.45rem;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+.project-form-modal .project-form-grid :is([class*="col-"], .form-control-validation, .mb-3) > .form-label,
+.project-detail-card.edit-mode .project-detail-grid :is([class*="col-"], .form-control-validation, .mb-3) > .form-label {
+    grid-column: 1;
+    grid-row: 1;
+    margin: 0;
+    padding-top: 0.5rem;
+    font-size: 0.8125rem;
+}
+.project-form-modal .project-form-grid :is([class*="col-"], .form-control-validation, .mb-3):has(> .form-label) > :not(.form-label),
+.project-detail-card.edit-mode .project-detail-grid :is([class*="col-"], .form-control-validation, .mb-3):has(> .form-label) > :not(.form-label) {
+    grid-column: 2;
+    min-width: 0;
+}
+@media (max-width: 767.98px) {
+    .project-form-modal .project-form-grid,
+    .project-detail-card.edit-mode .project-detail-grid {
+        --pf-caption-width: 7.5rem;
+    }
+}
