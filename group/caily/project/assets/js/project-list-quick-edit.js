@@ -516,7 +516,10 @@
                         }
                         orderTypeInput.value = '';
                         quickEditOrderTypeTagify = new window.Tagify(orderTypeInput, {
-                            whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                            // 省エネ department: only 新規 / 修正 are offered
+                            whitelist: String((p && p.department_name) || '').indexOf('省エネ') !== -1
+                                ? ['新規', '修正']
+                                : ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
                             maxTags: 5,
                             dropdown: {
                                 maxItems: 20,

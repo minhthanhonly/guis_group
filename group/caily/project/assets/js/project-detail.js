@@ -1266,6 +1266,14 @@ const vueApp = createApp({
         },
     },
     methods: {
+        // 受注形態 suggestions: a 省エネ department only offers 新規 / 修正
+        getProjectOrderTypeWhitelist() {
+            const name = String((this.project && this.project.department_name) || '');
+            if (name.indexOf('省エネ') !== -1) {
+                return ['新規', '修正'];
+            }
+            return ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'];
+        },
         // 建物情報: shared building modal (parent_project/assets/js/parent-project-quick-modal.js)
         openParentProjectInfoModal() {
             if (!this.project || !this.project.parent_project_id || typeof window.openParentProjectModal !== 'function') {
@@ -3367,7 +3375,7 @@ const vueApp = createApp({
                             }
                         }
                         this.projectOrderTypeTagify = new Tagify(orderTypeInput, {
-                            whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                            whitelist: this.getProjectOrderTypeWhitelist(),
                             maxTags: 5,
                             dropdown: {
                                 maxItems: 20,
@@ -5890,7 +5898,7 @@ const vueApp = createApp({
                                 }
                             }
                             this.projectOrderTypeTagify = new Tagify(input, {
-                                whitelist: ['新規', '修正', '新規修正', '変更', '免震', '耐震', '計画変更', '契約図', '実施図'],
+                                whitelist: this.getProjectOrderTypeWhitelist(),
                                 maxTags: 5,
                                 dropdown: {
                                     maxItems: 20,
