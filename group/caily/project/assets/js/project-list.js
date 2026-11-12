@@ -4377,17 +4377,37 @@ var projectTable;
         return out;
     }
 
+    // Visibility is stored per department, like column order and widths. With one shared
+    // entry, every table init rewrote it with only the current department's columns, so a
+    // custom column hidden in department B was visible again after a visit to department A.
+    function getColumnVisibilityStorageKey() {
+        var departmentId = getActiveProjectListDepartmentId();
+        return departmentId ? COLUMN_VISIBILITY_KEY + '_' + String(departmentId) : COLUMN_VISIBILITY_KEY;
+    }
+
+    /** This department's entry, or the old shared entry until the department has its own. */
+    function readColumnVisibilityStorageRaw() {
+        try {
+            var own = localStorage.getItem(getColumnVisibilityStorageKey());
+            return own !== null ? own : localStorage.getItem(COLUMN_VISIBILITY_KEY);
+        } catch (e) {
+            return null;
+        }
+    }
+
     function saveColumnVisibilityToLocalStorage(visibility, customColDefs) {
         var customDefs = customColDefs || customFieldColumnDefinitions || [];
         var sanitized = sanitizeColumnVisibilityForStorage(visibility, customDefs);
-        localStorage.setItem(COLUMN_VISIBILITY_KEY, JSON.stringify({
+        // Keep choices for columns that are not available right now (permission, tab state)
+        var merged = Object.assign({}, parseColumnVisibilityStorage(readColumnVisibilityStorageRaw()), sanitized);
+        localStorage.setItem(getColumnVisibilityStorageKey(), JSON.stringify({
             version: COLUMN_VISIBILITY_STORAGE_VERSION,
-            visibility: sanitized
+            visibility: merged
         }));
     }
-    
+
     function loadColumnVisibilityFromLocalStorage(customColDefs) {
-        const savedRaw = parseColumnVisibilityStorage(localStorage.getItem(COLUMN_VISIBILITY_KEY));
+        const savedRaw = parseColumnVisibilityStorage(readColumnVisibilityStorageRaw());
         const saved = {};
         Object.keys(savedRaw || {}).forEach(function(key) {
             saved[migrateNamedDefaultTaskColumnKey(key)] = savedRaw[key];
@@ -4440,7 +4460,7 @@ var projectTable;
 
     function migrateColumnVisibilityStorageIfNeeded(customColDefs) {
         try {
-            var raw = localStorage.getItem(COLUMN_VISIBILITY_KEY);
+            var raw = readColumnVisibilityStorageRaw();
             if (!raw) return;
             var parsed = JSON.parse(raw);
             var needsMigration = !parsed

@@ -627,9 +627,8 @@ function exportProjectListToExcelAfterJszip() {
     if (window.app) window.app.loading = true;
 
     var pageInfo = dt.page.info();
-    var oldStart = pageInfo.start;
-    var oldLength = dt.page.len();
-    var exportLength = pageInfo.recordsDisplay || pageInfo.recordsTotal || oldLength;
+    var oldPage = pageInfo.page || 0;
+    var exportLength = pageInfo.recordsDisplay || pageInfo.recordsTotal || dt.page.len();
     if (!exportLength || exportLength < 1) {
         isProjectListExporting = false;
         if (window.app) window.app.loading = false;
@@ -638,38 +637,23 @@ function exportProjectListToExcelAfterJszip() {
         }
         return;
     }
-    var restored = false;
 
-    function restorePagination() {
-        if (restored) return;
-        restored = true;
-        dt.one('preXhr', function(e, settings, data) {
-            data.start = oldStart;
-            data.length = oldLength;
-        });
-        dt.one('draw', function() {
-            isProjectListExporting = false;
-            if (window.app) window.app.loading = false;
-        });
-        dt.ajax.reload(null, false);
+    function finishExport() {
+        isProjectListExporting = false;
+        if (window.app) window.app.loading = false;
     }
 
-    dt.one('preXhr', function(e, settings, data) {
-        data.start = 0;
-        data.length = exportLength;
-    });
+    // Back to the page the user was on. Paging goes through the API so the pager and the
+    // rows agree (overriding only the request's start left page-N rows under "page 1").
+    function restorePagination() {
+        dt.one('draw', finishExport);
+        dt.page(oldPage).draw('page');
+    }
 
-    dt.one('error.dt', function() {
-        if (!restored) {
-            isProjectListExporting = false;
-            if (window.app) window.app.loading = false;
-            if (typeof showMessage === 'function') {
-                showProjectListError('Excel出力に失敗しました。');
-            }
-        }
-    });
-
-    dt.one('draw', function() {
+    // Exactly one of the two handlers below runs; whichever does removes the other, so a
+    // failed export cannot leave a draw handler armed that downloads on the next reload.
+    function onExportDraw() {
+        dt.off('dt-error', onExportError);
         try {
             dt.button(0).trigger();
         } catch (err) {
@@ -677,13 +661,25 @@ function exportProjectListToExcelAfterJszip() {
             if (typeof showMessage === 'function') {
                 showProjectListError('Excel出力に失敗しました。', err);
             }
-            isProjectListExporting = false;
-            if (window.app) window.app.loading = false;
-            restored = true;
-            return;
         }
         restorePagination();
+    }
+
+    // DataTables 2 reports ajax / JSON failures as "dt-error" (1.x used "error")
+    function onExportError() {
+        dt.off('draw', onExportDraw);
+        finishExport();
+        if (typeof showMessage === 'function') {
+            showProjectListError('Excel出力に失敗しました。');
+        }
+    }
+
+    dt.one('preXhr', function(e, settings, data) {
+        data.start = 0;
+        data.length = exportLength;
     });
+    dt.one('dt-error', onExportError);
+    dt.one('draw', onExportDraw);
 
     dt.ajax.reload();
 }
