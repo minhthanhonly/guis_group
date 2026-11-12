@@ -1211,6 +1211,8 @@ $view->heading('建物詳細');
                 <div class="modal-body">
                     <form @submit.prevent="createChildProject">
                         <div class="row g-3 project-form-grid">
+                            <!-- Two fixed columns of section tables: the same sections sit in the same column on the page and in the form -->
+                            <div class="pd-col">
                             <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
@@ -1407,6 +1409,8 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
                             </div>
+                            </div>
+                            <div class="pd-col">
                             <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="チーム・メンバー">チーム・メンバー</span></h6>
@@ -1465,6 +1469,7 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
                             </div>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -1500,6 +1505,8 @@ $view->heading('建物詳細');
                     <form @submit.prevent="updateChildProject">
                         <input type="hidden" v-model.number="editingChildProject.version">
                         <div class="row g-3 project-form-grid">
+                            <!-- Two fixed columns of section tables: the same sections sit in the same column on the page and in the form -->
+                            <div class="pd-col">
                             <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
@@ -1694,6 +1701,8 @@ $view->heading('建物詳細');
                                 </div>
                             </div>
                             </div>
+                            </div>
+                            <div class="pd-col">
                             <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="チーム・メンバー">チーム・メンバー</span></h6>
@@ -1750,6 +1759,7 @@ $view->heading('建物詳細');
                                         <textarea class="custom_editor_textarea d-none" v-model="editingChildProject.description" id="edit_child_project_quill_description_textarea"></textarea>
                                     </div>
                                 </div>
+                            </div>
                             </div>
                             </div>
                         </div>

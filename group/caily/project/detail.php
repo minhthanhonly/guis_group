@@ -154,6 +154,8 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </div>
                             <!-- Each titled section is its own block: one table per section on the read-only page -->
+                            <!-- Two fixed columns of section tables: the same sections sit in the same column on the page and in the form -->
+                            <div class="pd-col">
                             <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
@@ -426,6 +428,8 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </div>
                             </div>
+                            </div>
+                            <div class="pd-col">
                             <div class="pd-section" v-show="showSection('team')">
                             <div class="col-12 project-form-section" v-show="showSection('team')">
                                 <h6 class="project-form-section-title"><span data-i18n="チーム・メンバー">チーム・メンバー</span></h6>
@@ -544,7 +548,7 @@ if($_SESSION['show_project'] == 0){
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">
-                                                        <span :title="field.statusOf ? translateLabel(field.label) : null">{{ field.statusOf ? translateLabel('状況') : translateLabel(field.label) }}</span>
+                                                        <span>{{ field.statusOf ? '' : translateLabel(field.label) }}</span>
                                                         <button v-if="field.type === 'checkbox_select_all'"
                                                                 type="button"
                                                                 class="btn btn-sm btn-outline-secondary py-0"
@@ -633,7 +637,7 @@ if($_SESSION['show_project'] == 0){
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">
-                                                        <span :title="field.statusOf ? translateLabel(field.label) : null">{{ field.statusOf ? translateLabel('状況') : translateLabel(field.label) }}</span>
+                                                        <span>{{ field.statusOf ? '' : translateLabel(field.label) }}</span>
                                                         <button v-if="canEditProject && field.type === 'checkbox_select_all'"
                                                                 type="button"
                                                                 class="btn btn-sm btn-outline-secondary py-0"
@@ -761,6 +765,7 @@ if($_SESSION['show_project'] == 0){
                                 <template v-else>
                                     <div class="form-control ql-editor" style="min-height:100px;" v-html="decodeHtmlEntities(project.description)"></div>
                                 </template>
+                            </div>
                             </div>
                             </div>
                         </div>
@@ -1759,28 +1764,29 @@ $view->footing();
     --bs-gutter-x: 0;
     --bs-gutter-y: 0;
     --pd-caption-width: 9.5rem;
-    display: block;
-    column-gap: 1.25rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 1.25rem;
+    align-items: start;
     margin: 0;
 }
-/* Two tables side by side when the card is wide enough for two readable columns.
-   Columns (not a grid): the sections stack inside each column, so a short table is
-   followed directly by the next one instead of waiting for the taller neighbour. */
+/* Two fixed columns (.pd-col) when the card is wide enough: 基本情報 + スケジュール on the
+   left, the rest on the right. The edit dialog uses the same two columns (demo.css), so a
+   table is found in the same place on the page and in the form. */
 @container (min-width: 760px) {
     .project-detail-card:not(.edit-mode) .project-detail-grid {
-        column-count: 2;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 /* What comes before the first section (建物情報 button, customer box) spans the card */
 .project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"] {
-    column-span: all;
+    grid-column: 1 / -1;
     width: 100%;
     max-width: 100%;
     margin: 0 0 0.75rem !important;
     padding: 0;
 }
 .project-detail-card:not(.edit-mode) .pd-section {
-    break-inside: avoid;
     margin-bottom: 1rem;
     min-width: 0;
     border: 1px solid var(--bs-border-color);
@@ -1878,20 +1884,14 @@ $view->footing();
 }
 
 /* A 状況 field belongs to the field above it (see groupStatusCompanionFields): no rule
-   between the two, and its caption is the indented word 状況. Read-only page and edit dialog. */
+   between the two and no caption of its own, so its value reads as a second line of that
+   field. Read-only page and edit dialog. */
 .project-detail-grid .row > [class*="col-"]:has(+ .cf-status-companion) {
     border-bottom: 0 !important;
     padding-bottom: 0.1rem !important;
 }
 .project-detail-grid .row > .cf-status-companion {
     padding-top: 0.1rem !important;
-}
-.project-detail-grid .row > .cf-status-companion > .form-label {
-    padding-left: 1rem;
-    opacity: 0.6;
-}
-.project-detail-grid .row > .cf-status-companion > .form-label::before {
-    content: "└ ";
 }
 
 /* ---- 編集: the card becomes a dialog over the page ---- */

@@ -1134,22 +1134,29 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     --bs-gutter-x: 0;
     --bs-gutter-y: 0;
     --pf-caption-width: 9.5rem;
-    display: block;
-    column-gap: 1.25rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0 1.25rem;
+    align-items: start;
     margin: 0;
 }
-/* Columns (not a grid): the sections stack inside each column, so a short table is
-   followed directly by the next one instead of waiting for a taller neighbour. */
+/* Two fixed columns (.pd-col), each a stack of section tables. Which sections are in
+   which column is decided by the markup, so it is the same on every screen and the
+   same as on the read-only page. */
 @media (min-width: 1100px) {
     .project-form-modal .project-form-grid,
     .project-detail-card.edit-mode .project-detail-grid {
-        column-count: 2;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+}
+.project-form-grid > .pd-col,
+.project-detail-grid > .pd-col {
+    min-width: 0;
 }
 /* anything outside a section (e.g. the 建物情報 button) spans both columns */
 .project-form-modal .project-form-grid > [class*="col-"],
 .project-detail-card.edit-mode .project-detail-grid > [class*="col-"] {
-    column-span: all;
+    grid-column: 1 / -1;
     width: 100%;
     max-width: 100%;
     margin: 0 0 0.75rem !important;
@@ -1157,7 +1164,6 @@ span.avatar-initial:not(.avatar .avatar-initial) {
 }
 .project-form-modal .project-form-grid .pd-section,
 .project-detail-card.edit-mode .project-detail-grid .pd-section {
-    break-inside: avoid;
     margin-bottom: 1rem;
     min-width: 0;
     border: 1px solid var(--bs-border-color);
@@ -1189,8 +1195,6 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     flex: 0 0 100%;
     width: 100%;
     max-width: 100%;
-    padding-left: 0;
-    padding-right: 0;
 }
 .project-form-modal .project-form-grid .row,
 .project-detail-card.edit-mode .project-detail-grid .row {

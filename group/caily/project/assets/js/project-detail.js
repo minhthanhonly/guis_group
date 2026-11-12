@@ -5288,8 +5288,10 @@ const vueApp = createApp({
             const allFieldsFromSets = this.collectCustomFieldsFromSets(this.allDepartmentCustomFieldSets);
             const saved = this.parseSavedCustomFieldList(this.project?.custom_fields);
             // The page lists only what has been filled in; empty fields are set in the edit dialog
-            const filled = this.mapSetFieldsToCustomFields(allFieldsFromSets, saved)
-                .filter(f => this.customFieldHasValue(f));
+            const all = this.mapSetFieldsToCustomFields(allFieldsFromSets, saved);
+            const withValue = new Set(all.filter(f => this.customFieldHasValue(f)).map(f => String(f.label || '').trim()));
+            // A 状況 field follows its own field: shown whenever that field is, even while empty
+            const filled = all.filter(f => this.customFieldHasValue(f) || (f.statusOf && withValue.has(f.statusOf)));
             const shown = new Set(filled.map(f => String(f.label || '').trim()));
             // A 状況 whose own field is empty stands alone, under its full label
             return filled.map(f => (f.statusOf && !shown.has(f.statusOf)) ? { ...f, statusOf: null } : f);
