@@ -2000,6 +2000,25 @@ const vueApp = createApp({
             const isDelivered = !!(status && String(status).indexOf('納品済み') !== -1);
             return getScheduleJudgment(this.project, deadline, { isDelivered: isDelivered });
         },
+        /**
+         * Judgment badge (期限超過 / 進捗遅れ) to show next to a 納期's remaining-time badge.
+         * When the remaining-time badge already says the deadline has passed ("5日…超過"),
+         * a second badge reading 期限超過 only repeats it, so it is dropped.
+         */
+        getNoukiJudgmentBadge(kind) {
+            const judgment = this.getNoukiScheduleJudgment(kind);
+            if (!judgment) return null;
+            const remaining = kind === 'caily' ? this.cailyNoukiTimeRemaining() : this.guisNoukiTimeRemaining();
+            if (judgment.key === 'overdue' && remaining && remaining.isOverdue) return null;
+            return judgment;
+        },
+        /** The one badge the summary bar shows for a 納期: remaining time, else the judgment. */
+        getDeadlineBadge(kind) {
+            const remaining = kind === 'caily' ? this.cailyNoukiTimeRemaining() : this.guisNoukiTimeRemaining();
+            if (remaining) return { className: remaining.class, text: remaining.text };
+            const judgment = this.getNoukiScheduleJudgment(kind);
+            return judgment ? { className: judgment.className, text: this.translateLabel(judgment.textKey) } : null;
+        },
         cailyNoukiTimeRemaining() {
             if (!this.project) return null;
             return this.getTimeRemainingForDate(

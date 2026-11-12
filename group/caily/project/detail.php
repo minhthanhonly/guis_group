@@ -61,25 +61,16 @@ if($_SESSION['show_project'] == 0){
         <?php $statusBannerVar = 'project'; require __DIR__ . '/partials/project-status-banner.php'; ?>
         <div class="row">
             <!-- Back button -->
-            <div class="col-12 mb-3">
-                <a href="index.php" class="btn btn-outline-primary me-2">
+            <div class="col-12 mb-3 d-flex flex-wrap align-items-center gap-2">
+                <a href="index.php" class="btn btn-outline-primary">
                     <i class="fa fa-arrow-left me-2"></i><span data-i18n="案件一覧へ戻る">案件一覧へ戻る</span>
                 </a>
-                <a v-if="project && project.parent_project_id" :href="'../parent_project/detail.php?id=' + project.parent_project_id" class="btn btn-outline-primary">
-                    <i class="fa fa-external-link me-2"></i>
-                    <span data-i18n="建物詳細">建物詳細</span>
-                </a>
-                <span v-if="project && (project.parent_project_name || project.parent_construction_number)"
-                      class="ms-3 d-inline-flex flex-wrap align-items-center gap-3 border rounded px-3 py-2 align-middle">
-                    <span v-if="project.parent_project_name" class="d-inline-flex align-items-center gap-1">
-                        <span class="badge bg-label-primary" data-i18n="お施主様名">お施主様名</span>
-                        <span class="fw-semibold">{{ project.parent_project_name }}</span>
-                    </span>
-                    <span v-if="project.parent_construction_number" class="d-inline-flex align-items-center gap-1">
-                        <span class="badge bg-label-info" data-i18n="工事番号">工事番号</span>
-                        <span class="fw-semibold">{{ project.parent_construction_number }}</span>
-                    </span>
-                </span>
+                <?php
+                // 建物一覧 › 建物 › 案件: replaces the 建物詳細 button and the お施主様名 / 工事番号 box
+                $breadcrumbVar = 'project';
+                $breadcrumbLeaf = '';
+                require __DIR__ . '/partials/project-breadcrumb.php';
+                ?>
             </div>
 
             <!-- Left Column - Project Details -->
@@ -132,6 +123,49 @@ if($_SESSION['show_project'] == 0){
 
 
                         
+                        <!-- The facts people open this page for, in one place; stays visible while scrolling.
+                             View mode only: in edit mode the same fields are being edited below. -->
+                        <div v-if="project && !isEditMode" class="project-summary-bar">
+                            <div class="psb-item">
+                                <span class="psb-label" data-i18n="ステータス">ステータス</span>
+                                <span v-if="project.is_kadai == 1 && project.status !== 'cancelled'" class="badge bg-warning">承認待ち</span>
+                                <span v-else class="badge" :class="getStatusBadgeClass(project.status)">{{ getStatusLabel(project.status) }}</span>
+                            </div>
+                            <div class="psb-item">
+                                <span class="psb-label" data-i18n="優先度">優先度</span>
+                                <span class="badge" :class="getPriorityBadgeClass(project.priority)">{{ getPriorityLabel(project.priority) }}</span>
+                            </div>
+                            <div class="psb-item" v-show="!isEnergyDepartmentProject">
+                                <span class="psb-label" data-i18n="担当">担当</span>
+                                <span class="psb-value">{{ project.tantou || '—' }}</span>
+                            </div>
+                            <div class="psb-item" v-show="!isEnergyDepartmentProject">
+                                <span class="psb-label" data-i18n="進捗率">進捗率</span>
+                                <span class="psb-value">{{ project.progress || 0 }}%</span>
+                            </div>
+                            <div class="psb-item">
+                                <span class="psb-label" data-i18n="CAILY納期">CAILY納期</span>
+                                <span class="psb-value">{{ formatDateTime(project.caily_nouki) || '-' }}</span>
+                                <span v-if="isNoukiDelivered(project.caily_nouki_status)" class="badge bg-success" data-i18n="納品済み">納品済み</span>
+                                <span v-else-if="getDeadlineBadge('caily')" class="badge" :class="getDeadlineBadge('caily').className">{{ getDeadlineBadge('caily').text }}</span>
+                            </div>
+                            <div class="psb-item" v-if="canViewEndDate">
+                                <span class="psb-label" data-i18n="GUIS納期">GUIS納期</span>
+                                <span class="psb-value">{{ formatDateTime(project.guis_nouki) || '-' }}</span>
+                                <span v-if="isNoukiDelivered(project.guis_nouki_status)" class="badge bg-success" data-i18n="納品済み">納品済み</span>
+                                <span v-else-if="getDeadlineBadge('guis')" class="badge" :class="getDeadlineBadge('guis').className">{{ getDeadlineBadge('guis').text }}</span>
+                            </div>
+                            <div class="psb-item" v-if="canViewEndDate">
+                                <span class="psb-label" data-i18n="期限日(実納期)">期限日(実納期)</span>
+                                <span class="psb-value">{{ formatDateTime(project.end_date) || '-' }}</span>
+                                <span v-if="getTimeRemaining()" class="badge" :class="getTimeRemaining().class">{{ getTimeRemaining().text }}</span>
+                            </div>
+                            <div class="psb-item" v-if="managers && managers.length">
+                                <span class="psb-label"><span v-show="!isEnergyDepartmentProject" data-i18n="管理">管理</span><span v-show="isEnergyDepartmentProject" data-i18n="担当者">担当者</span></span>
+                                <span class="psb-value">{{ managers.slice(0, 3).map(m => m.user_name).join('、') }}<span v-if="managers.length > 3"> +{{ managers.length - 3 }}</span></span>
+                            </div>
+                        </div>
+
                         <div class="row g-3 project-detail-grid" v-if="project">
                             <!-- 建物情報: opens the shared building modal (read-only; 編集 inside it when permitted) -->
                             <div v-if="project.parent_project_id" class="col-12 mb-2">
@@ -365,9 +399,9 @@ if($_SESSION['show_project'] == 0){
                                           :title="cailyNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ cailyNoukiTimeRemaining().text }}
                                     </span>
-                                    <span v-if="getNoukiScheduleJudgment('caily')"
-                                          :class="'badge ms-1 ' + getNoukiScheduleJudgment('caily').className">
-                                        {{ translateLabel(getNoukiScheduleJudgment('caily').textKey) }}
+                                    <span v-if="getNoukiJudgmentBadge('caily')"
+                                          :class="'badge ms-1 ' + getNoukiJudgmentBadge('caily').className">
+                                        {{ translateLabel(getNoukiJudgmentBadge('caily').textKey) }}
                                     </span>
                                 </label>
                                 <div v-if="isEditMode">
@@ -402,9 +436,9 @@ if($_SESSION['show_project'] == 0){
                                           :title="guisNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
                                         {{ guisNoukiTimeRemaining().text }}
                                     </span>
-                                    <span v-if="getNoukiScheduleJudgment('guis')"
-                                          :class="'badge ms-1 ' + getNoukiScheduleJudgment('guis').className">
-                                        {{ translateLabel(getNoukiScheduleJudgment('guis').textKey) }}
+                                    <span v-if="getNoukiJudgmentBadge('guis')"
+                                          :class="'badge ms-1 ' + getNoukiJudgmentBadge('guis').className">
+                                        {{ translateLabel(getNoukiJudgmentBadge('guis').textKey) }}
                                     </span>
                                 </label>
                                 <div v-if="isEditMode && !isCailyBranchUser">
@@ -1728,20 +1762,70 @@ $view->footing();
     color: var(--bs-primary);
     border-bottom: 1px solid var(--bs-border-color);
 }
-/* View mode: read-only values look like text, not like editable boxes */
+/* View mode: a read-only value is plain text under its caption. No box, no fill: a tinted
+   box still reads as a disabled input, i.e. a form the user is locked out of. A hairline
+   under the value keeps the grid's rows aligned and scannable. */
 #app .card input.form-control[readonly]:not(.modal *),
 #app .card textarea.form-control[readonly]:not(.modal *),
 #app .card div.form-control:not(.modal *) {
-    background-color: rgba(75, 70, 92, 0.06);
-    border-color: transparent !important;
-    box-shadow: none;
+    background-color: transparent !important;
+    border: 0 !important;
+    /* derived from the text colour so it stays a faint line in the dark theme too */
+    border-bottom: 1px solid color-mix(in srgb, currentColor 16%, transparent) !important;
+    border-radius: 0;
+    box-shadow: none !important;
+    padding-left: 0;
+    padding-right: 0;
     font-weight: 600;
+    color: var(--bs-heading-color, inherit);
     cursor: default;
+    text-overflow: ellipsis;
 }
-[data-bs-theme="dark"] #app .card input.form-control[readonly]:not(.modal *),
-[data-bs-theme="dark"] #app .card textarea.form-control[readonly]:not(.modal *),
-[data-bs-theme="dark"] #app .card div.form-control:not(.modal *) {
-    background-color: rgba(255, 255, 255, 0.07);
+#app .card textarea.form-control[readonly]:not(.modal *) {
+    resize: none;
+}
+
+/* The theme's content wrapper is "overflow: hidden auto", which makes it the scroll box
+   that position: sticky measures against; it never scrolls itself (the page does), so
+   nothing inside it could stick. clip hides horizontal overflow without creating a
+   scroll box. This style block is only on the project detail page. */
+.layout-page .content-wrapper {
+    overflow-x: clip;
+    overflow-y: visible;
+}
+
+/* Summary of the key facts at the top of the project card (view mode) */
+.project-summary-bar {
+    position: sticky;
+    top: var(--project-summary-top, 4.75rem);
+    z-index: 6;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    margin: 0 0 1.25rem;
+    padding: 0.65rem 0.9rem;
+    border: 1px solid var(--bs-border-color);
+    border-left: 3px solid var(--bs-primary);
+    border-radius: var(--bs-border-radius);
+    background: var(--bs-card-bg, var(--bs-body-bg));
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+.project-summary-bar .psb-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    min-width: 0;
+}
+.project-summary-bar .psb-label {
+    font-size: 0.75rem;
+    opacity: 0.75;
+    white-space: nowrap;
+}
+.project-summary-bar .psb-value {
+    font-weight: 600;
+    color: var(--bs-heading-color, inherit);
+    white-space: nowrap;
 }
 /* Field captions: smaller and muted so they read as labels, not values */
 #app .card .form-label:not(.modal *) {
