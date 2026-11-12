@@ -1140,19 +1140,32 @@ $view->footing();
 
 <style>
 /* Time remaining badge styling */
+/* The halo is a pseudo-element animated with transform/opacity only, so it runs on the
+   compositor. Animating box-shadow on the badge itself repainted the whole table layer
+   on every frame (~8 ms per frame with 100 rows), even while idle. */
 .badge.pulse-animation {
-    animation: pulse 2s infinite;
+    position: relative;
+    z-index: 0;
+}
+.badge.pulse-animation::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    background: rgba(220, 53, 69, 0.7);
+    pointer-events: none;
+    animation: pl-badge-pulse 2s infinite;
 }
 
-@keyframes pulse {
+@keyframes pl-badge-pulse {
     0% {
-        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+        transform: scale(1);
+        opacity: 1;
     }
-    70% {
-        box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    70%, 100% {
+        transform: scale(1.35, 2);
+        opacity: 0;
     }
 }
 
