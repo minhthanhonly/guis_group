@@ -1122,49 +1122,106 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     vertical-align: bottom;
 }
 
-/* Project forms as a table: one field per row, caption left, control right.
-   Used by the project form modals (案件依頼を作成 / 案件依頼編集 / 案件を編集) and by the
-   edit dialog of the project detail page, so they match the read-only table there.
+/* Project forms as tables: one table per titled section (.pd-section), one field per row,
+   caption left, control right, and two tables side by side on wide screens — the same
+   layout as the read-only 案件詳細 page.
+   Used by the project form modals (案件依頼を作成 / 案件依頼編集 / 案件を編集) and by the edit
+   dialog of the project detail page.
    A "field row" is whichever element directly holds the caption (.form-label): the grid
-   column itself, or the .form-control-validation wrapper some forms put inside it. */
+   column itself, or the wrapper (.form-control-validation / .mb-3) some forms put inside it. */
 .project-form-modal .project-form-grid,
 .project-detail-card.edit-mode .project-detail-grid {
+    --bs-gutter-x: 0;
     --bs-gutter-y: 0;
-    --pf-caption-width: 11rem;
+    --pf-caption-width: 9.5rem;
+    display: block;
+    column-gap: 1.25rem;
+    margin: 0;
 }
-.project-form-modal .project-form-grid > [class*="col-"]:not(.project-form-section),
-.project-detail-card.edit-mode .project-detail-grid > [class*="col-"]:not(.project-form-section),
-.project-form-modal .project-form-grid .row > [class*="col-"]:has(> .form-label),
-.project-detail-card.edit-mode .project-detail-grid .row > [class*="col-"]:has(> .form-label),
-.project-form-modal .project-form-grid .row > [class*="col-"]:has(> :is(.form-control-validation, .mb-3) > .form-label),
-.project-detail-card.edit-mode .project-detail-grid .row > [class*="col-"]:has(> :is(.form-control-validation, .mb-3) > .form-label) {
+/* Columns (not a grid): the sections stack inside each column, so a short table is
+   followed directly by the next one instead of waiting for a taller neighbour. */
+@media (min-width: 1100px) {
+    .project-form-modal .project-form-grid,
+    .project-detail-card.edit-mode .project-detail-grid {
+        column-count: 2;
+    }
+}
+/* anything outside a section (e.g. the 建物情報 button) spans both columns */
+.project-form-modal .project-form-grid > [class*="col-"],
+.project-detail-card.edit-mode .project-detail-grid > [class*="col-"] {
+    column-span: all;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 0.75rem !important;
+    padding: 0;
+}
+.project-form-modal .project-form-grid .pd-section,
+.project-detail-card.edit-mode .project-detail-grid .pd-section {
+    break-inside: avoid;
+    margin-bottom: 1rem;
+    min-width: 0;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+}
+/* a section whose every child is hidden (e.g. no custom fields, nothing else in it) */
+.project-form-modal .project-form-grid .pd-section:not(:has(> :not([style*="display: none"]):not(.d-none))) {
+    display: none;
+}
+.project-form-modal .project-form-grid .pd-section > .project-form-section,
+.project-detail-card.edit-mode .project-detail-grid .pd-section > .project-form-section {
+    width: 100%;
+    max-width: 100%;
+    margin: 0 !important;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius) var(--bs-border-radius) 0 0;
+    background: color-mix(in srgb, var(--bs-primary) 7%, transparent);
+}
+.project-form-modal .project-form-grid .pd-section > .project-form-section .project-form-section-title,
+.project-detail-card.edit-mode .project-detail-grid .pd-section > .project-form-section .project-form-section-title {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+.project-form-modal .project-form-grid .pd-section > [class*="col-"]:not(.project-form-section),
+.project-detail-card.edit-mode .project-detail-grid .pd-section > [class*="col-"]:not(.project-form-section),
+.project-form-modal .project-form-grid .row > [class*="col-"],
+.project-detail-card.edit-mode .project-detail-grid .row > [class*="col-"] {
     flex: 0 0 100%;
     width: 100%;
     max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
 }
 .project-form-modal .project-form-grid .row,
 .project-detail-card.edit-mode .project-detail-grid .row {
+    --bs-gutter-x: 0;
     --bs-gutter-y: 0;
+    margin: 0 !important;
 }
+/* the field row */
 .project-form-modal .project-form-grid :is([class*="col-"], .form-control-validation, .mb-3):has(> .form-label),
 .project-detail-card.edit-mode .project-detail-grid :is([class*="col-"], .form-control-validation, .mb-3):has(> .form-label) {
     display: grid;
     grid-template-columns: var(--pf-caption-width) minmax(0, 1fr);
-    column-gap: 1rem;
+    column-gap: 0.75rem;
     align-items: start;
     margin-top: 0 !important;
     margin-bottom: 0 !important;
-    padding-top: 0.45rem;
-    padding-bottom: 0.45rem;
+    padding: 0.45rem 0.75rem;
     border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+}
+/* content of a section that is not a captioned row (checkbox line, helper text) */
+.project-form-modal .project-form-grid .pd-section > [class*="col-"]:not(.project-form-section):not(:has(.form-label)) {
+    padding: 0.45rem 0.75rem;
 }
 .project-form-modal .project-form-grid :is([class*="col-"], .form-control-validation, .mb-3) > .form-label,
 .project-detail-card.edit-mode .project-detail-grid :is([class*="col-"], .form-control-validation, .mb-3) > .form-label {
     grid-column: 1;
     grid-row: 1;
     margin: 0;
-    padding-top: 0.5rem;
-    font-size: 0.8125rem;
+    padding-top: 0.45rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
 }
 .project-form-modal .project-form-grid :is([class*="col-"], .form-control-validation, .mb-3):has(> .form-label) > :not(.form-label),
 .project-detail-card.edit-mode .project-detail-grid :is([class*="col-"], .form-control-validation, .mb-3):has(> .form-label) > :not(.form-label) {

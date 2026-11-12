@@ -2118,9 +2118,13 @@ const vueApp = createApp({
         getProjectDateTimePlaceholder() {
             return getProjectDateTimePlaceholder();
         },
-        /** Tooltip giờ VN khi hover lên giờ Nhật: "VN hh:ii" (dùng chung với main.js) */
+        /**
+         * Text of the "VN hh:ii" tooltip shown on JST dates. The tooltip was removed from the
+         * project detail page on request: with no text, initVietnamTimeTooltips() creates
+         * none. (Other pages still use window.formatVietnamTimeTooltip from main.js.)
+         */
         getVietnamTimeTooltip(jpDateTimeStr) {
-            return typeof window.formatVietnamTimeTooltip === 'function' ? window.formatVietnamTimeTooltip(jpDateTimeStr) : '';
+            return '';
         },
         /** Khởi tạo Bootstrap tooltip cho ô có data-time (giờ JST → tooltip VN) */
         initVietnamTimeTooltips() {
@@ -4035,7 +4039,33 @@ const vueApp = createApp({
                 }
                 rows.push(row);
             });
-            return rows;
+            return this.groupStatusCompanionFields(rows);
+        },
+        /**
+         * A custom field whose label is another field's label + 状況 is that field's status
+         * (the project list already shows the two in one cell). Put it directly after its
+         * field and mark it, so the page shows the pair as one group. The list stays flat:
+         * saving and the field indexes used by the form are unaffected.
+         */
+        groupStatusCompanionFields(rows) {
+            const baseOf = (label) => String(label || '').trim().replace(/状況s*$/, '').trim();
+            const labels = new Set(rows.map(r => String(r.label || '').trim()));
+            const companions = {};
+            rows.forEach(r => {
+                const label = String(r.label || '').trim();
+                const base = baseOf(label);
+                if (/状況s*$/.test(label) && base && base !== label && labels.has(base) && !r.isComposite) {
+                    r.statusOf = base;
+                    (companions[base] = companions[base] || []).push(r);
+                }
+            });
+            const ordered = [];
+            rows.forEach(r => {
+                if (r.statusOf) return;
+                ordered.push(r);
+                (companions[String(r.label || '').trim()] || []).forEach(c => ordered.push(c));
+            });
+            return ordered;
         },
         async quickUpdateNoukiStatus(kind) {
             if (!this.project || !this.project.id) return;
@@ -5257,7 +5287,68 @@ const vueApp = createApp({
         getCustomFieldsForView() {
             const allFieldsFromSets = this.collectCustomFieldsFromSets(this.allDepartmentCustomFieldSets);
             const saved = this.parseSavedCustomFieldList(this.project?.custom_fields);
-            return this.mapSetFieldsToCustomFields(allFieldsFromSets, saved);
+            // The page lists only what has been filled in; empty fields are set in the edit dialog
+            const filled = this.mapSetFieldsToCustomFields(allFieldsFromSets, saved)
+                .filter(f => this.customFieldHasValue(f));
+            const shown = new Set(filled.map(f => String(f.label || '').trim()));
+            // A 状況 whose own field is empty stands alone, under its full label
+            return filled.map(f => (f.statusOf && !shown.has(f.statusOf)) ? { ...f, statusOf: null } : f);
+        },
+        customFieldHasValue(field) {
+            if (!field) return false;
+            if (field.isComposite) return this.isCompositeValueSelected(field);
+            if (Array.isArray(field.valueArr) && field.valueArr.length > 0) return true;
+            return this.hasFieldValue(field.value);
+        },
+        hasFieldValue(value) {
+            if (value == null) return false;
+            if (Array.isArray(value)) return value.length > 0;
+            const text = String(value).trim();
+            return text !== '' && text !== '-' && text !== '—';
+        },
+        /**
+         * Whether a row of the project card is shown. The read-only page lists only fields
+         * that have a value; the edit dialog shows every field.
+         */
+        showField(key) {
+            if (this.isEditMode || !this.project) return true;
+            const p = this.project;
+            switch (key) {
+                case 'order_type': return this.hasFieldValue(p.project_order_type);
+                case 'tantou': return this.hasFieldValue(p.tantou);
+                case 'yotei': return this.hasFieldValue(this.yoteiDisplayText);
+                case 'start': return this.hasFieldValue(this.formatDateTime(p.start_date));
+                case 'end': return this.hasFieldValue(this.formatDateTime(p.end_date));
+                case 'actual_end': return this.hasFieldValue(this.formatDateTime(p.actual_end_date));
+                case 'caily': return this.hasFieldValue(this.formatDateTime(p.caily_nouki));
+                case 'guis': return this.hasFieldValue(this.formatDateTime(p.guis_nouki));
+                case 'team': return Array.isArray(p.team_list) && p.team_list.length > 0;
+                case 'managers': return Array.isArray(this.managers) && this.managers.length > 0;
+                case 'members': return Array.isArray(this.members) && this.members.length > 0;
+                case 'tags': return this.hasFieldValue(p.tags);
+                case 'description': {
+                    const html = this.decodeHtmlEntities(p.description || '');
+                    return /<img/i.test(html) || this.hasFieldValue(html.replace(/<[^>]*>/g, '').replace(/&nbsp;| /g, ' '));
+                }
+                default: return true;
+            }
+        },
+        /** A section title is shown while at least one of its rows is. */
+        showSection(key) {
+            if (this.isEditMode || !this.project) return true;
+            const energy = this.isEnergyDepartmentProject;
+            const any = (keys) => keys.some(k => this.showField(k));
+            switch (key) {
+                case 'schedule': {
+                    const keys = ['yotei', 'start', 'caily'];
+                    if (this.canViewEndDate) keys.push('end', 'guis');
+                    if (this.project.status === 'completed') keys.push('actual_end');
+                    return any(keys);
+                }
+                case 'team': return any(energy ? ['managers'] : ['team', 'managers', 'members']);
+                case 'other': return any(['tags', 'description']);
+                default: return true;
+            }
         },
         onCompositeRadioChange(field, value) {
             if (!field || !field.isComposite) return;

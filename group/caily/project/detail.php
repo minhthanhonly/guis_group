@@ -153,6 +153,8 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
+                            <!-- Each titled section is its own block: one table per section on the read-only page -->
+                            <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
                             </div>
@@ -204,7 +206,7 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-show="showField('order_type')">
                                 <label class="form-label"><span data-i18n="受注形態">受注形態</span></label>
                                 <template v-if="isEditMode">
                                     <div class="d-flex align-items-center gap-2">
@@ -245,7 +247,7 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
+                            <div class="col-md-4" v-show="(!isEnergyDepartmentProject) && showField('tantou')">
                                 <label class="form-label"><span data-i18n="担当">担当</span></label>
                                 <div v-if="isEditMode && !isCailyBranchUser" class="d-flex gap-3">
                                     <div class="form-check">
@@ -290,10 +292,12 @@ if($_SESSION['show_project'] == 0){
                                 <label class="form-label">金額</label>
                                 <input type="text" class="form-control" :value="formatCurrency(project.amount)" readonly>
                             </div> -->
-                            <div class="col-12 project-form-section">
+                            </div>
+                            <div class="pd-section" v-show="showSection('schedule')">
+                            <div class="col-12 project-form-section" v-show="showSection('schedule')">
                                 <h6 class="project-form-section-title"><span data-i18n="スケジュール">スケジュール</span></h6>
                             </div>
-                            <div class="col-12">
+                            <div class="col-12" v-show="showField('yotei')">
                                 <label class="form-label"><span data-i18n="予定工程">予定工程</span></label>
                                 <div v-if="isEditMode" class="d-flex flex-wrap align-items-center gap-2">
                                     <div>
@@ -319,7 +323,7 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <input v-else type="text" class="form-control" :value="yoteiDisplayText" readonly>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-show="showField('start')">
                                 <label class="form-label"><span data-i18n="開始日">開始日</span></label>
                                 <div v-if="isEditMode" class="input-group">
                                     <input type="text" class="form-control" v-model="project.start_date" id="start_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
@@ -327,14 +331,13 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.start_date)" :data-time="project.start_date || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ''" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)" readonly>
                             </div>
-                            <div class="col-md-4" v-if="canViewEndDate">
+                            <div class="col-md-4" v-if="canViewEndDate" v-show="showField('end')">
                                 <label class="form-label">
                                     <span data-i18n="期限日(実納期)">期限日(実納期)</span>
-                                    <span v-if="getTimeRemaining()" :class="'badge ms-2 ' + getTimeRemaining().class" 
-                                          :title="getTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
-                                        {{ getTimeRemaining().text }}
-                                    </span>
                                 </label>
+                                <div class="pd-deadline-badges">
+                                    <span v-if="getTimeRemaining()" :class="'badge ' + getTimeRemaining().class"  :title="getTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'"> {{ getTimeRemaining().text }} </span>
+                                </div>
                                 <template v-if="isEditMode">
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="project.end_date" id="end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
@@ -348,7 +351,7 @@ if($_SESSION['show_project'] == 0){
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.end_date)" :data-time="project.end_date || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' 期限日'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)" readonly>
                             </div>
                             <!-- 実終了日 only makes sense once the project is 完了 (v-show keeps the date picker input alive in edit mode) -->
-                            <div class="col-md-4" v-show="project.status === 'completed'">
+                            <div class="col-md-4" v-show="(project.status === 'completed') && showField('actual_end')">
                                 <label class="form-label"><span data-i18n="実終了日">実終了日</span></label>
                                 <div v-if="isEditMode" class="input-group">
                                     <input type="text" class="form-control" v-model="project.actual_end_date" id="actual_end_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
@@ -356,18 +359,14 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                                 <input v-else type="text" class="form-control" :value="formatDateTime(project.actual_end_date)" readonly>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-show="showField('caily')">
                                 <label class="form-label"><span data-i18n="CAILY納期">CAILY納期</span>
                                     <span v-if="isEditMode && project.end_date && project.tantou === 'CAILY' && !isEnergyDepartmentProject" class="text-danger">*</span>
-                                    <span v-if="cailyNoukiTimeRemaining()" :class="'badge ms-2 ' + cailyNoukiTimeRemaining().class"
-                                          :title="cailyNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
-                                        {{ cailyNoukiTimeRemaining().text }}
-                                    </span>
-                                    <span v-if="getNoukiJudgmentBadge('caily')"
-                                          :class="'badge ms-1 ' + getNoukiJudgmentBadge('caily').className">
-                                        {{ translateLabel(getNoukiJudgmentBadge('caily').textKey) }}
-                                    </span>
                                 </label>
+                                <div class="pd-deadline-badges">
+                                    <span v-if="cailyNoukiTimeRemaining()" :class="'badge ' + cailyNoukiTimeRemaining().class" :title="cailyNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'"> {{ cailyNoukiTimeRemaining().text }} </span>
+                                    <span v-if="getNoukiJudgmentBadge('caily')" :class="'badge ' + getNoukiJudgmentBadge('caily').className"> {{ translateLabel(getNoukiJudgmentBadge('caily').textKey) }} </span>
+                                </div>
                                 <div v-if="isEditMode">
                                     <div class="input-group mb-1">
                                         <input type="text" class="form-control" v-model="project.caily_nouki" id="caily_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
@@ -393,18 +392,14 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4" v-if="canViewEndDate">
+                            <div class="col-md-4" v-if="canViewEndDate" v-show="showField('guis')">
                                 <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span>
                                     <span v-if="isEditMode && !isCailyBranchUser && project.end_date && project.tantou === 'GUIS' && !isEnergyDepartmentProject" class="text-danger">*</span>
-                                    <span v-if="guisNoukiTimeRemaining()" :class="'badge ms-2 ' + guisNoukiTimeRemaining().class"
-                                          :title="guisNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'">
-                                        {{ guisNoukiTimeRemaining().text }}
-                                    </span>
-                                    <span v-if="getNoukiJudgmentBadge('guis')"
-                                          :class="'badge ms-1 ' + getNoukiJudgmentBadge('guis').className">
-                                        {{ translateLabel(getNoukiJudgmentBadge('guis').textKey) }}
-                                    </span>
                                 </label>
+                                <div class="pd-deadline-badges">
+                                    <span v-if="guisNoukiTimeRemaining()" :class="'badge ' + guisNoukiTimeRemaining().class" :title="guisNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'"> {{ guisNoukiTimeRemaining().text }} </span>
+                                    <span v-if="getNoukiJudgmentBadge('guis')" :class="'badge ' + getNoukiJudgmentBadge('guis').className"> {{ translateLabel(getNoukiJudgmentBadge('guis').textKey) }} </span>
+                                </div>
                                 <div v-if="isEditMode && !isCailyBranchUser">
                                     <div class="input-group mb-1">
                                         <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
@@ -430,11 +425,13 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-12 project-form-section">
+                            </div>
+                            <div class="pd-section" v-show="showSection('team')">
+                            <div class="col-12 project-form-section" v-show="showSection('team')">
                                 <h6 class="project-form-section-title"><span data-i18n="チーム・メンバー">チーム・メンバー</span></h6>
                             </div>
                             <!-- チーム / 担当 are not used by 省エネ departments -->
-                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
+                            <div class="col-md-4" v-show="(!isEnergyDepartmentProject) && showField('team')">
                                 <label class="form-label"><span data-i18n="チーム">チーム</span></label>
                                 <div class="d-flex align-items-center gap-2">
                                     <input v-if="isEditMode" id="team_tags" class="form-control" />
@@ -447,7 +444,7 @@ if($_SESSION['show_project'] == 0){
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4">
+                            <div class="col-md-4" v-show="showField('managers')">
                                 <!-- 省エネ departments call 管理 "担当者" and do not use メンバー -->
                                 <label class="form-label"><span v-show="!isEnergyDepartmentProject" data-i18n="管理">管理</span><span v-show="isEnergyDepartmentProject" data-i18n="担当者">担当者</span></label>
                                 <div v-if="isEditMode" class="d-flex align-items-center gap-2">
@@ -477,7 +474,7 @@ if($_SESSION['show_project'] == 0){
                                     <span data-i18n="メンバーがいません">メンバーがいません</span>
                                 </div>
                             </div>
-                            <div class="col-md-4" v-show="!isEnergyDepartmentProject">
+                            <div class="col-md-4" v-show="(!isEnergyDepartmentProject) && showField('members')">
                                 <label class="form-label"><span data-i18n="メンバー">メンバー</span></label>
                                 <div v-if="isEditMode" class="d-flex align-items-center gap-2">
                                     <input class="form-control" type="text" id="members_tags" name="members_tags">
@@ -506,6 +503,8 @@ if($_SESSION['show_project'] == 0){
                                     <span data-i18n="メンバーがいません">メンバーがいません</span>
                                 </div>
                             </div>
+                            </div>
+                            <div class="pd-section" v-show="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || isEnergyDepartmentProject">
                             <div class="col-12 project-form-section" v-if="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || isEnergyDepartmentProject">
                                 <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span></h6>
                             </div>
@@ -543,9 +542,9 @@ if($_SESSION['show_project'] == 0){
                                                         <input type="text" class="form-control form-control-sm" v-model="field.memoValue" placeholder="メモ" style="min-width:6rem;">
                                                     </div>
                                                 </div>
-                                                <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
+                                                <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">
-                                                        <span>{{ translateLabel(field.label) }}</span>
+                                                        <span :title="field.statusOf ? translateLabel(field.label) : null">{{ field.statusOf ? translateLabel('状況') : translateLabel(field.label) }}</span>
                                                         <button v-if="field.type === 'checkbox_select_all'"
                                                                 type="button"
                                                                 class="btn btn-sm btn-outline-secondary py-0"
@@ -632,9 +631,9 @@ if($_SESSION['show_project'] == 0){
                                                         <div v-if="field.value && field.memoValue" class="mt-1 text-muted small">{{ field.memoValue }}</div>
                                                     </template>
                                                 </div>
-                                                <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
+                                                <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">
-                                                        <span>{{ translateLabel(field.label) }}</span>
+                                                        <span :title="field.statusOf ? translateLabel(field.label) : null">{{ field.statusOf ? translateLabel('状況') : translateLabel(field.label) }}</span>
                                                         <button v-if="canEditProject && field.type === 'checkbox_select_all'"
                                                                 type="button"
                                                                 class="btn btn-sm btn-outline-secondary py-0"
@@ -737,10 +736,12 @@ if($_SESSION['show_project'] == 0){
                                     <div v-else style="min-height:38px;">{{ belsZehGradeLabel || '-' }}</div>
                                 </div>
                             </template>
-                            <div class="col-12 project-form-section">
+                            </div>
+                            <div class="pd-section" v-show="showSection('other')">
+                            <div class="col-12 project-form-section" v-show="showSection('other')">
                                 <h6 class="project-form-section-title"><span data-i18n="その他">その他</span></h6>
                             </div>
-                            <div class="col-md-12">
+                            <div class="col-md-12" v-show="showField('tags')">
                                 <label class="form-label"><span data-i18n="タグ">タグ</span><i class="fa fa-question-circle text-muted ms-2" 
                                 data-bs-toggle="tooltip" 
                                 data-bs-placement="top" 
@@ -749,7 +750,7 @@ if($_SESSION['show_project'] == 0){
                                     <input type="text" class="form-control tagify" v-model="project.tags" id="project_tags" name="project_tags" @input="updateTags">
                                 </div>
                             </div>
-                            <div class="col-12">
+                            <div class="col-12" v-show="showField('description')">
                                 <label class="form-label"><span data-i18n="説明">説明</span></label>
                                 <template v-if="isEditMode">
                                     <div class="custom_editor">
@@ -760,6 +761,7 @@ if($_SESSION['show_project'] == 0){
                                 <template v-else>
                                     <div class="form-control ql-editor" style="min-height:100px;" v-html="decodeHtmlEntities(project.description)"></div>
                                 </template>
+                            </div>
                             </div>
                         </div>
                         <div v-else class="text-center py-5">
@@ -1746,47 +1748,97 @@ $view->footing();
     resize: none;
 }
 
-/* ---- Page (read-only): every field is one table row, caption left, value right ----
-   The markup is the same grid the edit form uses (one field = one .col-* with a
-   .form-label followed by its value); only the layout differs, so the two cannot drift. */
-.project-detail-card:not(.edit-mode) .project-detail-grid {
-    --bs-gutter-y: 0;
-    --pd-caption-width: 11rem;
+/* ---- Page (read-only): one table per section, caption left, value right ----
+   The markup is the same grid the edit form uses (a .pd-section per titled section, one
+   field = one .col-* holding a .form-label followed by its value); only the layout
+   differs, so the page and the form cannot drift apart. */
+.project-detail-card:not(.edit-mode) > .card-body {
+    container-type: inline-size;
 }
-.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"]:not(.project-form-section),
-.project-detail-card:not(.edit-mode) .project-detail-grid .row > [class*="col-"] {
+.project-detail-card:not(.edit-mode) .project-detail-grid {
+    --bs-gutter-x: 0;
+    --bs-gutter-y: 0;
+    --pd-caption-width: 9.5rem;
+    display: block;
+    column-gap: 1.25rem;
+    margin: 0;
+}
+/* Two tables side by side when the card is wide enough for two readable columns.
+   Columns (not a grid): the sections stack inside each column, so a short table is
+   followed directly by the next one instead of waiting for the taller neighbour. */
+@container (min-width: 760px) {
+    .project-detail-card:not(.edit-mode) .project-detail-grid {
+        column-count: 2;
+    }
+}
+/* What comes before the first section (建物情報 button, customer box) spans the card */
+.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"] {
+    column-span: all;
+    width: 100%;
+    max-width: 100%;
+    margin: 0 0 0.75rem !important;
+    padding: 0;
+}
+.project-detail-card:not(.edit-mode) .pd-section {
+    break-inside: avoid;
+    margin-bottom: 1rem;
+    min-width: 0;
+    border: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius);
+}
+.project-detail-card:not(.edit-mode) .pd-section > .project-form-section {
+    width: 100%;
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--bs-border-color);
+    border-radius: var(--bs-border-radius) var(--bs-border-radius) 0 0;
+    background: color-mix(in srgb, var(--bs-primary) 7%, transparent);
+}
+.project-detail-card:not(.edit-mode) .pd-section > .project-form-section .project-form-section-title {
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+/* a field row */
+.project-detail-card:not(.edit-mode) .pd-section > [class*="col-"]:not(.project-form-section),
+.project-detail-card:not(.edit-mode) .pd-section .row > [class*="col-"] {
     flex: 0 0 100%;
     width: 100%;
     max-width: 100%;
     display: grid;
     grid-template-columns: var(--pd-caption-width) minmax(0, 1fr);
-    column-gap: 1rem;
+    column-gap: 0.75rem;
     align-items: start;
     margin: 0 !important;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
+    padding: 0.45rem 0.75rem;
     border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
 }
+.project-detail-card:not(.edit-mode) .pd-section > [class*="col-"]:last-child,
+.project-detail-card:not(.edit-mode) .pd-section > [class*="col-"]:last-child .row > [class*="col-"]:last-child {
+    border-bottom: 0;
+}
 /* Wrappers that only hold other rows (custom fields, energy fields) are not rows themselves */
-.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"]:has(> .row),
-.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"]:has(> .mt-3 > .row),
-.project-detail-card:not(.edit-mode) .project-detail-grid > [class*="col-"]:not(:has(> .form-label)) {
+.project-detail-card:not(.edit-mode) .pd-section > [class*="col-"]:has(> .row),
+.project-detail-card:not(.edit-mode) .pd-section > [class*="col-"]:has(> .mt-3 > .row),
+.project-detail-card:not(.edit-mode) .pd-section > [class*="col-"]:not(.project-form-section):not(:has(> .form-label)) {
     display: block;
-    padding-top: 0;
-    padding-bottom: 0;
+    padding: 0;
     border-bottom: 0;
 }
 .project-detail-card:not(.edit-mode) .project-detail-grid .row {
+    --bs-gutter-x: 0;
     --bs-gutter-y: 0;
-    margin-top: 0 !important;
+    margin: 0 !important;
 }
-.project-detail-card:not(.edit-mode) .project-detail-grid [class*="col-"] > .form-label {
+/* caption column: as large as the values and bold; the values are regular weight */
+#app .project-detail-card:not(.edit-mode) .project-detail-grid [class*="col-"] > .form-label {
     grid-column: 1;
     grid-row: 1;
     margin: 0;
-    padding-top: 0.15rem;
-    font-size: 0.8125rem;
-    opacity: 0.75;
+    padding-top: 0.05rem;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    opacity: 1;
+    color: var(--bs-heading-color, inherit);
 }
 .project-detail-card:not(.edit-mode) .project-detail-grid [class*="col-"] > :not(.form-label) {
     grid-column: 2;
@@ -1799,6 +1851,7 @@ $view->footing();
     min-height: 0 !important;
     height: auto;
     line-height: 1.5;
+    font-weight: 400 !important;
 }
 @media (max-width: 767.98px) {
     .project-detail-card:not(.edit-mode) .project-detail-grid {
@@ -1806,7 +1859,48 @@ $view->footing();
     }
 }
 
+/* Remaining-time / judgment badges of a deadline sit in the value column, under the date
+   (page and edit dialog): the caption column holds captions only. */
+.project-detail-grid .pd-deadline-badges {
+    order: 9;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+}
+.project-detail-grid .pd-deadline-badges:empty {
+    display: none;
+}
+
+/* 進捗率: a short slider is enough for 5% steps */
+.project-detail-grid .position-relative:has(> .form-range) {
+    max-width: 200px;
+}
+
+/* A 状況 field belongs to the field above it (see groupStatusCompanionFields): no rule
+   between the two, and its caption is the indented word 状況. Read-only page and edit dialog. */
+.project-detail-grid .row > [class*="col-"]:has(+ .cf-status-companion) {
+    border-bottom: 0 !important;
+    padding-bottom: 0.1rem !important;
+}
+.project-detail-grid .row > .cf-status-companion {
+    padding-top: 0.1rem !important;
+}
+.project-detail-grid .row > .cf-status-companion > .form-label {
+    padding-left: 1rem;
+    opacity: 0.6;
+}
+.project-detail-grid .row > .cf-status-companion > .form-label::before {
+    content: "└ ";
+}
+
 /* ---- 編集: the card becomes a dialog over the page ---- */
+/* captions like on the page (the id is needed to beat "#app .card .form-label" below) */
+#app .project-detail-card.edit-mode .project-detail-grid .form-label {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    opacity: 1;
+}
 .project-edit-backdrop {
     position: fixed;
     inset: 0;
@@ -1823,7 +1917,7 @@ $view->footing();
     left: 0;
     right: 0;
     margin: 0 auto;
-    width: min(880px, 94vw);
+    width: min(1280px, 94vw);
     max-height: 94vh;
     display: flex;
     flex-direction: column;

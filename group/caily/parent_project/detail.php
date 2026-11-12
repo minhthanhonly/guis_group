@@ -1211,6 +1211,7 @@ $view->heading('建物詳細');
                 <div class="modal-body">
                     <form @submit.prevent="createChildProject">
                         <div class="row g-3 project-form-grid">
+                            <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
                             </div>
@@ -1329,6 +1330,8 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            </div>
+                            <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="スケジュール">スケジュール</span></h6>
                             </div>
@@ -1403,6 +1406,8 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            </div>
+                            <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="チーム・メンバー">チーム・メンバー</span></h6>
                             </div>
@@ -1439,6 +1444,8 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            </div>
+                            <div class="pd-section">
                             <div class="col-12 project-form-section" v-if="newChildProject.department_id">
                                 <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span></h6>
                             </div>
@@ -1456,6 +1463,7 @@ $view->heading('建物詳細');
                                         <textarea class="custom_editor_textarea d-none" v-model="newChildProject.description" id="create_child_project_quill_description_textarea"></textarea>
                                     </div>
                                 </div>
+                            </div>
                             </div>
                         </div>
                     </form>
@@ -1492,6 +1500,7 @@ $view->heading('建物詳細');
                     <form @submit.prevent="updateChildProject">
                         <input type="hidden" v-model.number="editingChildProject.version">
                         <div class="row g-3 project-form-grid">
+                            <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
                             </div>
@@ -1607,6 +1616,8 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            </div>
+                            <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="スケジュール">スケジュール</span></h6>
                             </div>
@@ -1682,6 +1693,8 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            </div>
+                            <div class="pd-section">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="チーム・メンバー">チーム・メンバー</span></h6>
                             </div>
@@ -1718,6 +1731,8 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                             </div>
+                            </div>
+                            <div class="pd-section">
                             <div class="col-12 project-form-section" v-if="editingChildProject.department_id">
                                 <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span></h6>
                             </div>
@@ -1735,6 +1750,7 @@ $view->heading('建物詳細');
                                         <textarea class="custom_editor_textarea d-none" v-model="editingChildProject.description" id="edit_child_project_quill_description_textarea"></textarea>
                                     </div>
                                 </div>
+                            </div>
                             </div>
                         </div>
                     </form>
@@ -3956,10 +3972,10 @@ $view->footing();
     }
 
     /* Project form modals (案件依頼を作成 / 案件依頼編集 / 案件を編集): fields grouped in titled sections */
-    /* one field per row (caption left, control right: see demo.css), so a narrower dialog reads better */
+    /* wide enough for two section tables side by side (layout: see demo.css) */
     @media (min-width: 1200px) {
         .modal-dialog.project-form-modal {
-            max-width: min(880px, calc(100vw - 3rem));
+            max-width: min(1280px, calc(100vw - 3rem));
         }
     }
     .project-form-modal .project-form-section:not(:first-child) {
