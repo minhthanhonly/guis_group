@@ -339,14 +339,14 @@
                             </div>
                             <div class="col-12" v-for="row in namedDefaultTaskRows.filter(r => r.task && r.task.id)" :key="'ndt_' + row.key">
                                 <label class="form-label">
-                                    <a v-if="row.task && row.task.id" class="text-reset text-decoration-none" :href="'task.php?project_id=' + project.id + '#task-' + row.task.id" title="タスクへ">{{ translateLabel(row.title) }} <i class="fa fa-arrow-up-right-from-square small text-muted"></i></a>
+                                    <a v-if="row.task && row.task.id" class="text-reset text-decoration-none" :href="'task.php?project_id=' + project.id + '&task_id=' + row.task.id" title="タスクへ">{{ translateLabel(row.title) }} <i class="fa fa-arrow-up-right-from-square small text-muted"></i></a>
                                     <span v-else>{{ translateLabel(row.title) }}</span>
                                 </label>
                                 <div class="pd-default-task">
                                     <span class="badge" :class="getNamedDefaultTaskStatusBadgeClass(row.task && row.task.status)">{{ getNamedDefaultTaskStatusLabel(row.task && row.task.status) }}</span>
                                     <span><span class="text-muted small me-1" data-i18n="担当">担当</span>{{ (row.task && row.task.assignee_name) ? row.task.assignee_name : '-' }}</span>
                                     <span><span class="text-muted small me-1" data-i18n="期限">期限</span>{{ (row.task && row.task.due_date) ? formatDateTime(row.task.due_date) : '-' }}</span>
-                                    <span v-if="row.task && row.task.note" class="pd-default-task-memo small text-break">{{ row.task.note }}</span>
+                                    <div v-if="row.task && hasFieldValue(richTextToPlain(row.task.note))" class="pd-default-task-memo small text-break" v-html="sanitizeRichText(row.task.note)"></div>
                                 </div>
                             </div>
                             </div>
@@ -518,9 +518,15 @@
                                                        @change="onEnergyMaterialToggle(opt, $event)">
                                                 <input v-else class="form-check-input pf-readonly-check" type="checkbox" tabindex="-1"
                                                        :checked="selectedEnergyMaterialLabels.indexOf(opt) !== -1" @click.prevent>
-                                                <label class="form-check-label" :for="canEditProject ? ('pd_energy_material_' + opt) : null">{{ opt }}<span v-if="opt === 'その他' && project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
+                                                <label class="form-check-label" :for="canEditProject ? ('pd_energy_material_' + opt) : null">{{ opt }}<span v-if="!canEditProject && opt === 'その他' && project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
                                                       class="small text-muted ms-1">({{ project.energy_materials_memo }})</span></label>
                                             </div>
+                                        </div>
+                                        <!-- その他メモ: typed on the page while その他 is ticked -->
+                                        <div class="mt-2" v-if="canEditProject && selectedEnergyMaterialLabels.indexOf('その他') !== -1">
+                                            <input type="text" class="form-control form-control-sm" placeholder="その他メモ" maxlength="500"
+                                                   :value="project.energy_materials_memo || ''" :disabled="savingEnergyMaterials"
+                                                   @change="onEnergyMaterialMemoChange($event)">
                                         </div>
                                     </div>
                                 </div>

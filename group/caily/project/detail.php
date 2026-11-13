@@ -1170,7 +1170,13 @@ $view->footing();
 }
 .project-detail-grid .pd-default-task .pd-default-task-memo {
     flex: 0 0 100%;
-    white-space: pre-wrap;
+}
+/* rich text memo: paragraphs without the editor's outer spacing */
+.project-detail-grid .pd-default-task .pd-default-task-memo > :last-child {
+    margin-bottom: 0;
+}
+.project-detail-grid .pd-default-task .pd-default-task-memo p {
+    margin-bottom: 0.25rem;
 }
 .project-detail-card:not(.edit-mode) .project-detail-grid .form-control[readonly],
 .project-detail-card:not(.edit-mode) .project-detail-grid div.form-control {

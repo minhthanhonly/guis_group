@@ -2777,6 +2777,56 @@
                     }
                 }
             },
+            /**
+             * Rich text written by users (Quill HTML; the API sends it entity-encoded, sometimes
+             * twice) as safe HTML for v-html: only formatting tags, colours and http(s)/mailto links
+             * survive — scripts, event handlers, images and everything else are dropped.
+             */
+            sanitizeRichText(raw) {
+                let html = String(raw == null ? '' : raw);
+                for (let i = 0; i < 3 && /&(?:lt|gt|quot|amp|#0?39);/.test(html); i++) {
+                    html = this.decodeHtmlEntities(html);
+                }
+                const ALLOWED = { P: 1, BR: 1, SPAN: 1, STRONG: 1, B: 1, EM: 1, I: 1, U: 1, S: 1, STRIKE: 1, UL: 1, OL: 1, LI: 1,
+                    A: 1, BLOCKQUOTE: 1, PRE: 1, CODE: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1, DIV: 1, SUB: 1, SUP: 1 };
+                const DROP_WITH_CONTENT = { SCRIPT: 1, STYLE: 1, IFRAME: 1, OBJECT: 1, EMBED: 1, TEMPLATE: 1, NOSCRIPT: 1, SVG: 1, MATH: 1 };
+                const doc = new DOMParser().parseFromString('<body>' + html + '</body>', 'text/html');
+                const clean = (node) => {
+                    Array.from(node.childNodes).forEach((child) => {
+                        if (child.nodeType === 3) return;
+                        if (child.nodeType !== 1) { child.remove(); return; }
+                        const tag = child.tagName.toUpperCase();
+                        if (DROP_WITH_CONTENT[tag]) { child.remove(); return; }
+                        clean(child);
+                        if (!ALLOWED[tag]) {
+                            // keep the text of an unknown tag, not the tag
+                            while (child.firstChild) node.insertBefore(child.firstChild, child);
+                            child.remove();
+                            return;
+                        }
+                        const color = child.style ? child.style.color : '';
+                        const background = child.style ? child.style.backgroundColor : '';
+                        const href = tag === 'A' ? String(child.getAttribute('href') || '').trim() : '';
+                        Array.from(child.attributes).forEach(attr => child.removeAttribute(attr.name));
+                        const safeColor = v => /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,%]+\)|[a-z]+)$/i.test(v);
+                        if (color && safeColor(color)) child.style.color = color;
+                        if (background && safeColor(background)) child.style.backgroundColor = background;
+                        if (tag === 'A' && /^(https?:|mailto:)/i.test(href)) {
+                            child.setAttribute('href', href);
+                            child.setAttribute('target', '_blank');
+                            child.setAttribute('rel', 'noopener noreferrer');
+                        }
+                    });
+                };
+                clean(doc.body);
+                return doc.body.innerHTML;
+            },
+            /** The text of a rich text value, to tell whether it holds anything. */
+            richTextToPlain(raw) {
+                const holder = document.createElement('div');
+                holder.innerHTML = this.sanitizeRichText(raw);
+                return (holder.textContent || '').replace(/\u00a0/g, ' ').trim();
+            },
             decodeHtmlEntities(str) {
                 const txt = document.createElement('textarea');
                 txt.innerHTML = str;
@@ -3144,6 +3194,40 @@
                     }
                 } catch (err) {
                     console.error('Energy materials save:', err);
+                    revert();
+                    showMessage((err.response && err.response.data && err.response.data.message) || '更新に失敗しました。', true);
+                } finally {
+                    this.savingEnergyMaterials = false;
+                    if (this.inlineSaveStatus.custom === 'loading') this.markInlineSave('custom', null);
+                }
+            },
+            /** Read-only page: その他メモ of 省エネ向け資料, saved when the input is left. */
+            async onEnergyMaterialMemoChange(event) {
+                const input = event && event.target;
+                const value = String((input && input.value) || '').trim();
+                const previous = String(this.project.energy_materials_memo || '');
+                const revert = () => { if (input) input.value = previous; };
+                if (!this.project || !this.canEditProject || this.savingEnergyMaterials) { revert(); return; }
+                if (value === previous) return;
+                this.savingEnergyMaterials = true;
+                this.markInlineSave('custom', 'loading');
+                try {
+                    const formData = new FormData();
+                    formData.append('id', this.project.id);
+                    formData.append('energy_materials_memo', value);
+                    appendProjectVersionToFormData(formData, this.project);
+                    const res = await axios.post('/api/index.php?model=project&method=update', formData);
+                    if (res.data && res.data.status === 'success') {
+                        applyProjectVersionFromResponse(this.project, res.data);
+                        this.project.energy_materials_memo = value;
+                        this.markInlineSave('custom', 'saved');
+                    } else {
+                        revert();
+                        if (handleProjectVersionConflict(res.data, () => this.loadProject())) return;
+                        showMessage((res.data && (res.data.message || res.data.error)) || '更新に失敗しました。', true);
+                    }
+                } catch (err) {
+                    console.error('Energy materials memo save:', err);
                     revert();
                     showMessage((err.response && err.response.data && err.response.data.message) || '更新に失敗しました。', true);
                 } finally {
