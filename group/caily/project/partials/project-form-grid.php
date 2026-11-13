@@ -448,7 +448,7 @@
                                                     <?php require __DIR__ . '/project-composite-field-edit.php'; ?>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
-                                                    <div class="form-label d-flex align-items-center justify-content-between gap-2">
+                                                    <div class="form-label d-flex flex-column align-items-start gap-1">
                                                         <span>{{ field.statusOf ? '' : translateLabel(field.label) }}</span>
                                                         <button v-if="field.type === 'checkbox_select_all'"
                                                                 type="button"
@@ -507,7 +507,7 @@
                                                     <?php require __DIR__ . '/project-composite-field-view.php'; ?>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
-                                                    <div class="form-label d-flex align-items-center justify-content-between gap-2">
+                                                    <div class="form-label d-flex flex-column align-items-start gap-1">
                                                         <span>{{ field.statusOf ? '' : translateLabel(field.label) }}</span>
                                                         <button v-if="canEditProject && field.type === 'checkbox_select_all'"
                                                                 type="button"
@@ -587,15 +587,18 @@
                                         </div>
                                     </template>
                                     <div v-else>
-                                        <div class="pf-energy-composite" v-for="(field, idx) in getEnergyMaterialCompositeFields(getCustomFieldsForView())" :key="'emc_view_' + field.label">
+                                        <div class="pf-energy-composite" v-for="(field, idx) in getEnergyMaterialCompositeFields(getAllCustomFieldsForView())" :key="'emc_view_' + field.label">
                                             <div class="pf-energy-composite-title">{{ translateLabel(field.label) }}</div>
                                             <?php require __DIR__ . '/project-composite-field-view.php'; ?>
                                         </div>
-                                        <div class="d-flex flex-wrap gap-1 align-items-center">
-                                            <span v-for="opt in getEnergyMaterialPlainSelected()" :key="'em_' + opt"
-                                                  class="badge badge-outline-primary me-1">{{ opt }}</span>
-                                            <span v-if="project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
-                                                  class="small text-muted ms-1">({{ project.energy_materials_memo }})</span>
+                                        <!-- every other choice, ticked or not (changed in the edit dialog) -->
+                                        <div class="pf-energy-plain-list">
+                                            <div class="form-check mb-0" v-for="opt in getEnergyMaterialPlainOptions()" :key="'em_' + opt">
+                                                <input class="form-check-input pf-readonly-check" type="checkbox" tabindex="-1"
+                                                       :checked="selectedEnergyMaterialLabels.indexOf(opt) !== -1" @click.prevent>
+                                                <label class="form-check-label">{{ opt }}<span v-if="opt === 'その他' && project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
+                                                      class="small text-muted ms-1">({{ project.energy_materials_memo }})</span></label>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

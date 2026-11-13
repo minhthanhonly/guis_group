@@ -1309,3 +1309,13 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     font-size: 0.875rem;
     margin-bottom: 0.25rem;
 }
+
+/* 省エネ向け資料 on the read-only page: the plain choices as ticked / unticked boxes */
+.project-detail-grid .pf-energy-plain-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+}
+.project-detail-grid .pf-readonly-check {
+    pointer-events: none;
+}

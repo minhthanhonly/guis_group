@@ -2877,6 +2877,12 @@
                 const found = arr.find(f => f.label && f.label.trim() === label.trim());
                 return found ? found.value : '';
             },
+            /** Every custom field of the department with its saved value (filled or not). */
+            getAllCustomFieldsForView() {
+                const allFieldsFromSets = this.collectCustomFieldsFromSets(this.allDepartmentCustomFieldSets);
+                const saved = this.parseSavedCustomFieldList(this.project?.custom_fields);
+                return this.mapSetFieldsToCustomFields(allFieldsFromSets, saved);
+            },
             getCustomFieldsForView() {
                 const allFieldsFromSets = this.collectCustomFieldsFromSets(this.allDepartmentCustomFieldSets);
                 const saved = this.parseSavedCustomFieldList(this.project?.custom_fields);
