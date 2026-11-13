@@ -3,7 +3,7 @@
 
     var CAILY_API = 'https://group.caily.com.vn/api/index.php?type=get_upcoming_holidays&debug=1&days=60&limit=40';
     var GUIS_API = '/api/index.php?model=timecard&method=get_holiday_upcoming&days=60&limit=40';
-    var BUSINESS_DAYS_WINDOW = 30;
+    var BANNER_DAYS_WINDOW = 14;
     var BANNER_COLLAPSE_KEY = 'upcomingHolidayBannerCollapsed';
 
     // i18n helper — fallback to JP if i18next not ready
@@ -11,7 +11,7 @@
         '祝日一覧':         { vi: 'Danh sách ngày nghỉ' },
         '今後の祝日':       { vi: 'Ngày nghỉ sắp tới' },
         '近日の祝日':       { vi: 'Ngày nghỉ sắp tới' },
-        '30営業日以内':     { vi: 'Trong 30 ngày làm việc' },
+        '14日以内':         { vi: 'Trong 14 ngày tới' },
         '読み込み中...':    { vi: 'Đang tải...' },
         '祝日はありません': { vi: 'Không có ngày nghỉ' },
         '今週':             { vi: 'Tuần này' },
@@ -58,14 +58,10 @@
         return d;
     }
 
-    /** End of window covering `count` weekdays from today (inclusive when today is weekday). */
-    function getBusinessWindowEnd(count) {
+    /** Last day of a window of `count` calendar days starting today (today counts as day 1). */
+    function getWindowEnd(count) {
         var d = startOfToday();
-        var counted = isWeekend(d) ? 0 : 1;
-        while (counted < count) {
-            d.setDate(d.getDate() + 1);
-            if (!isWeekend(d)) counted++;
-        }
+        d.setDate(d.getDate() + count - 1);
         return d;
     }
 
@@ -84,9 +80,9 @@
         return (h && (h.name_ja || h.name)) ? String(h.name_ja || h.name) : '';
     }
 
-    function filterHolidaysInBusinessWindow(list, days) {
+    function filterHolidaysInWindow(list, days) {
         var today = startOfToday();
-        var end = getBusinessWindowEnd(days || BUSINESS_DAYS_WINDOW);
+        var end = getWindowEnd(days || BANNER_DAYS_WINDOW);
         var todayYmd = toYmd(today);
         var endYmd = toYmd(end);
         var out = [];
@@ -127,14 +123,10 @@
             .replace(/"/g, '&quot;');
     }
 
+    // Only companies that have a holiday in the window get a line.
     function companyLineHtml(company, list) {
+        if (!list || !list.length) return '';
         var badgeClass = company === 'CAILY' ? 'bg-success' : 'bg-dark';
-        if (!list || !list.length) {
-            return '<div class="uhb-company">' +
-                '<span class="badge ' + badgeClass + '">' + company + '</span>' +
-                '<span class="uhb-empty">' + escapeHtml(t('なし')) + '</span>' +
-                '</div>';
-        }
         var items = list.map(function (h) {
             return '<div class="uhb-item">' +
                 '<span class="uhb-date">' + escapeHtml(formatHolidayDate(h.date)) + '</span>' +
@@ -178,7 +170,7 @@
             '    <i class="fa fa-calendar text-danger" aria-hidden="true"' + (collapsed ? ' style="display:none"' : '') + '></i>' +
             '    <span class="uhb-title">' +
             escapeHtml(t('近日の祝日')) +
-            ' <span class="uhb-window">(' + escapeHtml(t('30営業日以内')) + ')</span>' +
+            ' <span class="uhb-window">(' + escapeHtml(t('14日以内')) + ')</span>' +
             '</span>' +
             '    <button type="button" class="uhb-toggle ms-auto" id="upcomingHolidayBannerToggle"' +
             '      title="' + escapeHtml(collapsed ? t('展開') : t('縮小')) + '"' +
@@ -216,8 +208,8 @@
         function finish() {
             if (!guisDone || !cailyDone) return;
             renderBanner(
-                filterHolidaysInBusinessWindow(guisList, BUSINESS_DAYS_WINDOW),
-                filterHolidaysInBusinessWindow(cailyList, BUSINESS_DAYS_WINDOW)
+                filterHolidaysInWindow(guisList, BANNER_DAYS_WINDOW),
+                filterHolidaysInWindow(cailyList, BANNER_DAYS_WINDOW)
             );
         }
 
