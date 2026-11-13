@@ -188,7 +188,7 @@ $view->heading('建物詳細');
                                         </span>
                                     </div>
                                 </div>
-                                <!-- チーム / 管理 / メンバー: everyone, by name -->
+                                <!-- チーム / 管理 / メンバー: everyone (avatars, name on hover) -->
                                 <div class="cp-row" v-if="project.team_names && project.team_names.length">
                                     <div class="cp-label"><span data-i18n="チーム">チーム</span></div>
                                     <div class="cp-value d-flex flex-wrap gap-1">
@@ -199,27 +199,27 @@ $view->heading('建物詳細');
                                     <!-- 省エネ departments call 管理 "担当者" -->
                                     <div class="cp-label"><span v-if="mapDepartmentNameToRequestType(project.department_name) === '省エネ'" data-i18n="担当者">担当者</span><span v-else data-i18n="管理">管理</span></div>
                                     <div class="cp-value cp-people">
-                                        <span class="cp-person" v-for="person in splitChildProjectPeople(project.manager_id)" :key="'cp_mgr_' + person">
-                                            <span class="avatar avatar-xs" v-if="getManagerImage(person)">
-                                                <img
-                                                     :src="'/assets/upload/avatar/' + getManagerImage(person)" alt="avatar" class="rounded-circle"
-                                                     @error="$event.target.parentElement.style.display='none'">
-                                            </span>
-                                            <span>{{ getManagerName(person) }}</span>
-                                        </span>
+                                        <div class="avatar avatar-sm" v-for="person in splitChildProjectPeople(project.manager_id)" :key="'cp_mgr_' + person"
+                                             data-bs-toggle="tooltip" :title="getManagerName(person)">
+                                            <span class="avatar-initial rounded-circle bg-label-primary pull-up">{{ getManagerInitials(person) }}</span>
+                                            <img v-if="getManagerImage(person)"
+                                                 :src="'/assets/upload/avatar/' + getManagerImage(person)" alt="avatar" class="rounded-circle pull-up" style="display:none;"
+                                                 @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';"
+                                                 @error="$event.target.remove()">
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="cp-row" v-if="splitChildProjectPeople(project.member_id).length">
                                     <div class="cp-label"><span data-i18n="メンバー">メンバー</span></div>
                                     <div class="cp-value cp-people">
-                                        <span class="cp-person" v-for="person in splitChildProjectPeople(project.member_id)" :key="'cp_mem_' + person">
-                                            <span class="avatar avatar-xs" v-if="getManagerImage(person)">
-                                                <img
-                                                     :src="'/assets/upload/avatar/' + getManagerImage(person)" alt="avatar" class="rounded-circle"
-                                                     @error="$event.target.parentElement.style.display='none'">
-                                            </span>
-                                            <span>{{ getManagerName(person) }}</span>
-                                        </span>
+                                        <div class="avatar avatar-sm" v-for="person in splitChildProjectPeople(project.member_id)" :key="'cp_mem_' + person"
+                                             data-bs-toggle="tooltip" :title="getManagerName(person)">
+                                            <span class="avatar-initial rounded-circle bg-label-primary pull-up">{{ getManagerInitials(person) }}</span>
+                                            <img v-if="getManagerImage(person)"
+                                                 :src="'/assets/upload/avatar/' + getManagerImage(person)" alt="avatar" class="rounded-circle pull-up" style="display:none;"
+                                                 @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';"
+                                                 @error="$event.target.remove()">
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="cp-row" v-if="project.tantou && mapDepartmentNameToRequestType(project.department_name) !== '省エネ'">
@@ -3024,10 +3024,7 @@ $view->footing();
     .child-project-card .cp-label { font-weight: 700; }
     .child-project-card .cp-value { min-width: 0; word-break: break-word; }
     .child-project-card .cp-desc { white-space: pre-line; }
-    .child-project-card .cp-people { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; }
-    .child-project-card .cp-person { display: inline-flex; align-items: center; gap: 0.3rem; }
-    .child-project-card .cp-person .avatar { width: 1.5rem; height: 1.5rem; flex-shrink: 0; }
-    .child-project-card .cp-person .avatar-initial { font-size: 0.625rem; }
+    .child-project-card .cp-people { display: flex; flex-wrap: wrap; gap: 0.25rem; }
     .child-project-card .cp-actions {
         display: flex;
         justify-content: flex-end;
