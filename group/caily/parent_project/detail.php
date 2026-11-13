@@ -55,9 +55,9 @@ $view->heading('建物詳細');
             </nav>
         </div>
 
-        <!-- Left Column - Parent Project Details -->
-        <div class="col-12 mb-3">
-            <div class="card">
+        <!-- Left Column - building details, 案件依頼, workload -->
+        <div class="col-xl-8 mb-3">
+            <div class="card project-detail-card">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center mb-4">
                         <div class="d-flex align-items-center gap-2">
@@ -89,219 +89,30 @@ $view->heading('建物詳細');
                             </template>
                         </div>
                     </div>
-                    <div v-if="parentProject" class="row g-3">
-                        <?php $customerListViewRowDetail = true; include __DIR__ . '/partials/customer-list-view.php'; unset($customerListViewRowDetail); ?>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
-                                <input type="text" class="form-control" :value="guisReceiverDisplayName || '-'"
-                                    readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span
-                                        class="text-danger">*</span></label>
-                                <input type="text" class="form-control" :value="parentProject.project_name"
-                                    readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
-                                <input type="text" class="form-control"
-                                    :value="formatDateTime(parentProject.request_date)" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label">
-                                    <span data-i18n="管理番号">管理番号</span>
-                                </label>
-                                <input type="text" class="form-control" :value="parentProject.project_number || '-'"
-                                    readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
-                                <input type="text" class="form-control"
-                                    :value="parentProject.construction_number || '-'" readonly>
-                            </div>
-                        </div>
-                        
-                        
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
-                                <input type="text" class="form-control" :value="parentProject.scale || '-'"
-                                    readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
-                                <input type="text" class="form-control" :value="parentProject.city || '-'"
-                                    readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                <input type="text" class="form-control"
-                                    :value="parentProject.structural_office || '-'" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="種類1">種類1</span></label>
-                                <div style="min-height:38px;">
-                                    <span v-if="parentProject.type1 && parentProject.type1.split(',').length > 0">
-                                        <span v-for="item in parentProject.type1.split(',')" :key="item.trim()"
-                                            class="badge bg-primary me-1">{{ item.trim() }}</span>
-                                    </span>
-                                    <span v-else>-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="住宅種類">住宅種類</span></label>
-                                <div style="min-height:38px;">
-                                    <span v-if="parentProject.type2 && parentProject.type2.split(',').length > 0">
-                                        <span v-for="item in parentProject.type2.split(',')" :key="item.trim()"
-                                            class="badge bg-primary me-1">{{ item.trim() }}</span>
-                                    </span>
-                                    <span v-else>-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3" v-if="hasNonResidentialType">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="非住宅の主要用途">非住宅の主要用途</span></label>
-                                <div style="min-height:38px;">
-                                    {{ nonResidentialMainUseLabel || '-' }}
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <div class="col-12">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="依頼">依頼</span></label>
-                                <div class="form-control-plaintext">
-                                    <div class="d-flex flex-wrap gap-1 align-items-center" v-if="parentRequestTypes.length">
-                                        <span v-for="item in parentRequestTypes" :key="item"
-                                              class="badge me-1"
-                                              :class="isParentRequestFulfilled(item) ? getParentRequestBadgeClass(item) : getParentRequestUnfulfilledBadgeClass(item)"
-                                              :title="isParentRequestFulfilled(item) ? '' : '未作成'">
-                                            <i v-if="!isParentRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
-                                            <i v-else class="fa fa-check me-1"></i>
-                                            {{ item }}
-                                        </span>
-                                    </div>
-                                    <span v-else class="text-muted">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="お客様提供資料">お客様提供資料</span></label>
-                                <div class="form-control-plaintext">
-                                    <div class="row">
-                                        <div class="col-md-4"
-                                            v-if="parentProject.materials && parentProject.materials.includes('配置図')">
-                                            <i class="fa fa-check text-success me-2"></i>配置図
-                                        </div>
-                                        <div class="col-md-4"
-                                            v-if="parentProject.materials && parentProject.materials.includes('家賃審査書')">
-                                            <i class="fa fa-check text-success me-2"></i>家賃審査書
-                                        </div>
-                                        <div class="col-md-4"
-                                            v-if="parentProject.materials && parentProject.materials.includes('契約図')">
-                                            <i class="fa fa-check text-success me-2"></i>契約図
-                                        </div>
-                                        <div class="col-md-4"
-                                            v-if="parentProject.materials && parentProject.materials.includes('TAC図')">
-                                            <i class="fa fa-check text-success me-2"></i>TAC図
-                                        </div>
-                                        <div class="col-md-4"
-                                            v-if="parentProject.materials && parentProject.materials.includes('その他')">
-                                            <i class="fa fa-check text-success me-2"></i>その他
-                                            <span v-if="parentProject.materials_memo" class="small text-muted ms-1">
-                                                ({{ parentProject.materials_memo }})
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="特徴">特徴</span></label>
-                                <div class="form-control-plaintext">
-                                    <div class="d-flex flex-wrap gap-1 align-items-center" v-if="selectedFeatureLabels.length">
-                                        <span v-for="opt in selectedFeatureLabels" :key="opt" class="badge badge-outline-primary me-1">
-                                            {{ opt }}
-                                        </span>
-                                    </div>
-                                    <span v-else class="text-muted">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- <div class="col-12">
-                            <div class="mb-3 form-control-validation">
-                                <label class="form-label"><span data-i18n="備考">備考</span></label>
-                                <div class="form-control-plaintext" style="white-space: pre-wrap;">{{
-                                    parentProject.notes || '-' }}</div>
-                            </div>
-                        </div> -->
-                    </div>
+                    <template v-if="parentProject">
+                        <?php
+                        $ppv = array(
+                            'p' => 'parentProject',
+                            'receiver' => 'guisReceiverDisplayName',
+                            'requestDate' => 'formatDateTime(parentProject.request_date)',
+                            'type1' => "String(parentProject.type1 || '').split(',').map(v => v.trim()).filter(Boolean)",
+                            'type2' => "String(parentProject.type2 || '').split(',').map(v => v.trim()).filter(Boolean)",
+                            'hasNonRes' => 'hasNonResidentialType',
+                            'nonResLabel' => 'nonResidentialMainUseLabel',
+                            'requests' => 'parentRequestTypes',
+                            'reqFulfilled' => 'isParentRequestFulfilled',
+                            'reqBadge' => 'getParentRequestBadgeClass',
+                            'reqBadgeUnfulfilled' => 'getParentRequestUnfulfilledBadgeClass',
+                            'materials' => "['配置図', '家賃審査書', '契約図', 'TAC図', 'その他'].filter(m => String(parentProject.materials || '').includes(m))",
+                            'features' => 'selectedFeatureLabels',
+                        );
+                        include __DIR__ . '/partials/parent-project-view-grid.php';
+                        ?>
+                    </template>
                     <div v-else class="text-center py-5">
                         <div class="spinner-border" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- メモ (Notes) - below 備考 -->
-            <div class="card mb-4 mt-4">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0"><span data-i18n="メモ">メモ</span></h5>
-                    <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
-                        <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
-                    </button>
-                </div>
-                <div class="card-body">
-                    <div v-if="notes.length > 0" class="list-group">
-                        <div v-for="note in notes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
-                            <div class="flex-grow-1" style="cursor: pointer;" @click="openNoteModal(note)">
-                                <div class="d-flex align-items-center justify-content-between mb-1">
-                                    <small class="text-secondary">
-                                        {{ formatShortDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}
-                                    </small>
-                                    <div class="ms-2">
-                                        <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
-                                    </div>
-                                </div>
-                                <div v-if="note.content" class="text-muted" style="white-space: pre-line; word-break: break-word;">
-                                    {{ note.content }}
-                                </div>
-                            </div>
-                            <button class="btn btn-outline-danger btn-sm ms-2"
-                                    @click="deleteNote(note.id)"
-                                    title="削除"
-                                    v-if="canDeleteNote(note)">
-                                <i class="fa fa-trash"></i>
-                            </button>
-                        </div>
-                    </div>
-                    <div v-else class="text-center text-muted py-3">
-                        <i class="fa fa-sticky-note fa-2x mb-2"></i>
-                        <p><span data-i18n="メモがありません">メモがありません</span></p>
-                        <button v-if="canAddNote" class="btn btn-outline-primary btn-sm" @click="openNoteModal()">
-                            <span data-i18n="最初のメモを追加">最初のメモを追加</span>
-                        </button>
                     </div>
                 </div>
             </div>
@@ -542,6 +353,51 @@ $view->heading('建物詳細');
                             </div>
                         </div>
                     </template>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - メモ -->
+        <div class="col-xl-4 mb-3">
+            <!-- メモ (Notes) -->
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0"><span data-i18n="メモ">メモ</span></h5>
+                    <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
+                        <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div v-if="notes.length > 0" class="list-group">
+                        <div v-for="note in notes" :key="note.id" class="list-group-item d-flex justify-content-between align-items-start">
+                            <div class="flex-grow-1" style="cursor: pointer;" @click="openNoteModal(note)">
+                                <div class="d-flex align-items-center justify-content-between mb-1">
+                                    <small class="text-secondary">
+                                        {{ formatShortDateTime(note.created_at) }} - {{ note.realname || 'Unknown' }}
+                                    </small>
+                                    <div class="ms-2">
+                                        <i v-if="note.is_important == 1" class="fa fa-exclamation-circle text-danger me-2"></i>
+                                    </div>
+                                </div>
+                                <div v-if="note.content" class="text-muted" style="white-space: pre-line; word-break: break-word;">
+                                    {{ note.content }}
+                                </div>
+                            </div>
+                            <button class="btn btn-outline-danger btn-sm ms-2"
+                                    @click="deleteNote(note.id)"
+                                    title="削除"
+                                    v-if="canDeleteNote(note)">
+                                <i class="fa fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div v-else class="text-center text-muted py-3">
+                        <i class="fa fa-sticky-note fa-2x mb-2"></i>
+                        <p><span data-i18n="メモがありません">メモがありません</span></p>
+                        <button v-if="canAddNote" class="btn btn-outline-primary btn-sm" @click="openNoteModal()">
+                            <span data-i18n="最初のメモを追加">最初のメモを追加</span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

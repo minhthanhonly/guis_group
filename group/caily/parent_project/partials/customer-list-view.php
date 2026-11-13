@@ -5,11 +5,15 @@
  * Needs ParentProjectCustomersMixin.
  * $customerListViewRowDetail = true: no 顧客情報 button; each row gets a 詳細 button that opens the
  * customer detail modal directly (the host must provide showCustomerInfoModal).
+ * $customerListViewBare = true: no 顧客 caption and no frame — the list is the body of a titled
+ * section table (.pd-section).
  */
 $customerListViewRowDetail = !empty($customerListViewRowDetail);
+$customerListViewBare = !empty($customerListViewBare);
 ?>
 <div class="col-12">
-    <div class="mb-3">
+    <div class="<?php echo $customerListViewBare ? '' : 'mb-3'; ?>">
+<?php if (!$customerListViewBare): ?>
         <label class="form-label d-flex flex-wrap align-items-center gap-2">
             <span><span data-i18n="顧客">顧客</span></span>
 <?php if (!$customerListViewRowDetail): ?>
@@ -19,7 +23,8 @@ $customerListViewRowDetail = !empty($customerListViewRowDetail);
             </button>
 <?php endif; ?>
         </label>
-        <div class="table-responsive border rounded">
+<?php endif; ?>
+        <div class="table-responsive <?php echo $customerListViewBare ? 'pd-bare-table' : 'border rounded'; ?>">
             <table class="table table-sm align-middle mb-0 parent-project-customer-table">
                 <thead class="table-light">
                     <tr>
