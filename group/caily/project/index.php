@@ -760,122 +760,8 @@ if($_SESSION['show_project'] == 0){
     </div>
     <div class="modal-backdrop fade show" v-if="showBusinessDocumentLogModal"></div>
 
-    <!-- Note Modal (for 確認必要メモ) -->
-    <div class="modal fade" tabindex="-1" :class="{show: showNoteModal}" style="display: block;" v-if="showNoteModal">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"></h5>
-                    <button type="button" class="btn-close" @click="closeNoteModal"></button>
-                </div>
-                <div class="modal-body">
-                    <!-- View mode -->
-                    <div v-if="editingNote.id && !isNoteEditMode">
-                        <div class="mb-3">
-                            <label class="form-label"><span data-i18n="内容">内容</span></label>
-                            <div class="form-control ql-editor" style="min-height:100px;max-height:600px;overflow-y:auto;" v-html="editingNote.content || '-'"></div>
-                        </div>
-                        <div class="mb-3" v-if="editingNote.is_important || editingNote.is_pinned_self">
-                            <label class="form-label"><span data-i18n="ピン">ピン</span></label>
-                            <div class="d-flex flex-wrap gap-2">
-                                <span v-if="editingNote.is_important" class="badge bg-danger"><i class="fa fa-thumb-tack me-1"></i><span data-i18n="ピン（全員）">ピン（全員）</span></span>
-                                <span v-if="editingNote.is_pinned_self" class="badge bg-primary"><i class="fa fa-bookmark me-1"></i><span data-i18n="ピン（自分）">ピン（自分）</span></span>
-                            </div>
-                        </div>
-                        <div class="mb-3" v-if="editingNote.needs_confirmation">
-                            <label class="form-label"><span>区分</span></label>
-                            <div>
-                                <span class="badge bg-primary" v-if="String(editingNote.needs_confirmation) === '1'">{{ cailyNoteLabel }}</span>
-                                <span class="badge bg-dark" v-else-if="String(editingNote.needs_confirmation) === '2'">GUISメモ</span>
-                                <span class="badge bg-primary" v-else>確認必要</span>
-                            </div>
-                        </div>
-                        <div class="mb-3" v-if="editingNote.label">
-                            <label class="form-label"><span>ラベル</span></label>
-                            <div>
-                                <span class="note-label-chip" :style="getNoteLabelStyle(editingNote.label)"><i class="fa fa-tag note-label-chip-icon" aria-hidden="true"></i><span class="note-label-chip-text">{{ editingNote.label }}</span></span>
-                            </div>
-                        </div>
-                        <div class="mb-3" v-if="editingNote.display_column">
-                            <label class="form-label"><span>表示列</span></label>
-                            <div>{{ getNoteDisplayColumnLabel(editingNote.display_column) }}</div>
-                        </div>
-                    </div>
-                    <!-- Edit mode -->
-                    <form v-else @submit.prevent="saveNote">
-                        <div class="mb-3">
-                            <label class="form-label"><span data-i18n="内容">内容</span></label>
-                            <div class="custom_editor">
-                                <div class="custom_editor_content" id="quill_note_content"></div>
-                                <textarea class="custom_editor_textarea d-none" v-model="editingNote.content" id="quill_note_content_textarea"></textarea>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check mb-1">
-                                <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant" @change="onNotePinEveryoneChange">
-                                <label class="form-check-label" for="isImportant">
-                                    <i class="fa fa-thumb-tack text-danger me-2"></i> <span data-i18n="ピン（全員）">ピン（全員）</span>
-                                </label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" v-model="editingNote.is_pinned_self" id="isPinnedSelf" @change="onNotePinSelfChange">
-                                <label class="form-check-label" for="isPinnedSelf">
-                                    <i class="fa fa-bookmark text-primary me-2"></i> <span data-i18n="ピン（自分）">ピン（自分）</span>
-                                </label>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label"><span>ラベル</span></label>
-                            <select class="form-select" v-model="editingNote.labelSelect" @change="onNoteLabelSelectChange">
-                                <option value="">— 選択 —</option>
-                                <option v-for="lbl in noteLabelSelectOptions" :key="lbl.name" :value="lbl.name">{{ lbl.name }}</option>
-                                <option :value="NOTE_LABEL_OTHER">その他</option>
-                            </select>
-                            <input v-if="editingNote.labelSelect === NOTE_LABEL_OTHER"
-                                   type="text"
-                                   class="form-control mt-2"
-                                   v-model="editingNote.labelOther"
-                                   maxlength="100"
-                                   placeholder="ラベルを入力">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label d-block"><span>区分</span></label>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" :value="1" v-model="editingNote.needs_confirmation" id="needsConfirmationCaily">
-                                <label class="form-check-label" for="needsConfirmationCaily">{{ cailyNoteLabel }}</label>
-                            </div>
-                            <div class="form-check form-check-inline">
-                                <input class="form-check-input" type="radio" :value="2" v-model="editingNote.needs_confirmation" id="needsConfirmationGuis">
-                                <label class="form-check-label" for="needsConfirmationGuis">GUISメモ</label>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label"><span>表示列</span></label>
-                            <select class="form-select" v-model="editingNote.display_column">
-                                <option value="">— 選択 —</option>
-                                <option v-for="opt in noteDisplayColumnOptions" :key="opt.value" :value="opt.value">{{ opt.text }}</option>
-                            </select>
-                        </div>
-                    </form>
-                </div>
-                    <div class="modal-footer">
-                        <template v-if="editingNote.id && !isNoteEditMode">
-                            <button class="btn btn-primary" @click="isNoteEditMode = true; $nextTick(() => initQuillNoteEditor())"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
-                            <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
-                        </template>
-                        <template v-else>
-                            <button class="btn btn-danger me-auto" v-if="editingNote.id" @click="deleteCurrentNote">
-                                <i class="fa fa-trash me-2"></i> <span data-i18n="削除">削除</span>
-                            </button>
-                            <button class="btn btn-secondary" @click="closeNoteModal"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
-                            <button class="btn btn-primary" @click="saveNote" :disabled="savingNote || !canSaveNote">
-                                <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
-                            </button>
-                        </template>
-                    </div>
-            </div>
-        </div>
-    </div>
+    <!-- メモ modal (add / view / edit) — shared with 案件詳細 -->
+    <?php $noteModalEditorId = 'quill_note_content'; require __DIR__ . '/partials/project-note-modal.php'; ?>
 
     <!-- Kadai Projects Queue - Fixed Bottom -->
     <div id="kadaiQueue" class="kadai-queue-container" v-show="kadaiProjects.length > 0">
@@ -2054,6 +1940,7 @@ body > .select2-container--default,
 </style>
 
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.css" />
+<link rel="stylesheet" href="assets/css/project-notes.css?v=<?=PROJECT_CACHE_VERSION?>">
 <script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/dataTables.colReorder.min.js"></script>
 <script src="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.js"></script>
 <!-- Chat page context: AI can use current project list data -->
@@ -2078,5 +1965,6 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="../parent_project/assets/js/parent-project-quick-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-energy-fields-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-note-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

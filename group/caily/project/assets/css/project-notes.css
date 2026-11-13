@@ -1,0 +1,176 @@
+/*
+ * メモ shared styles — 案件詳細 (board + modal) and 案件一覧 (memo cells + modal).
+ * Palette keys must match ProjectNote::BG_COLORS.
+ */
+
+/* Palette — light */
+.note-bg-coral   { --note-bg: #faafa8; --note-fg: #202124; }
+.note-bg-peach   { --note-bg: #f39f76; --note-fg: #202124; }
+.note-bg-sand    { --note-bg: #fff8b8; --note-fg: #202124; }
+.note-bg-mint    { --note-bg: #e2f6d3; --note-fg: #202124; }
+.note-bg-sage    { --note-bg: #b4ddd3; --note-fg: #202124; }
+.note-bg-fog     { --note-bg: #d4e4ed; --note-fg: #202124; }
+.note-bg-storm   { --note-bg: #aeccdc; --note-fg: #202124; }
+.note-bg-dusk    { --note-bg: #d3bfdb; --note-fg: #202124; }
+.note-bg-blossom { --note-bg: #f6e2dd; --note-fg: #202124; }
+.note-bg-clay    { --note-bg: #e9e3d4; --note-fg: #202124; }
+.note-bg-chalk   { --note-bg: #efeff1; --note-fg: #202124; }
+/* Palette — dark */
+[data-bs-theme="dark"] .note-bg-coral   { --note-bg: #77172e; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-peach   { --note-bg: #692b17; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-sand    { --note-bg: #7c4a03; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-mint    { --note-bg: #264d3b; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-sage    { --note-bg: #0c625d; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-fog     { --note-bg: #256377; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-storm   { --note-bg: #284255; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-dusk    { --note-bg: #472e5b; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-blossom { --note-bg: #6c394f; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-clay    { --note-bg: #4b443a; --note-fg: #e8eaed; }
+[data-bs-theme="dark"] .note-bg-chalk   { --note-bg: #232427; --note-fg: #e8eaed; }
+
+/* ---------- Note modal (partials/project-note-modal.php) ---------- */
+.project-note-modal:focus {
+    outline: none;
+}
+.project-note-modal .modal-header {
+    align-items: flex-start;
+}
+.project-note-modal-heading {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.project-note-modal-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 20px;
+    align-items: start;
+}
+.project-note-modal-main {
+    min-width: 0;
+}
+.project-note-modal-side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+@media (min-width: 992px) {
+    /* the theme caps modal-xl at 600px on mid-size screens — too narrow for editor + sidebar */
+    .project-note-modal .modal-dialog {
+        max-width: min(1100px, calc(100vw - 2rem));
+    }
+}
+@media (max-width: 991.98px) {
+    .project-note-modal-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+.project-note-modal .pnm-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    opacity: 0.75;
+    margin-bottom: 6px;
+}
+/* filled checked state — the theme only tints checked outline buttons faintly */
+.project-note-modal .pnm-segmented .btn-check:checked + .btn-outline-primary {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: #fff;
+}
+.project-note-modal .pnm-segmented .btn-check:checked + .btn-outline-danger {
+    background-color: var(--bs-danger);
+    border-color: var(--bs-danger);
+    color: #fff;
+}
+.project-note-modal .pnm-segmented .btn {
+    white-space: nowrap;
+}
+/* Editor: tall, tinted with the selected 背景色 */
+.project-note-modal-editor .ql-container {
+    min-height: 320px;
+    font-size: 0.95rem;
+}
+.project-note-modal-editor .ql-editor {
+    min-height: 320px;
+    max-height: 60vh;
+    overflow-y: auto;
+}
+.note-editor-tinted .ql-container {
+    background: var(--note-bg, transparent);
+    color: var(--note-fg, inherit);
+    transition: background-color 0.15s ease;
+}
+/* the theme's editor.css paints .ql-snow .ql-editor with --bs-paper-bg, which would cover the tint */
+.note-editor-tinted .ql-snow .ql-editor {
+    background: transparent;
+}
+.note-editor-tinted .ql-editor.ql-blank::before {
+    color: currentColor;
+    opacity: 0.55;
+}
+/* View mode: the content box takes the note's colour */
+.note-view-content.ql-editor {
+    background: var(--note-bg, transparent);
+    color: var(--note-fg, inherit);
+}
+.project-note-modal-view.ql-editor {
+    min-height: 200px;
+    max-height: 65vh;
+    overflow-y: auto;
+    padding: 14px 16px;
+    border: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.12));
+    border-radius: 8px;
+    font-size: 0.95rem;
+}
+.project-note-modal-view.ql-editor:not(.note-bg-default) {
+    border-color: transparent;
+}
+
+/* Colour swatches */
+.note-color-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.note-color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 2px solid rgba(0, 0, 0, 0.15);
+    background-color: var(--note-bg, var(--bs-card-bg, #fff));
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: #5f6368;
+    font-size: 0.75rem;
+}
+.note-color-swatch.is-selected {
+    border-color: #a142f4;
+    box-shadow: 0 0 0 2px rgba(161, 66, 244, 0.25);
+}
+.note-color-swatch.note-bg-default {
+    background-image: linear-gradient(135deg, transparent 46%, rgba(0, 0, 0, 0.3) 48%, rgba(0, 0, 0, 0.3) 52%, transparent 54%);
+}
+
+/* 公開範囲 icon next to a memo (board card, list cell) */
+.note-visibility-icon {
+    opacity: 0.6;
+    font-size: 0.75em;
+}
+
+/* 案件一覧: memo cells take the note's 背景色 */
+#projectTable .confirmation-note-item[class*="note-bg-"] {
+    background-color: var(--note-bg);
+    color: var(--note-fg);
+}
+#projectTable .confirmation-note-item[class*="note-bg-"] .note-text {
+    color: inherit;
+}
+#projectTable .note-text-row .note-visibility-icon {
+    flex: 0 0 auto;
+    margin-right: 3px;
+}

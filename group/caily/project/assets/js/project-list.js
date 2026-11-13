@@ -4058,8 +4058,8 @@ var projectTable;
     }
 
     /**
-     * Pack format (new): id_:_content_:_isImportant_:_isPinnedSelf[_:_v:visibility][_:_label]
-     * (v: members / self only; absent = 全員)
+     * Pack format (new): id_:_content_:_isImportant_:_isPinnedSelf[_:_v:visibility][_:_c:bgColor][_:_label]
+     * (v: members / self only, absent = 全員; c: 背景色 key, absent = デフォルト)
      * Legacy: id_:_content_:_isImportant[_:_label]
      */
     function parsePackedConfirmationNote(raw) {
@@ -4069,13 +4069,18 @@ var projectTable;
         var isImportant = arr.length > 2 ? arr[2] : '0';
         var isPinnedSelf = '0';
         var visibility = 'all';
+        var bgColor = '';
         var label = '';
         if (arr.length >= 4 && (arr[3] === '0' || arr[3] === '1')) {
             isPinnedSelf = arr[3];
             var labelStart = 4;
-            if (arr.length > 4 && /^v:(members|self)$/.test(arr[4])) {
-                visibility = arr[4].slice(2);
-                labelStart = 5;
+            if (arr.length > labelStart && /^v:(members|self)$/.test(arr[labelStart])) {
+                visibility = arr[labelStart].slice(2);
+                labelStart++;
+            }
+            if (arr.length > labelStart && /^c:[a-z]+$/.test(arr[labelStart])) {
+                bgColor = arr[labelStart].slice(2);
+                labelStart++;
             }
             label = arr.length > labelStart ? arr.slice(labelStart).join('_:_') : '';
         } else if (arr.length > 3) {
@@ -4087,8 +4092,25 @@ var projectTable;
             isImportant: isImportant,
             isPinnedSelf: isPinnedSelf,
             visibility: visibility,
+            bgColor: bgColor,
             label: label
         };
+    }
+
+    /** 背景色 class (palette: assets/css/project-notes.css) */
+    function noteBgClassForList(color) {
+        return /^[a-z]+$/.test(String(color || '')) ? ' note-bg-' + color : '';
+    }
+
+    /** 公開範囲 icon; nothing for 全員 */
+    function buildNoteVisibilityIconHtml(visibility) {
+        if (visibility === 'members') {
+            return '<span class="note-visibility-icon" title="公開範囲: 案件メンバー"><i class="fa fa-users"></i></span>';
+        }
+        if (visibility === 'self') {
+            return '<span class="note-visibility-icon" title="公開範囲: 自分のみ"><i class="fa fa-lock"></i></span>';
+        }
+        return '';
     }
 
     function getProjectListNoteLabelColor(labelName) {
@@ -4146,10 +4168,11 @@ var projectTable;
         return false;
     }
 
-    function buildNoteTextRowHtml(decodedHtml) {
+    function buildNoteTextRowHtml(decodedHtml, prefixHtml) {
         var body = decodedHtml || '-';
         var hasMore = noteContentHasMultipleLines(body);
         return '<div class="note-text-row' + (hasMore ? ' note-has-more' : '') + '">' +
+            (prefixHtml || '') +
             '<div class="note-text small ql-editor">' + body + '</div>' +
             (hasMore
                 ? '<span class="note-more-lines-icon" title="複数行あり" aria-label="複数行あり"><i class="fa fa-angle-down"></i></span>'
@@ -4173,6 +4196,7 @@ var projectTable;
         if (isEditing) cls += ' editing-note';
         if (isImportant) cls += ' important-note';
         if (isPinnedSelf) cls += ' pinned-self-note';
+        cls += noteBgClassForList(parsed.bgColor);
         var pinEveryoneTitle = isImportant ? 'ピン（全員）解除' : 'ピン（全員）';
         var pinSelfTitle = isPinnedSelf ? 'ピン（自分）解除' : 'ピン（自分）';
         return `
@@ -4180,7 +4204,7 @@ var projectTable;
                 <span class="note-drag-handle" title="並べ替え" aria-label="並べ替え"><i class="fa fa-grip-vertical"></i></span>
                 <div class="note-main">
                     ${labelHtml ? '<div class="mb-1 note-label-row">' + labelHtml + '</div>' : ''}
-                    ${buildNoteTextRowHtml(decodedText || '-')}
+                    ${buildNoteTextRowHtml(decodedText || '-', buildNoteVisibilityIconHtml(parsed.visibility))}
                 </div>
                 <span class="note-actions">
                     ${parsed.visibility === 'self' ? '' : `<span class="note-pin-everyone-icon ${isImportant ? 'is-active' : ''}" title="${pinEveryoneTitle}" style="cursor: pointer;">
@@ -7312,10 +7336,11 @@ var projectTable;
                         var snCls = 'confirmation-note-item mb-1 cell-note-snippet-item';
                         if (isImportant) snCls += ' important-note';
                         if (isPinnedSelf) snCls += ' pinned-self-note';
+                        snCls += noteBgClassForList(n.bg_color);
                         // Label only on CAILYメモ / GUISメモ columns — not on other column snippets
                         parts.push(
                             '<div class="' + snCls + '" data-note-id="' + (n.id || '') + '" data-project-id="' + (rowData.id || '') + '" style="cursor:pointer">' +
-                                buildNoteTextRowHtml(decodedHtml || '-') +
+                                buildNoteTextRowHtml(decodedHtml || '-', buildNoteVisibilityIconHtml(n.visibility)) +
                             '</div>'
                         );
                     });
@@ -9483,7 +9508,8 @@ var projectTable;
     function bootProjectListVueApp() {
         const { createApp } = Vue;
         app = createApp({
-            mixins: (typeof window.BusinessDocumentModalMixin !== 'undefined') ? [window.BusinessDocumentModalMixin] : [],
+            // ProjectNoteModalMixin (project-note-modal-mixin.js): メモ modal shared with 案件詳細
+            mixins: [window.BusinessDocumentModalMixin, window.ProjectNoteModalMixin].filter(Boolean),
             data() {
                 return {
                     loading: true,
@@ -9675,6 +9701,9 @@ var projectTable;
                 canSaveNote() {
                     const raw = (this.quillNoteContent || this.editingNote.content || '').trim();
                     return this.noteContentHasText(raw);
+                },
+                canDeleteCurrentNote() {
+                    return !!(this.editingNote && this.editingNote.id);
                 }
             },
             mounted() {
@@ -10216,6 +10245,10 @@ var projectTable;
                         label: '',
                         labelSelect: '',
                         labelOther: '',
+                        bg_color: '',
+                        visibility: 'all',
+                        created_at: '',
+                        realname: '',
                         user_id: null
                     }, overrides);
                 },
@@ -10264,6 +10297,7 @@ var projectTable;
                     this.showNoteModal = true;
                     this.isNoteEditMode = true;
                     this.currentEditingNoteId = noteId; // Track which note is being edited
+                    this.focusNoteModal();
                     this.destroyQuillNoteEditor();
                     this.quillNoteContent = '';
                 
@@ -10283,6 +10317,10 @@ var projectTable;
                                 is_pinned_self: match.is_pinned_self == 1,
                                 needs_confirmation: Number(match.needs_confirmation) || 0,
                                 display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : '',
+                                bg_color: match.bg_color || '',
+                                visibility: match.visibility || 'all',
+                                created_at: match.created_at || '',
+                                realname: match.realname || '',
                                 user_id: match.user_id
                             });
                             this.applySavedLabelToEditingNote(match.label);
@@ -10299,6 +10337,7 @@ var projectTable;
                     this.showNoteModal = true;
                     this.isNoteEditMode = true;
                     this.currentEditingNoteId = null; // No specific note ID for fallback mode
+                    this.focusNoteModal();
                     this.destroyQuillNoteEditor();
                     this.quillNoteContent = '';
                     // noteType: 1 = CAILYメモ, 2 = GUISメモ. Nếu noteType = 0, set mặc định theo branch hiện tại (NOTE_DEFAULT_TYPE)
@@ -10326,6 +10365,10 @@ var projectTable;
                                     is_pinned_self: match.is_pinned_self == 1,
                                     needs_confirmation: Number(match.needs_confirmation) || 0,
                                     display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : (displayColumnKey || ''),
+                                    bg_color: match.bg_color || '',
+                                    visibility: match.visibility || 'all',
+                                    created_at: match.created_at || '',
+                                    realname: match.realname || '',
                                     user_id: match.user_id
                                 });
                                 this.applySavedLabelToEditingNote(match.label);
@@ -10459,13 +10502,15 @@ var projectTable;
                         formData.append('project_id', this.currentNoteProjectId);
                         formData.append('content', rawContent);
                         // Mutual exclusivity: prefer ピン（全員） if both somehow set
-                        var pinEveryone = !!this.editingNote.is_important;
+                        var pinEveryone = !!this.editingNote.is_important && this.editingNote.visibility !== 'self';
                         var pinSelf = !!this.editingNote.is_pinned_self && !pinEveryone;
                         formData.append('is_important', pinEveryone ? 1 : 0);
                         formData.append('is_pinned_self', pinSelf ? 1 : 0);
                         formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
                         formData.append('display_column', this.editingNote.display_column || '');
                         formData.append('label', this.resolveNoteLabelForSave());
+                        formData.append('bg_color', this.editingNote.bg_color || '');
+                        formData.append('visibility', this.editingNote.visibility || 'all');
                     
                         let response;
                         if (this.editingNote.id) {

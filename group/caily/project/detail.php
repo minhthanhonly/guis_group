@@ -950,154 +950,8 @@ if($_SESSION['show_project'] == 0){
         </div>
         <div class="modal-backdrop fade show" v-if="showBusinessDocumentLogModal"></div>
 
-        <!-- Modal Note -->
-        <div class="modal fade" tabindex="-1" :class="{show: showNoteModal}" style="display: block;" v-if="showNoteModal">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title"></h5>
-                        <button type="button" class="btn-close" @click="closeNoteModal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <!-- View mode -->
-                        <div v-if="editingNote.id && !isNoteEditMode">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="内容">内容</span></label>
-                                <div class="form-control ql-editor note-view-content" :class="'note-bg-' + (editingNote.bg_color || 'default')" style="min-height:100px;max-height:300px;overflow-y:auto;" v-html="editingNote.content || '-'"></div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="公開範囲">公開範囲</span></label>
-                                <div><i class="fa me-1" :class="noteVisibilityIcon(editingNote.visibility)"></i>{{ noteVisibilityLabel(editingNote.visibility) }}</div>
-                            </div>
-                            <div class="mb-3" v-if="editingNote.is_important || editingNote.is_pinned_self">
-                                <label class="form-label"><span data-i18n="ピン">ピン</span></label>
-                                <div class="d-flex flex-wrap gap-2">
-                                    <span v-if="editingNote.is_important" class="badge bg-danger"><i class="fa fa-thumb-tack me-1"></i><span data-i18n="ピン（全員）">ピン（全員）</span></span>
-                                    <span v-if="editingNote.is_pinned_self" class="badge bg-primary"><i class="fa fa-bookmark me-1"></i><span data-i18n="ピン（自分）">ピン（自分）</span></span>
-                                </div>
-                            </div>
-                            <div class="mb-3" v-if="editingNote.needs_confirmation">
-                                <label class="form-label"><span>区分</span></label>
-                                <div>
-                                    <span class="badge bg-primary" v-if="String(editingNote.needs_confirmation) === '1'">{{ cailyNoteLabel }}</span>
-                                    <span class="badge bg-dark" v-else-if="String(editingNote.needs_confirmation) === '2'">GUISメモ</span>
-                                    <span class="badge bg-primary" v-else>確認必要</span>
-                                </div>
-                            </div>
-                            <div class="mb-3" v-if="editingNote.label">
-                                <label class="form-label"><span>ラベル</span></label>
-                                <div>
-                                    <span class="note-label-chip" :style="getNoteLabelStyle(editingNote.label)"><i class="fa fa-tag note-label-chip-icon" aria-hidden="true"></i><span class="note-label-chip-text">{{ editingNote.label }}</span></span>
-                                </div>
-                            </div>
-                            <div class="mb-3" v-if="editingNote.display_column">
-                                <label class="form-label"><span>表示列</span></label>
-                                <div>{{ getNoteDisplayColumnLabel(editingNote.display_column) }}</div>
-                            </div>
-                        </div>
-                        <!-- Edit mode -->
-                        <form v-else @submit.prevent="saveNote">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="内容">内容</span></label>
-                                <!-- 背景色 tints the editor: class on this wrapper, not on the Quill node, because Vue
-                                     rewriting that node's class list would drop Quill's own ql-container classes -->
-                                <div class="custom_editor note-editor-tinted" :class="'note-bg-' + (editingNote.bg_color || 'default')">
-                                    <!-- Dynamic attribute on purpose: a fully static node is hoisted by Vue and
-                                         re-created by cloning the last mounted one, which still holds the previous
-                                         note's Quill markup — メモを追加 would then open with that note's text. -->
-                                    <div class="custom_editor_content" id="quill_note_content_detail" :data-note-id="editingNote.id || 'new'"></div>
-                                    <textarea class="custom_editor_textarea d-none" v-model="editingNote.content" id="quill_note_content_detail_textarea"></textarea>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="背景色">背景色</span></label>
-                                <div class="note-color-swatches">
-                                    <button v-for="c in noteBgColorOptions" :key="c.value"
-                                            type="button"
-                                            class="note-color-swatch"
-                                            :class="['note-bg-' + (c.value || 'default'), { 'is-selected': (editingNote.bg_color || '') === c.value }]"
-                                            :title="c.text"
-                                            :aria-label="c.text"
-                                            @click="editingNote.bg_color = c.value">
-                                        <i v-if="(editingNote.bg_color || '') === c.value" class="fa fa-check"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="公開範囲">公開範囲</span></label>
-                                <select class="form-select" v-model="editingNote.visibility">
-                                    <option v-for="v in noteVisibilityOptions" :key="v.value" :value="v.value">{{ v.text }}</option>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <!-- 自分のみ: no one else sees the note, so ピン（全員） is not offered -->
-                                <div class="form-check mb-1" v-if="editingNote.visibility !== 'self'">
-                                    <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant" @change="onNotePinEveryoneChange">
-                                    <label class="form-check-label" for="isImportant">
-                                        <i class="fa fa-thumb-tack text-danger me-2"></i> <span data-i18n="ピン（全員）">ピン（全員）</span>
-                                    </label>
-                                </div>
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" v-model="editingNote.is_pinned_self" id="isPinnedSelf" @change="onNotePinSelfChange">
-                                    <label class="form-check-label" for="isPinnedSelf">
-                                        <i class="fa fa-bookmark text-primary me-2"></i> <span data-i18n="ピン（自分）">ピン（自分）</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label"><span>ラベル</span></label>
-                                <select class="form-select" v-model="editingNote.labelSelect" @change="onNoteLabelSelectChange">
-                                    <option value="">— 選択 —</option>
-                                    <option v-for="lbl in noteLabelSelectOptions" :key="lbl.name" :value="lbl.name">{{ lbl.name }}</option>
-                                    <option :value="NOTE_LABEL_OTHER">その他</option>
-                                </select>
-                                <input v-if="editingNote.labelSelect === NOTE_LABEL_OTHER"
-                                       type="text"
-                                       class="form-control mt-2"
-                                       v-model="editingNote.labelOther"
-                                       maxlength="100"
-                                       placeholder="ラベルを入力">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label d-block"><span>区分</span></label>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" :value="1" v-model="editingNote.needs_confirmation" id="needsConfirmationCaily">
-                                    <label class="form-check-label" for="needsConfirmationCaily">
-                                        {{ cailyNoteLabel }}
-                                    </label>
-                                </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" :value="2" v-model="editingNote.needs_confirmation" id="needsConfirmationGuis">
-                                    <label class="form-check-label" for="needsConfirmationGuis">
-                                        GUISメモ
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label"><span>表示列</span></label>
-                                <select class="form-select" v-model="editingNote.display_column">
-                                    <option value="">— 選択 —</option>
-                                    <option v-for="opt in noteDisplayColumnOptions" :key="opt.value" :value="opt.value">{{ opt.text }}</option>
-                                </select>
-                            </div>
-                        </form>
-                    </div>
-                    <div class="modal-footer">
-                        <template v-if="editingNote.id && !isNoteEditMode">
-                            <button class="btn btn-primary" @click="isNoteEditMode = true; $nextTick(() => initQuillNoteEditor())" v-if="canEditNote(editingNote)"><i class="fa fa-pencil-alt me-2"></i> <span data-i18n="編集">編集</span></button>
-                            <button class="btn btn-secondary" @click="closeNoteModal"><span data-i18n="閉じる">閉じる</span></button>
-                        </template>
-                        <template v-else>
-                            <button class="btn btn-secondary" @click="isNoteEditMode = false" v-if="editingNote.id"><i class="fa fa-times me-2"></i> <span data-i18n="キャンセル">キャンセル</span></button>
-                            <button class="btn btn-secondary" @click="closeNoteModal" v-else><span data-i18n="キャンセル">キャンセル</span></button>
-                            <button class="btn btn-primary" @click="saveNote" :disabled="!((quillNoteContent && quillNoteContent.trim()) || (editingNote.content && editingNote.content.trim()))">
-                                <i class="fa fa-save me-2"></i> <span data-i18n="保存">保存</span>
-                            </button>
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- メモ modal (add / view / edit) — shared with 案件一覧 -->
+        <?php $noteModalEditorId = 'quill_note_content_detail'; require __DIR__ . '/partials/project-note-modal.php'; ?>
     </div>
 </div>
 
@@ -1109,6 +963,7 @@ include __DIR__ . '/partials/project-form-modal.php';
 $view->footing();
 ?>
 
+<link rel="stylesheet" href="assets/css/project-notes.css?v=<?=PROJECT_CACHE_VERSION?>">
 <style>
 /* Project detail card: fields grouped under section titles (same grouping as the project form modals) */
 .project-detail-grid .project-form-section {
@@ -1451,80 +1306,9 @@ $view->footing();
     display: none !important;
 }
 
-/* Palette — light */
-.note-bg-coral   { --note-bg: #faafa8; --note-fg: #202124; }
-.note-bg-peach   { --note-bg: #f39f76; --note-fg: #202124; }
-.note-bg-sand    { --note-bg: #fff8b8; --note-fg: #202124; }
-.note-bg-mint    { --note-bg: #e2f6d3; --note-fg: #202124; }
-.note-bg-sage    { --note-bg: #b4ddd3; --note-fg: #202124; }
-.note-bg-fog     { --note-bg: #d4e4ed; --note-fg: #202124; }
-.note-bg-storm   { --note-bg: #aeccdc; --note-fg: #202124; }
-.note-bg-dusk    { --note-bg: #d3bfdb; --note-fg: #202124; }
-.note-bg-blossom { --note-bg: #f6e2dd; --note-fg: #202124; }
-.note-bg-clay    { --note-bg: #e9e3d4; --note-fg: #202124; }
-.note-bg-chalk   { --note-bg: #efeff1; --note-fg: #202124; }
-/* Palette — dark */
+/* Board card borders in dark mode (palette: assets/css/project-notes.css) */
 [data-bs-theme="dark"] .note-board .note-card { border-color: rgba(255, 255, 255, 0.15); }
 [data-bs-theme="dark"] .note-board .note-card:not(.note-bg-default) { border-color: transparent; }
-[data-bs-theme="dark"] .note-bg-coral   { --note-bg: #77172e; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-peach   { --note-bg: #692b17; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-sand    { --note-bg: #7c4a03; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-mint    { --note-bg: #264d3b; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-sage    { --note-bg: #0c625d; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-fog     { --note-bg: #256377; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-storm   { --note-bg: #284255; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-dusk    { --note-bg: #472e5b; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-blossom { --note-bg: #6c394f; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-clay    { --note-bg: #4b443a; --note-fg: #e8eaed; }
-[data-bs-theme="dark"] .note-bg-chalk   { --note-bg: #232427; --note-fg: #e8eaed; }
-
-/* Note modal editor takes the selected 背景色 */
-.note-editor-tinted .ql-container {
-    background: var(--note-bg, transparent);
-    color: var(--note-fg, inherit);
-    transition: background-color 0.15s ease;
-}
-/* the theme's editor.css paints .ql-snow .ql-editor with --bs-paper-bg, which would cover the tint */
-.note-editor-tinted .ql-snow .ql-editor {
-    background: transparent;
-}
-.note-editor-tinted .ql-editor.ql-blank::before {
-    color: currentColor;
-    opacity: 0.55;
-}
-
-/* Colour swatches in the note modal */
-.note-color-swatches {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-.note-color-swatch {
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    border: 2px solid rgba(0, 0, 0, 0.15);
-    background-color: var(--note-bg, var(--bs-card-bg, #fff));
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    color: #5f6368;
-    font-size: 0.75rem;
-}
-.note-color-swatch.is-selected {
-    border-color: #a142f4;
-    box-shadow: 0 0 0 2px rgba(161, 66, 244, 0.25);
-}
-.note-color-swatch.note-bg-default {
-    background-image: linear-gradient(135deg, transparent 46%, rgba(0, 0, 0, 0.3) 48%, rgba(0, 0, 0, 0.3) 52%, transparent 54%);
-}
-/* View mode: the content box takes the note's colour */
-.note-view-content.ql-editor {
-    background: var(--note-bg, transparent);
-    color: var(--note-fg, inherit);
-}
 
 /* Memo label chip — distinct from Bootstrap .badge */
 .note-label-chip {
@@ -1746,6 +1530,7 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="../parent_project/assets/js/parent-project-quick-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-energy-fields-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-note-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 

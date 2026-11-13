@@ -597,7 +597,8 @@ const vueApp = createApp({
     // 省エネ fields edit mode (省エネ向け資料 / 申請提出先の審査機関 / BELSのZEH等級)
     // ProjectFormMixin (project-form-mixin.js): the form fields, validation, widgets and save logic,
     // shared with the edit / create dialog. This file keeps what only the detail page needs.
-    mixins: [window.ProjectDetailEnergyMixin, window.ProjectFormMixin],
+    // ProjectNoteModalMixin (project-note-modal-mixin.js): メモ modal shared with 案件一覧
+    mixins: [window.ProjectDetailEnergyMixin, window.ProjectFormMixin, window.ProjectNoteModalMixin],
     data() {
         return {
             permission: {},
@@ -739,21 +740,6 @@ const vueApp = createApp({
                 visibility: 'all',
                 user_id: null
             },
-            // メモボード: 背景色 palette keys (match ProjectNote::BG_COLORS) and 公開範囲
-            noteBgColorOptions: [
-                { value: '', text: 'デフォルト' },
-                { value: 'coral', text: 'コーラル' },
-                { value: 'peach', text: 'ピーチ' },
-                { value: 'sand', text: 'サンド' },
-                { value: 'mint', text: 'ミント' },
-                { value: 'sage', text: 'セージ' },
-                { value: 'fog', text: 'フォグ' },
-                { value: 'storm', text: 'ストーム' },
-                { value: 'dusk', text: 'ダスク' },
-                { value: 'blossom', text: 'ブロッサム' },
-                { value: 'clay', text: 'クレイ' },
-                { value: 'chalk', text: 'チョーク' }
-            ],
             noteFilterVisibilityOptions: [
                 { value: '', text: 'すべて' },
                 { value: 'all', text: '全員', icon: 'fa-globe' },
@@ -766,11 +752,7 @@ const vueApp = createApp({
                 { value: 'self', text: 'ピン（自分）', icon: 'fa-bookmark text-primary' },
                 { value: 'none', text: 'ピンなし' }
             ],
-            noteVisibilityOptions: [
-                { value: 'all', text: '全員', icon: 'fa-globe' },
-                { value: 'members', text: '案件メンバー', icon: 'fa-users' },
-                { value: 'self', text: '自分のみ', icon: 'fa-lock' }
-            ],
+            savingNote: false,
             _detailNotesSortable: null,
             _detailNotesSortablePending: false,
             quillNoteInstance: null,
@@ -1038,6 +1020,14 @@ const vueApp = createApp({
                 return a.localeCompare(b, 'ja');
             });
             return out;
+        },
+        /** 保存 enabled once the editor has text */
+        canSaveNote() {
+            const raw = (this.quillNoteContent && this.quillNoteContent.trim()) || (this.editingNote.content && this.editingNote.content.trim()) || '';
+            return String(raw).replace(/<[^>]*>/g, '').replace(/&nbsp;|\u00a0/gi, ' ').trim() !== '';
+        },
+        canDeleteCurrentNote() {
+            return !!(this.editingNote && this.editingNote.id && this.canDeleteNote(this.editingNote));
         },
         /** Any board filter set — drag reorder is off while filtering (would scramble sort_order) */
         noteFiltersActive() {
@@ -3133,6 +3123,8 @@ const vueApp = createApp({
                 labelOther: '',
                 bg_color: '',
                 visibility: 'all',
+                created_at: '',
+                realname: '',
                 user_id: null
             }, overrides);
         },
@@ -3197,6 +3189,8 @@ const vueApp = createApp({
                     display_column: (note.display_column != null && note.display_column !== undefined) ? String(note.display_column) : '',
                     bg_color: note.bg_color || '',
                     visibility: note.visibility || 'all',
+                    created_at: note.created_at || '',
+                    realname: note.realname || '',
                     user_id: note.user_id
                 });
                 this.applySavedLabelToEditingNote(note.label);
@@ -3208,30 +3202,22 @@ const vueApp = createApp({
                     needs_confirmation: defaultType
                 });
             }
-            // Init Quill editor nếu ở edit mode
-            if (!note) {
+            // New note, or a note the user may edit: straight to the editor. Others only view it.
+            if (!note || this.canEditNote(note)) {
                 this.isNoteEditMode = true;
                 this.$nextTick(() => {
                     this.initQuillNoteEditor();
                 });
             }
+            this.focusNoteModal();
         },
         closeNoteModal() {
             this.showNoteModal = false;
             this.isNoteEditMode = false;
+            this.savingNote = false;
             this.destroyQuillNoteEditor();
             this.editingNote = this.buildEmptyEditingNote();
             this.quillNoteContent = '';
-        },
-        noteVisibilityOption(value) {
-            var opts = this.noteVisibilityOptions;
-            return opts.find(function(o) { return o.value === value; }) || opts[0];
-        },
-        noteVisibilityLabel(value) {
-            return this.noteVisibilityOption(value).text;
-        },
-        noteVisibilityIcon(value) {
-            return this.noteVisibilityOption(value).icon;
         },
         getNoteDisplayColumnLabel(value) {
             if (!value) return '';
@@ -3252,6 +3238,7 @@ const vueApp = createApp({
             this.noteFilterPin = '';
         },
         async saveNote() {
+            if (this.savingNote) return;
             // Lấy nội dung từ Quill editor nếu có, nếu không dùng editingNote.content
             const rawContent = (this.quillNoteContent && this.quillNoteContent.trim()) || (this.editingNote.content || '').trim();
             if (!rawContent) {
@@ -3262,6 +3249,7 @@ const vueApp = createApp({
                 this.showNotification('その他のラベルを入力してください', 'error');
                 return;
             }
+            this.savingNote = true;
             try {
                 const formData = new FormData();
                 formData.append('project_id', this.projectId);
@@ -3297,11 +3285,19 @@ const vueApp = createApp({
             } catch (error) {
                 console.error('Error saving note:', error);
                 this.showNotification('メモの保存に失敗しました', 'error');
+            } finally {
+                this.savingNote = false;
             }
+        },
+        /** 削除 in the note modal */
+        async deleteCurrentNote() {
+            if (!this.editingNote || !this.editingNote.id) return;
+            const deleted = await this.deleteNote(this.editingNote.id);
+            if (deleted) this.closeNoteModal();
         },
         async deleteNote(noteId) {
             if (!confirm('このメモを削除しますか？')) {
-                return;
+                return false;
             }
             
             try {
@@ -3313,6 +3309,7 @@ const vueApp = createApp({
                 if (response.data && response.data.status === 'success') {
                     this.showNotification('メモが削除されました', 'success');
                     await this.loadNotes();
+                    return true;
                 } else {
                     this.showNotification('メモの削除に失敗しました', 'error');
                 }
@@ -3320,6 +3317,7 @@ const vueApp = createApp({
                 console.error('Error deleting note:', error);
                 this.showNotification('メモの削除に失敗しました', 'error');
             }
+            return false;
         },
         getNotePreview(content) {
             if (!content) return '';
