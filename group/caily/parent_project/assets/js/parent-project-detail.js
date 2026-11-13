@@ -1181,6 +1181,19 @@ createApp({
             }
             return label;
         },
+        /** Translate [data-i18n] elements under #app whose text is still the untranslated key. */
+        applyPendingDataI18n() {
+            if (typeof i18next === 'undefined' || !i18next.isInitialized) return;
+            const root = document.getElementById('app');
+            if (!root) return;
+            root.querySelectorAll('[data-i18n]').forEach((el) => {
+                if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') return;
+                const key = el.dataset.i18n;
+                if (!key || el.textContent.trim() !== key) return;
+                const translated = i18next.t(key);
+                if (translated && translated !== key) el.innerHTML = translated;
+            });
+        },
         formatYoteiDisplay(raw) {
             if (typeof window.YoteiField === 'undefined') return '';
             return window.YoteiField.displayOf(raw) || window.YoteiField.buildDisplay(raw) || '';
@@ -7056,6 +7069,15 @@ createApp({
         }
     },
     async mounted() {
+        // translateLabel() in the template is not reactive: re-render once the locale JSON has loaded
+        this._onI18nReady = () => {
+            this.$forceUpdate();
+            this.$nextTick(() => this.applyPendingDataI18n());
+        };
+        if (typeof i18next !== 'undefined' && i18next.on) {
+            i18next.on('languageChanged', this._onI18nReady);
+            if (!i18next.isInitialized) i18next.on('initialized', this._onI18nReady);
+        }
         try {
             await this.loadPermission();
             await this.loadParentProject();
@@ -7176,10 +7198,23 @@ createApp({
             console.error('Error in mounted:', error);
         } finally {
             this.loading = false;
+            this.$nextTick(() => this.applyPendingDataI18n());
         }
     },
-    
+
+    // main.js localizes [data-i18n] only once at page load; elements Vue renders later
+    // (after data loads, v-if toggles, modals) would otherwise stay in Japanese.
+    updated() {
+        clearTimeout(this._dataI18nTimer);
+        this._dataI18nTimer = setTimeout(() => this.applyPendingDataI18n(), 30);
+    },
+
     beforeUnmount() {
+        clearTimeout(this._dataI18nTimer);
+        if (this._onI18nReady && typeof i18next !== 'undefined' && i18next.off) {
+            i18next.off('languageChanged', this._onI18nReady);
+            i18next.off('initialized', this._onI18nReady);
+        }
         if (this._childProjectContextMenuDocClickBound) {
             document.removeEventListener('click', this._childProjectContextMenuDocClickBound);
             this._childProjectContextMenuDocClickBound = null;

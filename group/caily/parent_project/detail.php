@@ -65,25 +65,25 @@ $view->heading('建物詳細');
                                :class="parentProject && parentProject.is_favorite == 1 ? 'text-warning' : 'text-muted'"
                                style="cursor: pointer; font-size: 1.3em;"
                                @click="toggleFavorite"
-                               :title="parentProject && parentProject.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                               :title="parentProject && parentProject.is_favorite == 1 ? translateLabel('お気に入りから削除') : translateLabel('お気に入りに追加')"></i>
                             <h5 class="card-title mb-0"><span data-i18n="建物詳細">建物詳細</span></h5>
                         </div>
                         <div>
                             <button v-if="canAddProject" class="btn btn-outline-info btn-sm me-2"
-                                @click="copyParentProject" title="建物をコピー">
+                                @click="copyParentProject" :title="translateLabel('建物をコピー')">
                                 <i class="fa fa-copy me-1"></i><span data-i18n="建物をコピー">建物をコピー</span>
                             </button>
                             <template v-if="isProjectManager">
                                 <button class="btn btn-outline-warning btn-sm me-2"
-                                    @click="openParentProjectEditModal" title="編集">
+                                    @click="openParentProjectEditModal" :title="translateLabel('編集')">
                                     <i class="fa fa-pencil-alt me-1"></i><span data-i18n="編集">編集</span>
                                 </button>
                                 <button class="btn btn-outline-secondary btn-sm me-2"
-                                    @click="showLogs" title="アクティビティログ">
+                                    @click="showLogs" :title="translateLabel('アクティビティログ')">
                                     <i class="fa fa-history me-1"></i><span data-i18n="アクティビティログ">アクティビティログ</span>
                                 </button>
                                 <!-- <button v-if="childProjects.length == 0" class="btn btn-outline-danger btn-sm"
-                                    @click="deleteParentProject" title="削除">
+                                    @click="deleteParentProject" :title="translateLabel('削除')">
                                     <i class="fa fa-trash me-1"></i><span data-i18n="削除">削除</span>
                                 </button> -->
                             </template>
@@ -165,7 +165,7 @@ $view->heading('建物詳細');
                                     <i class="fa fa-star cp-fav"
                                        :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
                                        @click="toggleProjectFavorite(project)"
-                                       :title="project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                                       :title="project.is_favorite == 1 ? translateLabel('お気に入りから削除') : translateLabel('お気に入りに追加')"></i>
                                     <a :href="'../project/detail.php?id=' + project.id" class="text-decoration-none"><span class="badge bg-primary">#{{ project.id }}</span></a>
                                     <template v-if="project.project_order_type">
                                         <span v-for="item in project.project_order_type.split(',').map(v => v.trim()).filter(Boolean)" :key="item" class="badge" :class="getOrderTypeBadgeClass(item)">{{ item }}</span>
@@ -223,7 +223,7 @@ $view->heading('建物詳細');
                                     </div>
                                 </div>
                                 <div class="cp-row" v-if="project.tantou && mapDepartmentNameToRequestType(project.department_name) !== '省エネ'">
-                                    <div class="cp-label"><span>担当</span></div>
+                                    <div class="cp-label"><span>{{ translateLabel('担当') }}</span></div>
                                     <div class="cp-value">{{ project.tantou }}</div>
                                 </div>
                                 <div class="cp-row" v-if="getChildProjectGuisReceiverDisplay(project) && getChildProjectGuisReceiverDisplay(project) !== '-'">
@@ -240,11 +240,11 @@ $view->heading('建物詳細');
                                 </div>
                                 <!-- 省エネ departments do not use CAILY納期 / GUIS納期 -->
                                 <div class="cp-row" v-if="mapDepartmentNameToRequestType(project.department_name) !== '省エネ' && project.caily_nouki">
-                                    <div class="cp-label"><span>CAILY納期</span></div>
+                                    <div class="cp-label"><span>{{ translateLabel('CAILY納期') }}</span></div>
                                     <div class="cp-value" :data-time="project.caily_nouki">{{ formatChildProjectDateTime(project.caily_nouki) }}</div>
                                 </div>
                                 <div class="cp-row" v-if="canViewEndDate && mapDepartmentNameToRequestType(project.department_name) !== '省エネ' && project.guis_nouki">
-                                    <div class="cp-label"><span>GUIS納期</span></div>
+                                    <div class="cp-label"><span>{{ translateLabel('GUIS納期') }}</span></div>
                                     <div class="cp-value" :data-time="project.guis_nouki">{{ formatChildProjectDateTime(project.guis_nouki) }}</div>
                                 </div>
                                 <div class="cp-row" v-if="canViewEndDate && project.end_date">
@@ -273,15 +273,15 @@ $view->heading('建物詳細');
                                 <div class="d-flex flex-column gap-1 align-items-center">
                                     <div class="d-flex gap-1">
                                         <a :href="'../project/detail.php?id=' + project.id" class="btn btn-sm btn-outline-primary"
-                                           title="詳細を表示">
+                                           :title="translateLabel('詳細を表示')">
                                             <i class="fa fa-eye"></i>
                                         </a>
                                         <button v-if="canEditBusinessDocuments" type="button" class="btn btn-sm btn-outline-success"
-                                                title="決済情報" @click="openBusinessDocumentModal(project)">
+                                                :title="translateLabel('決済情報')" @click="openBusinessDocumentModal(project)">
                                             <i class="fa fa-money-bill-wave"></i>
                                         </button>
                                         <button v-if="canEditChildProject(project)" type="button" class="btn btn-sm btn-outline-warning"
-                                                title="編集" @click="showEditChildProjectModal(project)">
+                                                :title="translateLabel('編集')" @click="showEditChildProjectModal(project)">
                                             <i class="fa fa-pencil-alt"></i>
                                         </button>
                                     </div>
@@ -297,12 +297,12 @@ $view->heading('建物詳細');
                                             </li>
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showChildProjectLogs(project)">
-                                                    <i class="fa fa-history me-1"></i> ログ
+                                                    <i class="fa fa-history me-1"></i> {{ translateLabel('ログ') }}
                                                 </a>
                                             </li>
                                             <li v-if="canDeleteChildProject(project) && project.status !== 'cancelled'">
                                                 <a class="dropdown-item text-danger" href="javascript:void(0);" @click.prevent="cancelChildProject(project)">
-                                                    <i class="fa fa-trash me-1"></i> 削除
+                                                    <i class="fa fa-trash me-1"></i> {{ translateLabel('削除') }}
                                                 </a>
                                             </li>
                                         </ul>
@@ -330,7 +330,7 @@ $view->heading('建物詳細');
             <div class="card mb-4">
                 <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0"><span data-i18n="メモ">メモ</span></h5>
-                    <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
+                    <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" :title="translateLabel('メモを追加')">
                         <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
                     </button>
                 </div>
@@ -352,7 +352,7 @@ $view->heading('建物詳細');
                             </div>
                             <button class="btn btn-outline-danger btn-sm ms-2"
                                     @click="deleteNote(note.id)"
-                                    title="削除"
+                                    :title="translateLabel('削除')"
                                     v-if="canDeleteNote(note)">
                                 <i class="fa fa-trash"></i>
                             </button>
@@ -488,22 +488,22 @@ $view->heading('建物詳細');
                                             </button>
                                             <ul class="dropdown-menu">
                                                 <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '下書き')">
-                                                    <span class="badge bg-draft me-2">下書き</span>
+                                                    <span class="badge bg-draft me-2">{{ translateLabel('下書き') }}</span>
                                                 </a></li>
                                                 <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '発行済み')">
-                                                    <span class="badge bg-primary me-2">発行済み</span>
+                                                    <span class="badge bg-primary me-2">{{ translateLabel('発行済み') }}</span>
                                                 </a></li>
                                                 <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '承認済み')">
-                                                    <span class="badge bg-approved me-2">承認済み</span>
+                                                    <span class="badge bg-approved me-2">{{ translateLabel('承認済み') }}</span>
                                                 </a></li>
                                                 <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '却下')">
-                                                    <span class="badge bg-rejected me-2">却下</span>
+                                                    <span class="badge bg-rejected me-2">{{ translateLabel('却下') }}</span>
                                                 </a></li>
                                                 <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, '調整')">
-                                                    <span class="badge bg-adjustment me-2">調整</span>
+                                                    <span class="badge bg-adjustment me-2">{{ translateLabel('調整') }}</span>
                                                 </a></li>
                                                 <li><a class="dropdown-item" href="#" @click="updateQuotationStatus(quotation.id, 'キャンセル')">
-                                                    <span class="badge bg-danger me-2">キャンセル</span>
+                                                    <span class="badge bg-danger me-2">{{ translateLabel('キャンセル') }}</span>
                                                 </a></li>
                                             </ul>
                                         </div>
@@ -512,26 +512,26 @@ $view->heading('建物詳細');
                                     <td>
                                         <span v-if="quotation.updated_by" 
                                               class=""
-                                              :title="'最終更新者: ' + quotation.updated_by + (quotation.updated_at ? ' (' + formatDateTime(quotation.updated_at) + ')' : '')">
+                                              :title="translateLabel('最終更新者') + ': ' + quotation.updated_by + (quotation.updated_at ? ' (' + formatDateTime(quotation.updated_at) + ')' : '')">
                                             {{ quotation.updated_by }}
                                         </span>
                                         <span v-else class="text-muted">-</span>
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <button v-if="canAddQuotation" class="btn btn-outline-primary" title="表示"
+                                            <button v-if="canAddQuotation" class="btn btn-outline-primary" :title="translateLabel('表示')"
                                                 @click="showQuotationModal(quotation)">
                                                 <i class="fa fa-eye"></i>
                                             </button>
-                                            <button v-if="canAddQuotation" class="btn btn-outline-secondary" title="編集"
+                                            <button v-if="canAddQuotation" class="btn btn-outline-secondary" :title="translateLabel('編集')"
                                                 @click="editQuotation(quotation)">
                                                 <i class="fa fa-edit"></i>
                                             </button>
-                                            <button class="btn btn-outline-info" title="履歴"
+                                            <button class="btn btn-outline-info" :title="translateLabel('履歴')"
                                                 @click="showQuotationHistory(quotation)">
                                                 <i class="fa fa-history"></i>
                                             </button>
-                                            <button v-if="canAddQuotation" class="btn btn-outline-danger" title="削除"
+                                            <button v-if="canAddQuotation" class="btn btn-outline-danger" :title="translateLabel('削除')"
                                                 @click="deleteQuotation(quotation)">
                                                 <i class="fa fa-trash"></i>
                                             </button>
@@ -561,7 +561,7 @@ $view->heading('建物詳細');
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">履歴</h5>
+                    <h5 class="modal-title">{{ translateLabel('履歴') }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -599,11 +599,11 @@ $view->heading('建物詳細');
                     </div>
                     <div v-else class="text-center text-muted py-3">
                         <i class="fa fa-history fa-2x mb-2"></i>
-                        <p>履歴はありません。</p>
+                        <p>{{ translateLabel('履歴はありません。') }}</p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ translateLabel('閉じる') }}</button>
                 </div>
             </div>
         </div>
@@ -635,7 +635,7 @@ $view->heading('建物詳細');
                     <form v-else @submit.prevent="saveNote">
                         <div class="mb-3">
                             <label class="form-label"><span data-i18n="内容">内容</span></label>
-                            <textarea class="form-control" v-model="editingNote.content" rows="6" placeholder="メモの詳細を入力してください..."></textarea>
+                            <textarea class="form-control" v-model="editingNote.content" rows="6" :placeholder="translateLabel('メモの詳細を入力してください...')"></textarea>
                         </div>
                         <div class="mb-3">
                             <div class="form-check">
@@ -669,13 +669,13 @@ $view->heading('建物詳細');
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">案件履歴 - {{ selectedChildProject?.name }}</h5>
+                    <h5 class="modal-title">{{ translateLabel('案件履歴') }} - {{ selectedChildProject?.name }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <div v-if="loadingChildProjectLogs" class="text-center py-3">
                         <div class="spinner-border text-primary" role="status">
-                            <span class="visually-hidden">読み込み中...</span>
+                            <span class="visually-hidden">{{ translateLabel('読み込み中...') }}</span>
                         </div>
                     </div>
                     <div v-else-if="childProjectLogs.length > 0">
@@ -712,11 +712,11 @@ $view->heading('建物詳細');
                     </div>
                     <div v-else class="text-center text-muted py-3">
                         <i class="fa fa-history fa-2x mb-2"></i>
-                        <p>履歴はありません。</p>
+                        <p>{{ translateLabel('履歴はありません。') }}</p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ translateLabel('閉じる') }}</button>
                 </div>
             </div>
         </div>
@@ -732,7 +732,7 @@ $view->heading('建物詳細');
         <div class="modal-dialog modal-lg">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="quotationHistoryModalLabel">見積書履歴</h5>
+                    <h5 class="modal-title" id="quotationHistoryModalLabel">{{ translateLabel('見積書履歴') }}</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -770,11 +770,11 @@ $view->heading('建物詳細');
                     </div>
                     <div v-else class="text-center text-muted py-3">
                         <i class="fa fa-history fa-2x mb-2"></i>
-                        <p>履歴はありません。</p>
+                        <p>{{ translateLabel('履歴はありません。') }}</p>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">閉じる</button>
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{{ translateLabel('閉じる') }}</button>
                 </div>
             </div>
         </div>
@@ -882,7 +882,7 @@ $view->heading('建物詳細');
                                                                         v-model="selectedChildProjectIds"
                                                                         @change="updateChildProjectSelection"
                                                                         :disabled="projectsUsedInActiveQuotations.has(parseInt(project.id))"
-                                                                        :title="projectsUsedInActiveQuotations.has(parseInt(project.id)) ? 'このプロジェクトは他の見積書で既に使用されています' : ''">
+                                                                        :title="projectsUsedInActiveQuotations.has(parseInt(project.id)) ? translateLabel('このプロジェクトは他の見積書で既に使用されています') : ''">
                                                                 </td>
                                                                 <td>{{ project.project_number || '-' }}</td>
                                                                 <td>
@@ -908,7 +908,7 @@ $view->heading('建物詳細');
                                                                 <td v-if="canViewEndDate">{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                 <td>
                                                                     <span v-if="project.is_kadai == 1" class="badge bg-warning">
-                                                                        承認待ち
+                                                                        {{ translateLabel('承認待ち') }}
                                                                     </span>
                                                                     <span v-else class="badge"
                                                                         :class="getProjectStatusBadgeClass(project.status)">
@@ -996,7 +996,7 @@ $view->heading('建物詳細');
                                             <label class="form-label"><span data-i18n="支社選択">支社選択</span></label>
                                             <select class="form-select" v-model="newQuotation.selected_branch_id"
                                                 @change="onBranchSelect">
-                                                <option value="">支社を選択してください</option>
+                                                <option value="">{{ translateLabel('支社を選択してください') }}</option>
                                                 <option v-for="branch in quotationBranches" :key="branch.id"
                                                     :value="branch.id">
                                                     {{ branch.name }}
@@ -1036,7 +1036,7 @@ $view->heading('建物詳細');
                                             <label class="form-label"><span data-i18n="担当">担当</span></label>
                                             <select class="form-select" v-model="newQuotation.receiver_contact"
                                                 @change="onContactSelect">
-                                                <option value="">担当者を選択してください</option>
+                                                <option value="">{{ translateLabel('担当者を選択してください') }}</option>
                                                 <option v-for="user in quotationUsers" :key="user.id"
                                                     :value="user.realname">
                                                     {{ user.realname }}
@@ -1052,7 +1052,7 @@ $view->heading('建物詳細');
                                                         <img v-if="selectedContactSeal.image_path"
                                                             :src="selectedContactSeal.image_path" class="mt-1"
                                                             style="max-width: 60px; max-height: 60px; object-fit: contain;"
-                                                            alt="印鑑画像">
+                                                            :alt="translateLabel('印鑑画像')">
                                                     </div>
                                                 </div>
                                             </div>
@@ -1080,7 +1080,7 @@ $view->heading('建物詳細');
                                                 :class="{ 'is-invalid': quotationValidationErrors.subject }"
                                                 v-model="newQuotation.subject" 
                                                 @input="quotationValidationErrors.subject = ''"
-                                                placeholder="件名を入力してください" required>
+                                                :placeholder="translateLabel('件名を入力してください')" required>
                                             <div v-if="quotationValidationErrors.subject" class="text-danger small mt-1">
                                                 {{ quotationValidationErrors.subject }}
                                             </div>
@@ -1111,7 +1111,7 @@ $view->heading('建物詳細');
                                                 <thead>
                                                     <tr>
                                                         <th style="width:30px;">
-                                                            <i class="fa fa-arrows-alt text-muted" title="ドラッグして並び替え"></i>
+                                                            <i class="fa fa-arrows-alt text-muted" :title="translateLabel('ドラッグして並び替え')"></i>
                                                         </th>
                                                         <th style="width:36px;">
                                                             <input type="checkbox" class="form-check-input"
@@ -1139,7 +1139,7 @@ $view->heading('建物詳細');
                                                     <tr v-for="(item, index) in newQuotation.items" :key="index" class="sortable-item">
                                                         <td class="text-center">
                                                             <i class="fa fa-grip-vertical drag-handle text-muted cursor-move" 
-                                                               title="ドラッグして移動"></i>
+                                                               :title="translateLabel('ドラッグして移動')"></i>
                                                         </td>
                                                         <td class="text-center">
                                                             <input type="checkbox" class="form-check-input"
@@ -1151,7 +1151,7 @@ $view->heading('建物詳細');
                                                                 :class="{ 'is-invalid': quotationValidationErrors.items && (!item.project_id || item.project_id === '' || item.project_id === null) }"
                                                                 v-model="item.project_id"
                                                                 @change="updateProjectTotalAmount(item.project_id, index); validateProjectIdSelection();">
-                                                                <option value="">選択してください</option>
+                                                                <option value="">{{ translateLabel('選択してください') }}</option>
                                                                 <option
                                                                     v-for="project in selectedChildProjectsForDropdown"
                                                                     :key="project.id" :value="project.id">
@@ -1169,15 +1169,15 @@ $view->heading('建物詳細');
                                                         </td>
                                                         <td>
                                                             <input type="text" class="form-control form-control-sm"
-                                                                v-model="item.title" placeholder="件名">
+                                                                v-model="item.title" :placeholder="translateLabel('件名')">
                                                         </td>
                                                         <td>
                                                             <input type="text" class="form-control form-control-sm"
-                                                                v-model="item.product_code" placeholder="商品コード">
+                                                                v-model="item.product_code" :placeholder="translateLabel('商品コード')">
                                                         </td>
                                                         <td>
                                                             <input type="text" class="form-control form-control-sm"
-                                                                v-model="item.type" placeholder="タイプ">
+                                                                v-model="item.type" :placeholder="translateLabel('タイプ')">
                                                         </td>
                                                         <td>
                                                             <input type="number" class="form-control form-control-sm"
@@ -1199,17 +1199,17 @@ $view->heading('建物詳細');
                                                         </td>
                                                         <td>
                                                             <input type="text" class="form-control form-control-sm"
-                                                                v-model="item.notes" placeholder="備考">
+                                                                v-model="item.notes" :placeholder="translateLabel('備考')">
                                                         </td>
                                                         <td>
                                                             <div class="btn-group btn-group-sm" role="group">
                                                                 <button type="button" class="btn btn-outline-secondary"
                                                                     v-if="item.is_set" @click="showEditSetModal(index)"
-                                                                    title="編集">
+                                                                    :title="translateLabel('編集')">
                                                                     <i class="fa fa-edit"></i> <span data-i18n="編集">編集</span>
                                                                 </button>
                                                                 <button type="button" class="btn btn-outline-danger"
-                                                                    @click="removeOrderItem(index)" title="削除">
+                                                                    @click="removeOrderItem(index)" :title="translateLabel('削除')">
                                                                     <i class="fa fa-trash"></i> <span data-i18n="削除">削除</span>
                                                                 </button>
                                                             </div>
@@ -1219,7 +1219,7 @@ $view->heading('建物詳細');
                                             </table>
                                         </div>
                                         <div class="d-flex justify-content-between align-items-center mt-2">
-                                            <div class="text-muted small">選択中: {{ selectedOrderItemIndexes.length }} /
+                                            <div class="text-muted small">{{ translateLabel('選択中') }}: {{ selectedOrderItemIndexes.length }} /
                                                 {{ newQuotation.items.length }}</div>
                                             <button type="button" class="btn btn-outline-danger btn-sm"
                                                 @click="deleteSelectedOrderItems"
@@ -1236,13 +1236,13 @@ $view->heading('建物詳細');
                                                     :key="project.id" type="button"
                                                     class="btn btn-outline-primary btn-sm"
                                                     @click="quickSelectProjectNumberForCheckedItems(project.id)"
-                                                    :title="'案件番号: ' + (project.project_number || project.name) + ' をチェック済み商品に適用'"
+                                                    :title="translateLabel('案件番号') + ': ' + (project.project_number || project.name) + ' — ' + translateLabel('チェック済み商品に適用')"
                                                     :disabled="selectedOrderItemIndexes.length === 0">
                                                     {{ project.project_number || project.name }}
                                                 </button>
                                                 <button type="button" class="btn btn-outline-danger btn-sm ms-2"
                                                     @click="clearProjectNumbersForCheckedItems"
-                                                    :title="'チェック済み商品の案件番号をクリア'"
+                                                    :title="translateLabel('チェック済み商品の案件番号をクリア')"
                                                     :disabled="selectedOrderItemIndexes.length === 0">
                                                     <i class="fa fa-times me-1"></i> <span data-i18n="クリア">クリア</span>
                                                 </button>
@@ -1303,15 +1303,15 @@ $view->heading('建物詳細');
                                                 <label class="form-label"><span data-i18n="納入期限">納入期限</span></label>
                                                 <div class="input-group">
                                                     <input type="text" class="form-control" id="quotation_delivery_date"
-                                                        v-model="newQuotation.delivery_date" placeholder="納入期限を入力（任意）">
+                                                        v-model="newQuotation.delivery_date" :placeholder="translateLabel('納入期限を入力（任意）')">
                                                     <!-- Hidden input for Flatpickr -->
                                                     <input type="hidden" id="quotation_delivery_date_picker" style="display: none;">
                                                     <button class="btn btn-outline-secondary" type="button"
-                                                        @click="openDeliveryDatePicker" title="日付を選択">
+                                                        @click="openDeliveryDatePicker" :title="translateLabel('日付を選択')">
                                                         <i class="fa fa-calendar"></i>
                                                     </button>
                                                     <button class="btn btn-outline-danger" type="button"
-                                                        @click="clearDeliveryDate" title="納入期限をクリア">
+                                                        @click="clearDeliveryDate" :title="translateLabel('納入期限をクリア')">
                                                         <i class="fa fa-times"></i>
                                                     </button>
                                                 </div>
@@ -1320,7 +1320,7 @@ $view->heading('建物詳細');
                                                 <label class="form-label"><span data-i18n="納入場所">納入場所</span> <span class="text-danger">*</span></label>
                                                 <input type="text" class="form-control"
                                                     :class="{ 'is-invalid': quotationValidationErrors.delivery_location }"
-                                                    v-model="newQuotation.delivery_location" placeholder="納入場所を入力">
+                                                    v-model="newQuotation.delivery_location" :placeholder="translateLabel('納入場所を入力')">
                                                 <div v-if="quotationValidationErrors.delivery_location" class="text-danger small mt-1">
                                                     {{ quotationValidationErrors.delivery_location }}
                                                 </div>
@@ -1329,7 +1329,7 @@ $view->heading('建物詳細');
                                                 <label class="form-label"><span data-i18n="取引方法">取引方法</span> <span class="text-danger">*</span></label>
                                                 <input type="text" class="form-control"
                                                     :class="{ 'is-invalid': quotationValidationErrors.payment_method }"
-                                                    v-model="newQuotation.payment_method" placeholder="取引方法を入力">
+                                                    v-model="newQuotation.payment_method" :placeholder="translateLabel('取引方法を入力')">
                                                 <div v-if="quotationValidationErrors.payment_method" class="text-danger small mt-1">
                                                     {{ quotationValidationErrors.payment_method }}
                                                 </div>
@@ -1339,14 +1339,14 @@ $view->heading('建物詳細');
                                                 <select class="form-select" v-model="newQuotation.valid_until_type"
                                                     :class="{ 'is-invalid': quotationValidationErrors.valid_until }"
                                                     @change="onValidUntilTypeChange">
-                                                    <option value="1_week">発行から1週間</option>
-                                                    <option value="1_month" selected>発行から1か月</option>
-                                                    <option value="custom">日付指定</option>
+                                                    <option value="1_week">{{ translateLabel('発行から1週間') }}</option>
+                                                    <option value="1_month" selected>{{ translateLabel('発行から1か月') }}</option>
+                                                    <option value="custom">{{ translateLabel('日付指定') }}</option>
                                                 </select>
                                                 <input v-if="newQuotation.valid_until_type === 'custom'" type="text"
                                                     class="form-control mt-2" id="quotation_valid_until"
                                                     :class="{ 'is-invalid': quotationValidationErrors.valid_until }"
-                                                    v-model="newQuotation.valid_until" placeholder="有効期限を選択">
+                                                    v-model="newQuotation.valid_until" :placeholder="translateLabel('有効期限を選択')">
                                                 <div v-if="quotationValidationErrors.valid_until" class="text-danger small mt-1">
                                                     {{ quotationValidationErrors.valid_until }}
                                                 </div>
@@ -1354,12 +1354,12 @@ $view->heading('建物詳細');
                                             <div class="col-md-6">
                                                 <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                                 <select class="form-select" v-model="newQuotation.status">
-                                                    <option value="下書き" selected>下書き</option>
-                                                    <option value="発行済み">発行済み</option>
-                                                    <option value="承認済み">承認済み</option>
-                                                    <option value="却下">却下</option>
-                                                    <option value="調整">調整</option>
-                                                    <option value="キャンセル">キャンセル</option>
+                                                    <option value="下書き" selected>{{ translateLabel('下書き') }}</option>
+                                                    <option value="発行済み">{{ translateLabel('発行済み') }}</option>
+                                                    <option value="承認済み">{{ translateLabel('承認済み') }}</option>
+                                                    <option value="却下">{{ translateLabel('却下') }}</option>
+                                                    <option value="調整">{{ translateLabel('調整') }}</option>
+                                                    <option value="キャンセル">{{ translateLabel('キャンセル') }}</option>
                                                 </select>
                                             </div>
                                             <div class="col-md-6">
@@ -1510,7 +1510,7 @@ $view->heading('建物詳細');
                                                                 <td v-if="canViewEndDate">{{ formatDateTime(project.end_date) || '-' }}</td>
                                                                 <td>
                                                                     <span v-if="project.is_kadai == 1" class="badge bg-warning">
-                                                                        承認待ち
+                                                                        {{ translateLabel('承認待ち') }}
                                                                     </span>
                                                                     <span v-else class="badge"
                                                                         :class="getProjectStatusBadgeClass(project.status)">
@@ -1592,7 +1592,7 @@ $view->heading('建物詳細');
                                             <label class="form-label"><span data-i18n="支社選択">支社選択</span></label>
                                             <select class="form-select" v-model="editingQuotation.selected_branch_id"
                                                 @change="onBranchSelectForEdit">
-                                                <option value=""><span data-i18n="支社を選択してください">支社を選択してください</span></option>
+                                                <option value="">{{ translateLabel('支社を選択してください') }}</option>
                                                 <option v-for="branch in quotationBranches" :key="branch.id"
                                                     :value="branch.id">
                                                     {{ branch.name }}
@@ -1634,10 +1634,10 @@ $view->heading('建物詳細');
                                             <label class="form-label"><span data-i18n="担当">担当</span></label>
                                             <select class="form-select" v-model="editingQuotation.receiver_contact"
                                                 @change="onContactSelectForEdit">
-                                                <option value=""><span data-i18n="担当者を選択してください">担当者を選択してください</span></option>
+                                                <option value="">{{ translateLabel('担当者を選択してください') }}</option>
                                                 <option v-for="user in quotationUsers" :key="user.id"
                                                     :value="user.realname">
-                                                    {{ user.realname }}{{ user.is_inactive ? ' (退職済み)' : '' }}
+                                                    {{ user.realname }}{{ user.is_inactive ? ' (' + translateLabel('退職済み') + ')' : '' }}
                                                 </option>
                                             </select>
                                             <!-- Seal display area -->
@@ -1650,7 +1650,7 @@ $view->heading('建物詳細');
                                                         <img v-if="selectedContactSealForEdit.image_path"
                                                             :src="selectedContactSealForEdit.image_path" class="mt-1"
                                                             style="max-width: 60px; max-height: 60px; object-fit: contain;"
-                                                            alt="印鑑画像">
+                                                            :alt="translateLabel('印鑑画像')">
                                                     </div>
                                                 </div>
                                             </div>
@@ -1687,7 +1687,7 @@ $view->heading('建物詳細');
                                             :class="{ 'is-invalid': editQuotationValidationErrors.subject }"
                                             v-model="editingQuotation.subject" 
                                             @input="editQuotationValidationErrors.subject = ''"
-                                            placeholder="件名を入力してください" required>
+                                            :placeholder="translateLabel('件名を入力してください')" required>
                                         <div v-if="editQuotationValidationErrors.subject" class="text-danger small mt-1">
                                             {{ editQuotationValidationErrors.subject }}
                                         </div>
@@ -1718,7 +1718,7 @@ $view->heading('建物詳細');
                                             <thead>
                                                 <tr>
                                                     <th style="width:30px;">
-                                                        <i class="fa fa-arrows-alt text-muted" title="ドラッグして並び替え"></i>
+                                                        <i class="fa fa-arrows-alt text-muted" :title="translateLabel('ドラッグして並び替え')"></i>
                                                     </th>
                                                     <th style="width:36px;">
                                                         <input type="checkbox" class="form-check-input"
@@ -1746,7 +1746,7 @@ $view->heading('建物詳細');
                                                 <tr v-for="(item, index) in editingQuotation.items" :key="index" class="sortable-item">
                                                     <td class="text-center">
                                                         <i class="fa fa-grip-vertical drag-handle text-muted cursor-move" 
-                                                           title="ドラッグして移動"></i>
+                                                           :title="translateLabel('ドラッグして移動')"></i>
                                                     </td>
                                                     <td class="text-center">
                                                         <input type="checkbox" class="form-check-input"
@@ -1758,7 +1758,7 @@ $view->heading('建物詳細');
                                                             :class="{ 'is-invalid': editQuotationValidationErrors.items && (!item.project_id || item.project_id === '' || item.project_id === null) }"
                                                             v-model="item.project_id"
                                                             @change="updateProjectTotalAmountForEdit(item.project_id, index); validateProjectIdSelectionForEdit();">
-                                                            <option value="">選択してください</option>
+                                                            <option value="">{{ translateLabel('選択してください') }}</option>
                                                             <option
                                                                 v-for="project in selectedChildProjectsForEditDropdown"
                                                                 :key="project.id" :value="project.id">
@@ -1767,7 +1767,7 @@ $view->heading('建物詳細');
                                                         </select>
                                                         <small v-if="selectedChildProjectsForEditDropdown.length === 0"
                                                             class="text-muted d-block mt-1">
-                                                            子プロジェクトが選択されていません
+                                                            {{ translateLabel('子プロジェクトが選択されていません') }}
                                                         </small>
                                                         <div v-if="editQuotationValidationErrors.items && (!item.project_id || item.project_id === '' || item.project_id === null)"
                                                             class="invalid-feedback d-block">
@@ -1776,15 +1776,15 @@ $view->heading('建物詳細');
                                                     </td>
                                                     <td>
                                                         <input type="text" class="form-control form-control-sm"
-                                                            v-model="item.title" placeholder="件名">
+                                                            v-model="item.title" :placeholder="translateLabel('件名')">
                                                     </td>
                                                     <td>
                                                         <input type="text" class="form-control form-control-sm"
-                                                            v-model="item.product_code" placeholder="商品コード">
+                                                            v-model="item.product_code" :placeholder="translateLabel('商品コード')">
                                                     </td>
                                                     <td>
                                                         <input type="text" class="form-control form-control-sm"
-                                                            v-model="item.type" placeholder="タイプ">
+                                                            v-model="item.type" :placeholder="translateLabel('タイプ')">
                                                     </td>
                                                     <td>
                                                         <input type="number" class="form-control form-control-sm"
@@ -1806,17 +1806,17 @@ $view->heading('建物詳細');
                                                     </td>
                                                     <td>
                                                         <input type="text" class="form-control form-control-sm"
-                                                            v-model="item.notes" placeholder="備考">
+                                                            v-model="item.notes" :placeholder="translateLabel('備考')">
                                                     </td>
                                                     <td>
                                                         <div class="btn-group btn-group-sm" role="group">
                                                             <button type="button" class="btn btn-outline-secondary"
                                                                 v-if="item.is_set"
-                                                                @click="showEditSetModal(index)" title="編集">
+                                                                @click="showEditSetModal(index)" :title="translateLabel('編集')">
                                                                 <i class="fa fa-edit"></i>
                                                             </button>
                                                             <button type="button" class="btn btn-outline-danger"
-                                                                @click="removeOrderItemForEdit(index)" title="削除">
+                                                                @click="removeOrderItemForEdit(index)" :title="translateLabel('削除')">
                                                                 <i class="fa fa-trash"></i>
                                                             </button>
                                                         </div>
@@ -1842,13 +1842,13 @@ $view->heading('建物詳細');
                                             <button v-for="project in selectedChildProjectsForEditDropdown"
                                                 :key="project.id" type="button" class="btn btn-outline-primary btn-sm"
                                                 @click="quickSelectProjectNumberForCheckedItemsForEdit(project.id)"
-                                                :title="'案件番号: ' + (project.project_number || project.name) + ' をチェック済み商品に適用'"
+                                                :title="translateLabel('案件番号') + ': ' + (project.project_number || project.name) + ' — ' + translateLabel('チェック済み商品に適用')"
                                                 :disabled="selectedOrderItemIndexesForEdit.length === 0">
                                                 {{ project.project_number || project.name }}
                                             </button>
                                             <button type="button" class="btn btn-outline-danger btn-sm ms-2"
                                                 @click="clearProjectNumbersForCheckedItemsForEdit"
-                                                :title="'チェック済み商品の案件番号をクリア'"
+                                                :title="translateLabel('チェック済み商品の案件番号をクリア')"
                                                 :disabled="selectedOrderItemIndexesForEdit.length === 0">
                                                 <i class="fa fa-times me-1"></i> <span data-i18n="クリア">クリア</span>
                                             </button>
@@ -1910,15 +1910,15 @@ $view->heading('建物詳細');
                                             <div class="input-group">
                                                 <input type="text" class="form-control"
                                                     id="edit_quotation_delivery_date"
-                                                    v-model="editingQuotation.delivery_date" placeholder="納入期限を入力（任意）">
+                                                    v-model="editingQuotation.delivery_date" :placeholder="translateLabel('納入期限を入力（任意）')">
                                                 <!-- Hidden input for Flatpickr -->
                                                 <input type="hidden" id="edit_quotation_delivery_date_picker" style="display: none;">
                                                 <button class="btn btn-outline-secondary" type="button"
-                                                    @click="openDeliveryDatePickerForEdit" title="日付を選択">
+                                                    @click="openDeliveryDatePickerForEdit" :title="translateLabel('日付を選択')">
                                                     <i class="fa fa-calendar"></i>
                                                 </button>
                                                 <button class="btn btn-outline-danger" type="button"
-                                                    @click="clearDeliveryDateForEdit" title="納入期限をクリア">
+                                                    @click="clearDeliveryDateForEdit" :title="translateLabel('納入期限をクリア')">
                                                     <i class="fa fa-times"></i>
                                                 </button>
                                             </div>
@@ -1927,7 +1927,7 @@ $view->heading('建物詳細');
                                             <label class="form-label"><span data-i18n="納入場所">納入場所</span> <span class="text-danger">*</span></label>
                                             <input type="text" class="form-control"
                                                 :class="{ 'is-invalid': editQuotationValidationErrors.delivery_location }"
-                                                v-model="editingQuotation.delivery_location" placeholder="納入場所を入力">
+                                                v-model="editingQuotation.delivery_location" :placeholder="translateLabel('納入場所を入力')">
                                             <div v-if="editQuotationValidationErrors.delivery_location" class="text-danger small mt-1">
                                                 {{ editQuotationValidationErrors.delivery_location }}
                                             </div>
@@ -1936,7 +1936,7 @@ $view->heading('建物詳細');
                                             <label class="form-label"><span data-i18n="取引方法">取引方法</span> <span class="text-danger">*</span></label>
                                             <input type="text" class="form-control"
                                                 :class="{ 'is-invalid': editQuotationValidationErrors.payment_method }"
-                                                v-model="editingQuotation.payment_method" placeholder="取引方法を入力">
+                                                v-model="editingQuotation.payment_method" :placeholder="translateLabel('取引方法を入力')">
                                             <div v-if="editQuotationValidationErrors.payment_method" class="text-danger small mt-1">
                                                 {{ editQuotationValidationErrors.payment_method }}
                                             </div>
@@ -1946,14 +1946,14 @@ $view->heading('建物詳細');
                                             <select class="form-select" v-model="editingQuotation.valid_until_type"
                                                 :class="{ 'is-invalid': editQuotationValidationErrors.valid_until }"
                                                 @change="onValidUntilTypeChangeForEdit">
-                                                <option value="1_week">発行から1週間</option>
-                                                <option value="1_month" selected>発行から1か月</option>
-                                                <option value="custom">日付指定</option>
+                                                <option value="1_week">{{ translateLabel('発行から1週間') }}</option>
+                                                <option value="1_month" selected>{{ translateLabel('発行から1か月') }}</option>
+                                                <option value="custom">{{ translateLabel('日付指定') }}</option>
                                             </select>
                                             <input v-if="editingQuotation.valid_until_type === 'custom'" type="text"
                                                 class="form-control mt-2" id="edit_quotation_valid_until"
                                                 :class="{ 'is-invalid': editQuotationValidationErrors.valid_until }"
-                                                v-model="editingQuotation.valid_until" placeholder="有効期限を選択">
+                                                v-model="editingQuotation.valid_until" :placeholder="translateLabel('有効期限を選択')">
                                             <div v-if="editQuotationValidationErrors.valid_until" class="text-danger small mt-1">
                                                 {{ editQuotationValidationErrors.valid_until }}
                                             </div>
@@ -1961,12 +1961,12 @@ $view->heading('建物詳細');
                                         <div class="col-md-6">
                                             <label class="form-label"><span data-i18n="ステータス">ステータス</span></label>
                                             <select class="form-select" v-model="editingQuotation.status">
-                                                <option value="下書き" selected>下書き</option>
-                                                <option value="発行済み">発行済み</option>
-                                                <option value="承認済み">承認済み</option>
-                                                <option value="却下">却下</option>
-                                                <option value="調整">調整</option>
-                                                <option value="キャンセル">キャンセル</option>
+                                                <option value="下書き" selected>{{ translateLabel('下書き') }}</option>
+                                                <option value="発行済み">{{ translateLabel('発行済み') }}</option>
+                                                <option value="承認済み">{{ translateLabel('承認済み') }}</option>
+                                                <option value="却下">{{ translateLabel('却下') }}</option>
+                                                <option value="調整">{{ translateLabel('調整') }}</option>
+                                                <option value="キャンセル">{{ translateLabel('キャンセル') }}</option>
                                             </select>
                                         </div>
                                         <div class="col-md-6">
@@ -2028,21 +2028,21 @@ $view->heading('建物詳細');
                             <label class="form-label"><span data-i18n="商品タイプフィルター">商品タイプフィルター</span></label>
                             <select class="form-select" v-model="selectedPriceListType"
                                 @change="scheduleFilterPriceListProducts">
-                                <option value="">すべてのタイプ</option>
-                                <option value="新規">新規</option>
-                                <option value="修正">修正</option>
-                                <option value="その他">その他</option>
+                                <option value="">{{ translateLabel('すべてのタイプ') }}</option>
+                                <option value="新規">{{ translateLabel('新規') }}</option>
+                                <option value="修正">{{ translateLabel('修正') }}</option>
+                                <option value="その他">{{ translateLabel('その他') }}</option>
                             </select>
                         </div>
                         <div class="col-md-4">
                             <label class="form-label"><span data-i18n="検索">検索</span></label>
                             <input type="text" class="form-control" v-model="priceListSearchTerm"
-                                @input="scheduleFilterPriceListProducts" placeholder="コードまたは商品名で検索">
+                                @input="scheduleFilterPriceListProducts" :placeholder="translateLabel('コードまたは商品名で検索')">
                         </div>
                         <div class="col-md-4">
                             <label class="form-label"><span data-i18n="タグ検索">タグ検索</span></label>
                             <input type="text" class="form-control" v-model="priceListTagSearchTerm"
-                                @input="scheduleFilterPriceListProducts" placeholder="タグで検索">
+                                @input="scheduleFilterPriceListProducts" :placeholder="translateLabel('タグで検索')">
                         </div>
                     </div>
                     <!-- Pagination and bulk actions -->
@@ -2067,7 +2067,7 @@ $view->heading('建物詳細');
                                 :disabled="priceListPage >= totalPriceListPages">
                                 <i class="fa fa-chevron-right"></i>
                             </button>
-                            <span class="ms-2 text-muted">表示: {{ (priceListPage - 1) * priceListPageSize + 1 }} - {{
+                            <span class="ms-2 text-muted">{{ translateLabel('表示') }}: {{ (priceListPage - 1) * priceListPageSize + 1 }} - {{
                                 Math.min(priceListPage * priceListPageSize, filteredPriceListProducts.length) }} / {{
                                 filteredPriceListProducts.length }}</span>
                             <button type="button" class="btn btn-outline-primary btn-sm ms-3" @click="selectAllFiltered"
@@ -2283,7 +2283,7 @@ $view->heading('建物詳細');
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label"><span data-i18n="カテゴリー">カテゴリー</span></label>
                                     <select class="form-select" v-model="selectedCustomer.category_id" required>
-                                        <option value="">選択してください</option>
+                                        <option value="">{{ translateLabel('選択してください') }}</option>
                                         <option v-for="category in categories" :key="category.id" :value="category.id">{{ category.name }}</option>
                                     </select>
                                 </div>
@@ -2328,8 +2328,8 @@ $view->heading('建物詳細');
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label"><span data-i18n="敬称">敬称</span></label>
                                     <select class="form-select" v-model="selectedCustomer.title" required>
-                                        <option>様</option>
-                                        <option>御社</option>
+                                        <option value="様">{{ translateLabel('様') }}</option>
+                                        <option value="御社">{{ translateLabel('御社') }}</option>
                                     </select>
                                 </div>
                                 <div class="col-md-4 mb-3">
@@ -2356,7 +2356,7 @@ $view->heading('建物詳細');
                                     <label class="form-label"><span data-i18n="郵便番号">郵便番号</span></label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="selectedCustomer.zip" required>
-                                        <button class="btn btn-outline-primary waves-effect" type="button" @click.prevent="searchAddressCustomer">住所検索</button>
+                                        <button class="btn btn-outline-primary waves-effect" type="button" @click.prevent="searchAddressCustomer">{{ translateLabel('住所検索') }}</button>
                                     </div>
                                 </div>
                             
@@ -2372,8 +2372,8 @@ $view->heading('建物詳細');
                                 <div class="col-md-4 mb-3">
                                     <label class="form-label"><span data-i18n="状況">状況</span></label>
                                     <select class="form-select" v-model="selectedCustomer.status" required>
-                                        <option value="1">有効</option>
-                                        <option value="0">無効</option>
+                                        <option value="1">{{ translateLabel('有効') }}</option>
+                                        <option value="0">{{ translateLabel('無効') }}</option>
                                     </select>
                                 </div>
 

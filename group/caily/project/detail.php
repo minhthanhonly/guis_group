@@ -85,43 +85,43 @@ if($_SESSION['show_project'] == 0){
                                    :class="project && project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
                                    style="cursor: pointer; font-size: 1.2em;"
                                    @click="toggleFavorite"
-                                   :title="project && project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                                   :title="project && project.is_favorite == 1 ? translateLabel('お気に入りから削除') : translateLabel('お気に入りに追加')"></i>
                                 <span v-show="!isEditMode" data-i18n="案件詳細">案件詳細</span>
                                 <span v-show="isEditMode" data-i18n="案件を編集">案件を編集</span>
                                 <span v-if="project && project.department_name" class="badge border border-info bg-transparent text-info ms-2">{{ project.department_name }}</span>
                                 <span v-if="isPeriodUndecided" class="badge bg-label-warning ms-2">{{ translateLabel('期間未定') }}</span>
                             </h5>
                             <div>
-                                <button v-if="!isEditMode && project" class="btn btn-outline-info btn-sm me-2" @click="copyProjectInfoToClipboard" title="案件情報をコピー">
+                                <button v-if="!isEditMode && project" class="btn btn-outline-info btn-sm me-2" @click="copyProjectInfoToClipboard" :title="translateLabel('案件情報をコピー')">
                                     <i class="fa fa-copy me-1"></i><span data-i18n="案件情報をコピー">案件情報をコピー</span>
                                 </button>
                                 <!-- Join Project Button -->
-                            <button v-if="!isEditMode && canJoinProject" class="btn btn-primary btn-sm me-2" @click="joinProject" title="案件に参加">
+                            <button v-if="!isEditMode && canJoinProject" class="btn btn-primary btn-sm me-2" @click="joinProject" :title="translateLabel('案件に参加')">
                                     <i class="fa fa-user-plus me-1"></i><span data-i18n="案件に参加">案件に参加</span>
                                 </button>
                                 
                                 <!-- Confirm Project Button for Kadai Projects -->
-                                <button v-if="project && project.is_kadai == 1 && project.status !== 'cancelled' && !isEditMode && canEditProject" class="btn btn-success btn-sm me-2" @click="confirmKadaiProject" title="案件を承認">
-                                    <i class="fa fa-check me-1"></i>案件を承認
+                                <button v-if="project && project.is_kadai == 1 && project.status !== 'cancelled' && !isEditMode && canEditProject" class="btn btn-success btn-sm me-2" @click="confirmKadaiProject" :title="translateLabel('案件を承認')">
+                                    <i class="fa fa-check me-1"></i>{{ translateLabel('案件を承認') }}
                                 </button>
                                 
-                                <!-- <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" title="案件をコピー">
+                                <!-- <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" :title="translateLabel('案件をコピー')">
                                     <i class="fa fa-copy"></i> <span data-i18n="案件をコピー">案件をコピー</span>
                                 </button> -->
-                                <button v-if="!isEditMode && canEditProject && !(project && project.is_kadai == 1)" class="btn btn-outline-warning btn-sm me-2" @click="openEditForm" title="編集">
+                                <button v-if="!isEditMode && canEditProject && !(project && project.is_kadai == 1)" class="btn btn-outline-warning btn-sm me-2" @click="openEditForm" :title="translateLabel('編集')">
                                     <i class="fa fa-pencil-alt me-1"></i> <span data-i18n="編集">編集</span>
                                 </button>
-                                <button v-if="!isEditMode && project" class="btn btn-outline-secondary btn-sm me-2" @click="openGeneralLogModal" title="履歴">
+                                <button v-if="!isEditMode && project" class="btn btn-outline-secondary btn-sm me-2" @click="openGeneralLogModal" :title="translateLabel('履歴')">
                                     <i class="fa fa-history me-1"></i><span data-i18n="履歴">履歴</span>
                                 </button>
-                                <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject" :disabled="savingProject" title="保存">
+                                <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject" :disabled="savingProject" :title="translateLabel('保存')">
                                     <span v-if="savingProject" class="spinner-border spinner-border-sm me-1"></span>
-                                    <i v-else class="fa fa-save me-1"></i> <span v-if="savingProject" data-i18n="保存中">保存中...</span><span v-else data-i18n="保存">保存</span>
+                                    <i v-else class="fa fa-save me-1"></i> <span v-if="savingProject">{{ translateLabel('保存中') }}...</span><span v-else data-i18n="保存">保存</span>
                                 </button>
-                                <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit" title="キャンセル">
+                                <button v-if="isEditMode" class="btn btn-secondary btn-sm me-2" @click="cancelEdit" :title="translateLabel('キャンセル')">
                                     <i class="fa fa-times me-1"></i> <span data-i18n="キャンセル">キャンセル</span>
                                 </button>  
-                                <button v-if="!isEditMode && canDeleteProject && !(project && project.is_kadai == 1)" class="btn btn-outline-danger btn-sm" @click="deleteProject" title="削除">
+                                <button v-if="!isEditMode && canDeleteProject && !(project && project.is_kadai == 1)" class="btn btn-outline-danger btn-sm" @click="deleteProject" :title="translateLabel('削除')">
                                     <i class="fa fa-trash me-1"></i> <span data-i18n="削除">削除</span>
                                 </button>
                             </div>
@@ -146,26 +146,26 @@ if($_SESSION['show_project'] == 0){
                         </h5>
                         <div class="d-flex flex-wrap align-items-center gap-2">
                             <template v-if="notes.length > 0">
-                                <select class="form-select form-select-sm note-board-filter" v-model="noteFilterLabel" title="ラベル">
-                                    <option value="">ラベル: すべて</option>
-                                    <option value="__none__">ラベルなし</option>
+                                <select class="form-select form-select-sm note-board-filter" v-model="noteFilterLabel" :title="translateLabel('ラベル')">
+                                    <option value="">{{ translateLabel('ラベル: すべて') }}</option>
+                                    <option value="__none__">{{ translateLabel('ラベルなし') }}</option>
                                     <option v-for="lbl in noteFilterLabelOptions" :key="lbl" :value="lbl">{{ lbl }}</option>
                                 </select>
-                                <select class="form-select form-select-sm note-board-filter" v-model="noteFilterType" title="区分">
-                                    <option value="">区分: すべて</option>
+                                <select class="form-select form-select-sm note-board-filter" v-model="noteFilterType" :title="translateLabel('区分')">
+                                    <option value="">{{ translateLabel('区分: すべて') }}</option>
                                     <option value="1">{{ cailyNoteLabel }}</option>
-                                    <option value="2">GUISメモ</option>
-                                    <option value="0">未分類</option>
+                                    <option value="2">{{ translateLabel('GUISメモ') }}</option>
+                                    <option value="0">{{ translateLabel('未分類') }}</option>
                                 </select>
                                 <button v-if="noteFiltersActive"
                                         type="button"
                                         class="btn btn-sm btn-danger"
-                                        title="フィルターをクリア"
+                                        :title="translateLabel('フィルターをクリア')"
                                         @click="clearNoteFilters">
-                                    <i class="fa fa-times me-1"></i>クリア ({{ filteredNotes.length }} / {{ notes.length }})
+                                    <i class="fa fa-times me-1"></i>{{ translateLabel('クリア') }} ({{ filteredNotes.length }} / {{ notes.length }})
                                 </button>
                             </template>
-                            <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
+                            <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" :title="translateLabel('メモを追加')">
                                 <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
                             </button>
                         </div>
@@ -174,27 +174,27 @@ if($_SESSION['show_project'] == 0){
                         <!-- 公開範囲 / ピン filters (radio) -->
                         <div v-if="notes.length > 0" class="note-board-radio-filters">
                             <div class="note-board-radio-group">
-                                <span class="note-board-radio-label">公開範囲</span>
-                                <div class="btn-group btn-group-sm" role="group" aria-label="公開範囲">
+                                <span class="note-board-radio-label">{{ translateLabel('公開範囲') }}</span>
+                                <div class="btn-group btn-group-sm" role="group" :aria-label="translateLabel('公開範囲')">
                                     <template v-for="opt in noteFilterVisibilityOptions" :key="'noteFilterVisibility-' + opt.value">
                                         <input type="radio" class="btn-check" name="noteFilterVisibility"
                                                :id="'noteFilterVisibility-' + (opt.value || 'any')"
                                                :value="opt.value" v-model="noteFilterVisibility" autocomplete="off">
                                         <label class="btn btn-outline-primary" :for="'noteFilterVisibility-' + (opt.value || 'any')">
-                                            <i v-if="opt.icon" class="fa me-1" :class="opt.icon"></i>{{ opt.text }}
+                                            <i v-if="opt.icon" class="fa me-1" :class="opt.icon"></i>{{ translateLabel(opt.text) }}
                                         </label>
                                     </template>
                                 </div>
                             </div>
                             <div class="note-board-radio-group">
-                                <span class="note-board-radio-label">ピン</span>
-                                <div class="btn-group btn-group-sm" role="group" aria-label="ピン">
+                                <span class="note-board-radio-label">{{ translateLabel('ピン') }}</span>
+                                <div class="btn-group btn-group-sm" role="group" :aria-label="translateLabel('ピン')">
                                     <template v-for="opt in noteFilterPinOptions" :key="'noteFilterPin-' + opt.value">
                                         <input type="radio" class="btn-check" name="noteFilterPin"
                                                :id="'noteFilterPin-' + (opt.value || 'any')"
                                                :value="opt.value" v-model="noteFilterPin" autocomplete="off">
                                         <label class="btn btn-outline-primary" :for="'noteFilterPin-' + (opt.value || 'any')">
-                                            <i v-if="opt.icon" class="fa me-1" :class="opt.icon"></i>{{ opt.text }}
+                                            <i v-if="opt.icon" class="fa me-1" :class="opt.icon"></i>{{ translateLabel(opt.text) }}
                                         </label>
                                     </template>
                                 </div>
@@ -217,33 +217,33 @@ if($_SESSION['show_project'] == 0){
                                  :data-note-id="note.id">
                                 <div class="note-card-top">
                                     <span class="note-drag-handle"
-                                          title="並べ替え"
-                                          aria-label="並べ替え"
+                                          :title="translateLabel('並べ替え')"
+                                          :aria-label="translateLabel('並べ替え')"
                                           @click.stop
                                           @mousedown.stop>
                                         <i class="fa fa-grip-vertical"></i>
                                     </span>
-                                    <i v-if="note.is_important == 1" class="fa fa-thumb-tack text-danger" title="ピン（全員）"></i>
-                                    <i v-if="note.is_pinned_self == 1" class="fa fa-bookmark text-primary" title="ピン（自分）"></i>
-                                    <span v-if="note.visibility === 'members'" class="note-visibility-icon" title="公開範囲: 案件メンバー"><i class="fa fa-users"></i></span>
-                                    <span v-else-if="note.visibility === 'self'" class="note-visibility-icon" title="公開範囲: 自分のみ"><i class="fa fa-lock"></i></span>
+                                    <i v-if="note.is_important == 1" class="fa fa-thumb-tack text-danger" :title="translateLabel('ピン（全員）')"></i>
+                                    <i v-if="note.is_pinned_self == 1" class="fa fa-bookmark text-primary" :title="translateLabel('ピン（自分）')"></i>
+                                    <span v-if="note.visibility === 'members'" class="note-visibility-icon" :title="translateLabel('公開範囲: 案件メンバー')"><i class="fa fa-users"></i></span>
+                                    <span v-else-if="note.visibility === 'self'" class="note-visibility-icon" :title="translateLabel('公開範囲: 自分のみ')"><i class="fa fa-lock"></i></span>
                                     <span class="note-actions ms-auto" @click.stop>
                                         <span v-if="note.visibility !== 'self'"
                                               class="note-pin-everyone-icon"
                                               :class="{ 'is-active': note.is_important == 1 }"
-                                              :title="note.is_important == 1 ? 'ピン（全員）解除' : 'ピン（全員）'"
+                                              :title="note.is_important == 1 ? translateLabel('ピン（全員）解除') : translateLabel('ピン（全員）')"
                                               @click="toggleNotePin(note, 'everyone')">
                                             <i class="fa fa-thumb-tack"></i>
                                         </span>
                                         <span class="note-pin-self-icon"
                                               :class="{ 'is-active': note.is_pinned_self == 1 }"
-                                              :title="note.is_pinned_self == 1 ? 'ピン（自分）解除' : 'ピン（自分）'"
+                                              :title="note.is_pinned_self == 1 ? translateLabel('ピン（自分）解除') : translateLabel('ピン（自分）')"
                                               @click="toggleNotePin(note, 'self')">
                                             <i class="fa fa-bookmark"></i>
                                         </span>
                                         <span v-if="canDeleteNote(note)"
                                               class="detail-note-delete"
-                                              title="削除"
+                                              :title="translateLabel('削除')"
                                               @click="deleteNote(note.id)">
                                             <i class="fa fa-trash"></i>
                                         </span>
@@ -253,9 +253,9 @@ if($_SESSION['show_project'] == 0){
                                     <div v-if="note.label || note.needs_confirmation == 1 || note.needs_confirmation == 2 || note.display_column"
                                          class="note-card-tags">
                                         <span v-if="note.label" class="note-label-chip" :style="getNoteLabelStyle(note.label)"><i class="fa fa-tag note-label-chip-icon" aria-hidden="true"></i><span class="note-label-chip-text">{{ note.label }}</span></span>
-                                        <span v-if="note.needs_confirmation == 1" class="badge bg-primary">{{ cailyNoteLabel }}</span>
-                                        <span v-else-if="note.needs_confirmation == 2" class="badge bg-dark">GUISメモ</span>
-                                        <span v-if="note.display_column" class="badge bg-secondary">関連項目: {{ getNoteDisplayColumnLabel(note.display_column) }}</span>
+                                        <span v-if="note.needs_confirmation == 1" class="badge bg-primary">{{ translateLabel(cailyNoteLabel) }}</span>
+                                        <span v-else-if="note.needs_confirmation == 2" class="badge bg-dark">{{ translateLabel('GUISメモ') }}</span>
+                                        <span v-if="note.display_column" class="badge bg-secondary">{{ translateLabel('関連項目') }}: {{ translateLabel(getNoteDisplayColumnLabel(note.display_column)) }}</span>
                                     </div>
                                     <div v-if="note.content" class="ql-editor note-card-content" v-html="decodeNoteHtml(note.content)"></div>
                                 </div>
@@ -266,8 +266,8 @@ if($_SESSION['show_project'] == 0){
                         </div>
                         <div v-else-if="notes.length > 0" class="text-center text-muted py-3">
                             <i class="fa fa-filter fa-2x mb-2"></i>
-                            <p class="mb-2">条件に一致するメモがありません</p>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" @click="clearNoteFilters">フィルターをクリア</button>
+                            <p class="mb-2">{{ translateLabel('条件に一致するメモがありません') }}</p>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" @click="clearNoteFilters">{{ translateLabel('フィルターをクリア') }}</button>
                         </div>
                         <div v-else class="text-center text-muted py-3">
                             <i class="fa fa-sticky-note fa-2x mb-2"></i>
@@ -319,10 +319,10 @@ if($_SESSION['show_project'] == 0){
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center gap-2">
                             <h5 class="card-title mb-0"><span data-i18n="決済情報">決済情報</span></h5>
-                            <span v-if="businessDocumentSaveStatus === 'loading'" class="text-muted" title="保存中">
+                            <span v-if="businessDocumentSaveStatus === 'loading'" class="text-muted" :title="translateLabel('保存中')">
                                 <i class="fa fa-spinner fa-spin"></i>
                             </span>
-                            <span v-else-if="businessDocumentSaveStatus === 'saved'" class="text-success" title="保存済み">
+                            <span v-else-if="businessDocumentSaveStatus === 'saved'" class="text-success" :title="translateLabel('保存済み')">
                                 <i class="fa fa-check-circle"></i>
                             </span>
                         </div>
@@ -343,53 +343,53 @@ if($_SESSION['show_project'] == 0){
                                     <div class="bd-block-title">
                                         <i v-if="row.standard" :class="section.icon" class="me-1"></i>
                                         <span :data-i18n="bdRowTitle(section, row)">{{ bdRowTitle(section, row) }}</span>
-                                        <span v-if="canEditBusinessDocuments && bdRowShowIssuedHint(row)" class="bd-hint-icon" tabindex="0" :data-tip="'発行済にするには' + row.dateLabel + '・' + row.amountLabel + 'が必要です'" :aria-label="'発行済にするには' + row.dateLabel + '・' + row.amountLabel + 'が必要です'"><i class="fa fa-info-circle"></i></span>
+                                        <span v-if="canEditBusinessDocuments && bdRowShowIssuedHint(row)" class="bd-hint-icon" tabindex="0" :data-tip="translateLabel('発行済にするには{fields}が必要です').replace('{fields}', translateLabel(row.dateLabel) + '・' + translateLabel(row.amountLabel))" :aria-label="translateLabel('発行済にするには{fields}が必要です').replace('{fields}', translateLabel(row.dateLabel) + '・' + translateLabel(row.amountLabel))"><i class="fa fa-info-circle"></i></span>
                                     </div>
                                     <div v-if="canEditBusinessDocuments" class="btn-group">
                                         <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light bd-status-btn"
                                                 :class="getEnergyFeeStatusButtonClass(row.kind, project[row.statusKey])"
                                                 :id="row.dropdownId"
                                                 data-bs-toggle="dropdown" aria-expanded="false">
-                                            {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
+                                            {{ translateLabel(getEnergyFeeStatusLabel(row.kind, project[row.statusKey])) }}
                                         </button>
                                         <ul class="dropdown-menu dropdown-menu-end">
                                             <li v-for="status in bdRowStatusOptions(row)" :key="status.value">
                                                 <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                   :class="{ disabled: status.value === '発行済' && !bdRowIsComplete(row), active: getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) === status.label }"
+                                                   :class="{ disabled: status.value === '発行済' && !bdRowIsComplete(row), active: getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) === translateLabel(status.label) }"
                                                    @click="bdRowSelectStatus(row, status.value)">
-                                                    {{ status.label }}
+                                                    {{ translateLabel(status.label) }}
                                                 </a>
                                             </li>
                                         </ul>
                                     </div>
                                     <span v-else class="badge" :class="getEnergyFeeStatusBadgeClass(row.kind, project[row.statusKey])">
-                                        {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
+                                        {{ translateLabel(getEnergyFeeStatusLabel(row.kind, project[row.statusKey])) }}
                                     </span>
                                 </div>
                                 <div class="bd-fields">
                                     <div class="bd-field">
-                                        <label class="bd-label" :for="businessDocumentPickerId(row.dateKey)">{{ row.dateLabel }}<span v-if="canEditBusinessDocuments" class="text-danger ms-1">*</span></label>
+                                        <label class="bd-label" :for="businessDocumentPickerId(row.dateKey)">{{ translateLabel(row.dateLabel) }}<span v-if="canEditBusinessDocuments" class="text-danger ms-1">*</span></label>
                                         <div v-if="canEditBusinessDocuments" class="input-group input-group-sm">
                                             <input type="text" class="form-control" v-model="project[row.dateKey]" :id="businessDocumentPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                            <button v-if="!hasBusinessDocumentDate(row.dateKey)" type="button" class="btn btn-outline-primary" title="今日の日付を入力"
-                                                    @click="setBusinessDocumentDateToday(row.dateKey)">今日</button>
+                                            <button v-if="!hasBusinessDocumentDate(row.dateKey)" type="button" class="btn btn-outline-primary" :title="translateLabel('今日の日付を入力')"
+                                                    @click="setBusinessDocumentDateToday(row.dateKey)">{{ translateLabel('今日') }}</button>
                                         </div>
                                         <div v-else class="bd-value" :data-time="getBusinessDocumentDateForTooltip(row.dateKey)" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip(row.dateKey))">
                                             {{ formatBusinessDocumentDateTime(row.dateKey) || '—' }}
                                         </div>
                                     </div>
                                     <div class="bd-field">
-                                        <label class="bd-label">{{ row.amountLabel }}<span v-if="canEditBusinessDocuments" class="text-danger ms-1">*</span></label>
+                                        <label class="bd-label">{{ translateLabel(row.amountLabel) }}<span v-if="canEditBusinessDocuments" class="text-danger ms-1">*</span></label>
                                         <div v-if="canEditBusinessDocuments" class="input-group input-group-sm">
                                             <span class="input-group-text">¥</span>
                                             <input type="text" inputmode="numeric" autocomplete="off" class="form-control text-end bd-amount-input"
-                                                   :value="bdAmountDisplay(project, row.amountKey)" placeholder="未入力" data-i18n="未入力"
+                                                   :value="bdAmountDisplay(project, row.amountKey)" :placeholder="translateLabel('未入力')" data-i18n="未入力"
                                                    @focus="onBdAmountFocus(row.amountKey, $event)" @blur="onBdAmountBlur" @input="onBdAmountInput(project, row.amountKey, $event, scheduleBusinessDocumentUpdate)">
-                                            <button v-if="bdRowCanCopy(row)" type="button" class="btn btn-outline-primary" title="見積金額をコピー"
-                                                    @click="bdRowCopy(row)">見積と同額</button>
+                                            <button v-if="bdRowCanCopy(row)" type="button" class="btn btn-outline-primary" :title="translateLabel('見積金額をコピー')"
+                                                    @click="bdRowCopy(row)">{{ translateLabel('見積と同額') }}</button>
                                         </div>
                                         <div v-else class="bd-value text-end">{{ bdAmountDisplay(project, row.amountKey) ? '¥' + bdAmountDisplay(project, row.amountKey) : '—' }}</div>
-                                        <div v-if="bdRowTaxIncluded(row)" class="bd-sub text-end">税込 {{ bdRowTaxIncluded(row) }}</div>
+                                        <div v-if="bdRowTaxIncluded(row)" class="bd-sub text-end">{{ translateLabel('税込') }} {{ bdRowTaxIncluded(row) }}</div>
                                     </div>
                                 </div>
                             </div>
@@ -397,7 +397,7 @@ if($_SESSION['show_project'] == 0){
 
                         <div class="mb-0 bd-note">
                             <label class="bd-label" data-i18n="決済備考">決済備考</label>
-                            <textarea class="form-control form-control-sm" rows="3" placeholder="備考を入力" v-model="project.payment_note" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate"></textarea>
+                            <textarea class="form-control form-control-sm" rows="3" :placeholder="translateLabel('備考を入力')" v-model="project.payment_note" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate"></textarea>
                         </div>
 
                         <div v-if="businessDocumentError" class="alert alert-danger mt-3 mb-0">{{ businessDocumentError }}</div>
@@ -606,7 +606,7 @@ if($_SESSION['show_project'] == 0){
                                     <i class="fa fa-check-circle fs-3"></i>
                                 </div>
                                 <h2 class="mb-1">{{ stats.completedTasks }}</h2>
-                                <small>完了タスク</small>
+                                <small>{{ translateLabel('完了タスク') }}</small>
                             </div>
                         </div>
                     </div>
@@ -617,7 +617,7 @@ if($_SESSION['show_project'] == 0){
                                     <i class="fa fa-clock fs-3"></i>
                                 </div>
                                 <h2 class="mb-1">{{ stats.timeTracked }}h</h2>
-                                <small>記録時間</small>
+                                <small>{{ translateLabel('記録時間') }}</small>
                             </div>
                         </div>
                     </div>-->
@@ -660,7 +660,7 @@ if($_SESSION['show_project'] == 0){
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">{{ memberSelectType === 'manager' ? '管理者を選択' : 'メンバーを選択' }}</h5>
+                        <h5 class="modal-title">{{ memberSelectType === 'manager' ? translateLabel('管理者を選択') : translateLabel('メンバーを選択') }}</h5>
                         <button type="button" class="btn-close" @click="showMemberModal = false"></button>
                     </div>
                     <div class="modal-body">
@@ -682,7 +682,7 @@ if($_SESSION['show_project'] == 0){
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button class="btn btn-secondary" @click="showMemberModal = false">キャンセル</button>
+                        <button class="btn btn-secondary" @click="showMemberModal = false">{{ translateLabel('キャンセル') }}</button>
                         <button class="btn btn-primary" @click="confirmMemberSelect">OK</button>
                     </div>
                 </div>
@@ -734,11 +734,11 @@ if($_SESSION['show_project'] == 0){
                                 </div>
                             </li>
                             <li v-if="logsLoading && !logsLoaded" class="list-group-item text-center text-muted py-4"><i class="fa fa-spinner fa-spin"></i></li>
-                            <li v-else-if="!sortedGeneralLogs || sortedGeneralLogs.length === 0" class="list-group-item text-muted">履歴はありません。</li>
+                            <li v-else-if="!sortedGeneralLogs || sortedGeneralLogs.length === 0" class="list-group-item text-muted">{{ translateLabel('履歴はありません。') }}</li>
                         </ul>
                     </div>
                     <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @click="closeGeneralLogModal">閉じる</button>
+                        <button type="button" class="btn btn-secondary" @click="closeGeneralLogModal">{{ translateLabel('閉じる') }}</button>
                     </div>
                 </div>
             </div>
