@@ -198,7 +198,8 @@ if($_SESSION['show_project'] == 0){
                                     <span v-if="note.visibility === 'members'" class="note-visibility-icon" title="公開範囲: 案件メンバー"><i class="fa fa-users"></i></span>
                                     <span v-else-if="note.visibility === 'self'" class="note-visibility-icon" title="公開範囲: 自分のみ"><i class="fa fa-lock"></i></span>
                                     <span class="note-actions ms-auto" @click.stop>
-                                        <span class="note-pin-everyone-icon"
+                                        <span v-if="note.visibility !== 'self'"
+                                              class="note-pin-everyone-icon"
                                               :class="{ 'is-active': note.is_important == 1 }"
                                               :title="note.is_important == 1 ? 'ピン（全員）解除' : 'ピン（全員）'"
                                               @click="toggleNotePin(note, 'everyone')">
@@ -997,7 +998,8 @@ if($_SESSION['show_project'] == 0){
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <div class="form-check mb-1">
+                                <!-- 自分のみ: no one else sees the note, so ピン（全員） is not offered -->
+                                <div class="form-check mb-1" v-if="editingNote.visibility !== 'self'">
                                     <input class="form-check-input" type="checkbox" v-model="editingNote.is_important" id="isImportant" @change="onNotePinEveryoneChange">
                                     <label class="form-check-label" for="isImportant">
                                         <i class="fa fa-thumb-tack text-danger me-2"></i> <span data-i18n="ピン（全員）">ピン（全員）</span>

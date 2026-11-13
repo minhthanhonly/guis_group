@@ -70,10 +70,16 @@ function parseConfirmationNotesRawForExport(cellData) {
     });
     if (!notes.length) return '';
     var texts = notes.map(function(note) {
-        // Format: id_:_content_:_isImportant[_:_label]
+        // Format: id_:_content_:_isImportant_:_isPinnedSelf[_:_v:visibility][_:_label]
+        // (legacy: id_:_content_:_isImportant[_:_label])
         var arr = note.trim().split('_:_');
         var text = arr.length > 1 ? arr[1] : note.trim();
-        var label = arr.length > 3 ? arr.slice(3).join('_:_') : '';
+        var labelStart = 3;
+        if (arr.length > 3 && (arr[3] === '0' || arr[3] === '1')) {
+            labelStart = 4;
+            if (arr.length > 4 && /^v:(members|self)$/.test(arr[4])) labelStart = 5;
+        }
+        var label = arr.length > labelStart ? arr.slice(labelStart).join('_:_') : '';
         var decoded = decodeHtmlForNote(text);
         decoded = (decoded || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
         var plain = decoded.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();

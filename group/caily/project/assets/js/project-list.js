@@ -4058,7 +4058,8 @@ var projectTable;
     }
 
     /**
-     * Pack format (new): id_:_content_:_isImportant_:_isPinnedSelf[_:_label]
+     * Pack format (new): id_:_content_:_isImportant_:_isPinnedSelf[_:_v:visibility][_:_label]
+     * (v: members / self only; absent = 全員)
      * Legacy: id_:_content_:_isImportant[_:_label]
      */
     function parsePackedConfirmationNote(raw) {
@@ -4067,10 +4068,16 @@ var projectTable;
         var content = arr.length > 1 ? arr[1] : '';
         var isImportant = arr.length > 2 ? arr[2] : '0';
         var isPinnedSelf = '0';
+        var visibility = 'all';
         var label = '';
         if (arr.length >= 4 && (arr[3] === '0' || arr[3] === '1')) {
             isPinnedSelf = arr[3];
-            label = arr.length > 4 ? arr.slice(4).join('_:_') : '';
+            var labelStart = 4;
+            if (arr.length > 4 && /^v:(members|self)$/.test(arr[4])) {
+                visibility = arr[4].slice(2);
+                labelStart = 5;
+            }
+            label = arr.length > labelStart ? arr.slice(labelStart).join('_:_') : '';
         } else if (arr.length > 3) {
             label = arr.slice(3).join('_:_');
         }
@@ -4079,6 +4086,7 @@ var projectTable;
             content: content,
             isImportant: isImportant,
             isPinnedSelf: isPinnedSelf,
+            visibility: visibility,
             label: label
         };
     }
@@ -4175,9 +4183,9 @@ var projectTable;
                     ${buildNoteTextRowHtml(decodedText || '-')}
                 </div>
                 <span class="note-actions">
-                    <span class="note-pin-everyone-icon ${isImportant ? 'is-active' : ''}" title="${pinEveryoneTitle}" style="cursor: pointer;">
+                    ${parsed.visibility === 'self' ? '' : `<span class="note-pin-everyone-icon ${isImportant ? 'is-active' : ''}" title="${pinEveryoneTitle}" style="cursor: pointer;">
                         <i class="fa fa-thumb-tack"></i>
-                    </span>
+                    </span>`}
                     <span class="note-pin-self-icon ${isPinnedSelf ? 'is-active' : ''}" title="${pinSelfTitle}" style="cursor: pointer;">
                         <i class="fa fa-bookmark"></i>
                     </span>

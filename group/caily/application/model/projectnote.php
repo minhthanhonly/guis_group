@@ -279,6 +279,10 @@ class ProjectNote extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Missing required fields'];
         }
         
+        // 自分のみ: nobody else sees the note, so ピン（全員） has no meaning
+        if ($data['visibility'] === 'self') {
+            $data['is_important'] = 0;
+        }
         // Mutual exclusivity: ピン（全員） wins over ピン（自分）
         if (!empty($data['is_important'])) {
             $_POST['is_pinned_self'] = 0;
@@ -320,6 +324,10 @@ class ProjectNote extends ApplicationModel {
         }
         if (isset($_POST['visibility'])) {
             $data['visibility'] = $this->normalizeVisibility($_POST['visibility']);
+        }
+        $effectiveVisibility = isset($data['visibility']) ? $data['visibility'] : $this->normalizeVisibility($note['visibility'] ?? 'all');
+        if ($effectiveVisibility === 'self') {
+            $data['is_important'] = 0; // ピン（全員） is meaningless on a 自分のみ note
         }
         
         if (!$this->noteContentHasText($data['content'])) {
@@ -446,6 +454,9 @@ class ProjectNote extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Permission denied'];
         }
         $next = empty($note['is_important']) ? 1 : 0;
+        if ($next === 1 && ($note['visibility'] ?? 'all') === 'self') {
+            return ['status' => 'error', 'error' => '自分のみのメモはピン（全員）にできません'];
+        }
         $ok = $this->query_update(
             array('is_important' => $next, 'updated_at' => date('Y-m-d H:i:s')),
             array('id' => $id)

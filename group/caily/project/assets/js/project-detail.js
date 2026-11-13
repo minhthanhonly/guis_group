@@ -3236,7 +3236,7 @@ const vueApp = createApp({
                 formData.append('project_id', this.projectId);
                 formData.append('content', rawContent);
                 // Mutual exclusivity: prefer ピン（全員） if both somehow set
-                var pinEveryone = !!this.editingNote.is_important;
+                var pinEveryone = !!this.editingNote.is_important && this.editingNote.visibility !== 'self';
                 var pinSelf = !!this.editingNote.is_pinned_self && !pinEveryone;
                 formData.append('is_important', pinEveryone ? 1 : 0);
                 formData.append('is_pinned_self', pinSelf ? 1 : 0);

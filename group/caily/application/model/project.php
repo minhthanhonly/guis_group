@@ -751,7 +751,7 @@ class Project extends ApplicationModel {
         $pinTable = DB_PREFIX . 'project_note_user_pins';
         $sessionUserid = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
         $noteRows = $this->fetchAll(sprintf(
-            "SELECT n.project_id, n.needs_confirmation, n.id, n.content, n.is_important, n.label, n.sort_order,
+            "SELECT n.project_id, n.needs_confirmation, n.id, n.content, n.is_important, n.label, n.sort_order, n.visibility,
                     CASE WHEN pin.id IS NOT NULL THEN 1 ELSE 0 END AS is_pinned_self
              FROM %sproject_notes n
              LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
@@ -766,9 +766,14 @@ class Project extends ApplicationModel {
         foreach ($noteRows as $row) {
             $pid = (int)$row['project_id'];
             $labelSafe = str_replace(array('_:_', '_|_'), array('-', '-'), trim((string)($row['label'] ?? '')));
-            // Pack: id_:_content_:_isImportant_:_isPinnedSelf[_:_label]
+            // Pack: id_:_content_:_isImportant_:_isPinnedSelf[_:_v:visibility][_:_label]
+            // (v: only when not 全員 — members / self)
             $part = $row['id'] . '_:_' . ($row['content'] ?? '') . '_:_' . ($row['is_important'] ?? 0)
                 . '_:_' . (isset($row['is_pinned_self']) ? intval($row['is_pinned_self']) : 0);
+            $vis = isset($row['visibility']) ? (string)$row['visibility'] : 'all';
+            if ($vis === 'members' || $vis === 'self') {
+                $part .= '_:_v:' . $vis;
+            }
             if ($labelSafe !== '') {
                 $part .= '_:_' . $labelSafe;
             }
