@@ -3146,6 +3146,13 @@ const vueApp = createApp({
             return String(this.editingNote.labelSelect || '').trim().slice(0, 100);
         },
         openNoteModal(note = null) {
+            // Already open (e.g. in edit mode): tear the modal and its Quill editor down first,
+            // so the new note starts from a fresh editor instead of the previous note's.
+            if (this.showNoteModal) {
+                this.closeNoteModal();
+                this.$nextTick(() => this.openNoteModal(note));
+                return;
+            }
             this.showNoteModal = true;
             this.isNoteEditMode = false;
             
@@ -3725,6 +3732,13 @@ const vueApp = createApp({
 
     },
     watch: {
+        // Leaving edit mode removes the editor's DOM: drop the Quill instance with it,
+        // otherwise the next 編集 / メモを追加 reuses an instance bound to a detached node.
+        isNoteEditMode(editing) {
+            if (!editing) {
+                this.destroyQuillNoteEditor();
+            }
+        },
         canCommentProject(newVal) {
             if (newVal) {
                 this.$nextTick(() => this.armCommentsLazyMount());
