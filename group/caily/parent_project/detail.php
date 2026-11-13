@@ -296,65 +296,6 @@ $view->heading('建物詳細');
                     </div>
                 </div>
             </div>
-
-            <!-- Task workload by department -->
-            <div class="card mt-4" v-if="childProjects.length > 0">
-                <div class="card-header pb-0">
-                    <h5 class="card-title mb-0"><span data-i18n="部署別種別工数">部署別種別工数</span></h5>
-                </div>
-                <div class="card-body">
-                    <div v-if="loadingWorkloadStats" class="text-center py-3">
-                        <div class="spinner-border spinner-border-sm text-primary" role="status">
-                            <span class="visually-hidden"><span data-i18n="読み込み中">読み込み中</span>...</span>
-                        </div>
-                    </div>
-                    <template v-else-if="workloadStatsByDepartment.length">
-                        <ul class="nav nav-tabs mb-3" role="tablist">
-                            <li v-for="dept in workloadStatsByDepartment" :key="dept.department_id" class="nav-item" role="presentation">
-                                <button type="button"
-                                        class="nav-link"
-                                        :class="{ active: activeWorkloadDeptId === dept.department_id }"
-                                        @click="activeWorkloadDeptId = dept.department_id">
-                                    {{ dept.department_name }}
-                                </button>
-                            </li>
-                        </ul>
-                        <div v-if="activeWorkloadDept">
-                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
-                                <small class="text-muted">
-                                    <span data-i18n="案件依頼">案件依頼</span> {{ activeWorkloadDept.projectCount }}<span data-i18n="件">件</span>
-                                    · <span data-i18n="タスク">タスク</span> {{ activeWorkloadDept.taskCount }}<span data-i18n="件">件</span>
-                                </small>
-                                <span class="fw-semibold">
-                                    <span data-i18n="工数合計">工数合計</span>: {{ formatTotalWorkload(activeWorkloadDept.totalWorkload) }}
-                                </span>
-                            </div>
-                            <div v-if="activeWorkloadDept.byKind.length" class="row">
-                                <div v-if="activeWorkloadDept.byKind.some(item => item.hours > 0)" class="col-lg-6 mb-3 mb-lg-0">
-                                    <div id="workload-dept-chart-active" style="min-height: 300px;"></div>
-                                </div>
-                                <div :class="activeWorkloadDept.byKind.some(item => item.hours > 0) ? 'col-lg-6' : 'col-12'">
-                                    <div v-for="(item, idx) in activeWorkloadDept.byKind" :key="item.kind"
-                                         class="d-flex justify-content-between align-items-center py-2"
-                                         :class="{ 'border-bottom': idx < activeWorkloadDept.byKind.length - 1 }">
-                                        <div class="d-flex align-items-center gap-2">
-                                            <span class="badge" :class="getTaskKindBadgeClass(item.kind)">{{ getTaskKindLabel(item.kind) }}</span>
-                                            <small class="text-muted">{{ item.count }}<span data-i18n="件">件</span></small>
-                                        </div>
-                                        <span class="fw-semibold text-nowrap">
-                                            {{ formatTotalWorkload(item.hours) }}
-                                            <small class="text-muted ms-1">({{ formatWorkloadPercent(item.hours, activeWorkloadDept.totalWorkload) }})</small>
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div v-else class="text-center text-muted py-3">
-                                <span data-i18n="タスクがありません">タスクがありません</span>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
         </div>
 
         <!-- Right Column - メモ -->
@@ -398,6 +339,64 @@ $view->heading('建物詳細');
                             <span data-i18n="最初のメモを追加">最初のメモを追加</span>
                         </button>
                     </div>
+                </div>
+            </div>
+            <!-- Task workload by department -->
+            <div class="card mb-4" v-if="childProjects.length > 0">
+                <div class="card-header pb-0">
+                    <h5 class="card-title mb-0"><span data-i18n="部署別種別工数">部署別種別工数</span></h5>
+                </div>
+                <div class="card-body">
+                    <div v-if="loadingWorkloadStats" class="text-center py-3">
+                        <div class="spinner-border spinner-border-sm text-primary" role="status">
+                            <span class="visually-hidden"><span data-i18n="読み込み中">読み込み中</span>...</span>
+                        </div>
+                    </div>
+                    <template v-else-if="workloadStatsByDepartment.length">
+                        <ul class="nav nav-tabs mb-3" role="tablist">
+                            <li v-for="dept in workloadStatsByDepartment" :key="dept.department_id" class="nav-item" role="presentation">
+                                <button type="button"
+                                        class="nav-link"
+                                        :class="{ active: activeWorkloadDeptId === dept.department_id }"
+                                        @click="activeWorkloadDeptId = dept.department_id">
+                                    {{ dept.department_name }}
+                                </button>
+                            </li>
+                        </ul>
+                        <div v-if="activeWorkloadDept">
+                            <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
+                                <small class="text-muted">
+                                    <span data-i18n="案件依頼">案件依頼</span> {{ activeWorkloadDept.projectCount }}<span data-i18n="件">件</span>
+                                    · <span data-i18n="タスク">タスク</span> {{ activeWorkloadDept.taskCount }}<span data-i18n="件">件</span>
+                                </small>
+                                <span class="fw-semibold">
+                                    <span data-i18n="工数合計">工数合計</span>: {{ formatTotalWorkload(activeWorkloadDept.totalWorkload) }}
+                                </span>
+                            </div>
+                            <div v-if="activeWorkloadDept.byKind.length" class="row">
+                                <div v-if="activeWorkloadDept.byKind.some(item => item.hours > 0)" class="col-12 mb-3">
+                                    <div id="workload-dept-chart-active" style="min-height: 300px;"></div>
+                                </div>
+                                <div class="col-12">
+                                    <div v-for="(item, idx) in activeWorkloadDept.byKind" :key="item.kind"
+                                         class="d-flex justify-content-between align-items-center py-2"
+                                         :class="{ 'border-bottom': idx < activeWorkloadDept.byKind.length - 1 }">
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="badge" :class="getTaskKindBadgeClass(item.kind)">{{ getTaskKindLabel(item.kind) }}</span>
+                                            <small class="text-muted">{{ item.count }}<span data-i18n="件">件</span></small>
+                                        </div>
+                                        <span class="fw-semibold text-nowrap">
+                                            {{ formatTotalWorkload(item.hours) }}
+                                            <small class="text-muted ms-1">({{ formatWorkloadPercent(item.hours, activeWorkloadDept.totalWorkload) }})</small>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div v-else class="text-center text-muted py-3">
+                                <span data-i18n="タスクがありません">タスクがありません</span>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             </div>
         </div>
@@ -2874,8 +2873,15 @@ $view->footing();
     /* 案件依頼: one card per project */
     .child-project-cards {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 1rem;
+    }
+    /* 3 columns by default; fewer only on narrow screens */
+    @media (max-width: 991.98px) {
+        .child-project-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 575.98px) {
+        .child-project-cards { grid-template-columns: minmax(0, 1fr); }
     }
     .child-project-card {
         display: flex;
