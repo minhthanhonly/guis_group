@@ -969,7 +969,9 @@ if($_SESSION['show_project'] == 0){
                         <form v-else @submit.prevent="saveNote">
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="内容">内容</span></label>
-                                <div class="custom_editor">
+                                <!-- 背景色 tints the editor: class on this wrapper, not on the Quill node, because Vue
+                                     rewriting that node's class list would drop Quill's own ql-container classes -->
+                                <div class="custom_editor note-editor-tinted" :class="'note-bg-' + (editingNote.bg_color || 'default')">
                                     <!-- Dynamic attribute on purpose: a fully static node is hoisted by Vue and
                                          re-created by cloning the last mounted one, which still holds the previous
                                          note's Quill markup — メモを追加 would then open with that note's text. -->
@@ -1420,6 +1422,21 @@ $view->footing();
 [data-bs-theme="dark"] .note-bg-blossom { --note-bg: #6c394f; --note-fg: #e8eaed; }
 [data-bs-theme="dark"] .note-bg-clay    { --note-bg: #4b443a; --note-fg: #e8eaed; }
 [data-bs-theme="dark"] .note-bg-chalk   { --note-bg: #232427; --note-fg: #e8eaed; }
+
+/* Note modal editor takes the selected 背景色 */
+.note-editor-tinted .ql-container {
+    background: var(--note-bg, transparent);
+    color: var(--note-fg, inherit);
+    transition: background-color 0.15s ease;
+}
+/* the theme's editor.css paints .ql-snow .ql-editor with --bs-paper-bg, which would cover the tint */
+.note-editor-tinted .ql-snow .ql-editor {
+    background: transparent;
+}
+.note-editor-tinted .ql-editor.ql-blank::before {
+    color: currentColor;
+    opacity: 0.55;
+}
 
 /* Colour swatches in the note modal */
 .note-color-swatches {
