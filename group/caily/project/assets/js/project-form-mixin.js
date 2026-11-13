@@ -2526,10 +2526,13 @@
                     formData.append('end_date', this.toAPIDate(this.project.end_date));
                     formData.append('actual_end_date', this.toAPIDate(this.project.actual_end_date) || '');
                     formData.append('tantou', this.project.tantou || '');
-                    formData.append('caily_nouki', this.toAPIDate(this.project.caily_nouki) || '');
-                    formData.append('guis_nouki', this.toAPIDate(this.project.guis_nouki) || '');
-                    formData.append('caily_nouki_status', this.project.caily_nouki_status || '');
-                    formData.append('guis_nouki_status', this.project.guis_nouki_status || '');
+                    // Hidden for 省エネ departments: not sent, so stored values stay as they are
+                    if (!this.isEnergyDepartmentProject) {
+                        formData.append('caily_nouki', this.toAPIDate(this.project.caily_nouki) || '');
+                        formData.append('guis_nouki', this.toAPIDate(this.project.guis_nouki) || '');
+                        formData.append('caily_nouki_status', this.project.caily_nouki_status || '');
+                        formData.append('guis_nouki_status', this.project.guis_nouki_status || '');
+                    }
                     const yoteiPayload = this.getYoteiPayloadForSave();
                     formData.append('yotei', yoteiPayload ? JSON.stringify(yoteiPayload) : '');
                     formData.append('project_order_type', this.project.project_order_type);
@@ -2900,6 +2903,8 @@
              * that have a value; the edit dialog shows every field.
              */
             showField(key) {
+                // 省エネ departments do not use CAILY納期 / GUIS納期 (page and form)
+                if ((key === 'caily' || key === 'guis') && this.isEnergyDepartmentProject) return false;
                 if (this.isEditMode || !this.project) return true;
                 const p = this.project;
                 switch (key) {
@@ -3202,6 +3207,8 @@
                 this.syncCustomFieldDatePickers();
             },
             validateProjectNoukiFields() {
+                // 省エネ departments do not use the 納期 fields
+                if (this.isEnergyDepartmentProject) return true;
                 const errors = this.validationErrors;
                 let isValid = true;
                 // 省エネ departments do not use 担当 (hidden), so no 納期 becomes mandatory because of it
