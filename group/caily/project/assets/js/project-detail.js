@@ -1156,6 +1156,14 @@ const vueApp = createApp({
     },
     methods: {
         /** 編集: the project is edited in the shared form dialog (project-form-modal.js); this page stays read-only. */
+        /** A project row (e.g. one of the same building) that belongs to a 省エネ department. */
+        isEnergyDepartmentRow(row) {
+            const name = String((row && row.department_name) || '').trim();
+            if (window.EnergyDrawingShare && typeof window.EnergyDrawingShare.isEnergyDepartmentName === 'function') {
+                return window.EnergyDrawingShare.isEnergyDepartmentName(name);
+            }
+            return name.indexOf('省エネ') !== -1;
+        },
         openEditForm() {
             if (!this.canEditProject) {
                 showMessage('管理者のみプロジェクトを編集できます。', true);

@@ -422,7 +422,14 @@
                     var el = document.getElementById(MODAL_ID);
                     if (!el || typeof bootstrap === 'undefined') return;
                     var instance = bootstrap.Modal.getInstance(el);
-                    if (instance) instance.hide();
+                    if (!instance) return;
+                    // Bootstrap ignores hide() while the dialog is still fading in (a refused or
+                    // failed open can come back that fast): close it as soon as it is shown.
+                    if (instance._isTransitioning && instance._isShown) {
+                        el.addEventListener('shown.bs.modal', function () { instance.hide(); }, { once: true });
+                        return;
+                    }
+                    instance.hide();
                 }
             }
         });

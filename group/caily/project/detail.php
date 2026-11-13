@@ -491,7 +491,8 @@ if($_SESSION['show_project'] == 0){
                                 </span>
                             </div>
                             <div class="small">
-                                <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                <!-- 省エネ departments do not use CAILY納期 / GUIS納期 -->
+                                <div v-if="!isEnergyDepartmentRow(sibling)" class="d-flex flex-wrap align-items-center gap-1 mb-1">
                                     <span class="text-muted" data-i18n="CAILY納期">CAILY納期</span>
                                     <span v-if="sibling.caily_nouki"
                                           :data-time="sibling.caily_nouki"
@@ -510,7 +511,7 @@ if($_SESSION['show_project'] == 0){
                                     </span>
                                 </div>
                                 <template v-if="canViewEndDate">
-                                    <div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+                                    <div v-if="!isEnergyDepartmentRow(sibling)" class="d-flex flex-wrap align-items-center gap-1 mb-1">
                                         <span class="text-muted" data-i18n="GUIS納期">GUIS納期</span>
                                         <span v-if="sibling.guis_nouki"
                                               :data-time="sibling.guis_nouki"

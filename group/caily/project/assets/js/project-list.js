@@ -405,7 +405,7 @@ var projectTable;
         confirmation_notes_caily: '入力注意点項目'
     };
     /** Columns 省エネ departments do not use: never shown on that tab, not offered in 列の表示. */
-    var ENERGY_HIDDEN_COLUMN_KEYS = { teams: true, members: true };
+    var ENERGY_HIDDEN_COLUMN_KEYS = { teams: true, members: true, caily_nouki: true, guis_nouki: true };
 
     function getProjectBaseColumnLabel(col) {
         if (!col) return '';
@@ -6671,6 +6671,10 @@ var projectTable;
                     name: 'caily_nouki',
                     data: 'caily_nouki',
                     render: function(data, type, row) {
+                        // 省エネ departments do not use CAILY納期 (rows of other tabs, e.g. a mixed list)
+                        if (isEnergyDepartmentProjectRow(row)) {
+                            return type === 'display' ? '<span class="text-muted">-</span>' : '';
+                        }
                         // Luôn tính statusBadge trước (từ row), kể cả khi caily_nouki rỗng → vẫn hiện 納品済み
                         var statusBadge = '';
                         var isDelivered = false;
@@ -6734,6 +6738,10 @@ var projectTable;
                     name: 'guis_nouki',
                     data: 'guis_nouki',
                     render: function(data, type, row) {
+                        // 省エネ departments do not use GUIS納期
+                        if (isEnergyDepartmentProjectRow(row)) {
+                            return type === 'display' ? '<span class="text-muted">-</span>' : '';
+                        }
                         // Luôn tính statusBadge trước (từ row), kể cả khi guis_nouki rỗng → vẫn hiện 納品済み
                         var statusBadge = '';
                         var isDelivered = false;
@@ -7916,12 +7924,14 @@ var projectTable;
                             var stLabel = tLabel(st.name);
                             var dept = String(c.department_name || '').trim() || '-';
                             var childUrl = 'detail.php?id=' + encodeURIComponent(c.id);
+                            // 省エネ departments do not use the 納期 fields
+                            var childIsEnergy = isEnergyDepartmentProjectRow({ department_name: dept });
                             html += '<tr>';
                             html += '<td class="text-nowrap text-start"><a href="' + childUrl + '" class="text-decoration-none">' + escapeHtmlForNote(dept) + '</a></td>';
                             html += '<td class="text-start"><span class="badge bg-' + escapeHtmlForNote(st.color) + '" style="font-size:0.65rem;">' + escapeHtmlForNote(stLabel) + '</span></td>';
-                            html += '<td class="text-nowrap text-start">' + escapeHtmlForNote(formatNoukiDate(c.caily_nouki)) + '</td>';
+                            html += '<td class="text-nowrap text-start">' + escapeHtmlForNote(childIsEnergy ? '-' : formatNoukiDate(c.caily_nouki)) + '</td>';
                             if (showGuisNouki) {
-                                html += '<td class="text-nowrap text-start">' + escapeHtmlForNote(formatNoukiDate(c.guis_nouki)) + '</td>';
+                                html += '<td class="text-nowrap text-start">' + escapeHtmlForNote(childIsEnergy ? '-' : formatNoukiDate(c.guis_nouki)) + '</td>';
                             }
                             html += '</tr>';
                         });
