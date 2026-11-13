@@ -1,5 +1,5 @@
 <?php
-define('APP_VERSION', '2.3.37');
+define('APP_VERSION', '2.3.38');
 define('CACHE_VERSION', APP_VERSION);
 define('PROJECT_CACHE_VERSION', '1.6.44');
 define('STATS_CACHE_VERSION', '1.0.30');

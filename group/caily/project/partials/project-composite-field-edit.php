@@ -14,7 +14,7 @@
     </template>
     <template v-else>
         <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
-            <input class="form-check-input" type="radio" :name="'custom_composite_radio_' + field.label" :value="opt" v-model="field.value">
+            <input class="form-check-input" type="checkbox" :value="opt" :checked="field.value === opt" @change="field.value = $event.target.checked ? opt : ''">
             <label class="form-check-label">{{ opt }}</label>
         </div>
     </template>
