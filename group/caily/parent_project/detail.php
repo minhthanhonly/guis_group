@@ -319,77 +319,42 @@ $view->heading('建物詳細');
                     </div>
                 </div>
                 <div class="card-body">
-                    <div v-if="childProjects.length > 0" class="table-responsive">
-                        <table class="table table-hover table-sm" id="childProjectsTable">
-                            <thead>
-                                <tr>
-                                    <th class="text-center col-fav"><i class="fa fa-star text-muted" title="お気に入り"></i></th>
-                                    <th class="col-id"><span data-i18n="ID">ID</span></th>
-                                    <th class="col-order-type"><span data-i18n="受注形態">受注形態</span></th>
-                                    <th class="col-name"><span data-i18n="案件名">案件名</span></th>
-                                    <th class="col-desc"><span data-i18n="説明">説明</span></th>
-                                    <th class="col-receiver"><span data-i18n="GUIS受付者">GUIS受付者</span></th>
-                                    <th class="col-dept"><span data-i18n="部署">部署</span></th>
-                                    <th class="col-manager"><span data-i18n="管理">管理</span></th>
-                                    <th class="col-tantou"><span>担当</span></th>
-                                    <th class="col-yotei"><span data-i18n="予定工程">予定工程</span></th>
-                                    <th class="col-date"><span data-i18n="開始日">開始日</span></th>
-                                    <th class="col-date"><span>CAILY納期</span></th>
-                                    <th v-if="canViewEndDate" class="col-date"><span>GUIS納期</span></th>
-                                    <th v-if="canViewEndDate" class="col-date"><span data-i18n="期限日">期限日</span></th>
-                                    <th class="col-status"><span data-i18n="ステータス">ステータス</span></th>
-                                    <th class="col-progress text-center"><span data-i18n="進捗">進捗</span></th>
-                                    <th v-if="canViewBusinessDocuments" class="col-payment"><span data-i18n="決済情報">決済情報</span></th>
-                                    <th class="col-actions text-center"><span data-i18n="操作">操作</span></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr v-for="project in childProjects" :key="project.id"
-                                    :class="{ 'table-active': selectedChildProjectIds.includes(project.id) }"
-                                    @contextmenu.prevent="onChildProjectContextMenu($event, project)">
-                                    <td class="text-center col-fav">
-                                        <i class="fa fa-star" 
-                                           :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
-                                           style="cursor: pointer;"
-                                           @click="toggleProjectFavorite(project)"
-                                           :title="project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
-                                    </td>
-                                    <td class="col-id"><a :href="'../project/detail.php?id=' + project.id" class="text-decoration-none"><span class="badge bg-primary border me-1">{{ project.id || '-' }}</span></a></td>
-                                    <td class="col-order-type">
-                                        <span
-                                            v-if="project.project_order_type && project.project_order_type.split(',').length > 0">
-                                            <span v-for="item in project.project_order_type.split(',')"
-                                                :key="item.trim()" class="badge me-1" :class="getOrderTypeBadgeClass(item.trim())">{{ item.trim() }}</span>
+                    <!-- One card per project: caption / value rows, only the fields that have a value -->
+                    <div v-if="childProjects.length > 0" class="child-project-cards" id="childProjectCards">
+                        <div class="child-project-card" v-for="project in childProjects" :key="project.id"
+                             :class="{ 'is-selected': selectedChildProjectIds.includes(project.id), 'is-cancelled': project.status === 'cancelled' }"
+                             @contextmenu.prevent="onChildProjectContextMenu($event, project)">
+                            <div class="cp-head">
+                                <div class="cp-title">
+                                    <i class="fa fa-star cp-fav"
+                                       :class="project.is_favorite == 1 ? 'text-warning' : 'text-muted'"
+                                       @click="toggleProjectFavorite(project)"
+                                       :title="project.is_favorite == 1 ? 'お気に入りから削除' : 'お気に入りに追加'"></i>
+                                    <a :href="'../project/detail.php?id=' + project.id" class="text-decoration-none"><span class="badge bg-primary">#{{ project.id }}</span></a>
+                                    <template v-if="project.project_order_type">
+                                        <span v-for="item in project.project_order_type.split(',').map(v => v.trim()).filter(Boolean)" :key="item" class="badge" :class="getOrderTypeBadgeClass(item)">{{ item }}</span>
+                                    </template>
+                                    <a :href="'../project/detail.php?id=' + project.id" class="cp-name text-decoration-none">{{ project.name }}</a>
+                                </div>
+                                <div class="cp-state">
+                                    <span class="badge" :class="getProjectStatusBadgeClass(project.status)">{{ getProjectStatusLabel(project.status) }}</span>
+                                    <span class="fw-bold" v-if="mapDepartmentNameToRequestType(project.department_name) !== '省エネ'">{{ project.progress }}%</span>
+                                </div>
+                            </div>
+                            <div class="cp-body">
+                                <div class="cp-row">
+                                    <div class="cp-label"><span data-i18n="部署">部署</span></div>
+                                    <div class="cp-value d-flex flex-wrap align-items-center gap-1">
+                                        <span>{{ project.department_name || '-' }}</span>
+                                        <span v-if="shouldShowEnergyDrawingShareBadge(project)" class="badge" :class="getEnergyDrawingShareBadgeClass(project)"
+                                              :title="getEnergyDrawingShareLabel(project)">
+                                            <span data-i18n="省エネ図面">省エネ図面</span>: {{ getEnergyDrawingShareLabel(project) }}
                                         </span>
-                                        <span v-else>-</span>
-                                    </td>
-                                    <td class="col-name">
-                                        <a :href="'../project/detail.php?id=' + project.id"
-                                            class="text-decoration-none">
-                                            {{ project.name }}
-                                        </a>
-                                        
-                                        <div v-if="mapDepartmentNameToRequestType(project.department_name)" class="mt-1">
-                                            <span class="badge" :class="getParentRequestBadgeClass(mapDepartmentNameToRequestType(project.department_name))">
-                                                {{ mapDepartmentNameToRequestType(project.department_name) }}
-                                            </span>
-                                        </div>
-                                        <div v-if="shouldShowEnergyDrawingShareBadge(project)" class="mt-1">
-                                            <span class="badge" :class="getEnergyDrawingShareBadgeClass(project)"
-                                                  :title="getEnergyDrawingShareLabel(project)">
-                                                <span data-i18n="省エネ図面">省エネ図面</span>: {{ getEnergyDrawingShareLabel(project) }}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td class="col-desc"
-                                        :title="project.description ? getDescriptionPlainText(project.description) : ''">
-                                        <span :class="{ 'text-muted': !project.description }">
-                                            {{ formatDescriptionPreview(project.description) }}
-                                        </span>
-                                    </td>
-                                    <td class="col-receiver">{{ getChildProjectGuisReceiverDisplay(project) }}</td>
-                                    <td class="col-dept">{{ project.department_name || '-' }}</td>
-                                    <td class="col-manager">
+                                    </div>
+                                </div>
+                                <div class="cp-row" v-if="project.manager_id && project.manager_id.split('|').filter(m => m.trim() !== '').length > 0">
+                                    <div class="cp-label"><span data-i18n="管理">管理</span></div>
+                                    <div class="cp-value">
                                         <div class="d-flex align-items-center" v-if="project.manager_id && project.manager_id.split('|').filter(m => m.trim() !== '').length > 0">
                                             <template v-for="(manager, index) in project.manager_id.split('|').filter(m => m.trim() !== '')" :key="manager">
                                                 <div v-if="index < 1" 
@@ -417,50 +382,44 @@ $view->heading('建物詳細');
                                             </span>
                                         </div>
                                         <span v-else class="text-muted">-</span>
-                                    </td>
-                                    <td class="col-tantou">{{ project.tantou || '-' }}</td>
-                                    <td class="col-yotei">
-                                        <span v-if="formatYoteiDisplay(project.yotei)">{{ formatYoteiDisplay(project.yotei) }}</span>
-                                        <span v-else class="text-muted">-</span>
-                                    </td>
-                                    <td class="col-date">
-                                        <span v-if="project.start_date" :data-time="project.start_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.start_date)">
-                                            <span class="d-block">{{ formatDateTimeDatePart(project.start_date) }}</span>
-                                            <span class="d-block">{{ formatDateTimeTimePart(project.start_date) }}</span>
-                                        </span>
-                                        <span v-else class="text-muted">-</span>
-                                    </td>
-                                    <td class="col-date">
-                                        <span v-if="project.caily_nouki" :data-time="project.caily_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.caily_nouki)">
-                                            <span class="d-block">{{ formatDateTimeDatePart(project.caily_nouki) }}</span>
-                                            <span class="d-block">{{ formatDateTimeTimePart(project.caily_nouki) }}</span>
-                                        </span>
-                                        <span v-else class="text-muted">-</span>
-                                    </td>
-                                    <td v-if="canViewEndDate" class="col-date">
-                                        <span v-if="project.guis_nouki" :data-time="project.guis_nouki" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)">
-                                            <span class="d-block">{{ formatDateTimeDatePart(project.guis_nouki) }}</span>
-                                            <span class="d-block">{{ formatDateTimeTimePart(project.guis_nouki) }}</span>
-                                        </span>
-                                        <span v-else class="text-muted">-</span>
-                                    </td>
-                                   
-                                    <td v-if="canViewEndDate" class="col-date">
-                                        <span v-if="project.end_date" :data-time="project.end_date" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.end_date)">
-                                            <span class="d-block">{{ formatDateTimeDatePart(project.end_date) }}</span>
-                                            <span class="d-block">{{ formatDateTimeTimePart(project.end_date) }}</span>
-                                        </span>
-                                        <span v-else class="text-muted">-</span>
-                                    </td>
-                                    <td class="col-status">
-                                        <span class="badge" :class="getProjectStatusBadgeClass(project.status)">
-                                            {{ getProjectStatusLabel(project.status) }}
-                                        </span>
-                                    </td>
-                                    <td class="col-progress text-center">
-                                        <span class="fw-bold">{{ project.progress }}%</span>
-                                    </td>
-                                    <td v-if="canViewBusinessDocuments" class="col-payment">
+                                    </div>
+                                </div>
+                                <div class="cp-row" v-if="project.tantou && mapDepartmentNameToRequestType(project.department_name) !== '省エネ'">
+                                    <div class="cp-label"><span>担当</span></div>
+                                    <div class="cp-value">{{ project.tantou }}</div>
+                                </div>
+                                <div class="cp-row" v-if="getChildProjectGuisReceiverDisplay(project) && getChildProjectGuisReceiverDisplay(project) !== '-'">
+                                    <div class="cp-label"><span data-i18n="GUIS受付者">GUIS受付者</span></div>
+                                    <div class="cp-value">{{ getChildProjectGuisReceiverDisplay(project) }}</div>
+                                </div>
+                                <div class="cp-row" v-if="formatYoteiDisplay(project.yotei)">
+                                    <div class="cp-label"><span data-i18n="予定工程">予定工程</span></div>
+                                    <div class="cp-value">{{ formatYoteiDisplay(project.yotei) }}</div>
+                                </div>
+                                <div class="cp-row" v-if="project.start_date">
+                                    <div class="cp-label"><span data-i18n="開始日">開始日</span></div>
+                                    <div class="cp-value" :data-time="project.start_date">{{ formatDateTimeDatePart(project.start_date) }} {{ formatDateTimeTimePart(project.start_date) }}</div>
+                                </div>
+                                <!-- 省エネ departments do not use CAILY納期 / GUIS納期 -->
+                                <div class="cp-row" v-if="mapDepartmentNameToRequestType(project.department_name) !== '省エネ' && project.caily_nouki">
+                                    <div class="cp-label"><span>CAILY納期</span></div>
+                                    <div class="cp-value" :data-time="project.caily_nouki">{{ formatDateTimeDatePart(project.caily_nouki) }} {{ formatDateTimeTimePart(project.caily_nouki) }}</div>
+                                </div>
+                                <div class="cp-row" v-if="canViewEndDate && mapDepartmentNameToRequestType(project.department_name) !== '省エネ' && project.guis_nouki">
+                                    <div class="cp-label"><span>GUIS納期</span></div>
+                                    <div class="cp-value" :data-time="project.guis_nouki">{{ formatDateTimeDatePart(project.guis_nouki) }} {{ formatDateTimeTimePart(project.guis_nouki) }}</div>
+                                </div>
+                                <div class="cp-row" v-if="canViewEndDate && project.end_date">
+                                    <div class="cp-label"><span data-i18n="期限日">期限日</span></div>
+                                    <div class="cp-value" :data-time="project.end_date">{{ formatDateTimeDatePart(project.end_date) }} {{ formatDateTimeTimePart(project.end_date) }}</div>
+                                </div>
+                                <div class="cp-row" v-if="project.description && getDescriptionPlainText(project.description)">
+                                    <div class="cp-label"><span data-i18n="説明">説明</span></div>
+                                    <div class="cp-value cp-desc" :title="getDescriptionPlainText(project.description)">{{ formatDescriptionPreview(project.description, 120) }}</div>
+                                </div>
+                                <div class="cp-row" v-if="canViewBusinessDocuments && getChildProjectPaymentLines(project).length">
+                                    <div class="cp-label"><span data-i18n="決済情報">決済情報</span></div>
+                                    <div class="cp-value">
                                         <div v-for="line in getChildProjectPaymentLines(project)" :key="line.key"
                                              class="d-flex justify-content-between align-items-center gap-2 small mb-1">
                                             <span class="d-flex align-items-center gap-1 flex-wrap">
@@ -469,56 +428,51 @@ $view->heading('建物詳細');
                                             </span>
                                             <span class="fw-semibold text-nowrap">{{ formatPrice(line.amount) }}</span>
                                         </div>
-                                    </td>
-                                    <td class="text-center col-actions">
-                                        <div class="d-flex flex-column gap-1 align-items-center">
-                                            <div class="d-flex gap-1">
-                                                <a :href="'../project/detail.php?id=' + project.id" class="btn btn-sm btn-outline-primary"
-                                                   title="詳細を表示">
-                                                    <i class="fa fa-eye"></i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="cp-actions">
+                                <div class="d-flex flex-column gap-1 align-items-center">
+                                    <div class="d-flex gap-1">
+                                        <a :href="'../project/detail.php?id=' + project.id" class="btn btn-sm btn-outline-primary"
+                                           title="詳細を表示">
+                                            <i class="fa fa-eye"></i>
+                                        </a>
+                                        <button v-if="canEditBusinessDocuments" type="button" class="btn btn-sm btn-outline-success"
+                                                title="決済情報" @click="openBusinessDocumentModal(project)">
+                                            <i class="fa fa-money-bill-wave"></i>
+                                        </button>
+                                    </div>
+                                    <div class="dropdown">
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="fa fa-ellipsis-v"></i>
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li v-if="canEditBusinessDocuments">
+                                                <a class="dropdown-item" href="javascript:void(0);" @click.prevent="openBusinessDocumentModal(project)">
+                                                    <i class="fa fa-file-invoice me-1"></i> <span data-i18n="決済情報">決済情報</span>
                                                 </a>
-                                                <button v-if="canEditBusinessDocuments" type="button" class="btn btn-sm btn-outline-success"
-                                                        title="決済情報" @click="openBusinessDocumentModal(project)">
-                                                    <i class="fa fa-money-bill-wave"></i>
-                                                </button>
-                                            </div>
-                                            <div class="dropdown">
-                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                                    <i class="fa fa-ellipsis-v"></i>
-                                                </button>
-                                                <ul class="dropdown-menu dropdown-menu-end">
-                                                    <li v-if="canEditBusinessDocuments">
-                                                        <a class="dropdown-item" href="javascript:void(0);" @click.prevent="openBusinessDocumentModal(project)">
-                                                            <i class="fa fa-file-invoice me-1"></i> <span data-i18n="決済情報">決済情報</span>
-                                                        </a>
-                                                    </li>
-                                                    <li v-if="canEditChildProject(project)">
-                                                        <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showEditChildProjectModal(project)">
-                                                            <i class="fa fa-edit me-1"></i> 編集
-                                                        </a>
-                                                    </li>
-                                                    <li>
-                                                        <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showChildProjectLogs(project)">
-                                                            <i class="fa fa-history me-1"></i> ログ
-                                                        </a>
-                                                    </li>
-                                                    <li v-if="canDeleteChildProject(project) && project.status !== 'cancelled'">
-                                                        <a class="dropdown-item text-danger" href="javascript:void(0);" @click.prevent="cancelChildProject(project)">
-                                                            <i class="fa fa-trash me-1"></i> 削除
-                                                        </a>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                        </div>
-                                    </td>
-                                </tr>
-                                <tr v-if="childProjects.length === 0">
-                                    <td colspan="18" class="text-center text-muted py-4">
-                                        案件依頼がありません
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                                            </li>
+                                            <li v-if="canEditChildProject(project)">
+                                                <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showEditChildProjectModal(project)">
+                                                    <i class="fa fa-edit me-1"></i> 編集
+                                                </a>
+                                            </li>
+                                            <li>
+                                                <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showChildProjectLogs(project)">
+                                                    <i class="fa fa-history me-1"></i> ログ
+                                                </a>
+                                            </li>
+                                            <li v-if="canDeleteChildProject(project) && project.status !== 'cancelled'">
+                                                <a class="dropdown-item text-danger" href="javascript:void(0);" @click.prevent="cancelChildProject(project)">
+                                                    <i class="fa fa-trash me-1"></i> 削除
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     <div v-else class="text-center py-4">
                         <div class="text-muted">
@@ -3061,60 +3015,71 @@ $view->footing();
         font-size: 0.75rem;
         padding: 0.35em 0.65em;
     }
-    #childProjectsTable {
-        font-size: 0.8125rem;
-        table-layout: auto;
-        width: 100%;
-        min-width: 1280px;
+    /* 案件依頼: one card per project */
+    .child-project-cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+        gap: 1rem;
     }
-    #childProjectsTable td,
-    #childProjectsTable th {
-        padding: 0.35rem 0.4rem;
-        vertical-align: middle;
-        border: 1px solid #ccc;
-        white-space: nowrap;
+    .child-project-card {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.5rem;
+        background: var(--bs-body-bg);
+        overflow: hidden;
     }
-    #childProjectsTable .col-fav { width: 36px; min-width: 36px; text-align: center; }
-    #childProjectsTable .col-id { width: 46px; min-width: 46px; }
-    #childProjectsTable .col-order-type { width: 60px; min-width: 60px; }
-    #childProjectsTable .col-name {
-        min-width: 160px;
-        max-width: 220px;
-        white-space: normal;
+    .child-project-card.is-selected { border-color: var(--bs-primary); }
+    .child-project-card.is-cancelled { opacity: 0.65; }
+    .child-project-card .cp-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.75rem;
+        padding: 0.6rem 0.75rem;
+        background: color-mix(in srgb, var(--bs-primary) 6%, transparent);
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+    .child-project-card .cp-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.35rem;
+        min-width: 0;
+    }
+    .child-project-card .cp-name {
+        flex: 1 1 100%;
+        font-weight: 700;
+        font-size: 1rem;
         word-break: break-word;
     }
-    #childProjectsTable .col-desc {
-        min-width: 120px;
-        max-width: 180px;
-        white-space: normal;
-        word-break: break-word;
+    .child-project-card .cp-fav { cursor: pointer; }
+    .child-project-card .cp-state {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
     }
-    #childProjectsTable .col-receiver { min-width: 90px; max-width: 110px; }
-    #childProjectsTable .col-dept { min-width: 88px; max-width: 120px; white-space: normal; }
-    #childProjectsTable .col-manager { width: 56px; min-width: 56px; }
-    #childProjectsTable .col-tantou { min-width: 64px; max-width: 90px; }
-    #childProjectsTable .col-yotei { min-width: 96px; max-width: 120px; white-space: normal; }
-    #childProjectsTable .col-date { width: 78px; min-width: 78px; }
-    #childProjectsTable .col-status { min-width: 88px; }
-    #childProjectsTable .col-progress { width: 52px; min-width: 52px; }
-    #childProjectsTable .col-payment {
-        min-width: 150px;
-        max-width: 190px;
-        white-space: normal;
+    .child-project-card .cp-body { flex: 1 1 auto; }
+    .child-project-card .cp-row {
+        display: grid;
+        grid-template-columns: 7rem minmax(0, 1fr);
+        column-gap: 0.75rem;
+        padding: 0.35rem 0.75rem;
+        border-bottom: 1px solid color-mix(in srgb, currentColor 10%, transparent);
     }
-    #childProjectsTable .col-actions { width: 88px; min-width: 88px; }
-    #childProjectsTable .badge {
-        font-size: 0.7rem;
-        padding: 0.25em 0.45em;
+    .child-project-card .cp-row:last-child { border-bottom: 0; }
+    .child-project-card .cp-label { font-weight: 700; }
+    .child-project-card .cp-value { min-width: 0; word-break: break-word; }
+    .child-project-card .cp-desc { white-space: pre-line; }
+    .child-project-card .cp-actions {
+        display: flex;
+        justify-content: flex-end;
+        padding: 0.5rem 0.75rem;
+        border-top: 1px solid var(--bs-border-color);
     }
-    #childProjectsTable .btn-sm {
-        font-size: 0.7rem;
-        padding: 0.15rem 0.35rem;
-    }
-  
-    #childProjectsTable .fa-star {
-        font-size: 0.95rem;
-    }
+    /* the action block came from the table: put its two groups on one line */
+    .child-project-card .cp-actions > .d-flex { flex-direction: row !important; }
     #edit-quotation-table td,
     #edit-quotation-table th {
         padding-left: 0.25rem;

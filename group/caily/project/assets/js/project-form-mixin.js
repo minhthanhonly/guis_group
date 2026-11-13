@@ -740,6 +740,7 @@
                     '敷地求積図',
                     '確認申請書',
                     '設備仕様書',
+                    '太陽光割付図',
                     'その他'
                 ];
                 const selected = String(this.project && this.project.energy_materials ? this.project.energy_materials : '')

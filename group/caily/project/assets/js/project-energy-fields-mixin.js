@@ -16,7 +16,7 @@
 (function () {
     'use strict';
 
-    var MATERIAL_OPTIONS = ['意匠図', '設備図', '配置図', '案内図', '敷地求積図', '確認申請書', '設備仕様書', 'その他'];
+    var MATERIAL_OPTIONS = ['意匠図', '設備図', '配置図', '案内図', '敷地求積図', '確認申請書', '設備仕様書', '太陽光割付図', 'その他'];
     var OTHER_LABEL = 'その他';
     var BELS_ZEH_GRADE_OPTIONS = [
         { value: '', label: '' },
