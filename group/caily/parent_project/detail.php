@@ -131,8 +131,33 @@ $view->heading('建物詳細');
                 </div>
                 <div class="card-body">
                     <!-- One card per project: caption / value rows, only the fields that have a value -->
+                    <!-- Filters: 部署 / ステータス -->
+                    <div v-if="childProjects.length > 0" class="child-project-filters">
+                        <div class="cp-filter">
+                            <label class="form-label mb-0" for="childProjectFilterDepartment"><span data-i18n="部署">部署</span></label>
+                            <select class="form-select form-select-sm" id="childProjectFilterDepartment" v-model="childProjectFilterDepartment">
+                                <option value="" data-i18n="すべて">すべて</option>
+                                <option v-for="name in childProjectDepartmentOptions" :key="'cpf_d_' + name" :value="name">{{ name }}</option>
+                            </select>
+                        </div>
+                        <div class="cp-filter">
+                            <label class="form-label mb-0" for="childProjectFilterStatus"><span data-i18n="ステータス">ステータス</span></label>
+                            <select class="form-select form-select-sm" id="childProjectFilterStatus" v-model="childProjectFilterStatus">
+                                <option value="" data-i18n="すべて">すべて</option>
+                                <option v-for="opt in childProjectStatusOptions" :key="'cpf_s_' + opt.value" :value="opt.value">{{ opt.label }}</option>
+                            </select>
+                        </div>
+                        <button v-if="childProjectFilterDepartment || childProjectFilterStatus" type="button" class="btn btn-sm btn-outline-secondary"
+                                @click="childProjectFilterDepartment = ''; childProjectFilterStatus = ''">
+                            <i class="fa fa-times me-1"></i><span data-i18n="クリア">クリア</span>
+                        </button>
+                        <span class="small text-muted ms-auto">{{ filteredChildProjects.length }} / {{ childProjects.length }}</span>
+                    </div>
+                    <div v-if="childProjects.length > 0 && filteredChildProjects.length === 0" class="text-center text-muted py-4">
+                        <span data-i18n="条件に一致する案件依頼がありません">条件に一致する案件依頼がありません</span>
+                    </div>
                     <div v-if="childProjects.length > 0" class="child-project-cards" id="childProjectCards">
-                        <div class="child-project-card" v-for="project in childProjects" :key="project.id"
+                        <div class="child-project-card" v-for="project in filteredChildProjects" :key="project.id"
                              :class="{ 'is-selected': selectedChildProjectIds.includes(project.id), 'is-cancelled': project.status === 'cancelled' }"
                              @contextmenu.prevent="onChildProjectContextMenu($event, project)">
                             <div class="cp-head">
@@ -253,6 +278,10 @@ $view->heading('建物詳細');
                                                 title="決済情報" @click="openBusinessDocumentModal(project)">
                                             <i class="fa fa-money-bill-wave"></i>
                                         </button>
+                                        <button v-if="canEditChildProject(project)" type="button" class="btn btn-sm btn-outline-warning"
+                                                title="編集" @click="showEditChildProjectModal(project)">
+                                            <i class="fa fa-pencil-alt"></i>
+                                        </button>
                                     </div>
                                     <div class="dropdown">
                                         <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -262,11 +291,6 @@ $view->heading('建物詳細');
                                             <li v-if="canEditBusinessDocuments">
                                                 <a class="dropdown-item" href="javascript:void(0);" @click.prevent="openBusinessDocumentModal(project)">
                                                     <i class="fa fa-file-invoice me-1"></i> <span data-i18n="決済情報">決済情報</span>
-                                                </a>
-                                            </li>
-                                            <li v-if="canEditChildProject(project)">
-                                                <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showEditChildProjectModal(project)">
-                                                    <i class="fa fa-edit me-1"></i> 編集
                                                 </a>
                                             </li>
                                             <li>
@@ -2873,6 +2897,22 @@ $view->footing();
         padding: 0.35em 0.65em;
     }
     /* 案件依頼: one card per project */
+    .child-project-filters {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.5rem 1rem;
+        margin-bottom: 0.75rem;
+    }
+    .child-project-filters .cp-filter {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+    }
+    .child-project-filters .cp-filter .form-select {
+        width: auto;
+        min-width: 10rem;
+    }
     .child-project-cards {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));

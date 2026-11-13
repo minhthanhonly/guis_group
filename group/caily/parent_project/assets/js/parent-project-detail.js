@@ -410,6 +410,9 @@ createApp({
             permission: {},
             parentProject: null,
             childProjects: [],
+            // 案件依頼 filters ('' = all)
+            childProjectFilterDepartment: '',
+            childProjectFilterStatus: '',
             workloadStatsByDepartment: [],
             activeWorkloadDeptId: null,
             loadingWorkloadStats: false,
@@ -822,6 +825,36 @@ createApp({
             if (!this.permission || !this.permission.length) return false;
             return this.permission.some(function(rule) {
                 return rule.project_view_end_date == 1 || rule.project_view_end_date === '1';
+            });
+        },
+        /** 部署 choices of the 案件依頼 filter: the departments the building's projects belong to. */
+        childProjectDepartmentOptions() {
+            const seen = {};
+            const list = [];
+            (this.childProjects || []).forEach((p) => {
+                const name = String(p.department_name || '').trim();
+                if (!name || seen[name]) return;
+                seen[name] = true;
+                list.push(name);
+            });
+            return list;
+        },
+        /** ステータス choices of the 案件依頼 filter: the statuses in use, in the usual status order. */
+        childProjectStatusOptions() {
+            const used = {};
+            (this.childProjects || []).forEach((p) => { if (p.status) used[p.status] = true; });
+            const order = (this.projectStatuses || []).map(s => s.value);
+            const known = order.filter(v => used[v]);
+            const other = Object.keys(used).filter(v => order.indexOf(v) === -1);
+            return known.concat(other).map(v => ({ value: v, label: this.getProjectStatusLabel(v) }));
+        },
+        filteredChildProjects() {
+            const dept = this.childProjectFilterDepartment;
+            const status = this.childProjectFilterStatus;
+            return (this.childProjects || []).filter((p) => {
+                if (dept && String(p.department_name || '').trim() !== dept) return false;
+                if (status && p.status !== status) return false;
+                return true;
             });
         },
         parentRequestTypes() {
