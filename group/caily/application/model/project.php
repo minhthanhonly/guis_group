@@ -756,6 +756,7 @@ class Project extends ApplicationModel {
              FROM %sproject_notes n
              LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
              WHERE n.project_id IN (%s) AND n.needs_confirmation IN (1, 2)
+               AND " . $this->noteVisibilitySql('n') . "
              ORDER BY n.project_id, n.needs_confirmation,
                       is_pinned_self DESC, n.is_important DESC, n.sort_order ASC, n.created_at DESC",
             DB_PREFIX,
@@ -1625,6 +1626,7 @@ class Project extends ApplicationModel {
                  FROM {$notesTable} n
                  LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
                  WHERE n.project_id IN ({$idsList}) AND n.display_column IS NOT NULL AND TRIM(n.display_column) != ''
+                   AND " . $this->noteVisibilitySql('n') . "
                  ORDER BY is_pinned_self DESC, n.is_important DESC, n.sort_order ASC, n.created_at DESC",
                 $this->quote($sessionUserid)
             ));
@@ -2064,9 +2066,11 @@ class Project extends ApplicationModel {
                 SELECT 1 FROM %sproject_notes pn
                 WHERE pn.project_id = p.id
                   AND %s
+                  AND %s
             )",
             DB_PREFIX,
-            $notesContentWhere
+            $notesContentWhere,
+            $this->noteVisibilitySql('pn')
         );
         if ($fieldWhere === '') {
             return $notesExists;
@@ -7291,6 +7295,21 @@ class Project extends ApplicationModel {
   
 
     // Note methods
+    /** メモ公開範囲 (全員 / 案件メンバー / 自分のみ) for the session user — see ProjectNote::visibilitySql */
+    private function noteVisibilitySql($alias) {
+        require_once dirname(__FILE__) . '/projectnote.php';
+        static $schemaReady = false;
+        if (!$schemaReady) {
+            // lazy migrate: visibility / bg_color columns must exist before filtering on them
+            $schemaReady = true;
+            $noteSchema = new ProjectNote();
+            unset($noteSchema);
+        }
+        $userid = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
+        $authId = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        return ProjectNote::visibilitySql($alias, $this->quote($userid), $authId);
+    }
+
     function addNote($params = null) {
         require_once('projectnote.php');
         $noteModel = new ProjectNote();

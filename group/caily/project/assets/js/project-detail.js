@@ -733,8 +733,30 @@ const vueApp = createApp({
                 label: '',
                 labelSelect: '',
                 labelOther: '',
+                bg_color: '',
+                visibility: 'all',
                 user_id: null
             },
+            // メモボード: 背景色 palette keys (match ProjectNote::BG_COLORS) and 公開範囲
+            noteBgColorOptions: [
+                { value: '', text: 'デフォルト' },
+                { value: 'coral', text: 'コーラル' },
+                { value: 'peach', text: 'ピーチ' },
+                { value: 'sand', text: 'サンド' },
+                { value: 'mint', text: 'ミント' },
+                { value: 'sage', text: 'セージ' },
+                { value: 'fog', text: 'フォグ' },
+                { value: 'storm', text: 'ストーム' },
+                { value: 'dusk', text: 'ダスク' },
+                { value: 'blossom', text: 'ブロッサム' },
+                { value: 'clay', text: 'クレイ' },
+                { value: 'chalk', text: 'チョーク' }
+            ],
+            noteVisibilityOptions: [
+                { value: 'all', text: '全員', icon: 'fa-globe' },
+                { value: 'members', text: '案件メンバー', icon: 'fa-users' },
+                { value: 'self', text: '自分のみ', icon: 'fa-lock' }
+            ],
             _detailNotesSortable: null,
             _detailNotesSortablePending: false,
             quillNoteInstance: null,
@@ -3080,6 +3102,8 @@ const vueApp = createApp({
                 label: '',
                 labelSelect: '',
                 labelOther: '',
+                bg_color: '',
+                visibility: 'all',
                 user_id: null
             }, overrides);
         },
@@ -3135,6 +3159,8 @@ const vueApp = createApp({
                     is_pinned_self: note.is_pinned_self == 1,
                     needs_confirmation: Number(note.needs_confirmation) || 0,
                     display_column: (note.display_column != null && note.display_column !== undefined) ? String(note.display_column) : '',
+                    bg_color: note.bg_color || '',
+                    visibility: note.visibility || 'all',
                     user_id: note.user_id
                 });
                 this.applySavedLabelToEditingNote(note.label);
@@ -3160,6 +3186,16 @@ const vueApp = createApp({
             this.destroyQuillNoteEditor();
             this.editingNote = this.buildEmptyEditingNote();
             this.quillNoteContent = '';
+        },
+        noteVisibilityOption(value) {
+            var opts = this.noteVisibilityOptions;
+            return opts.find(function(o) { return o.value === value; }) || opts[0];
+        },
+        noteVisibilityLabel(value) {
+            return this.noteVisibilityOption(value).text;
+        },
+        noteVisibilityIcon(value) {
+            return this.noteVisibilityOption(value).icon;
         },
         getNoteDisplayColumnLabel(value) {
             if (!value) return '';
@@ -3200,6 +3236,8 @@ const vueApp = createApp({
                 formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
                 formData.append('display_column', this.editingNote.display_column || '');
                 formData.append('label', this.resolveNoteLabelForSave());
+                formData.append('bg_color', this.editingNote.bg_color || '');
+                formData.append('visibility', this.editingNote.visibility || 'all');
                 
                 let response;
                 if (this.editingNote.id) {

@@ -14,13 +14,86 @@ class ProjectNote extends ApplicationModel {
             'display_column' => array(),
             'label' => array(),
             'sort_order' => array(),
+            'bg_color' => array(),
+            'visibility' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
         );
         $this->connect();
         $this->ensureLabelColumn();
         $this->ensureSortOrderColumn();
+        $this->ensureBoardColumns();
         $this->ensurePersonalPinTable();
+    }
+
+    /** 背景色 palette keys (Keep style). '' = default (white). */
+    const BG_COLORS = array('coral', 'peach', 'sand', 'mint', 'sage', 'fog', 'storm', 'dusk', 'blossom', 'clay', 'chalk');
+    /** 公開範囲: all = 全員, members = 案件メンバー (+ author), self = 自分のみ */
+    const VISIBILITIES = array('all', 'members', 'self');
+
+    /**
+     * SQL condition: the note (alias $alias) is visible to the given user. No admin exception.
+     * $escapedUserid / $authId must come from the caller's session; $escapedUserid already escaped.
+     */
+    public static function visibilitySql($alias, $escapedUserid, $authId) {
+        $a = preg_replace('/[^a-z0-9_]/i', '', $alias);
+        $authId = intval($authId);
+        $cond = "COALESCE({$a}.visibility, 'all') = 'all'";
+        if ($escapedUserid !== '') {
+            $cond .= " OR {$a}.user_id = '{$escapedUserid}'";
+        }
+        if ($authId > 0) {
+            $cond .= " OR ({$a}.visibility = 'members' AND EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_members pmv"
+                . " WHERE pmv.project_id = {$a}.project_id AND pmv.user_id = '{$authId}'))";
+        }
+        return '(' . $cond . ')';
+    }
+
+    /** Visibility condition for the current session user. */
+    public function currentVisibilitySql($alias = 'n') {
+        $authId = isset($_SESSION['id']) ? intval($_SESSION['id']) : 0;
+        return self::visibilitySql($alias, $this->quote($this->currentUserid()), $authId);
+    }
+
+    private function normalizeBgColor($raw) {
+        $c = trim((string)$raw);
+        return in_array($c, self::BG_COLORS, true) ? $c : '';
+    }
+
+    private function normalizeVisibility($raw) {
+        $v = trim((string)$raw);
+        return in_array($v, self::VISIBILITIES, true) ? $v : 'all';
+    }
+
+    /** bg_color + visibility columns (メモボード) */
+    private function ensureBoardColumns() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = $this->table;
+        $rows = $this->fetchAll(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
+            . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+            . "AND COLUMN_NAME IN ('bg_color', 'visibility')"
+        );
+        $have = array();
+        foreach ((array)$rows as $r) {
+            $have[$r['COLUMN_NAME']] = true;
+        }
+        if (empty($have['bg_color'])) {
+            $this->query(
+                "ALTER TABLE `{$table}` ADD COLUMN `bg_color` varchar(20) DEFAULT NULL "
+                . "COMMENT 'メモ背景色' AFTER `sort_order`"
+            );
+        }
+        if (empty($have['visibility'])) {
+            $this->query(
+                "ALTER TABLE `{$table}` ADD COLUMN `visibility` varchar(10) NOT NULL DEFAULT 'all' "
+                . "COMMENT '公開範囲 all/members/self' AFTER `bg_color`"
+            );
+        }
     }
 
     private function personalPinTable() {
@@ -196,6 +269,8 @@ class ProjectNote extends ApplicationModel {
             'display_column' => isset($_POST['display_column']) ? trim((string)$_POST['display_column']) : '',
             'label' => isset($_POST['label']) ? $this->normalizeLabel($_POST['label']) : '',
             'sort_order' => $projectId ? $this->nextSortOrder($projectId, $needsConfirmation) : 0,
+            'bg_color' => $this->normalizeBgColor(isset($_POST['bg_color']) ? $_POST['bg_color'] : ''),
+            'visibility' => $this->normalizeVisibility(isset($_POST['visibility']) ? $_POST['visibility'] : 'all'),
             'created_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
@@ -240,6 +315,12 @@ class ProjectNote extends ApplicationModel {
             'label' => isset($_POST['label']) ? $this->normalizeLabel($_POST['label']) : '',
             'updated_at' => date('Y-m-d H:i:s')
         );
+        if (isset($_POST['bg_color'])) {
+            $data['bg_color'] = $this->normalizeBgColor($_POST['bg_color']);
+        }
+        if (isset($_POST['visibility'])) {
+            $data['visibility'] = $this->normalizeVisibility($_POST['visibility']);
+        }
         
         if (!$this->noteContentHasText($data['content'])) {
             return ['status' => 'error', 'error' => 'Content is required'];
@@ -415,10 +496,10 @@ class ProjectNote extends ApplicationModel {
 
         $placeholders = implode(',', $ids);
         $whereExtra = $needsConfirmation !== null
-            ? (' AND needs_confirmation = ' . intval($needsConfirmation))
+            ? (' AND n.needs_confirmation = ' . intval($needsConfirmation))
             : '';
         $owned = $this->fetchAll(sprintf(
-            "SELECT id FROM {$this->table} WHERE project_id = %d AND id IN (%s)%s",
+            "SELECT n.id FROM {$this->table} n WHERE n.project_id = %d AND n.id IN (%s)%s AND " . $this->currentVisibilitySql('n'),
             $projectId,
             $placeholders,
             $whereExtra
@@ -472,7 +553,7 @@ class ProjectNote extends ApplicationModel {
             FROM {$this->table} n
             LEFT JOIN " . DB_PREFIX . "user u ON n.user_id = u.userid
             LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
-            WHERE n.id = %d",
+            WHERE n.id = %d AND " . $this->currentVisibilitySql('n'),
             $this->quote($userid),
             intval($id)
         );
@@ -488,7 +569,7 @@ class ProjectNote extends ApplicationModel {
             FROM {$this->table} n
             LEFT JOIN " . DB_PREFIX . "user u ON n.user_id = u.userid
             LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
-            WHERE n.project_id = %d
+            WHERE n.project_id = %d AND " . $this->currentVisibilitySql('n') . "
             ORDER BY is_pinned_self DESC, n.is_important DESC, n.sort_order ASC, n.created_at DESC",
             $this->quote($userid),
             intval($project_id)
