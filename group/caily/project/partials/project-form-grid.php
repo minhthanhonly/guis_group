@@ -35,7 +35,7 @@
                             <div class="pd-col">
                             <div class="pd-section">
                             <div class="col-12 project-form-section">
-                                <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
+                                <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span> <span v-if="!isEditMode && inlineSaveStatus.basic === 'loading'" class="text-muted ms-1" title="保存中"><i class="fa fa-spinner fa-spin"></i></span><span v-else-if="!isEditMode && inlineSaveStatus.basic === 'saved'" class="text-success ms-1" title="保存済み"><i class="fa fa-check-circle"></i></span></h6>
                             </div>
                             <!-- 部署: chosen in the form only when creating; it decides the fields below -->
                             <div class="col-md-12" v-if="isEditMode && formCreateMode">
@@ -199,7 +199,7 @@
                             </div>
                             <div class="pd-section" v-show="showSection('schedule')">
                             <div class="col-12 project-form-section" v-show="showSection('schedule')">
-                                <h6 class="project-form-section-title"><span data-i18n="スケジュール">スケジュール</span></h6>
+                                <h6 class="project-form-section-title"><span data-i18n="スケジュール">スケジュール</span> <span v-if="!isEditMode && inlineSaveStatus.schedule === 'loading'" class="text-muted ms-1" title="保存中"><i class="fa fa-spinner fa-spin"></i></span><span v-else-if="!isEditMode && inlineSaveStatus.schedule === 'saved'" class="text-success ms-1" title="保存済み"><i class="fa fa-check-circle"></i></span></h6>
                             </div>
                             <div class="col-12" v-show="showField('yotei')">
                                 <label class="form-label"><span data-i18n="予定工程">予定工程</span></label>
@@ -330,13 +330,14 @@
                                 </div>
                             </div>
                             </div>
-                            <!-- 既定タスク状況: default tasks marked show_on_project. Read-only page only (the form dialog
+                            <!-- 既定タスク状況: default tasks marked show_on_project that exist in this project; no table when
+                                 none does. Read-only page only (the form dialog
                                  never renders this: it is always in its edit state). -->
-                            <div class="pd-section" v-if="!isEditMode && namedDefaultTaskRows && namedDefaultTaskRows.length">
+                            <div class="pd-section" v-if="!isEditMode && namedDefaultTaskRows && namedDefaultTaskRows.some(r => r.task && r.task.id)">
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="既定タスク状況">既定タスク状況</span></h6>
                             </div>
-                            <div class="col-12" v-for="row in namedDefaultTaskRows" :key="'ndt_' + row.key">
+                            <div class="col-12" v-for="row in namedDefaultTaskRows.filter(r => r.task && r.task.id)" :key="'ndt_' + row.key">
                                 <label class="form-label">
                                     <a v-if="row.task && row.task.id" class="text-reset text-decoration-none" :href="'task.php?project_id=' + project.id + '#task-' + row.task.id" title="タスクへ">{{ translateLabel(row.title) }} <i class="fa fa-arrow-up-right-from-square small text-muted"></i></a>
                                     <span v-else>{{ translateLabel(row.title) }}</span>
@@ -431,7 +432,7 @@
                             </div>
                             <div class="pd-section" v-show="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || (isEnergyDepartmentProject && showSection('energy'))">
                             <div class="col-12 project-form-section" v-if="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || (isEnergyDepartmentProject && showSection('energy'))">
-                                <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span></h6>
+                                <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span> <span v-if="!isEditMode && inlineSaveStatus.custom === 'loading'" class="text-muted ms-1" title="保存中"><i class="fa fa-spinner fa-spin"></i></span><span v-else-if="!isEditMode && inlineSaveStatus.custom === 'saved'" class="text-success ms-1" title="保存済み"><i class="fa fa-check-circle"></i></span></h6>
                             </div>
                             <?php
                             // One group of custom fields (see getCustomFieldGroup in project-form-mixin.js): its own
@@ -508,12 +509,16 @@
                                             <div class="pf-energy-composite-title">{{ translateLabel(field.label) }}</div>
                                             <?php require __DIR__ . '/project-composite-field-view.php'; ?>
                                         </div>
-                                        <!-- every other choice, ticked or not (changed in the edit dialog) -->
+                                        <!-- every other choice, ticked or not; saved on change for users who may edit -->
                                         <div class="pf-energy-plain-list">
                                             <div class="form-check mb-0" v-for="opt in getEnergyMaterialPlainOptions()" :key="'em_' + opt">
-                                                <input class="form-check-input pf-readonly-check" type="checkbox" tabindex="-1"
+                                                <input v-if="canEditProject" class="form-check-input" type="checkbox"
+                                                       :id="'pd_energy_material_' + opt" :disabled="savingEnergyMaterials"
+                                                       :checked="selectedEnergyMaterialLabels.indexOf(opt) !== -1"
+                                                       @change="onEnergyMaterialToggle(opt, $event)">
+                                                <input v-else class="form-check-input pf-readonly-check" type="checkbox" tabindex="-1"
                                                        :checked="selectedEnergyMaterialLabels.indexOf(opt) !== -1" @click.prevent>
-                                                <label class="form-check-label">{{ opt }}<span v-if="opt === 'その他' && project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
+                                                <label class="form-check-label" :for="canEditProject ? ('pd_energy_material_' + opt) : null">{{ opt }}<span v-if="opt === 'その他' && project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
                                                       class="small text-muted ms-1">({{ project.energy_materials_memo }})</span></label>
                                             </div>
                                         </div>

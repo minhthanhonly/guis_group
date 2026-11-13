@@ -1,7 +1,7 @@
 <?php
-define('APP_VERSION', '2.3.41');
+define('APP_VERSION', '2.3.42');
 define('CACHE_VERSION', APP_VERSION);
-define('PROJECT_CACHE_VERSION', '1.6.47');
+define('PROJECT_CACHE_VERSION', '1.6.49');
 define('STATS_CACHE_VERSION', '1.0.30');
 
 //セッションバージョン (変更すると全ユーザーがログアウトされます)

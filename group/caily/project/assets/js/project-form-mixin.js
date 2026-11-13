@@ -710,6 +710,11 @@
                 // Set by the shared form dialog (project-form-modal.js); always off on the detail page.
                 // formCreateMode: the form creates a project (project.id is null, 部署 is chosen in the form).
                 // formManagerOnly: a 管理 without full edit rights — the .pf-full-only fields are hidden.
+                // 省エネ向け資料 ticked on the read-only page: one save at a time
+                savingEnergyMaterials: false,
+                // Inline saves on the read-only page, per section table ('basic' | 'schedule' | 'custom'):
+                // 'loading' while saving, 'saved' for a moment after — shown as an icon in the table title
+                inlineSaveStatus: { basic: null, schedule: null, custom: null },
                 formCreateMode: false,
                 formManagerOnly: false,
                 formDepartments: [],
@@ -1443,7 +1448,7 @@
                         if (window.EnergyDrawingShare && shareAnswer) {
                             window.EnergyDrawingShare.applyEnergyDrawingShareToProject(this.project, shareAnswer);
                         }
-                        showMessage('ステータスの更新に完了しました。');
+                        this.markInlineSave('basic', 'saved');
                         // The server also changes progress / actual start date with the status
                         this.loadProject({ silent: true });
                     } else {
@@ -1535,7 +1540,7 @@
                     formData.append('priority', this.project.priority);
                     const response = await axios.post('/api/index.php?model=project&method=updatePriority', formData);
                     if (this.isQuickEditSaved(response.data)) {
-                        showMessage('優先度を更新しました。');
+                        this.markInlineSave('basic', 'saved');
                     } else {
                         showMessage('優先度の更新に失敗しました。', true);
                         this.restoreProjectAfterFailedQuickEdit();
@@ -1598,7 +1603,7 @@
                     formData.append('progress', this.project.progress);
                     const response = await axios.post('/api/index.php?model=project&method=updateProgress', formData);
                     if (this.isQuickEditSaved(response.data)) {
-                        showMessage('進捗率を更新しました。');
+                        this.markInlineSave('basic', 'saved');
                     } else {
                         showMessage('進捗率の更新に失敗しました。', true);
                         this.restoreProjectAfterFailedQuickEdit();
@@ -2433,7 +2438,7 @@
                                 this.originalProject.energy_drawing_share_note = this.project.energy_drawing_share_note;
                             }
                         }
-                        showMessage('納期状況を更新しました。');
+                        this.markInlineSave('schedule', 'saved');
                     }
 
                 } catch (e) {
@@ -2970,6 +2975,8 @@
                     case 'members': return Array.isArray(this.members) && this.members.length > 0;
                     case 'tags': return this.hasFieldValue(p.tags);
                     case 'energy_materials':
+                        // users who may edit always get the row: the choices are ticked right on the page
+                        if (this.canEditProject) return true;
                         return this.getEnergyMaterialPlainSelected().length > 0
                             || this.getEnergyMaterialCompositeFields(this.getCustomFieldsForView()).length > 0;
                     case 'energy_agency': return this.energyReviewAgencyList.length > 0;
@@ -3089,6 +3096,61 @@
                 const composite = this.getEnergyMaterialCompositeLabels();
                 return this.selectedEnergyMaterialLabels.filter(opt => composite.indexOf(opt) === -1);
             },
+            /**
+             * Feedback of an inline save in the title of its section table (the way 決済情報 does
+             * it): 'loading', 'saved' (clears itself) or null. No dialog on success.
+             */
+            markInlineSave(section, state) {
+                if (!this._inlineSaveTimers) this._inlineSaveTimers = {};
+                clearTimeout(this._inlineSaveTimers[section]);
+                this.inlineSaveStatus[section] = state || null;
+                if (state === 'saved') {
+                    this._inlineSaveTimers[section] = setTimeout(() => {
+                        this.inlineSaveStatus[section] = null;
+                    }, 2500);
+                }
+            },
+            /** Read-only page: tick / untick one plain 省エネ向け資料 choice and save it at once. */
+            async onEnergyMaterialToggle(opt, event) {
+                const box = event && event.target;
+                const checked = !!(box && box.checked);
+                const revert = () => { if (box) box.checked = !checked; };
+                if (!this.project || !this.canEditProject || this.savingEnergyMaterials) { revert(); return; }
+                const selected = String(this.project.energy_materials || '').split(',').map(v => v.trim()).filter(Boolean)
+                    .filter(v => v !== opt);
+                if (checked) selected.push(opt);
+                // keep the order of the choices; unknown stored values stay at the end
+                const order = this.energyEditMaterialOptions || [];
+                const rank = v => { const i = order.indexOf(v); return i === -1 ? order.length : i; };
+                const value = selected.slice().sort((a, b) => rank(a) - rank(b)).join(',');
+                this.savingEnergyMaterials = true;
+                this.markInlineSave('custom', 'loading');
+                try {
+                    const formData = new FormData();
+                    formData.append('id', this.project.id);
+                    formData.append('energy_materials', value);
+                    appendProjectVersionToFormData(formData, this.project);
+                    const res = await axios.post('/api/index.php?model=project&method=update', formData);
+                    if (res.data && res.data.status === 'success') {
+                        applyProjectVersionFromResponse(this.project, res.data);
+                        this.project.energy_materials = value;
+                        // the server drops その他メモ once その他 is no longer selected
+                        if (selected.indexOf('その他') === -1) this.project.energy_materials_memo = '';
+                        this.markInlineSave('custom', 'saved');
+                    } else {
+                        revert();
+                        if (handleProjectVersionConflict(res.data, () => this.loadProject())) return;
+                        showMessage((res.data && (res.data.message || res.data.error)) || '更新に失敗しました。', true);
+                    }
+                } catch (err) {
+                    console.error('Energy materials save:', err);
+                    revert();
+                    showMessage((err.response && err.response.data && err.response.data.message) || '更新に失敗しました。', true);
+                } finally {
+                    this.savingEnergyMaterials = false;
+                    if (this.inlineSaveStatus.custom === 'loading') this.markInlineSave('custom', null);
+                }
+            },
             /** On save: a composite field with a choice counts as that 資料 being selected. */
             syncEnergyMaterialFlagsFromComposite() {
                 if (!this.isEnergyDepartmentProject || !this.energyEdit || !this.energyEdit.flags) return;
@@ -3141,6 +3203,7 @@
                     if (!found) updated.push({ label: label, value: newValue });
                 });
                 this.savingCustomFieldLabel = lockKey;
+                this.markInlineSave('custom', 'loading');
                 try {
                     const formData = new FormData();
                     formData.append('id', this.project.id);
@@ -3150,7 +3213,7 @@
                     if (res.data && res.data.status === 'success') {
                         applyProjectVersionFromResponse(this.project, res.data);
                         this.project.custom_fields = JSON.stringify(updated);
-                        if (typeof showMessage === 'function') showMessage('保存しました');
+                        this.markInlineSave('custom', 'saved');
                     } else {
                         if (handleProjectVersionConflict(res.data, () => this.loadProject())) {
                             return;
@@ -3162,6 +3225,7 @@
                     showMessage(err.response?.data?.message || '更新に失敗しました。', true);
                 } finally {
                     this.savingCustomFieldLabel = null;
+                    if (this.inlineSaveStatus.custom === 'loading') this.markInlineSave('custom', null);
                 }
             },
             isCustomFieldCheckboxChecked(fieldLabel, opt) {
