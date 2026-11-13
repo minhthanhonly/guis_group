@@ -13,7 +13,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
 ?>
 <div id="parent-project-quick-modal-app" v-cloak>
     <div class="modal fade" id="editParentProjectModal" tabindex="-1" aria-labelledby="editParentProjectModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable project-form-modal">
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="editParentProjectModalLabel">
@@ -30,130 +30,45 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                     </div>
 
                     <!-- View mode (read-only) -->
-                    <div v-else-if="!isEditMode" class="row g-3">
-                        <?php $customerListViewRowDetail = true; include __DIR__ . '/customer-list-view.php'; unset($customerListViewRowDetail); ?>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
-                                <input type="text" class="form-control" :value="guisReceiverName || editingParentProject.guis_receiver || '-'" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="お施主様名">お施主様名</span></label>
-                                <input type="text" class="form-control" :value="editingParentProject.project_name || '-'" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
-                                <input type="text" class="form-control" :value="viewRequestDate || '-'" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="管理番号">管理番号</span></label>
-                                <input type="text" class="form-control" :value="editingParentProject.project_number || '-'" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
-                                <input type="text" class="form-control" :value="editingParentProject.construction_number || '-'" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
-                                <input type="text" class="form-control" :value="editingParentProject.scale || '-'" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3" v-if="editingParentProject.city">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
-                                <input type="text" class="form-control" :value="editingParentProject.city" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
-                                <input type="text" class="form-control" :value="editingParentProject.structural_office || '-'" readonly>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="種類1">種類1</span></label>
-                                <div style="min-height: 38px;">
-                                    <span v-for="item in splitList(editingParentProject.type1)" :key="'t1_' + item" class="badge bg-info me-1">{{ item }}</span>
-                                    <span v-if="splitList(editingParentProject.type1).length === 0">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="住宅種類">住宅種類</span></label>
-                                <div style="min-height: 38px;">
-                                    <span v-for="item in splitList(editingParentProject.type2)" :key="'t2_' + item" class="badge bg-info me-1">{{ item }}</span>
-                                    <span v-if="splitList(editingParentProject.type2).length === 0">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4 col-xl-3" v-if="editHasNonResidentialType">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="非住宅の主要用途">非住宅の主要用途</span></label>
-                                <div style="min-height: 38px;">{{ viewNonResidentialMainUseLabel || '-' }}</div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="依頼">依頼</span></label>
-                                <div class="d-flex flex-wrap gap-1 align-items-center">
-                                    <span v-for="item in viewRequestTypes" :key="'rq_' + item" class="badge me-1 mb-1"
-                                        :class="isRequestFulfilled(item) ? getRequestBadgeClass(item) : getRequestUnfulfilledBadgeClass(item)"
-                                        :title="isRequestFulfilled(item) ? '' : '未作成'">
-                                        <i v-if="!isRequestFulfilled(item)" class="fa fa-exclamation-triangle me-1"></i>
-                                        <i v-else class="fa fa-check me-1"></i>
-                                        {{ item }}
-                                    </span>
-                                    <span v-if="viewRequestTypes.length === 0" class="text-muted">-</span>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="お客様提供資料">お客様提供資料</span></label>
-                                <div class="row">
-                                    <div class="col-md-4" v-for="item in viewMaterials" :key="'mt_' + item">
-                                        <i class="fa fa-check text-success me-2"></i>{{ item }}
-                                        <span v-if="item === 'その他' && editingParentProject.materials_memo" class="small text-muted ms-1">({{ editingParentProject.materials_memo }})</span>
-                                    </div>
-                                    <div v-if="viewMaterials.length === 0" class="col-12"><span class="text-muted">-</span></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="mb-3">
-                                <label class="form-label"><span data-i18n="特徴">特徴</span></label>
-                                <div class="d-flex flex-wrap gap-1 align-items-center">
-                                    <span v-for="opt in viewFeatureLabels" :key="'ft_' + opt" class="badge badge-outline-primary me-1">{{ opt }}</span>
-                                    <span v-if="viewFeatureLabels.length === 0" class="text-muted">-</span>
-                                </div>
-                            </div>
+                    <div v-else-if="!isEditMode" class="project-detail-card">
+                        <div class="card-body">
+                            <?php
+                            $ppv = array(
+                                'p' => 'editingParentProject',
+                                'receiver' => '(guisReceiverName || editingParentProject.guis_receiver)',
+                                'requestDate' => 'viewRequestDate',
+                                'type1' => 'splitList(editingParentProject.type1)',
+                                'type2' => 'splitList(editingParentProject.type2)',
+                                'hasNonRes' => 'editHasNonResidentialType',
+                                'nonResLabel' => 'viewNonResidentialMainUseLabel',
+                                'requests' => 'viewRequestTypes',
+                                'reqFulfilled' => 'isRequestFulfilled',
+                                'reqBadge' => 'getRequestBadgeClass',
+                                'reqBadgeUnfulfilled' => 'getRequestUnfulfilledBadgeClass',
+                                'materials' => 'viewMaterials',
+                                'features' => 'viewFeatureLabels',
+                            );
+                            include __DIR__ . '/parent-project-view-grid.php';
+                            ?>
                         </div>
                     </div>
 
                     <!-- Edit mode -->
-                    <div v-else class="row g-3">
-                            <?php $customerListEditorAllowNew = false; include __DIR__ . '/customer-list-editor.php'; ?>
-                            <div class="col-md-4 col-xl-3">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
-                                    <select id="edit_pp_guis_receiver" class="form-select" name="edit_pp_guis_receiver">
-                                        <option value="">選択してください</option>
-                                    </select>
-                                </div>
+                    <!-- Edit mode: the same sections, in the same two columns, as the read-only view -->
+                    <div v-else class="row g-3 project-form-grid">
+                        <!-- 顧客: spans both columns -->
+                        <div class="pd-section pd-span">
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="顧客">顧客</span></h6>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <?php $customerListEditorAllowNew = false; include __DIR__ . '/customer-list-editor.php'; ?>
+                        </div>
+                        <div class="pd-col">
+                        <div class="pd-section">
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span></h6>
+                            </div>
+                            <div class="col-12">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="お施主様名">お施主様名</span> <span class="text-danger">*</span></label>
                                     <input type="text" class="form-control" v-model="editingParentProject.project_name"
@@ -161,7 +76,19 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                     <div class="invalid-feedback d-block" v-if="editParentProjectErrors.project_name">{{ editParentProjectErrors.project_name }}</div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="管理番号">管理番号</span></label>
+                                    <input type="text" class="form-control" :value="editingParentProject.project_number || '-'" readonly>
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3 form-control-validation">
+                                    <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
+                                    <input type="text" class="form-control" v-model="editingParentProject.construction_number" placeholder="工事番号を入力">
+                                </div>
+                            </div>
+                            <div class="col-12">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
                                     <div class="input-group">
@@ -173,19 +100,20 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="管理番号">管理番号</span></label>
-                                    <input type="text" class="form-control" :value="editingParentProject.project_number || '-'" readonly>
+                                    <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
+                                    <select id="edit_pp_guis_receiver" class="form-select" name="edit_pp_guis_receiver">
+                                        <option value="">選択してください</option>
+                                    </select>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
-                                <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="工事番号">工事番号</span></label>
-                                    <input type="text" class="form-control" v-model="editingParentProject.construction_number" placeholder="工事番号を入力">
-                                </div>
+                        </div>
+                        <div class="pd-section">
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="建物情報">建物情報</span></h6>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-12">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
                                     <div class="d-flex align-items-center gap-2">
@@ -196,7 +124,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-12">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
                                     <div class="d-flex align-items-center gap-2">
@@ -207,7 +135,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-12">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
                                     <div class="d-flex align-items-center gap-2">
@@ -218,7 +146,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-12">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="種類1">種類1</span></label>
                                     <div class="d-flex align-items-center gap-2">
@@ -229,7 +157,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3">
+                            <div class="col-12">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="住宅種類">住宅種類</span></label>
                                     <div class="d-flex align-items-center gap-2">
@@ -240,7 +168,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-4 col-xl-3" v-if="editHasNonResidentialType">
+                            <div class="col-12" v-if="editHasNonResidentialType">
                                 <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="非住宅の主要用途">非住宅の主要用途</span></label>
                                     <select class="form-select" v-model="editingParentProject.type3">
@@ -250,6 +178,13 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                         </option>
                                     </select>
                                 </div>
+                            </div>
+                        </div>
+                        </div>
+                        <div class="pd-col">
+                        <div class="pd-section">
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="依頼・資料">依頼・資料</span></h6>
                             </div>
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
@@ -344,6 +279,8 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
