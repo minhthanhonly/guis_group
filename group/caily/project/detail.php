@@ -408,56 +408,6 @@ if($_SESSION['show_project'] == 0){
                     </div>
                 </div>
 
-                <!-- Default tasks marked show_on_project (per department) -->
-                <div class="card mb-4" v-if="namedDefaultTaskRows.length">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">
-                            <i class="fa fa-tasks me-1"></i>
-                            <span data-i18n="既定タスク状況">既定タスク状況</span>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-md-6" v-for="row in namedDefaultTaskRows" :key="row.key">
-                                <div class="border rounded p-3 h-100">
-                                    <div class="d-flex justify-content-between align-items-center mb-2">
-                                        <span class="fw-semibold" :data-i18n="row.title">{{ row.title }}</span>
-                                        <a v-if="row.task && row.task.id"
-                                           class="small text-decoration-none"
-                                           :href="'task.php?project_id=' + project.id + '#task-' + row.task.id">
-                                            <span data-i18n="タスクへ">タスクへ</span>
-                                        </a>
-                                    </div>
-                                    <div class="small mb-1">
-                                        <span class="text-muted me-1" data-i18n="担当">担当</span>
-                                        <span>{{ (row.task && row.task.assignee_name) ? row.task.assignee_name : '-' }}</span>
-                                    </div>
-                                    <div class="mb-1">
-                                        <span class="text-muted small me-1" data-i18n="状況">状況</span>
-                                        <span class="badge" :class="getNamedDefaultTaskStatusBadgeClass(row.task && row.task.status)">
-                                            {{ getNamedDefaultTaskStatusLabel(row.task && row.task.status) }}
-                                        </span>
-                                    </div>
-                                    <div class="small mb-1">
-                                        <span class="text-muted me-1" data-i18n="期限">期限</span>
-                                        <span v-if="row.task && row.task.due_date"
-                                              :data-time="row.task.due_date"
-                                              data-bs-toggle="tooltip"
-                                              :data-bs-title="getVietnamTimeTooltip(row.task.due_date)">
-                                            {{ formatDateTime(row.task.due_date) }}
-                                        </span>
-                                        <span v-else class="text-muted">-</span>
-                                    </div>
-                                    <div class="small">
-                                        <span class="text-muted me-1" data-i18n="メモ">メモ</span>
-                                        <span class="text-break">{{ (row.task && row.task.note) ? row.task.note : '-' }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Other departments' sibling project deadlines -->
                 <div class="card mb-4" v-if="otherDepartmentSiblingProjects.length">
                     <div class="card-header">
@@ -1210,6 +1160,17 @@ $view->footing();
 .project-detail-card:not(.edit-mode) .project-detail-grid [class*="col-"] > :not(.form-label) {
     grid-column: 2;
     min-width: 0;
+}
+/* 既定タスク状況: one row per task — status, 担当, 期限 on a line, the memo under it */
+.project-detail-grid .pd-default-task {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+}
+.project-detail-grid .pd-default-task .pd-default-task-memo {
+    flex: 0 0 100%;
+    white-space: pre-wrap;
 }
 .project-detail-card:not(.edit-mode) .project-detail-grid .form-control[readonly],
 .project-detail-card:not(.edit-mode) .project-detail-grid div.form-control {

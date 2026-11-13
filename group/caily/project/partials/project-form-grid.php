@@ -330,6 +330,25 @@
                                 </div>
                             </div>
                             </div>
+                            <!-- 既定タスク状況: default tasks marked show_on_project. Read-only page only (the form dialog
+                                 never renders this: it is always in its edit state). -->
+                            <div class="pd-section" v-if="!isEditMode && namedDefaultTaskRows && namedDefaultTaskRows.length">
+                            <div class="col-12 project-form-section">
+                                <h6 class="project-form-section-title"><span data-i18n="既定タスク状況">既定タスク状況</span></h6>
+                            </div>
+                            <div class="col-12" v-for="row in namedDefaultTaskRows" :key="'ndt_' + row.key">
+                                <label class="form-label">
+                                    <a v-if="row.task && row.task.id" class="text-reset text-decoration-none" :href="'task.php?project_id=' + project.id + '#task-' + row.task.id" title="タスクへ">{{ translateLabel(row.title) }} <i class="fa fa-arrow-up-right-from-square small text-muted"></i></a>
+                                    <span v-else>{{ translateLabel(row.title) }}</span>
+                                </label>
+                                <div class="pd-default-task">
+                                    <span class="badge" :class="getNamedDefaultTaskStatusBadgeClass(row.task && row.task.status)">{{ getNamedDefaultTaskStatusLabel(row.task && row.task.status) }}</span>
+                                    <span><span class="text-muted small me-1" data-i18n="担当">担当</span>{{ (row.task && row.task.assignee_name) ? row.task.assignee_name : '-' }}</span>
+                                    <span><span class="text-muted small me-1" data-i18n="期限">期限</span>{{ (row.task && row.task.due_date) ? formatDateTime(row.task.due_date) : '-' }}</span>
+                                    <span v-if="row.task && row.task.note" class="pd-default-task-memo small text-break">{{ row.task.note }}</span>
+                                </div>
+                            </div>
+                            </div>
                             </div>
                             <div class="pd-col">
                             <div class="pd-section" v-show="showSection('team')">
@@ -410,8 +429,8 @@
                                 </div>
                             </div>
                             </div>
-                            <div class="pd-section" v-show="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || isEnergyDepartmentProject">
-                            <div class="col-12 project-form-section" v-if="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || isEnergyDepartmentProject">
+                            <div class="pd-section" v-show="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || (isEnergyDepartmentProject && showSection('energy'))">
+                            <div class="col-12 project-form-section" v-if="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || (isEnergyDepartmentProject && showSection('energy'))">
                                 <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span></h6>
                             </div>
                             <div class="col-12">
@@ -419,34 +438,14 @@
                                     <div v-if="customFields && customFields.length > 0" class="mt-3">
                                         <div class="row">
                                             <template v-for="(field, idx) in customFields" :key="idx">
-                                                <div v-if="field.type === 'textarea'" class="col-12 mb-3">
+                                                <template v-if="isEnergyMaterialCompositeField(field)"></template>
+                                                <div v-else-if="field.type === 'textarea'" class="col-12 mb-3">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <textarea class="form-control" v-model="field.value"></textarea>
                                                 </div>
-                                                <div v-else-if="field.isComposite" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
+                                                <div v-else-if="field.isComposite && !isEnergyMaterialCompositeField(field)" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <div class="d-flex flex-wrap align-items-center gap-3">
-                                                        <template v-if="isCompositeCheckboxType(field)">
-                                                            <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
-                                                                <input class="form-check-input" type="checkbox" :value="opt" v-model="field.valueArr">
-                                                                <label class="form-check-label">{{ opt }}</label>
-                                                            </div>
-                                                        </template>
-                                                        <template v-else>
-                                                            <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
-                                                                <input class="form-check-input" type="radio" :name="'custom_composite_radio_' + idx" :value="opt" v-model="field.value">
-                                                                <label class="form-check-label">{{ opt }}</label>
-                                                            </div>
-                                                        </template>
-                                                        <div v-if="isCompositeValueSelected(field) && field.supportsReceived" class="form-check form-check-inline mb-0">
-                                                            <input class="form-check-input" type="checkbox" v-model="field.receivedChecked">
-                                                            <label class="form-check-label text-nowrap">受領済み</label>
-                                                        </div>
-                                                    </div>
-                                                    <div v-if="isCompositeValueSelected(field)" class="d-flex align-items-center gap-2 mt-2" style="min-width: 8rem;">
-                                                        <span class="text-nowrap small text-muted">【メモ】</span>
-                                                        <input type="text" class="form-control form-control-sm" v-model="field.memoValue" placeholder="メモ" style="min-width:6rem;">
-                                                    </div>
+                                                    <?php require __DIR__ . '/project-composite-field-edit.php'; ?>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">
@@ -498,44 +497,14 @@
                                     <template v-if="getCustomFieldsForView().length">
                                         <div class="row">
                                             <template v-for="(field, idx) in getCustomFieldsForView()" :key="idx">
-                                                <div v-if="field.type === 'textarea'" class="col-12 mb-3">
+                                                <template v-if="isEnergyMaterialCompositeField(field)"></template>
+                                                <div v-else-if="field.type === 'textarea'" class="col-12 mb-3">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
                                                     <div class="form-control" style="min-height:80px;white-space:pre-line;">{{ field.value || '-' }}</div>
                                                 </div>
-                                                <div v-else-if="field.isComposite" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
+                                                <div v-else-if="field.isComposite && !isEnergyMaterialCompositeField(field)" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
                                                     <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <template v-if="canEditProject">
-                                                        <div class="d-flex flex-wrap align-items-center gap-3">
-                                                            <template v-if="isCompositeCheckboxType(field)">
-                                                                <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
-                                                                    <input class="form-check-input" type="checkbox" :value="opt" :checked="(field.valueArr || []).includes(opt)" @change="onCompositeCheckboxChange(field, opt, $event.target.checked)">
-                                                                    <label class="form-check-label">{{ opt }}</label>
-                                                                </div>
-                                                            </template>
-                                                            <template v-else>
-                                                                <div class="form-check form-check-inline mb-0" v-for="opt in getCompositeOptions(field)" :key="opt">
-                                                                    <input class="form-check-input" type="radio" :name="'cf_composite_'+field.label+'_'+idx" :value="opt" :checked="field.value === opt" @change="onCompositeRadioChange(field, opt)">
-                                                                    <label class="form-check-label">{{ opt }}</label>
-                                                                </div>
-                                                            </template>
-                                                            <div v-if="isCompositeValueSelected(field) && field.supportsReceived" class="form-check form-check-inline mb-0">
-                                                                <input class="form-check-input" type="checkbox" :checked="field.receivedChecked" @change="onCompositeReceivedChange(field, $event.target.checked)">
-                                                                <label class="form-check-label text-nowrap">受領済み</label>
-                                                            </div>
-                                                        </div>
-                                                        <div v-if="isCompositeValueSelected(field)" class="d-flex align-items-center gap-2 mt-2" style="min-width: 8rem;">
-                                                            <span class="text-nowrap small text-muted">【メモ】</span>
-                                                            <input type="text" class="form-control form-control-sm" :value="field.memoValue" placeholder="メモ" style="min-width:6rem;" @change="onCompositeMemoChange(field, $event.target.value)">
-                                                        </div>
-                                                    </template>
-                                                    <template v-else>
-                                                        <div class="d-flex flex-wrap align-items-center gap-2">
-                                                            <span v-if="field.value" v-for="val in String(field.value).split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ val.trim() }}</span>
-                                                            <span v-if="field.value && field.receivedChecked" class="badge bg-success me-1">受領済み</span>
-                                                            <span v-if="!field.value">-</span>
-                                                        </div>
-                                                        <div v-if="field.value && field.memoValue" class="mt-1 text-muted small">{{ field.memoValue }}</div>
-                                                    </template>
+                                                    <?php require __DIR__ . '/project-composite-field-view.php'; ?>
                                                 </div>
                                                 <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
                                                     <div class="form-label d-flex align-items-center justify-content-between gap-2">
@@ -594,11 +563,16 @@
                             <!-- 省エネ部署の案件: 省エネ向け資料 / 申請提出先の審査機関 / BELSのZEH等級
                                  (edit state: energyEdit, see assets/js/project-energy-fields-mixin.js) -->
                             <template v-if="isEnergyDepartmentProject">
-                                <div class="col-12">
+                                <div class="col-12" v-show="showField('energy_materials')">
                                     <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
                                     <template v-if="isEditMode">
+                                        <!-- 意匠図 / 設備図 / 配置図: the composite custom fields of the department, in place of plain checkboxes -->
+                                        <div class="pf-energy-composite" v-for="(field, idx) in getEnergyMaterialCompositeFields(customFields)" :key="'emc_edit_' + field.label">
+                                            <div class="pf-energy-composite-title">{{ translateLabel(field.label) }}</div>
+                                            <?php require __DIR__ . '/project-composite-field-edit.php'; ?>
+                                        </div>
                                         <div class="row">
-                                            <div class="col-md-4" v-for="opt in energyEditMaterialOptions" :key="'em_edit_' + opt">
+                                            <div class="col-md-4" v-for="opt in getEnergyMaterialPlainOptions()" :key="'em_edit_' + opt">
                                                 <div class="form-check">
                                                     <input class="form-check-input" type="checkbox"
                                                         :id="'project_energy_materials_' + opt"
@@ -612,15 +586,20 @@
                                                    placeholder="その他メモ" maxlength="500">
                                         </div>
                                     </template>
-                                    <div v-else class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
-                                        <span v-for="opt in selectedEnergyMaterialLabels" :key="'em_' + opt"
-                                              class="badge badge-outline-primary me-1">{{ opt }}</span>
-                                        <span v-if="project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
-                                              class="small text-muted ms-1">({{ project.energy_materials_memo }})</span>
-                                        <span v-if="selectedEnergyMaterialLabels.length === 0" class="text-muted">-</span>
+                                    <div v-else>
+                                        <div class="pf-energy-composite" v-for="(field, idx) in getEnergyMaterialCompositeFields(getCustomFieldsForView())" :key="'emc_view_' + field.label">
+                                            <div class="pf-energy-composite-title">{{ translateLabel(field.label) }}</div>
+                                            <?php require __DIR__ . '/project-composite-field-view.php'; ?>
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-1 align-items-center">
+                                            <span v-for="opt in getEnergyMaterialPlainSelected()" :key="'em_' + opt"
+                                                  class="badge badge-outline-primary me-1">{{ opt }}</span>
+                                            <span v-if="project.energy_materials_memo && selectedEnergyMaterialLabels.indexOf('その他') !== -1"
+                                                  class="small text-muted ms-1">({{ project.energy_materials_memo }})</span>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-6" v-show="showField('energy_agency')">
                                     <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
                                     <div v-if="isEditMode" class="d-flex align-items-center gap-2">
                                         <input type="text" class="form-control tagify" id="project_energy_review_agency_tags" name="project_energy_review_agency_tags">
@@ -632,7 +611,7 @@
                                         <span v-if="energyReviewAgencyList.length === 0" class="text-muted">-</span>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
+                                <div class="col-md-6" v-show="showField('energy_grade')">
                                     <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
                                     <select v-if="isEditMode" class="form-select" v-model="energyEdit.grade">
                                         <option v-for="opt in energyEditGradeOptions" :key="'zeh_edit_' + opt.value" :value="opt.value">

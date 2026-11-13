@@ -86,6 +86,8 @@
     }
 
     /** 設備図 / 意匠図 / 配置図: セットの選択肢のまま、値選択時に【メモ】を表示 */
+    /** 省エネ projects show these composite fields inside 省エネ向け資料, in this order. */
+    var ENERGY_MATERIAL_COMPOSITE_ORDER = ['意匠図', '設備図', '配置図'];
     var CUSTOM_FIELD_COMPOSITE_BASE_LABELS = { '設備図': true, '意匠図': true, '配置図': true };
     var CUSTOM_FIELD_COMPOSITE_RECEIVED_LABELS = { '設備図': true, '意匠図': true };
     function isCustomFieldCompositeBaseLabel(label) {
@@ -2544,6 +2546,7 @@
                     // No need to send department_custom_fields_set_id since we use all sets from department
                     formData.append('custom_fields', this.project.custom_fields);
                     formData.append('description', this.project.description || '');
+                    this.syncEnergyMaterialFlagsFromComposite();
                     this.appendEnergyFieldsToFormData(formData);
                     if (this.guisReceiverForm && this.guisReceiverForm.enabled) {
                         formData.append('guis_receiver', this.resolveGuisReceiverForSave());
@@ -2920,6 +2923,11 @@
                     case 'managers': return Array.isArray(this.managers) && this.managers.length > 0;
                     case 'members': return Array.isArray(this.members) && this.members.length > 0;
                     case 'tags': return this.hasFieldValue(p.tags);
+                    case 'energy_materials':
+                        return this.getEnergyMaterialPlainSelected().length > 0
+                            || this.getEnergyMaterialCompositeFields(this.getCustomFieldsForView()).length > 0;
+                    case 'energy_agency': return this.energyReviewAgencyList.length > 0;
+                    case 'energy_grade': return this.hasFieldValue(this.belsZehGradeLabel);
                     case 'description': {
                         const html = this.decodeHtmlEntities(p.description || '');
                         return /<img/i.test(html) || this.hasFieldValue(html.replace(/<[^>]*>/g, '').replace(/&nbsp;| /g, ' '));
@@ -2941,6 +2949,7 @@
                     }
                     case 'team': return any(energy ? ['managers'] : ['team', 'managers', 'members']);
                     case 'other': return any(['tags', 'description']);
+                    case 'energy': return energy && any(['energy_materials', 'energy_agency', 'energy_grade']);
                     default: return true;
                 }
             },
@@ -3004,6 +3013,42 @@
                 if (!isCustomFieldCompositeValueSelected(mainVal)) return;
                 field.memoValue = value != null ? String(value) : '';
                 this.updateCustomFieldValues([{ label: field.memoLabel, value: field.memoValue }]);
+            },
+            // ---- 省エネ向け資料: 意匠図 / 設備図 / 配置図 are the department's composite custom fields ----
+            /** A composite custom field of a 省エネ project that is shown inside 省エネ向け資料. */
+            isEnergyMaterialCompositeField(field) {
+                return !!(field && field.isComposite && this.isEnergyDepartmentProject
+                    && ENERGY_MATERIAL_COMPOSITE_ORDER.indexOf(String(field.label || '').trim()) !== -1);
+            },
+            /** Those fields out of a custom field list, in the order of the 省エネ向け資料 choices. */
+            getEnergyMaterialCompositeFields(fields) {
+                const list = (fields || []).filter(f => this.isEnergyMaterialCompositeField(f));
+                return list.sort((a, b) => ENERGY_MATERIAL_COMPOSITE_ORDER.indexOf(String(a.label).trim())
+                    - ENERGY_MATERIAL_COMPOSITE_ORDER.indexOf(String(b.label).trim()));
+            },
+            /** Labels the department defines as composite custom fields (so not plain checkboxes). */
+            getEnergyMaterialCompositeLabels() {
+                if (!this.isEnergyDepartmentProject) return [];
+                return this.collectCustomFieldsFromSets(this.allDepartmentCustomFieldSets)
+                    .map(f => String((f && f.label) || '').trim())
+                    .filter(label => ENERGY_MATERIAL_COMPOSITE_ORDER.indexOf(label) !== -1 && isCustomFieldCompositeBaseLabel(label));
+            },
+            /** 省エネ向け資料 choices that stay plain checkboxes in the form. */
+            getEnergyMaterialPlainOptions() {
+                const composite = this.getEnergyMaterialCompositeLabels();
+                return (this.energyEditMaterialOptions || []).filter(opt => composite.indexOf(opt) === -1);
+            },
+            /** Selected 省エネ向け資料 shown as badges on the page (the composite ones have their own lines). */
+            getEnergyMaterialPlainSelected() {
+                const composite = this.getEnergyMaterialCompositeLabels();
+                return this.selectedEnergyMaterialLabels.filter(opt => composite.indexOf(opt) === -1);
+            },
+            /** On save: a composite field with a choice counts as that 資料 being selected. */
+            syncEnergyMaterialFlagsFromComposite() {
+                if (!this.isEnergyDepartmentProject || !this.energyEdit || !this.energyEdit.flags) return;
+                this.getEnergyMaterialCompositeFields(this.customFields).forEach((field) => {
+                    this.energyEdit.flags[String(field.label).trim()] = this.isCompositeValueSelected(field);
+                });
             },
             isCompositeValueSelected(field) {
                 if (!field) return false;

@@ -1295,3 +1295,17 @@ span.avatar-initial:not(.avatar .avatar-initial) {
 .project-form-modal.pf-manager-only .project-form-grid .pf-full-only {
     display: none !important;
 }
+
+/* 省エネ向け資料: the composite fields 意匠図 / 設備図 / 配置図 listed inside the value cell */
+.project-detail-grid .pf-energy-composite,
+.project-form-grid .pf-energy-composite {
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px dashed var(--bs-border-color);
+}
+.project-detail-grid .pf-energy-composite-title,
+.project-form-grid .pf-energy-composite-title {
+    font-weight: 600;
+    font-size: 0.875rem;
+    margin-bottom: 0.25rem;
+}
