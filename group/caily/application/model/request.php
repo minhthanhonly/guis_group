@@ -854,6 +854,85 @@ class Request extends ApplicationModel {
         ];
     }
 
+    /**
+     * 部署メンバーの休暇届（今日から N 日以内）— /project/* の休暇パネル用。
+     * Returns members of the department plus their pending/approved/completed leave requests
+     * overlapping [today, today + days - 1]. Reason/note/leave type are not returned.
+     */
+    function list_department_leaves() {
+        $departmentId = isset($_GET['department_id']) ? intval($_GET['department_id']) : 0;
+        $days = isset($_GET['days']) ? intval($_GET['days']) : 14;
+        if ($days < 1) $days = 14;
+        if ($days > 60) $days = 60;
+        $result = array('success' => true, 'members' => array(), 'leaves' => array());
+        if (empty($_SESSION['userid']) || $departmentId <= 0) {
+            return $result;
+        }
+
+        $members = $this->fetchAll(sprintf(
+            "SELECT u.userid, u.realname
+             FROM %suser u
+             JOIN %suser_department ud ON u.userid = ud.userid
+             WHERE ud.department_id = %d
+               AND (u.is_suspend = 0 OR u.is_suspend IS NULL)
+             ORDER BY u.id ASC",
+            DB_PREFIX,
+            DB_PREFIX,
+            $departmentId
+        ));
+        if (!is_array($members) || !count($members)) {
+            return $result;
+        }
+        $result['members'] = $members;
+
+        $from = date('Y-m-d');
+        $to = date('Y-m-d', strtotime('+' . ($days - 1) . ' days'));
+        $realnames = array();
+        $quoted = array();
+        foreach ($members as $m) {
+            $realnames[$m['userid']] = $m['realname'];
+            $quoted[] = "'" . $this->quote($m['userid']) . "'";
+        }
+
+        $rows = $this->fetchAll(
+            "SELECT id, user_id, status, start_date, end_date, data
+             FROM {$this->table}
+             WHERE type = 'leave'
+               AND status IN ('pending', 'approved', 'completed')
+               AND user_id IN (" . implode(',', $quoted) . ")
+               AND (end_date IS NULL OR end_date >= '" . $this->quote($from) . "')
+             ORDER BY start_date ASC, id ASC"
+        );
+        foreach ((is_array($rows) ? $rows : array()) as $row) {
+            list($start, $end) = $this->resolveFormPeriodDatesPublic($row);
+            if ($start === null) {
+                continue;
+            }
+            if ($end === null || $end < $start) {
+                $end = $start;
+            }
+            if ($end < $from || $start > $to) {
+                continue;
+            }
+            $data = is_string($row['data']) ? json_decode($row['data'], true) : array();
+            if (!is_array($data)) {
+                $data = array();
+            }
+            $result['leaves'][] = array(
+                'id' => intval($row['id']),
+                'userid' => $row['user_id'],
+                'realname' => $realnames[$row['user_id']] ?? $row['user_id'],
+                'status' => $row['status'],
+                'start_date' => $start,
+                'end_date' => $end,
+                // 全休 / 午前休 / 午後休 only. leave_type / unpaid_type (e.g. 生理休暇) are personal and not shared.
+                'part' => in_array($data['paid_type'] ?? '', array('全休', '午前休', '午後休'), true) ? $data['paid_type'] : '',
+                'days' => (string)($data['days'] ?? ''),
+            );
+        }
+        return $result;
+    }
+
     // Số đơn cần xử lý hiển thị badge menu
     // admin/総務: pending + 承認済（総務対応待ち）; approver: pending được chỉ định; user thường: đơn pending của mình
     function countPendingBadge() {

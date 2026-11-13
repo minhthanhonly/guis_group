@@ -1428,7 +1428,13 @@
             </div>
           </div>
           <!-- Upcoming holiday panel — dưới template-customizer-open-btn (filled by holiday-offcanvas.js) -->
-          <div id="upcoming-holiday-banner-slot" aria-live="polite"></div>
+          <div id="side-info-stack">
+            <div id="upcoming-holiday-banner-slot" aria-live="polite"></div>
+            <?php if ($directory == 'project'): ?>
+            <!-- 部署の休暇予定 (filled by department-leave-panel.js) -->
+            <div id="department-leave-panel-slot" aria-live="polite"></div>
+            <?php endif; ?>
+          </div>
           <?php if (!empty($__showProjectDisplayTimezone)): ?>
           <script>
           (function () {
@@ -1464,6 +1470,9 @@
           <?php endif; ?>
           <!-- Holiday Offcanvas (global) -->
           <script src="<?=$root?>assets/js/holiday-offcanvas.js?v=<?=CACHE_VERSION?>"></script>
+          <?php if ($directory == 'project'): ?>
+          <script src="<?=$root?>assets/js/department-leave-panel.js?v=<?=CACHE_VERSION?>"></script>
+          <?php endif; ?>
 
           <!-- Content wrapper -->
           <div class="content-wrapper">

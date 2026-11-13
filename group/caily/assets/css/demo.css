@@ -510,13 +510,145 @@
 }
 
 /* Upcoming holiday panel — fixed under .template-customizer-open-btn (top:150px, h:38px) */
-#upcoming-holiday-banner-slot {
+/* Holiday banner + 部署の休暇予定 panel stacked on the right edge */
+#side-info-stack {
 	position: fixed;
 	top: 198px; /* 150 + 38 + 10 */
 	right: 0;
 	z-index: 99990;
 	max-width: min(300px, calc(100vw - 16px));
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 6px;
 	pointer-events: none;
+}
+#upcoming-holiday-banner-slot,
+#department-leave-panel-slot {
+	max-width: 100%;
+	pointer-events: none;
+}
+#upcoming-holiday-banner-slot:empty,
+#department-leave-panel-slot:empty {
+	display: none;
+}
+
+#department-leave-panel {
+	pointer-events: auto;
+	border: 1px solid rgba(105, 108, 255, 0.3);
+	background: #fff;
+	border-end-start-radius: 0.5rem;
+	border-start-start-radius: 0.5rem;
+	border-inline-end: 0;
+	box-shadow: 0 0.125rem 0.35rem rgba(34, 48, 62, 0.16);
+	padding: 0.55rem 0.7rem;
+	min-width: 210px;
+}
+#department-leave-panel.is-collapsed {
+	min-width: 0;
+	width: 38px;
+	padding: 0;
+	border-radius: 0.375rem 0 0 0.375rem;
+	background: var(--bs-primary, #696cff);
+	border-color: transparent;
+}
+#department-leave-panel .dlp-header {
+	display: flex;
+	align-items: center;
+	gap: 0.4rem;
+	min-height: 1.5rem;
+}
+#department-leave-panel.is-collapsed .dlp-header {
+	justify-content: center;
+	min-height: 38px;
+}
+#department-leave-panel.is-collapsed .dlp-header-icon,
+#department-leave-panel.is-collapsed .dlp-title,
+#department-leave-panel.is-collapsed .dlp-body {
+	display: none !important;
+}
+#department-leave-panel .dlp-title {
+	font-size: 0.78rem;
+	font-weight: 600;
+	color: var(--bs-primary, #696cff);
+	white-space: nowrap;
+	min-width: 0;
+}
+#department-leave-panel .dlp-window {
+	font-size: 0.68rem;
+	color: #6c757d;
+	font-weight: 400;
+}
+#department-leave-panel .dlp-dept {
+	display: block;
+	font-size: 0.68rem;
+	font-weight: 400;
+	color: #6c757d;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 13rem;
+}
+#department-leave-panel .dlp-toggle {
+	flex: 0 0 auto;
+	border: 0;
+	background: transparent;
+	color: #6c757d;
+	padding: 0.15rem 0.3rem;
+	line-height: 1;
+	border-radius: 0.25rem;
+}
+#department-leave-panel .dlp-toggle:hover {
+	color: var(--bs-primary, #696cff);
+	background: rgba(105, 108, 255, 0.08);
+}
+#department-leave-panel.is-collapsed .dlp-toggle {
+	color: #fff;
+	padding: 0;
+	width: 100%;
+	height: 38px;
+	border-radius: 0.375rem 0 0 0.375rem;
+}
+#department-leave-panel .dlp-body {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	margin-top: 0.4rem;
+	max-height: 40vh;
+	overflow-y: auto;
+}
+#department-leave-panel .dlp-item {
+	display: flex;
+	align-items: baseline;
+	gap: 0.35rem;
+	font-size: 0.75rem;
+	min-width: 0;
+}
+#department-leave-panel .dlp-date {
+	color: #495057;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+#department-leave-panel .dlp-src,
+#department-leave-panel .dlp-pending {
+	font-size: 0.6rem;
+	flex: 0 0 auto;
+}
+#department-leave-panel .dlp-name {
+	color: #212529;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	max-width: 7rem;
+}
+#department-leave-panel .dlp-part {
+	color: #6c757d;
+	font-size: 0.68rem;
+	white-space: nowrap;
+}
+#department-leave-panel .dlp-empty {
+	font-size: 0.72rem;
+	color: #adb5bd;
 }
 #upcoming-holiday-banner {
 	pointer-events: auto;
