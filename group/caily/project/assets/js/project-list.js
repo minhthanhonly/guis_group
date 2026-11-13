@@ -845,43 +845,20 @@ var projectTable;
         }
     }
 
-    /** Quick Edit modal — lazy-loaded from project-list-quick-edit.js */
-    function ensureProjectListQuickEditModule() {
-        if (window.ProjectListQuickEditInstalled
-            && typeof window.__openQuickEditProjectModalImpl === 'function') {
-            return Promise.resolve();
-        }
-        if (window.__projectListQuickEditLoading) {
-            return window.__projectListQuickEditLoading;
-        }
-        var loader = withAppLoader();
-        if (!loader) {
-            return Promise.reject(new Error('AppLoader missing'));
-        }
-        var root = projectListAssetRoot();
-        var pcv = projectListProjectCacheV();
-        var q = function(path) { return root + path + (pcv ? ('?v=' + pcv) : ''); };
-        window.__projectListQuickEditLoading = loader.loadScripts([
-            q('project/assets/js/project-custom-field-composite.js'),
-            q('project/assets/js/project-list-quick-edit.js')
-        ]).then(function() {
-            if (typeof window.installProjectListQuickEdit === 'function') {
-                window.installProjectListQuickEdit();
-            }
-            window.__projectListQuickEditLoading = null;
-        });
-        return window.__projectListQuickEditLoading;
-    }
-
+    /**
+     * 案件を編集: the shared project form dialog (project-form-modal.js). isManagerOnly: a 管理
+     * without full edit rights sees the reduced form.
+     */
     window.openQuickEditProjectModal = function(projectId, isManagerOnly) {
-        ensureProjectListQuickEditModule().then(function() {
-            if (typeof window.__openQuickEditProjectModalImpl === 'function') {
-                window.__openQuickEditProjectModalImpl(projectId, isManagerOnly);
-            }
-        }).catch(function(err) {
-            console.error('Failed to load project list Quick Edit module:', err);
-            if (typeof showMessage === 'function') {
-                showProjectListError('クイック編集の読み込みに失敗しました。');
+        if (typeof window.openProjectFormModal !== 'function') {
+            showProjectListError('案件フォームを開けません。ページを再読み込みしてください。');
+            return;
+        }
+        window.openProjectFormModal({
+            projectId: projectId,
+            managerOnly: !!isManagerOnly,
+            onSaved: function() {
+                if (projectTable) reloadProjectTable(false);
             }
         });
     };
@@ -2873,55 +2850,6 @@ var projectTable;
 
     function isCailyBranchUser() {
         return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
-    }
-
-    var quickEditCompletedStatusOption = null;
-
-    function syncQuickEditStatusOptions(currentStatus) {
-        var $sel = $('#quickEditStatus');
-        if (!$sel.length) {
-            return;
-        }
-        if (!quickEditCompletedStatusOption || !quickEditCompletedStatusOption.length) {
-            quickEditCompletedStatusOption = $sel.find('option[value="completed"]').first().detach();
-        }
-        $sel.find('option[value="completed"]').remove();
-        var showEnergy = isEnergyDepartmentSelectedForStatus()
-            || !!(ENERGY_ONLY_PROJECT_STATUS_KEYS[String(currentStatus || '').trim()]);
-        $sel.find('option.js-energy-only-status').each(function() {
-            var $opt = $(this);
-            var val = String($opt.val() || '');
-            if (showEnergy || val === String(currentStatus || '')) {
-                $opt.prop('disabled', false).show();
-            } else {
-                $opt.prop('disabled', true).hide();
-            }
-        });
-        var canSelectCompleted = !isCailyBranchUser() || canViewEndDateColumn();
-        function insertCompletedAfterWaitingInvoice($option) {
-            var $waitingInvoice = $sel.find('option[value="waiting_invoice"]');
-            if ($waitingInvoice.length) {
-                $waitingInvoice.after($option);
-                return;
-            }
-            var $paused = $sel.find('option[value="paused"]');
-            if ($paused.length) {
-                $paused.before($option);
-                return;
-            }
-            $sel.append($option);
-        }
-        if (canSelectCompleted) {
-            if (quickEditCompletedStatusOption && quickEditCompletedStatusOption.length) {
-                insertCompletedAfterWaitingInvoice(quickEditCompletedStatusOption);
-            }
-            return;
-        }
-        if (currentStatus === 'completed' && quickEditCompletedStatusOption && quickEditCompletedStatusOption.length) {
-            insertCompletedAfterWaitingInvoice(
-                quickEditCompletedStatusOption.clone().prop('disabled', true)
-            );
-        }
     }
 
     function parseProjectDateMoment(value) {
@@ -8747,8 +8675,6 @@ var projectTable;
             });
         }
 
-        // Quick Edit modal — lazy-loaded from project-list-quick-edit.js (see ensureProjectListQuickEditModule)
-
         var businessDocumentModalEl = document.getElementById('businessDocumentModal');
         if (businessDocumentModalEl) {
             plInitListen(businessDocumentModalEl, 'shown.bs.modal', function() {
@@ -9221,7 +9147,6 @@ var projectTable;
         // Note 1-line switch is Vue-bound (inside #app); apply class early for first paint
         applyNoteDisplayOneLineClass();
 
-        syncQuickEditStatusOptions();
         var savedScrollOnLoad = getSavedProjectListScroll();
         if (savedScrollOnLoad) {
             scheduleProjectListScrollRestore(savedScrollOnLoad);
@@ -10671,7 +10596,6 @@ var projectTable;
                             } else if (typeof document !== 'undefined' && document.body) {
                                 document.body.classList.toggle('can-view-end-date', canViewEndDateColumn());
                             }
-                            syncQuickEditStatusOptions();
                             // DataTable serverSide already ajax-loads on init — do not reload here
                             await initializeProjectTable();
                         } finally {

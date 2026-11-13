@@ -1238,3 +1238,60 @@ span.avatar-initial:not(.avatar .avatar-initial) {
         --pf-caption-width: 7.5rem;
     }
 }
+
+/* ---- Project form dialog and field details shared by the detail page and the forms ---- */
+/* wide enough for two section tables side by side */
+@media (min-width: 1200px) {
+    .modal-dialog.project-form-modal {
+        max-width: min(1280px, calc(100vw - 3rem));
+    }
+}
+.project-form-modal .project-form-section-title {
+    margin: 0;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    color: var(--bs-primary);
+}
+/* the shared dialog has its own header: the 建物情報 button and the customer box that sit
+   above the first section on the detail page are not part of the form */
+#projectFormModal .project-form-grid > [class*="col-"] {
+    display: none;
+}
+#project-form-modal-app[v-cloak] {
+    display: none;
+}
+
+/* 進捗率: a short slider is enough for 5% steps */
+.project-detail-grid .position-relative:has(> .form-range) {
+    max-width: 200px;
+}
+
+/* A 状況 field belongs to the field above it (see groupStatusCompanionFields): no rule
+   between the two and no caption of its own, so its value reads as a second line of that
+   field. Read-only page and edit dialog. */
+.project-detail-grid .row > [class*="col-"]:has(+ .cf-status-companion) {
+    border-bottom: 0 !important;
+    padding-bottom: 0.1rem !important;
+}
+.project-detail-grid .row > .cf-status-companion {
+    padding-top: 0.1rem !important;
+}
+
+/* Remaining-time / judgment badges of a deadline sit in the value column, under the date
+   (page and edit dialog): the caption column holds captions only. */
+.project-detail-grid .pd-deadline-badges {
+    order: 9;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    margin-top: 0.25rem;
+}
+.project-detail-grid .pd-deadline-badges:empty {
+    display: none;
+}
+
+/* Shared project form, opened by a 管理 without full edit rights: these fields are not theirs to change */
+.project-form-modal.pf-manager-only .project-form-grid .pf-full-only {
+    display: none !important;
+}
