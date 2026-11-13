@@ -111,6 +111,9 @@ if($_SESSION['show_project'] == 0){
                                 <button v-if="!isEditMode && canEditProject && !(project && project.is_kadai == 1)" class="btn btn-outline-warning btn-sm me-2" @click="openEditForm" title="編集">
                                     <i class="fa fa-pencil-alt me-1"></i> <span data-i18n="編集">編集</span>
                                 </button>
+                                <button v-if="!isEditMode && project" class="btn btn-outline-secondary btn-sm me-2" @click="openGeneralLogModal" title="履歴">
+                                    <i class="fa fa-history me-1"></i><span data-i18n="履歴">履歴</span>
+                                </button>
                                 <button v-if="isEditMode" class="btn btn-success btn-sm me-2" @click="saveProject" :disabled="savingProject" title="保存">
                                     <span v-if="savingProject" class="spinner-border spinner-border-sm me-1"></span>
                                     <i v-else class="fa fa-save me-1"></i> <span v-if="savingProject" data-i18n="保存中">保存中...</span><span v-else data-i18n="保存">保存</span>
@@ -135,14 +138,21 @@ if($_SESSION['show_project'] == 0){
                     </div>
                 </div>
 
-                <!-- Comments Section (D6: mount after idle / near-viewport) -->
+                <!-- Comments Section: collapsed while the project has no comment; the
+                     component mounts only once the section is open (D6: after idle / near-viewport) -->
                 <div class="card mt-4" v-if="canCommentProject" ref="commentsSection">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center"
+                         :class="{ 'pb-4': !commentsExpanded }"
+                         role="button" style="cursor: pointer;"
+                         :aria-expanded="commentsExpanded ? 'true' : 'false'"
+                         @click="toggleCommentsSection">
                         <h5 class="card-title mb-0">
                             <i class="fa fa-comment me-2"></i><span data-i18n="コメント">コメント</span>
+                            <small v-if="commentsChecked && !commentsHaveAny" class="text-muted fw-normal ms-2" data-i18n="コメントはありません">コメントはありません</small>
                         </h5>
+                        <i class="fa" :class="commentsExpanded ? 'fa-chevron-up' : 'fa-chevron-down'"></i>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" v-show="commentsExpanded">
                         <comment-component
                              v-if="commentsMountReady"
                              :entity-type="'project'"
@@ -686,52 +696,6 @@ if($_SESSION['show_project'] == 0){
                     </div>
                 </div>
 
-                <!-- Lịch sử hành động (履歴) -->
-                <div class="card mb-4">
-                    <div class="card-header d-flex align-items-center">
-                        <h5 class="card-title mb-0"><span data-i18n="履歴">履歴</span></h5>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-group" style="max-height: 400px; overflow-y: auto;">
-                            <li v-for="log in sortedGeneralLogs" :key="log.id" class="list-group-item">
-                                <div class="d-flex">
-                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
-                                        <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <div class="avatar">
-                                                <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
-                                                    {{ getInitials(log.username || log.realname || '?', log.userid || log.user_id || '', log.user_ruby || '') }}
-                                                </span>
-                                                <img v-if="!log.avatarError && getAvatarSrc(log)"
-                                                    :src="getAvatarSrc(log)"
-                                                    alt="avatar"
-                                                    class="rounded-circle"
-                                                    :class="{ 'd-none': !log.avatarLoaded }"
-                                                    @load="handleAvatarLoad(log)"
-                                                    @error="handleAvatarError(log)">
-                                            </div>
-                                        </div>
-                                        <div class="d-flex flex-column align-items-start justify-content-center ms-2">
-                                            <span class="fw-bold small">{{ getBdLogDisplayName(log) }}</span>
-                                            <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1 d-flex align-items-center">
-                                        <span>
-                                            <i :class="historyIcon(log.action) + ' me-2'"></i>
-                                            <span class="me-2">{{ getLogNote(log) }}</span>
-                                            <br>
-                                            <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
-                                            <span v-if="log.value1 && log.value2" class="mx-1">→</span>
-                                            <span v-if="log.value2" :class="getLogBadgeClass(log, 'value2')" class="mx-1">{{ getLogBadgeLabel(log, 'value2') }}</span>
-                                        </span>
-                                    </div>
-                                </div>
-                            </li>
-                            <li v-if="!sortedGeneralLogs || sortedGeneralLogs.length === 0" class="list-group-item text-muted">履歴はありません。</li>
-                        </ul>
-                    </div>
-                </div>
-
                 <!-- Statistics Cards -->
                <div class="row g-3 mb-4">
                     <div class="col-4">
@@ -845,6 +809,62 @@ if($_SESSION['show_project'] == 0){
                 </div>
             </div>
         </div>
+
+        <!-- Modal 履歴 (project history): logs load only when it opens -->
+        <div class="modal fade" tabindex="-1" :class="{show: showGeneralLogModal}" style="display: block;" v-if="showGeneralLogModal">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title"><span data-i18n="履歴">履歴</span></h5>
+                        <button type="button" class="btn-close" @click="closeGeneralLogModal"></button>
+                    </div>
+                    <div class="modal-body p-0">
+                        <ul class="list-group list-group-flush">
+                            <li v-for="log in sortedGeneralLogs" :key="log.id" class="list-group-item">
+                                <div class="d-flex">
+                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
+                                        <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
+                                            <div class="avatar">
+                                                <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
+                                                    {{ getInitials(log.username || log.realname || '?', log.userid || log.user_id || '', log.user_ruby || '') }}
+                                                </span>
+                                                <img v-if="!log.avatarError && getAvatarSrc(log)"
+                                                    :src="getAvatarSrc(log)"
+                                                    alt="avatar"
+                                                    class="rounded-circle"
+                                                    :class="{ 'd-none': !log.avatarLoaded }"
+                                                    @load="handleAvatarLoad(log)"
+                                                    @error="handleAvatarError(log)">
+                                            </div>
+                                        </div>
+                                        <div class="d-flex flex-column align-items-start justify-content-center ms-2">
+                                            <span class="fw-bold small">{{ getBdLogDisplayName(log) }}</span>
+                                            <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex-grow-1 d-flex align-items-center">
+                                        <span>
+                                            <i :class="historyIcon(log.action) + ' me-2'"></i>
+                                            <span class="me-2">{{ getLogNote(log) }}</span>
+                                            <br>
+                                            <span v-if="log.value1" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getLogBadgeLabel(log, 'value1') }}</span>
+                                            <span v-if="log.value1 && log.value2" class="mx-1">→</span>
+                                            <span v-if="log.value2" :class="getLogBadgeClass(log, 'value2')" class="mx-1">{{ getLogBadgeLabel(log, 'value2') }}</span>
+                                        </span>
+                                    </div>
+                                </div>
+                            </li>
+                            <li v-if="logsLoading && !logsLoaded" class="list-group-item text-center text-muted py-4"><i class="fa fa-spinner fa-spin"></i></li>
+                            <li v-else-if="!sortedGeneralLogs || sortedGeneralLogs.length === 0" class="list-group-item text-muted">履歴はありません。</li>
+                        </ul>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @click="closeGeneralLogModal">閉じる</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show" v-if="showGeneralLogModal"></div>
 
         <!-- Modal Business Document History -->
         <div class="modal fade" tabindex="-1" :class="{show: showBusinessDocumentLogModal}" style="display: block;" v-if="showBusinessDocumentLogModal">

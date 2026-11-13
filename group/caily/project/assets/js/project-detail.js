@@ -698,6 +698,10 @@ const vueApp = createApp({
             customFields: [],
             departmentCustomFieldSets: [],
             commentsMountReady: false,
+            // コメント section: collapsed while the project has no comment (checked once on load)
+            commentsExpanded: false,
+            commentsChecked: false,
+            commentsHaveAny: false,
             _serverProjectDates: null,
             _serverBusinessDocumentDates: null,
             // Danh sách các tỉnh/thành phố của Nhật Bản
@@ -754,6 +758,9 @@ const vueApp = createApp({
             // mention-related variables removed
             logs: [], // Thêm biến lưu log lịch sử
             showBusinessDocumentLogModal: false,
+            showGeneralLogModal: false,
+            logsLoading: false,
+            logsLoaded: false,
             // Current user data
             currentUser: {
                 userid: typeof USER_ID !== 'undefined' ? USER_ID : null,
@@ -1178,7 +1185,7 @@ const vueApp = createApp({
                 projectId: this.projectId,
                 onSaved: () => {
                     this.loadProject();
-                    this.loadLogs();
+                    this.refreshLogsIfOpen();
                 }
             });
         },
@@ -1221,10 +1228,32 @@ const vueApp = createApp({
             return null;
         },
 
+        /** Opens the section on load when the project has a comment (or the URL points at one). */
+        async checkCommentsPresence() {
+            const linkedComment = String(window.location.hash || '').startsWith('#comment-');
+            try {
+                const res = await axios.get(`/api/index.php?model=project&method=getLatestCommentInfo&project_id=${this.projectId}`);
+                this.commentsHaveAny = !!(res.data && res.data.latest_comment_id);
+            } catch (e) {
+                // unknown: show the section open, as before
+                this.commentsHaveAny = true;
+            }
+            this.commentsChecked = true;
+            this.commentsExpanded = this.commentsHaveAny || linkedComment;
+        },
+        toggleCommentsSection() {
+            this.commentsExpanded = !this.commentsExpanded;
+            if (this.commentsExpanded) {
+                this.commentsMountReady = true;
+            }
+        },
         /** D6: mount comment-component after idle or when section nears viewport. */
-        armCommentsLazyMount() {
-            if (this.commentsMountReady || this._commentsArmed) return;
+        async armCommentsLazyMount() {
+            if (this.commentsMountReady || this._commentsArmed || !this.canCommentProject) return;
             this._commentsArmed = true;
+            await this.checkCommentsPresence();
+            // No comment yet: stay collapsed; the component mounts when the user opens the section.
+            if (!this.commentsExpanded) return;
             const mount = () => {
                 if (this.commentsMountReady) return;
                 this.commentsMountReady = true;
@@ -1634,6 +1663,7 @@ const vueApp = createApp({
         },
         // Comment component event handlers
         onCommentAdded(event) {
+            this.commentsHaveAny = true;
             this.showNotification('コメントが追加されました', 'success');
         },
         
@@ -2141,7 +2171,7 @@ const vueApp = createApp({
                         }, 200);
                     });
                     this.businessDocumentSaveStatus = 'saved';
-                    this.loadLogs();
+                    this.refreshLogsIfOpen();
                     this.businessDocumentSaveHideTimer = setTimeout(() => {
                         this.businessDocumentSaveStatus = null;
                         this.businessDocumentSaveHideTimer = null;
@@ -3460,7 +3490,14 @@ const vueApp = createApp({
                 this.mentionUsers = [];
             }
         },
+        /** 履歴 data is fetched only for an open history modal. */
+        refreshLogsIfOpen() {
+            if (this.showGeneralLogModal || this.showBusinessDocumentLogModal) {
+                this.loadLogs();
+            }
+        },
         async loadLogs() {
+            this.logsLoading = true;
             try {
                 const res = await axios.get(`/api/index.php?model=project&method=getLogs&project_id=${this.projectId}`);
                 if (res.data && Array.isArray(res.data)) {
@@ -3470,6 +3507,9 @@ const vueApp = createApp({
                 }
             } catch (e) {
                 this.logs = [];
+            } finally {
+                this.logsLoading = false;
+                this.logsLoaded = true;
             }
         },
         isBusinessDocumentLog(log) {
@@ -3486,6 +3526,13 @@ const vueApp = createApp({
         },
         closeBusinessDocumentLogModal() {
             this.showBusinessDocumentLogModal = false;
+        },
+        openGeneralLogModal() {
+            this.loadLogs();
+            this.showGeneralLogModal = true;
+        },
+        closeGeneralLogModal() {
+            this.showGeneralLogModal = false;
         },
         hasLogValue(value) {
             return value !== null && value !== undefined && String(value).trim() !== '';
@@ -3720,7 +3767,6 @@ const vueApp = createApp({
             this.loadProject(),
             this.loadCategories(),
             this.loadNotes(),
-            this.loadLogs(),
         ]);
         // Needs department_id from getById
         await Promise.all([
@@ -3910,7 +3956,7 @@ const vueApp = createApp({
             if (!this.isEditMode && !this.hasPendingBusinessDocumentChanges()) {
                 lastAutoRefreshAt = Date.now();
                 this.loadProject({ silent: true });
-                this.loadLogs();
+                this.refreshLogsIfOpen();
             }
         };
         this.autoRefreshTimer = setInterval(autoRefresh, 60000); // 60 seconds
