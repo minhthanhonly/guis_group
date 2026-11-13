@@ -433,136 +433,53 @@
                             <div class="col-12 project-form-section" v-if="(isEditMode ? (customFields && customFields.length > 0) : getCustomFieldsForView().length > 0) || (isEnergyDepartmentProject && showSection('energy'))">
                                 <h6 class="project-form-section-title"><span data-i18n="部署別項目">部署別項目</span></h6>
                             </div>
-                            <div class="col-12">
-                                <template v-if="isEditMode">
-                                    <div v-if="customFields && customFields.length > 0" class="mt-3">
-                                        <div class="row">
-                                            <template v-for="(field, idx) in customFields" :key="idx">
-                                                <template v-if="isEnergyMaterialCompositeField(field)"></template>
-                                                <div v-else-if="field.type === 'textarea'" class="col-12 mb-3">
-                                                    <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <textarea class="form-control" v-model="field.value"></textarea>
-                                                </div>
-                                                <div v-else-if="field.isComposite && !isEnergyMaterialCompositeField(field)" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
-                                                    <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <?php require __DIR__ . '/project-composite-field-edit.php'; ?>
-                                                </div>
-                                                <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
-                                                    <div class="form-label d-flex flex-column align-items-start gap-1">
-                                                        <span>{{ field.statusOf ? '' : translateLabel(field.label) }}</span>
-                                                        <button v-if="field.type === 'checkbox_select_all'"
-                                                                type="button"
-                                                                class="btn btn-sm btn-outline-secondary py-0"
-                                                                @click="toggleAllCustomCheckbox(field)">
-                                                            {{ isAllCustomCheckboxSelected(field) ? translateLabel('すべて解除') : translateLabel('すべて選択') }}
-                                                        </button>
-                                                    </div>
-                                                    <template v-if="field.type === 'radio'">
-                                                        <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
-                                                            <input class="form-check-input" type="radio" :name="'custom_radio_' + idx" :value="opt.trim()" v-model="field.value">
-                                                            <label class="form-check-label">{{ opt.trim() }}</label>
-                                                        </div>
-                                                    </template>
-                                                    <template v-else-if="field.type === 'select'">
-                                                        <select class="form-select" v-model="field.value">
-                                                            <option value="" data-i18n="選択してください">選択してください</option>
-                                                            <option v-for="opt in field.options.split(',')" :key="opt.trim()" :value="opt.trim()">{{ opt.trim() }}</option>
-                                                        </select>
-                                                    </template>
-                                                    <template v-else-if="field.type === 'checkbox' || field.type === 'checkbox_select_all'">
-                                                        <div class="form-check form-check-inline" v-for="opt in field.options.split(',')" :key="opt.trim()">
-                                                            <input class="form-check-input" type="checkbox" :name="'custom_checkbox_' + idx" :value="opt.trim()" v-model="field.valueArr">
-                                                            <label class="form-check-label">{{ opt.trim() }}</label>
-                                                        </div>
-                                                    </template>
-                                                    <template v-else-if="field.type === 'datetime'">
-                                                        <div class="input-group">
-                                                            <input type="text" class="form-control custom-field-datetime" 
-                                                                   :id="'custom_datetime_' + idx" 
-                                                                   v-model="field.value" 
-                                                                   :placeholder="getProjectDateTimePlaceholder()" 
-                                                                   autocomplete="off">
-                                                            <span class="input-group-text"><i class="fa fa-calendar"></i></span>
-                                                        </div>
-                                                    </template>
-                                                    <template v-else>
-                                                        <input class="form-control" v-model="field.value" type="text">
-                                                    </template>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <template v-if="getCustomFieldsForView().length">
-                                        <div class="row">
-                                            <template v-for="(field, idx) in getCustomFieldsForView()" :key="idx">
-                                                <template v-if="isEnergyMaterialCompositeField(field)"></template>
-                                                <div v-else-if="field.type === 'textarea'" class="col-12 mb-3">
-                                                    <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <div class="form-control" style="min-height:80px;white-space:pre-line;">{{ field.value || '-' }}</div>
-                                                </div>
-                                                <div v-else-if="field.isComposite && !isEnergyMaterialCompositeField(field)" :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6']">
-                                                    <label class="form-label">{{ translateLabel(field.label) }}</label>
-                                                    <?php require __DIR__ . '/project-composite-field-view.php'; ?>
-                                                </div>
-                                                <div v-else :class="['mb-3', field.one_row ? 'col-12' : 'col-md-6', { 'cf-status-companion': field.statusOf }]">
-                                                    <div class="form-label d-flex flex-column align-items-start gap-1">
-                                                        <span>{{ field.statusOf ? '' : translateLabel(field.label) }}</span>
-                                                        <button v-if="canEditProject && field.type === 'checkbox_select_all'"
-                                                                type="button"
-                                                                class="btn btn-sm btn-outline-secondary py-0"
-                                                                @click="onCustomFieldSelectAllToggle(field)">
-                                                            {{ isAllCustomFieldCheckboxSelected(field) ? translateLabel('すべて解除') : translateLabel('すべて選択') }}
-                                                        </button>
-                                                    </div>
-                                                    <template v-if="canEditProject && (field.type === 'select' || field.type === 'radio' || field.type === 'checkbox' || field.type === 'checkbox_select_all')">
-                                                        <select v-if="field.type === 'select'" class="form-select form-select-sm" :value="field.value" @change="updateCustomFieldValue(field.label, $event.target.value)">
-                                                            <option value="">選択してください</option>
-                                                            <option v-for="opt in (field.options || '').split(',').map(o=>o.trim()).filter(Boolean)" :key="opt" :value="opt">{{ translateLabel(opt) }}</option>
-                                                        </select>
-                                                        <template v-else-if="field.type === 'radio'">
-                                                            <div class="d-flex flex-wrap gap-2">
-                                                                <div v-for="opt in (field.options || '').split(',').map(o=>o.trim()).filter(Boolean)" :key="opt" class="form-check">
-                                                                    <input class="form-check-input" type="radio" :name="'cf_'+field.label+'_'+idx" :value="opt" :checked="field.value === opt" @change="updateCustomFieldValue(field.label, opt)">
-                                                                    <label class="form-check-label">{{ translateLabel(opt) }}</label>
-                                                                </div>
-                                                            </div>
-                                                        </template>
-                                                        <template v-else-if="field.type === 'checkbox' || field.type === 'checkbox_select_all'">
-                                                            <div class="d-flex flex-wrap gap-2">
-                                                                <div v-for="opt in (field.options || '').split(',').map(o=>o.trim()).filter(Boolean)" :key="opt" class="form-check">
-                                                                    <input class="form-check-input" type="checkbox" :value="opt" :checked="isCustomFieldCheckboxChecked(field.label, opt)" @change="onCustomFieldCheckboxChange(field, opt, $event.target.checked)">
-                                                                    <label class="form-check-label">{{ translateLabel(opt) }}</label>
-                                                                </div>
-                                                            </div>
-                                                        </template>
-                                                    </template>
-                                                    <template v-else>
-                                                        <template v-if="field.type === 'checkbox' || field.type === 'checkbox_select_all' || field.type === 'radio' || field.type === 'select'">
-                                                            <div>
-                                                                <span v-if="field.value">
-                                                                    <span v-for="val in field.value.split(',')" :key="val.trim()" class="badge bg-primary me-1">{{ translateLabel(val.trim()) }}</span>
-                                                                </span>
-                                                                <span v-else>-</span>
-                                                            </div>
-                                                        </template>
-                                                        <template v-else-if="field.type === 'datetime'">
-                                                            <div class="form-control" :data-time="field.value || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + field.label" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''">{{ formatDateTime(field.value) }}</div>
-                                                        </template>
-                                                        <template v-else>
-                                                            <div class="form-control">{{ field.value || '-' }}</div>
-                                                        </template>
-                                                    </template>
-                                                </div>
-                                            </template>
-                                        </div>
-                                    </template>
-                                </template>
+                            <?php
+                            // One group of custom fields (see getCustomFieldGroup in project-form-mixin.js): its own
+                            // wrapper row, so that groups and the 省エネ fields can be interleaved.
+                            $pfRenderCustomFields = function ($group) {
+                                $edit = "getCustomFieldGroup(customFields, '" . $group . "')";
+                                $view = "getCustomFieldGroup(getCustomFieldsForView(), '" . $group . "')";
+                                ?>
+                            <div class="col-12" v-show="(isEditMode ? <?= $edit ?> : <?= $view ?>).length > 0">
+                                <div class="row" v-if="isEditMode">
+                                    <?php $pfCustomFieldList = $edit; require __DIR__ . '/project-custom-fields-edit.php'; ?>
+                                </div>
+                                <div class="row" v-else>
+                                    <?php $pfCustomFieldList = $view; require __DIR__ . '/project-custom-fields-view.php'; ?>
+                                </div>
                             </div>
-                            <!-- 省エネ部署の案件: 省エネ向け資料 / 申請提出先の審査機関 / BELSのZEH等級
-                                 (edit state: energyEdit, see assets/js/project-energy-fields-mixin.js) -->
+                                <?php
+                            };
+                            ?>
+                            <!-- every department but 省エネ: the custom fields in the order of their sets -->
+                            <?php $pfRenderCustomFields('all'); ?>
+                            <!-- 省エネ部署の案件: fixed order — 省エネ・申請関連, 申請提出先の審査機関, BELSのZEH等級, 面積確認,
+                                 太陽光 年間日射地域区分, 省エネ向け資料, PJ No(旧), then any other custom field.
+                                 (edit state of the 省エネ fields: energyEdit, see assets/js/project-energy-fields-mixin.js) -->
                             <template v-if="isEnergyDepartmentProject">
+                                <?php $pfRenderCustomFields('energy_top'); ?>
+                                <div class="col-md-6" v-show="showField('energy_agency')">
+                                    <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
+                                    <div v-if="isEditMode" class="d-flex align-items-center gap-2">
+                                        <input type="text" class="form-control tagify" id="project_energy_review_agency_tags" name="project_energy_review_agency_tags">
+                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEnergyAgencyTags" title="すべて削除"><i class="fa fa-times"></i></button>
+                                    </div>
+                                    <div v-else class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
+                                        <span v-for="item in energyReviewAgencyList" :key="'ag_' + item"
+                                              class="badge badge-outline-primary me-1">{{ item }}</span>
+                                        <span v-if="energyReviewAgencyList.length === 0" class="text-muted">-</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-6" v-show="showField('energy_grade')">
+                                    <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
+                                    <select v-if="isEditMode" class="form-select" v-model="energyEdit.grade">
+                                        <option v-for="opt in energyEditGradeOptions" :key="'zeh_edit_' + opt.value" :value="opt.value">
+                                            {{ opt.label }}
+                                        </option>
+                                    </select>
+                                    <div v-else style="min-height:38px;">{{ belsZehGradeLabel || '-' }}</div>
+                                </div>
+                                <?php $pfRenderCustomFields('energy_middle'); ?>
                                 <div class="col-12" v-show="showField('energy_materials')">
                                     <label class="form-label"><span data-i18n="省エネ向け資料">省エネ向け資料</span></label>
                                     <template v-if="isEditMode">
@@ -602,27 +519,7 @@
                                         </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6" v-show="showField('energy_agency')">
-                                    <label class="form-label"><span data-i18n="申請提出先の審査機関">申請提出先の審査機関</span></label>
-                                    <div v-if="isEditMode" class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" id="project_energy_review_agency_tags" name="project_energy_review_agency_tags">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEnergyAgencyTags" title="すべて削除"><i class="fa fa-times"></i></button>
-                                    </div>
-                                    <div v-else class="d-flex flex-wrap gap-1 align-items-center" style="min-height:38px;">
-                                        <span v-for="item in energyReviewAgencyList" :key="'ag_' + item"
-                                              class="badge badge-outline-primary me-1">{{ item }}</span>
-                                        <span v-if="energyReviewAgencyList.length === 0" class="text-muted">-</span>
-                                    </div>
-                                </div>
-                                <div class="col-md-6" v-show="showField('energy_grade')">
-                                    <label class="form-label"><span data-i18n="BELSのZEH等級">BELSのZEH等級</span></label>
-                                    <select v-if="isEditMode" class="form-select" v-model="energyEdit.grade">
-                                        <option v-for="opt in energyEditGradeOptions" :key="'zeh_edit_' + opt.value" :value="opt.value">
-                                            {{ opt.label }}
-                                        </option>
-                                    </select>
-                                    <div v-else style="min-height:38px;">{{ belsZehGradeLabel || '-' }}</div>
-                                </div>
+                                <?php $pfRenderCustomFields('energy_rest'); ?>
                             </template>
                             </div>
                             <div class="pd-section" v-show="showSection('other')">

@@ -86,6 +86,20 @@
     }
 
     /** 設備図 / 意匠図 / 配置図: セットの選択肢のまま、値選択時に【メモ】を表示 */
+    /** Label of a custom field without spaces and with half-width brackets, for the order below. */
+    function normalizeEnergyCustomFieldLabel(label) {
+        return String(label || '').replace(/[\s\u3000]+/g, '').replace(/（/g, '(').replace(/）/g, ')').toLowerCase();
+    }
+    /**
+     * 部署別項目 of 省エネ projects: 省エネ・申請関連 / [申請提出先の審査機関, BELSのZEH等級] /
+     * 面積確認, 太陽光 年間日射地域区分 / [省エネ向け資料] / PJ No(旧), then the other custom fields.
+     */
+    var ENERGY_CUSTOM_FIELD_ORDER = {
+        top: ['省エネ・申請関連'].map(normalizeEnergyCustomFieldLabel),
+        middle: ['面積確認', '太陽光 年間日射地域区分'].map(normalizeEnergyCustomFieldLabel),
+        rest: ['PJ No(旧)'].map(normalizeEnergyCustomFieldLabel)
+    };
+    var ENERGY_INLINE_EDIT_LABELS = ['面積確認'].map(normalizeEnergyCustomFieldLabel);
     /** 省エネ projects show these composite fields inside 省エネ向け資料, in this order. */
     var ENERGY_MATERIAL_COMPOSITE_ORDER = ['意匠図', '設備図', '配置図'];
     var CUSTOM_FIELD_COMPOSITE_BASE_LABELS = { '設備図': true, '意匠図': true, '配置図': true };
@@ -817,7 +831,8 @@
             },
             canEditProject() {
                 if (this.isProjectCreator) return true;
-                return this.permission.can_manage_project || (this.permission.is_member && this.permission.rule && this.permission.rule.project_edit == 1);
+                // can_edit_project: what the server accepts (e.g. a 管理 of another department)
+                return this.permission.can_edit_project || this.permission.can_manage_project || (this.permission.is_member && this.permission.rule && this.permission.rule.project_edit == 1);
             },
             canUpdateProgress() {
                 return this.permission.is_member;
@@ -2877,6 +2892,30 @@
                 const found = arr.find(f => f.label && f.label.trim() === label.trim());
                 return found ? found.value : '';
             },
+            /**
+             * 部署別項目 is rendered in groups so the 省エネ fields can sit between custom fields.
+             * 'all': every field (departments other than 省エネ). 省エネ: 'energy_top', 'energy_middle'
+             * and 'energy_rest' follow ENERGY_CUSTOM_FIELD_ORDER.
+             */
+            getCustomFieldGroup(fields, group) {
+                const list = Array.isArray(fields) ? fields : [];
+                const energy = this.isEnergyDepartmentProject;
+                if (group === 'all') return energy ? [] : list;
+                if (!energy) return [];
+                const pos = (f, labels) => labels.indexOf(normalizeEnergyCustomFieldLabel(f && (f.statusOf || f.label)));
+                const pick = (labels) => list.filter(f => pos(f, labels) !== -1).sort((a, b) => pos(a, labels) - pos(b, labels));
+                if (group === 'energy_top') return pick(ENERGY_CUSTOM_FIELD_ORDER.top);
+                if (group === 'energy_middle') return pick(ENERGY_CUSTOM_FIELD_ORDER.middle);
+                const placed = ENERGY_CUSTOM_FIELD_ORDER.top.concat(ENERGY_CUSTOM_FIELD_ORDER.middle);
+                const rest = list.filter(f => pos(f, placed) === -1);
+                // PJ No(旧) first, then whatever else the department defines
+                return pick(ENERGY_CUSTOM_FIELD_ORDER.rest).concat(rest.filter(f => pos(f, ENERGY_CUSTOM_FIELD_ORDER.rest) === -1));
+            },
+            /** 面積確認 of a 省エネ project is typed right on the page by users who may edit. */
+            isInlineEditableCustomField(field) {
+                return !!(field && !field.isComposite && this.canEditProject && this.isEnergyDepartmentProject
+                    && ENERGY_INLINE_EDIT_LABELS.indexOf(normalizeEnergyCustomFieldLabel(field.label)) !== -1);
+            },
             /** Every custom field of the department with its saved value (filled or not). */
             getAllCustomFieldsForView() {
                 const allFieldsFromSets = this.collectCustomFieldsFromSets(this.allDepartmentCustomFieldSets);
@@ -2890,7 +2929,8 @@
                 const all = this.mapSetFieldsToCustomFields(allFieldsFromSets, saved);
                 const withValue = new Set(all.filter(f => this.customFieldHasValue(f)).map(f => String(f.label || '').trim()));
                 // A 状況 field follows its own field: shown whenever that field is, even while empty
-                const filled = all.filter(f => this.customFieldHasValue(f) || (f.statusOf && withValue.has(f.statusOf)));
+                const filled = all.filter(f => this.customFieldHasValue(f) || (f.statusOf && withValue.has(f.statusOf))
+                    || this.isInlineEditableCustomField(f));
                 const shown = new Set(filled.map(f => String(f.label || '').trim()));
                 // A 状況 whose own field is empty stands alone, under its full label
                 return filled.map(f => (f.statusOf && !shown.has(f.statusOf)) ? { ...f, statusOf: null } : f);

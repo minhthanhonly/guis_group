@@ -2867,8 +2867,20 @@ class Task extends ApplicationModel {
             );
         }
 
+        // A project_manager of any department may edit every project (Project::canUserEditProject)
+        $isAnyDepartmentManager = $isDepartmentManager;
+        if (!$isAdmin && !$isAnyDepartmentManager) {
+            $anyDepartmentCheck = $this->fetchOne(
+                "SELECT COUNT(*) as count FROM " . DB_PREFIX . "user_department " .
+                "WHERE userid = '" . $this->quote($currentUserId) . "' AND project_manager = 1"
+            );
+            $isAnyDepartmentManager = ($anyDepartmentCheck && $anyDepartmentCheck['count'] > 0);
+        }
+
         return [
             'is_team_leader' => $isTeamLeader,
+            // Same answer as Project::canUserEditProject(), i.e. what project.update accepts
+            'can_edit_project' => $isAdmin || $isProjectManager || $isAnyDepartmentManager || $isCreator,
             'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector || $isMember || $isCreator,
             'is_director' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector,
             'can_manage_project' => $isAdmin || $isProjectManager || $isDepartmentManager,
