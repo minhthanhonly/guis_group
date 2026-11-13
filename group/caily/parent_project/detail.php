@@ -353,16 +353,18 @@ $view->heading('建物詳細');
                         </div>
                     </div>
                     <template v-else-if="workloadStatsByDepartment.length">
-                        <ul class="nav nav-tabs mb-3" role="tablist">
-                            <li v-for="dept in workloadStatsByDepartment" :key="dept.department_id" class="nav-item" role="presentation">
-                                <button type="button"
-                                        class="nav-link"
-                                        :class="{ active: activeWorkloadDeptId === dept.department_id }"
-                                        @click="activeWorkloadDeptId = dept.department_id">
-                                    {{ dept.department_name }}
-                                </button>
-                            </li>
-                        </ul>
+                        <div class="workload-dept-tabs mb-3" role="tablist">
+                            <button v-for="dept in workloadStatsByDepartment" :key="dept.department_id"
+                                    type="button"
+                                    role="tab"
+                                    class="workload-dept-tab"
+                                    :class="{ active: activeWorkloadDeptId === dept.department_id }"
+                                    :aria-selected="activeWorkloadDeptId === dept.department_id"
+                                    @click="activeWorkloadDeptId = dept.department_id">
+                                <span class="workload-dept-tab-name">{{ dept.department_name }}</span>
+                                <span class="workload-dept-tab-hours">{{ formatTotalWorkload(dept.totalWorkload) }}</span>
+                            </button>
+                        </div>
                         <div v-if="activeWorkloadDept">
                             <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 pb-2 border-bottom">
                                 <small class="text-muted">
@@ -2875,6 +2877,52 @@ $view->footing();
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
         gap: 1rem;
+    }
+    /* 部署別種別工数: department switcher */
+    .workload-dept-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+    .workload-dept-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.4rem 0.85rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 999px;
+        background: var(--bs-body-bg);
+        color: var(--bs-heading-color, var(--bs-body-color));
+        font-size: 0.875rem;
+        font-weight: 500;
+        line-height: 1.3;
+        cursor: pointer;
+        transition: background-color .15s, border-color .15s, color .15s;
+    }
+    .workload-dept-tab:hover {
+        border-color: var(--bs-primary);
+        color: var(--bs-primary);
+    }
+    .workload-dept-tab:focus-visible {
+        outline: 2px solid var(--bs-primary);
+        outline-offset: 2px;
+    }
+    .workload-dept-tab-hours {
+        padding: 0.05rem 0.45rem;
+        border-radius: 999px;
+        background: color-mix(in srgb, currentColor 12%, transparent);
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .workload-dept-tab.active {
+        background: var(--bs-primary);
+        border-color: var(--bs-primary);
+        color: #fff;
+        box-shadow: 0 2px 6px color-mix(in srgb, var(--bs-primary) 35%, transparent);
+    }
+    .workload-dept-tab.active .workload-dept-tab-hours {
+        background: rgba(255, 255, 255, 0.22);
     }
     /* 3 columns by default; fewer only on narrow screens */
     @media (max-width: 991.98px) {

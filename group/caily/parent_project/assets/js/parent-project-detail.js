@@ -1205,6 +1205,22 @@ createApp({
             }
             return '#566a7f';
         },
+        // Dark or white text, whichever reads better on the given slice color
+        getContrastTextColor(color) {
+            const m = String(color || '').trim().match(/^#?([0-9a-f]{3}|[0-9a-f]{6})$/i);
+            if (!m) return '#fff';
+            let hex = m[1];
+            if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+            const lin = (v) => {
+                v /= 255;
+                return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+            };
+            const L = 0.2126 * lin(parseInt(hex.slice(0, 2), 16))
+                + 0.7152 * lin(parseInt(hex.slice(2, 4), 16))
+                + 0.0722 * lin(parseInt(hex.slice(4, 6), 16));
+            // contrast vs white = 1.05/(L+0.05); vs near-black (#1f2328, L≈0.016) = (L+0.05)/0.066
+            return (1.05 / (L + 0.05)) >= ((L + 0.05) / 0.066) ? '#fff' : '#1f2328';
+        },
         destroyWorkloadChart() {
             if (this.workloadChartRenderTimer) {
                 clearTimeout(this.workloadChartRenderTimer);
@@ -1270,8 +1286,10 @@ createApp({
                         legend: {
                             position: 'bottom',
                             horizontalAlign: 'center',
-                            fontSize: '12px',
+                            fontSize: '13px',
+                            fontWeight: 500,
                             markers: { width: 10, height: 10, radius: 2 },
+                            itemMargin: { horizontal: 8, vertical: 2 },
                             labels: {
                                 colors: chartTextColor
                             }
@@ -1279,8 +1297,12 @@ createApp({
                         dataLabels: {
                             enabled: true,
                             style: {
-                                colors: [chartTextColor]
+                                fontSize: '12px',
+                                fontWeight: 700,
+                                colors: colors.map(c => this.getContrastTextColor(c))
                             },
+                            background: { enabled: false },
+                            dropShadow: { enabled: false },
                             formatter(val, opts) {
                                 return formatHours(opts.w.config.series[opts.seriesIndex]);
                             }
