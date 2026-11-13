@@ -969,7 +969,10 @@ if($_SESSION['show_project'] == 0){
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="内容">内容</span></label>
                                 <div class="custom_editor">
-                                    <div class="custom_editor_content" id="quill_note_content_detail"></div>
+                                    <!-- Dynamic attribute on purpose: a fully static node is hoisted by Vue and
+                                         re-created by cloning the last mounted one, which still holds the previous
+                                         note's Quill markup — メモを追加 would then open with that note's text. -->
+                                    <div class="custom_editor_content" id="quill_note_content_detail" :data-note-id="editingNote.id || 'new'"></div>
                                     <textarea class="custom_editor_textarea d-none" v-model="editingNote.content" id="quill_note_content_detail_textarea"></textarea>
                                 </div>
                             </div>
