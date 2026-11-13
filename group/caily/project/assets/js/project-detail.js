@@ -722,6 +722,8 @@ const vueApp = createApp({
             noteLabels: [],
             noteFilterLabel: '',
             noteFilterType: '',
+            noteFilterVisibility: '', // '' | all | members | self
+            noteFilterPin: '',        // '' | everyone | self | none
             editingNote: {
                 id: null,
                 title: '',
@@ -751,6 +753,18 @@ const vueApp = createApp({
                 { value: 'blossom', text: 'ブロッサム' },
                 { value: 'clay', text: 'クレイ' },
                 { value: 'chalk', text: 'チョーク' }
+            ],
+            noteFilterVisibilityOptions: [
+                { value: '', text: 'すべて' },
+                { value: 'all', text: '全員', icon: 'fa-globe' },
+                { value: 'members', text: '案件メンバー', icon: 'fa-users' },
+                { value: 'self', text: '自分のみ', icon: 'fa-lock' }
+            ],
+            noteFilterPinOptions: [
+                { value: '', text: 'すべて' },
+                { value: 'everyone', text: 'ピン（全員）', icon: 'fa-thumb-tack text-danger' },
+                { value: 'self', text: 'ピン（自分）', icon: 'fa-bookmark text-primary' },
+                { value: 'none', text: 'ピンなし' }
             ],
             noteVisibilityOptions: [
                 { value: 'all', text: '全員', icon: 'fa-globe' },
@@ -1025,8 +1039,15 @@ const vueApp = createApp({
             });
             return out;
         },
+        /** Any board filter set — drag reorder is off while filtering (would scramble sort_order) */
+        noteFiltersActive() {
+            return !!(this.noteFilterLabel || this.noteFilterType !== ''
+                || this.noteFilterVisibility || this.noteFilterPin);
+        },
         filteredNotes() {
             const labelFilter = this.noteFilterLabel;
+            const visibilityFilter = this.noteFilterVisibility;
+            const pinFilter = this.noteFilterPin;
             const typeFilter = this.noteFilterType === '' || this.noteFilterType === null || this.noteFilterType === undefined
                 ? ''
                 : String(this.noteFilterType);
@@ -1039,6 +1060,14 @@ const vueApp = createApp({
                 if (typeFilter !== '') {
                     const t = Number(note.needs_confirmation) || 0;
                     if (String(t) !== typeFilter) return false;
+                }
+                if (visibilityFilter && (note.visibility || 'all') !== visibilityFilter) return false;
+                if (pinFilter) {
+                    const everyone = note.is_important == 1;
+                    const self = note.is_pinned_self == 1;
+                    if (pinFilter === 'everyone' && !everyone) return false;
+                    if (pinFilter === 'self' && !self) return false;
+                    if (pinFilter === 'none' && (everyone || self)) return false;
                 }
                 return true;
             });
@@ -3000,7 +3029,7 @@ const vueApp = createApp({
             var el = this.$refs.detailNotesList;
             if (!el || !this.filteredNotes || this.filteredNotes.length < 2) return;
             // Filters active → don't allow reorder (would scramble global sort_order)
-            if (this.noteFilterLabel || this.noteFilterType !== '') return;
+            if (this.noteFiltersActive) return;
 
             var bind = function() {
                 if (typeof Sortable === 'undefined') return;
@@ -3219,6 +3248,8 @@ const vueApp = createApp({
         clearNoteFilters() {
             this.noteFilterLabel = '';
             this.noteFilterType = '';
+            this.noteFilterVisibility = '';
+            this.noteFilterPin = '';
         },
         async saveNote() {
             // Lấy nội dung từ Quill editor nếu có, nếu không dùng editingNote.content
@@ -3805,6 +3836,12 @@ const vueApp = createApp({
             this.$nextTick(() => this.initDetailNotesSortable());
         },
         noteFilterType() {
+            this.$nextTick(() => this.initDetailNotesSortable());
+        },
+        noteFilterVisibility() {
+            this.$nextTick(() => this.initDetailNotesSortable());
+        },
+        noteFilterPin() {
             this.$nextTick(() => this.initDetailNotesSortable());
         },
     },

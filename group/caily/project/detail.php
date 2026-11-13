@@ -157,11 +157,12 @@ if($_SESSION['show_project'] == 0){
                                     <option value="2">GUISメモ</option>
                                     <option value="0">未分類</option>
                                 </select>
-                                <button v-if="noteFilterLabel || noteFilterType !== ''"
+                                <button v-if="noteFiltersActive"
                                         type="button"
-                                        class="btn btn-sm btn-outline-secondary"
+                                        class="btn btn-sm btn-danger"
+                                        title="フィルターをクリア"
                                         @click="clearNoteFilters">
-                                    クリア ({{ filteredNotes.length }})
+                                    <i class="fa fa-times me-1"></i>クリア ({{ filteredNotes.length }} / {{ notes.length }})
                                 </button>
                             </template>
                             <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" title="メモを追加">
@@ -170,10 +171,39 @@ if($_SESSION['show_project'] == 0){
                         </div>
                     </div>
                     <div class="card-body">
+                        <!-- 公開範囲 / ピン filters (radio) -->
+                        <div v-if="notes.length > 0" class="note-board-radio-filters">
+                            <div class="note-board-radio-group">
+                                <span class="note-board-radio-label">公開範囲</span>
+                                <div class="btn-group btn-group-sm" role="group" aria-label="公開範囲">
+                                    <template v-for="opt in noteFilterVisibilityOptions" :key="'noteFilterVisibility-' + opt.value">
+                                        <input type="radio" class="btn-check" name="noteFilterVisibility"
+                                               :id="'noteFilterVisibility-' + (opt.value || 'any')"
+                                               :value="opt.value" v-model="noteFilterVisibility" autocomplete="off">
+                                        <label class="btn btn-outline-primary" :for="'noteFilterVisibility-' + (opt.value || 'any')">
+                                            <i v-if="opt.icon" class="fa me-1" :class="opt.icon"></i>{{ opt.text }}
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                            <div class="note-board-radio-group">
+                                <span class="note-board-radio-label">ピン</span>
+                                <div class="btn-group btn-group-sm" role="group" aria-label="ピン">
+                                    <template v-for="opt in noteFilterPinOptions" :key="'noteFilterPin-' + opt.value">
+                                        <input type="radio" class="btn-check" name="noteFilterPin"
+                                               :id="'noteFilterPin-' + (opt.value || 'any')"
+                                               :value="opt.value" v-model="noteFilterPin" autocomplete="off">
+                                        <label class="btn btn-outline-primary" :for="'noteFilterPin-' + (opt.value || 'any')">
+                                            <i v-if="opt.icon" class="fa me-1" :class="opt.icon"></i>{{ opt.text }}
+                                        </label>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
                         <div v-if="notes.length > 0 && filteredNotes.length > 0"
                              ref="detailNotesList"
                              class="note-board detail-notes-list"
-                             :class="{ 'note-filters-active': !!(noteFilterLabel || noteFilterType !== '') }">
+                             :class="{ 'note-filters-active': noteFiltersActive }">
                             <div v-for="note in filteredNotes"
                                  :key="note.id"
                                  class="detail-note-item note-card"
@@ -1254,6 +1284,31 @@ $view->footing();
 .note-board-filter {
     width: auto;
     max-width: 180px;
+}
+.note-board-radio-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-bottom: 14px;
+}
+.note-board-radio-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.note-board-radio-label {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+/* the theme only tints a checked outline button faintly — fill it so the active filter is obvious */
+.note-board-radio-group .btn-check:checked + .btn {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: #fff;
+}
+.note-board-radio-group .btn-check:checked + .btn .fa {
+    color: #fff !important;
 }
 .note-board {
     display: grid;
