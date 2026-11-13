@@ -333,221 +333,73 @@ if($_SESSION['show_project'] == 0){
                     <div class="card-body" v-if="project">
                         <input type="hidden" v-model.number="project.payment_version">
 
-                        <template v-if="isEnergyDepartmentProject">
-                            <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
-                            <div v-for="row in energyEstimateFeeRows" :key="'est-' + row.fee" class="border rounded p-3 mb-3">
-                                <div class="fw-semibold mb-2"><span :data-i18n="row.title">{{ row.title }}</span></div>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <label class="form-label mb-0">{{ row.dateLabel }} <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                            <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate(row.dateKey)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
+                        <!-- 見積 / 請求: one block per document (省エネ: per fee). Logic: project-detail-business-doc-mixin.js -->
+                        <div v-for="section in businessDocumentSections" :key="'bd-' + section.kind" class="bd-section">
+                            <div v-if="isEnergyDepartmentProject" class="bd-section-title">
+                                <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ section.heading }}</span>
+                            </div>
+                            <div v-for="row in section.rows" :key="section.kind + '-' + row.fee" class="bd-block" :class="'bd-block-' + row.kind">
+                                <div class="bd-block-head">
+                                    <div class="bd-block-title">
+                                        <i v-if="row.standard" :class="section.icon" class="me-1"></i>
+                                        <span :data-i18n="bdRowTitle(section, row)">{{ bdRowTitle(section, row) }}</span>
+                                    </div>
+                                    <div v-if="canEditBusinessDocuments" class="btn-group">
+                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light bd-status-btn"
+                                                :class="getEnergyFeeStatusButtonClass(row.kind, project[row.statusKey])"
+                                                :id="row.dropdownId"
+                                                data-bs-toggle="dropdown" aria-expanded="false">
+                                            {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
+                                        </button>
+                                        <ul class="dropdown-menu dropdown-menu-end">
+                                            <li v-for="status in bdRowStatusOptions(row)" :key="status.value">
+                                                <a class="dropdown-item waves-effect" href="javascript:void(0);"
+                                                   :class="{ disabled: status.value === '発行済' && !bdRowIsComplete(row), active: getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) === status.label }"
+                                                   @click="bdRowSelectStatus(row, status.value)">
+                                                    {{ status.label }}
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <span v-else class="badge" :class="getEnergyFeeStatusBadgeClass(row.kind, project[row.statusKey])">
+                                        {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
+                                    </span>
+                                </div>
+                                <div class="bd-fields">
+                                    <div class="bd-field">
+                                        <label class="bd-label" :for="businessDocumentPickerId(row.dateKey)">{{ row.dateLabel }}<span v-if="canEditBusinessDocuments" class="text-danger ms-1">*</span></label>
+                                        <div v-if="canEditBusinessDocuments" class="input-group input-group-sm">
+                                            <input type="text" class="form-control" v-model="project[row.dateKey]" :id="businessDocumentPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
+                                            <button v-if="!hasBusinessDocumentDate(row.dateKey)" type="button" class="btn btn-outline-primary" title="今日の日付を入力"
                                                     @click="setBusinessDocumentDateToday(row.dateKey)">今日</button>
                                         </div>
-                                        <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project[row.dateKey]" :id="businessDocumentPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                        <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime(row.dateKey)" :data-time="getBusinessDocumentDateForTooltip(row.dateKey)" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip(row.dateKey))" readonly>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">{{ row.amountLabel }} <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                        <input type="number" autocomplete="off" class="form-control" v-model.number="project[row.amountKey]" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">状況</label>
-                                        <div v-if="canEditBusinessDocuments">
-                                            <div class="btn-group">
-                                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                                        :class="getEnergyFeeStatusButtonClass(row.kind, project[row.statusKey])"
-                                                        :id="row.dropdownId"
-                                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                                    {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li v-for="status in getEnergyFeeStatusOptions(row.kind)" :key="status.value">
-                                                        <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                           :class="{ disabled: status.value === '発行済' && !isEnergyFeeRowComplete(row) }"
-                                                           @click="selectEnergyFeeStatus(row, status.value)">
-                                                            {{ status.label }}
-                                                        </a>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                            <div v-if="shouldShowEnergyFeeIssuedHint(row)" class="form-text text-muted">
-                                                発行済にするには{{ row.dateLabel }}・{{ row.amountLabel }}が必要です
-                                            </div>
-                                        </div>
-                                        <div v-else>
-                                            <span class="badge" :class="getEnergyFeeStatusBadgeClass(row.kind, project[row.statusKey])">
-                                                {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
-                                            </span>
+                                        <div v-else class="bd-value" :data-time="getBusinessDocumentDateForTooltip(row.dateKey)" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip(row.dateKey))">
+                                            {{ formatBusinessDocumentDateTime(row.dateKey) || '—' }}
                                         </div>
                                     </div>
+                                    <div class="bd-field">
+                                        <label class="bd-label">{{ row.amountLabel }}<span v-if="canEditBusinessDocuments" class="text-danger ms-1">*</span></label>
+                                        <div v-if="canEditBusinessDocuments" class="input-group input-group-sm">
+                                            <span class="input-group-text">¥</span>
+                                            <input type="text" inputmode="numeric" autocomplete="off" class="form-control text-end bd-amount-input"
+                                                   :value="bdAmountDisplay(row.amountKey)" placeholder="未入力" data-i18n="未入力"
+                                                   @focus="onBdAmountFocus(row.amountKey, $event)" @blur="onBdAmountBlur" @input="onBdAmountInput(row.amountKey, $event)">
+                                            <button v-if="bdRowCanCopy(row)" type="button" class="btn btn-outline-primary" title="見積金額をコピー"
+                                                    @click="bdRowCopy(row)">見積と同額</button>
+                                        </div>
+                                        <div v-else class="bd-value text-end">{{ bdAmountDisplay(row.amountKey) ? '¥' + bdAmountDisplay(row.amountKey) : '—' }}</div>
+                                        <div v-if="bdRowTaxIncluded(row)" class="bd-sub text-end">税込 {{ bdRowTaxIncluded(row) }}</div>
+                                    </div>
+                                </div>
+                                <div v-if="canEditBusinessDocuments && bdRowShowIssuedHint(row)" class="bd-hint">
+                                    <i class="fa fa-info-circle me-1"></i>発行済にするには{{ row.dateLabel }}・{{ row.amountLabel }}が必要です
                                 </div>
                             </div>
+                        </div>
 
-                            <hr class="my-3">
-
-                            <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
-                            <div v-for="row in energyInvoiceFeeRows" :key="'inv-' + row.fee" class="border rounded p-3 mb-3">
-                                <div class="fw-semibold mb-2"><span :data-i18n="row.title">{{ row.title }}</span></div>
-                                <div class="row g-3">
-                                    <div class="col-md-4">
-                                        <div class="d-flex justify-content-between align-items-center mb-1">
-                                            <label class="form-label mb-0">{{ row.dateLabel }} <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                            <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate(row.dateKey)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                                    @click="setBusinessDocumentDateToday(row.dateKey)">今日</button>
-                                        </div>
-                                        <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project[row.dateKey]" :id="businessDocumentPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                        <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime(row.dateKey)" :data-time="getBusinessDocumentDateForTooltip(row.dateKey)" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip(row.dateKey))" readonly>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="d-flex justify-content-between align-items-center mb-1 flex-nowrap gap-1">
-                                            <label class="form-label mb-0 text-nowrap">{{ row.amountLabel }} <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                            <button v-if="canEditBusinessDocuments && canCopyEnergyFeeAmountToInvoice(row)" type="button" class="btn btn-outline-primary btn-sm py-0 px-2 text-nowrap flex-shrink-0"
-                                                    @click="copyEnergyFeeAmountToInvoice(row)">見積と同額</button>
-                                        </div>
-                                        <input type="number" autocomplete="off" class="form-control" v-model.number="project[row.amountKey]" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <label class="form-label">状況</label>
-                                        <div v-if="canEditBusinessDocuments">
-                                            <div class="btn-group">
-                                                <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                                        :class="getEnergyFeeStatusButtonClass(row.kind, project[row.statusKey])"
-                                                        :id="row.dropdownId"
-                                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                                    {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
-                                                </button>
-                                                <ul class="dropdown-menu">
-                                                    <li v-for="status in getEnergyFeeStatusOptions(row.kind)" :key="status.value">
-                                                        <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                           :class="{ disabled: status.value === '発行済' && !isEnergyFeeRowComplete(row) }"
-                                                           @click="selectEnergyFeeStatus(row, status.value)">
-                                                            {{ status.label }}
-                                                        </a>
-                                                    </li>
-                                                </ul>
-                                            </div>
-                                            <div v-if="shouldShowEnergyFeeIssuedHint(row)" class="form-text text-muted">
-                                                発行済にするには{{ row.dateLabel }}・{{ row.amountLabel }}が必要です
-                                            </div>
-                                        </div>
-                                        <div v-else>
-                                            <span class="badge" :class="getEnergyFeeStatusBadgeClass(row.kind, project[row.statusKey])">
-                                                {{ getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) }}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-
-                        <template v-else>
-                            <h6 class="text-muted mb-3"><span data-i18n="見積">見積</span></h6>
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <label class="form-label mb-0">見積日 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                        <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('estimate_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                                @click="setBusinessDocumentDateToday('estimate_date')">今日</button>
-                                    </div>
-                                    <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.estimate_date" id="estimate_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                    <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('estimate_date')" :data-time="getBusinessDocumentDateForTooltip('estimate_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('estimate_date'))" readonly>
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">見積金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                    <input type="number" autocomplete="off" class="form-control" v-model.number="project.amount" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">見積状況</label>
-                                    <div v-if="canEditBusinessDocuments">
-                                        <div class="btn-group">
-                                            <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                                    :class="getEstimateStatusButtonClass(project.estimate_status)"
-                                                    id="estimateStatusDropdown"
-                                                    data-bs-toggle="dropdown" aria-expanded="false">
-                                                {{ getEstimateStatusLabel(project.estimate_status) }}
-                                            </button>
-                                            <ul class="dropdown-menu">
-                                                <li v-for="status in businessEstimateStatuses" :key="status.value">
-                                                    <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                       :class="{ disabled: status.value === '発行済' && !isEstimateDocumentFieldsComplete() }"
-                                                       @click="selectEstimateStatus(status.value)">
-                                                        {{ status.label }}
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                        <div v-if="shouldShowEstimateIssuedHint()" class="form-text text-muted">
-                                            発行済にするには見積日・見積金額が必要です
-                                        </div>
-                                    </div>
-                                    <div v-else>
-                                        <span class="badge" :class="getEstimateStatusBadgeClass(project.estimate_status)">
-                                            {{ getEstimateStatusLabel(project.estimate_status) }}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <hr class="my-3">
-
-                            <h6 class="text-muted mb-3"><span data-i18n="請求">請求</span></h6>
-                            <div class="row g-3 mb-3">
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-between align-items-center mb-1">
-                                        <label class="form-label mb-0">請求日 <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                        <button v-if="canEditBusinessDocuments && !hasBusinessDocumentDate('invoice_date')" type="button" class="btn btn-outline-primary btn-sm py-0 px-2"
-                                                @click="setBusinessDocumentDateToday('invoice_date')">今日</button>
-                                    </div>
-                                    <input v-if="canEditBusinessDocuments" type="text" class="form-control" v-model="project.invoice_date" id="invoice_date_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                    <input v-else type="text" class="form-control" :value="formatBusinessDocumentDateTime('invoice_date')" :data-time="getBusinessDocumentDateForTooltip('invoice_date')" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip('invoice_date'))" readonly>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="d-flex justify-content-between align-items-center mb-1 flex-nowrap gap-1">
-                                        <label class="form-label mb-0 text-nowrap">請求金額(税抜き) <span v-if="canEditBusinessDocuments" class="text-danger">*</span></label>
-                                        <button v-if="canEditBusinessDocuments && canCopyEstimateAmountToInvoice()" type="button" class="btn btn-outline-primary btn-sm py-0 px-2 text-nowrap flex-shrink-0"
-                                                @click="copyEstimateAmountToInvoice">見積と同額</button>
-                                    </div>
-                                    <input type="number" autocomplete="off" class="form-control" v-model.number="project.invoice_amount" :readonly="!canEditBusinessDocuments" placeholder="未入力" data-i18n="未入力" @input="scheduleBusinessDocumentUpdate" min="0" step="1">
-                                </div>
-                                <div class="col-md-6">
-                                    <label class="form-label">請求状況</label>
-                                    <div v-if="canEditBusinessDocuments">
-                                        <div class="btn-group">
-                                            <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light"
-                                                    :class="getInvoiceStatusButtonClass(project.invoice_status)"
-                                                    id="invoiceStatusDropdown"
-                                                    data-bs-toggle="dropdown" aria-expanded="false">
-                                                {{ getInvoiceStatusLabel(project.invoice_status) }}
-                                            </button>
-                                            <ul class="dropdown-menu">
-                                                <li v-for="status in businessInvoiceStatuses" :key="status.value">
-                                                    <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                       :class="{ disabled: status.value === '発行済' && !isInvoiceDocumentFieldsComplete() }"
-                                                       @click="selectInvoiceStatus(status.value)">
-                                                        {{ status.label }}
-                                                    </a>
-                                                </li>
-                                            </ul>
-                                        </div>
-                                        <div v-if="shouldShowInvoiceIssuedHint()" class="form-text text-muted">
-                                            発行済にするには請求日・請求金額が必要です
-                                        </div>
-                                    </div>
-                                    <div v-else>
-                                        <span class="badge" :class="getInvoiceStatusBadgeClass(project.invoice_status)">
-                                            {{ getInvoiceStatusLabel(project.invoice_status) }}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-                        </template>
-
-                        <hr class="my-3">
-
-                        <div class="mb-0">
-                            <label class="form-label" data-i18n="決済備考">決済備考</label>
-                            <textarea class="form-control" rows="3" v-model="project.payment_note" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate"></textarea>
+                        <div class="mb-0 bd-note">
+                            <label class="bd-label" data-i18n="決済備考">決済備考</label>
+                            <textarea class="form-control form-control-sm" rows="3" placeholder="備考を入力" v-model="project.payment_note" :readonly="!canEditBusinessDocuments" @change="scheduleBusinessDocumentUpdate"></textarea>
                         </div>
 
                         <div v-if="businessDocumentError" class="alert alert-danger mt-3 mb-0">{{ businessDocumentError }}</div>
@@ -895,52 +747,67 @@ if($_SESSION['show_project'] == 0){
         </div>
         <div class="modal-backdrop fade show" v-if="showGeneralLogModal"></div>
 
-        <!-- Modal Business Document History -->
-        <div class="modal fade" tabindex="-1" :class="{show: showBusinessDocumentLogModal}" style="display: block;" v-if="showBusinessDocumentLogModal">
+        <!-- Modal Business Document History (grouped by day, filter by 見積 / 請求 / 入金 / 備考) -->
+        <div class="modal fade bd-log-modal" tabindex="-1" :class="{show: showBusinessDocumentLogModal}" style="display: block;" v-if="showBusinessDocumentLogModal" @keydown.esc="closeBusinessDocumentLogModal">
             <div class="modal-dialog modal-lg modal-dialog-scrollable">
                 <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">決済情報 履歴</h5>
+                    <div class="modal-header flex-wrap gap-2">
+                        <h5 class="modal-title"><i class="fa fa-history me-2"></i>決済情報 履歴</h5>
                         <button type="button" class="btn-close" @click="closeBusinessDocumentLogModal"></button>
+                        <div class="w-100 bd-log-filters" role="group" aria-label="種類で絞り込み">
+                            <button v-for="opt in bdLogFilterOptions" :key="'bdf-' + opt.value" type="button"
+                                    class="btn btn-sm" :class="bdLogFilter === opt.value ? 'btn-primary' : 'btn-outline-secondary'"
+                                    :disabled="opt.value !== '' && opt.count === 0"
+                                    @click="bdLogFilter = opt.value">
+                                {{ opt.label }} <span class="bd-log-filter-count">{{ opt.count }}</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="modal-body p-0">
-                        <ul class="list-group list-group-flush">
-                            <li v-for="log in sortedBusinessDocumentLogs" :key="log.id" class="list-group-item">
-                                <div class="d-flex">
-                                    <div class="d-flex flex-row align-items-start justify-content-start me-3" style="min-width:130px;">
-                                        <div class="d-flex flex-column align-items-center justify-content-start" style="width:40px;">
-                                            <div class="avatar">
-                                                <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
-                                                    {{ getInitials(log.username || log.realname || '?', log.userid || log.user_id || '', log.user_ruby || '') }}
-                                                </span>
-                                                <img v-if="!log.avatarError && getAvatarSrc(log)"
-                                                    :src="getAvatarSrc(log)"
-                                                    alt="avatar"
-                                                    class="rounded-circle"
-                                                    :class="{ 'd-none': !log.avatarLoaded }"
-                                                    @load="handleAvatarLoad(log)"
-                                                    @error="handleAvatarError(log)">
-                                            </div>
-                                        </div>
-                                        <div class="d-flex flex-column align-items-start justify-content-center ms-2">
-                                            <span class="fw-bold small">{{ getBdLogDisplayName(log) }}</span>
-                                            <span class="text-muted small">{{ formatShortDateTime(log.time) }}</span>
-                                        </div>
-                                    </div>
-                                    <div class="flex-grow-1 d-flex align-items-center">
-                                        <span>
-                                            <i :class="historyIcon(log.action) + ' me-2'"></i>
-                                            <span class="me-2">{{ getLogNote(log) }}</span>
-                                            <br>
-                                            <span v-if="hasLogValue(log.value1)" :class="getLogBadgeClass(log, 'value1')" class="mx-1">{{ getBusinessDocumentLogValue(log, 'value1') }}</span>
-                                            <span v-if="hasLogValue(log.value1) && hasLogValue(log.value2)" class="mx-1">→</span>
-                                            <span v-if="hasLogValue(log.value2)" :class="getLogBadgeClass(log, 'value2')" class="mx-1">{{ getBusinessDocumentLogValue(log, 'value2') }}</span>
+                    <div class="modal-body">
+                        <div v-for="group in businessDocumentLogGroups" :key="'bdg-' + group.date" class="bd-log-day">
+                            <div class="bd-log-day-label">{{ group.label }}</div>
+                            <ul class="bd-log-list">
+                                <li v-for="log in group.logs" :key="log.id" class="bd-log-item" :class="'bd-log-cat-' + getBdLogCategory(log)">
+                                    <div class="bd-log-time">{{ formatBdLogTime(log) }}</div>
+                                    <div class="bd-log-avatar avatar avatar-sm">
+                                        <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
+                                            {{ getInitials(log.username || log.realname || '?', log.userid || log.user_id || '', log.user_ruby || '') }}
                                         </span>
+                                        <img v-if="!log.avatarError && getAvatarSrc(log)"
+                                            :src="getAvatarSrc(log)"
+                                            alt="avatar"
+                                            class="rounded-circle"
+                                            :class="{ 'd-none': !log.avatarLoaded }"
+                                            @load="handleAvatarLoad(log)"
+                                            @error="handleAvatarError(log)">
                                     </div>
-                                </div>
-                            </li>
-                            <li v-if="!sortedBusinessDocumentLogs || sortedBusinessDocumentLogs.length === 0" class="list-group-item text-muted">決済情報の履歴はありません。</li>
-                        </ul>
+                                    <div class="bd-log-body">
+                                        <div class="bd-log-head">
+                                            <span class="bd-log-cat">{{ getBdLogCategoryLabel(log) }}</span>
+                                            <i :class="historyIcon(log.action)"></i>
+                                            <span class="bd-log-note">{{ getLogNote(log) }}</span>
+                                            <span class="bd-log-user">{{ getBdLogDisplayName(log) }}</span>
+                                        </div>
+                                        <div v-if="hasLogValue(log.value1) || hasLogValue(log.value2)" class="bd-log-change">
+                                            <template v-if="getBdLogValueKind(log) === 'status'">
+                                                <span v-if="hasLogValue(log.value1)" class="badge bd-log-old-badge" :class="getBdLogStatusBadgeClass(log, 'value1')">{{ formatBdLogValue(log, 'value1') }}</span>
+                                                <i v-if="hasLogValue(log.value1)" class="fa fa-arrow-right bd-log-arrow"></i>
+                                                <span class="badge" :class="getBdLogStatusBadgeClass(log, 'value2')">{{ formatBdLogValue(log, 'value2') }}</span>
+                                            </template>
+                                            <template v-else>
+                                                <span v-if="hasLogValue(log.value1)" class="bd-log-old">{{ formatBdLogValue(log, 'value1') }}</span>
+                                                <i v-if="hasLogValue(log.value1)" class="fa fa-arrow-right bd-log-arrow"></i>
+                                                <span class="bd-log-new">{{ formatBdLogValue(log, 'value2') }}</span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                        <div v-if="businessDocumentLogGroups.length === 0" class="text-muted text-center py-4">
+                            <i class="fa fa-inbox d-block mb-2 fs-3 opacity-50"></i>
+                            {{ bdLogFilter ? 'この種類の履歴はありません。' : '決済情報の履歴はありません。' }}
+                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" @click="closeBusinessDocumentLogModal">閉じる</button>
@@ -964,6 +831,7 @@ $view->footing();
 ?>
 
 <link rel="stylesheet" href="assets/css/project-notes.css?v=<?=PROJECT_CACHE_VERSION?>">
+<link rel="stylesheet" href="assets/css/project-business-doc.css?v=<?=PROJECT_CACHE_VERSION?>">
 <style>
 /* Project detail card: fields grouped under section titles (same grouping as the project form modals) */
 .project-detail-grid .project-form-section {
@@ -1531,6 +1399,7 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-energy-fields-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-note-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-detail-business-doc-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 

@@ -598,7 +598,8 @@ const vueApp = createApp({
     // ProjectFormMixin (project-form-mixin.js): the form fields, validation, widgets and save logic,
     // shared with the edit / create dialog. This file keeps what only the detail page needs.
     // ProjectNoteModalMixin (project-note-modal-mixin.js): メモ modal shared with 案件一覧
-    mixins: [window.ProjectDetailEnergyMixin, window.ProjectFormMixin, window.ProjectNoteModalMixin],
+    // ProjectDetailBusinessDocMixin (project-detail-business-doc-mixin.js): 決済情報 card + 履歴 modal
+    mixins: [window.ProjectDetailEnergyMixin, window.ProjectFormMixin, window.ProjectNoteModalMixin, window.ProjectDetailBusinessDocMixin],
     data() {
         return {
             permission: {},

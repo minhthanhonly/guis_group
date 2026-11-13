@@ -1,0 +1,204 @@
+/*
+ * 案件詳細 — 決済情報 card and 決済情報 履歴 modal (detail.php,
+ * logic: assets/js/project-detail-business-doc-mixin.js).
+ */
+
+/* ---------- card ---------- */
+.project-status-block .bd-section + .bd-section {
+    margin-top: 14px;
+}
+.project-status-block .bd-section-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    text-transform: none;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 6px;
+}
+.project-status-block .bd-block {
+    border: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.12));
+    border-left-width: 4px;
+    border-radius: 8px;
+    padding: 10px 12px;
+    background: var(--bs-card-bg, #fff);
+}
+.project-status-block .bd-block + .bd-block {
+    margin-top: 8px;
+}
+.project-status-block .bd-block-estimate {
+    border-left-color: var(--bs-info, #03c3ec);
+}
+.project-status-block .bd-block-invoice {
+    border-left-color: var(--bs-primary, #696cff);
+}
+.project-status-block .bd-block-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.project-status-block .bd-block-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    min-width: 0;
+}
+.project-status-block .bd-status-btn {
+    min-width: 92px;
+}
+/* date + amount side by side when there is room, stacked in a narrow column */
+.project-status-block .bd-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 8px 12px;
+}
+.project-status-block .bd-field {
+    min-width: 0;
+}
+.project-status-block .bd-label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-bottom: 3px;
+}
+.project-status-block .bd-value {
+    font-size: 0.95rem;
+    padding: 4px 0;
+    font-variant-numeric: tabular-nums;
+}
+.project-status-block .bd-amount-input {
+    font-variant-numeric: tabular-nums;
+}
+.project-status-block .bd-sub {
+    font-size: 0.72rem;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-top: 2px;
+    font-variant-numeric: tabular-nums;
+}
+.project-status-block .bd-hint {
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color, #6c757d);
+    margin-top: 6px;
+}
+.project-status-block .bd-note {
+    margin-top: 14px;
+}
+.project-status-block .input-group-sm > .btn {
+    white-space: nowrap;
+}
+
+/* ---------- 履歴 modal ---------- */
+.bd-log-modal .bd-log-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.bd-log-modal .bd-log-filter-count {
+    display: inline-block;
+    min-width: 18px;
+    padding: 0 5px;
+    margin-left: 2px;
+    border-radius: 9px;
+    font-size: 0.7rem;
+    background: rgba(0, 0, 0, 0.08);
+}
+.bd-log-modal .btn-primary .bd-log-filter-count {
+    background: rgba(255, 255, 255, 0.25);
+}
+.bd-log-modal .bd-log-day + .bd-log-day {
+    margin-top: 16px;
+}
+.bd-log-modal .bd-log-day-label {
+    position: sticky;
+    top: -16px;
+    z-index: 1;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 0;
+    margin-bottom: 4px;
+    background: var(--bs-modal-bg, var(--bs-body-bg, #fff));
+    border-bottom: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.12));
+}
+.bd-log-modal .bd-log-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+.bd-log-modal .bd-log-item {
+    display: grid;
+    grid-template-columns: 44px 32px minmax(0, 1fr);
+    gap: 10px;
+    align-items: start;
+    padding: 8px 4px;
+    border-bottom: 1px dashed var(--bs-border-color, rgba(0, 0, 0, 0.1));
+}
+.bd-log-modal .bd-log-item:last-child {
+    border-bottom: 0;
+}
+.bd-log-modal .bd-log-time {
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color, #6c757d);
+    font-variant-numeric: tabular-nums;
+    padding-top: 6px;
+}
+.bd-log-modal .bd-log-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.875rem;
+}
+.bd-log-modal .bd-log-cat {
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: rgba(105, 108, 255, 0.12);
+    color: var(--bs-primary, #696cff);
+}
+.bd-log-modal .bd-log-cat-estimate .bd-log-cat {
+    background: rgba(3, 195, 236, 0.14);
+    color: #0a8fb0;
+}
+.bd-log-modal .bd-log-cat-payment .bd-log-cat {
+    background: rgba(113, 221, 55, 0.16);
+    color: #4a9a1f;
+}
+.bd-log-modal .bd-log-cat-note .bd-log-cat {
+    background: rgba(133, 146, 163, 0.16);
+    color: var(--bs-secondary-color, #6c757d);
+}
+.bd-log-modal .bd-log-note {
+    font-weight: 500;
+}
+.bd-log-modal .bd-log-user {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+.bd-log-modal .bd-log-change {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 0.875rem;
+    font-variant-numeric: tabular-nums;
+}
+.bd-log-modal .bd-log-old {
+    color: var(--bs-secondary-color, #6c757d);
+    text-decoration: line-through;
+}
+.bd-log-modal .bd-log-old-badge {
+    opacity: 0.6;
+}
+.bd-log-modal .bd-log-new {
+    font-weight: 600;
+}
+.bd-log-modal .bd-log-arrow {
+    font-size: 0.7rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+[data-bs-theme="dark"] .bd-log-modal .bd-log-filter-count {
+    background: rgba(255, 255, 255, 0.12);
+}
