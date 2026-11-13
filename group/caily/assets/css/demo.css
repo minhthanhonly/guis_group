@@ -1526,6 +1526,9 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     max-width: 100%;
     display: grid;
     grid-template-columns: var(--pd-caption-width) minmax(0, 1fr);
+    /* the caption spans 40 rows; without this, a value's spare height is spread over the
+       empty rows and leaves a blank band under the value */
+    grid-auto-rows: max-content;
     column-gap: 0.75rem;
     align-items: start;
     margin: 0 !important;
