@@ -1221,7 +1221,8 @@ span.avatar-initial:not(.avatar .avatar-initial) {
 .project-form-modal .project-form-grid :is([class*="col-"], .form-control-validation, .mb-3) > .form-label,
 .project-detail-card.edit-mode .project-detail-grid :is([class*="col-"], .form-control-validation, .mb-3) > .form-label {
     grid-column: 1;
-    grid-row: 1;
+    /* spans every value line: a tall caption (title + すべて選択) must not stretch the first one */
+    grid-row: 1 / span 40;
     margin: 0;
     padding-top: 0.45rem;
     font-size: 0.9375rem;

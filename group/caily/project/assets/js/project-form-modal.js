@@ -13,6 +13,7 @@
  *   parentProject  { id, project_name, customer_id } of the building (create)
  *   managerOnly    edit as a 管理 without full edit rights: the .pf-full-only fields are hidden
  *   siblings       the building's other projects (for the 省エネ drawing-share question)
+ *   showGuisReceiver  include the GUIS受付者 field (child projects)
  *   allowRestore   offer 復元 for a cancelled project
  *   onSaved(id, info)  info: { created, restored, departmentId, departmentName }
  *   onClosed()     closed without saving
@@ -66,7 +67,12 @@
                                 throw new Error('project not found');
                             }
                         }
-                        await Promise.all([this.loadDepartmentCustomFieldSets(), this.loadGuisReceiverForForm()]);
+                        // GUIS受付者 is part of the form only where the host asks for it (building page);
+                        // elsewhere it is not shown and not sent, so the stored value stays
+                        await Promise.all([
+                            this.loadDepartmentCustomFieldSets(),
+                            opts.showGuisReceiver ? this.loadGuisReceiverForForm() : Promise.resolve()
+                        ]);
                     } catch (e) {
                         console.error('Project form: failed to load project', e);
                         this.formLoading = false;
