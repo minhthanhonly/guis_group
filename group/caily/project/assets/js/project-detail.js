@@ -599,7 +599,7 @@ const vueApp = createApp({
     // shared with the edit / create dialog. This file keeps what only the detail page needs.
     // ProjectNoteModalMixin (project-note-modal-mixin.js): メモ modal shared with 案件一覧
     // ProjectDetailBusinessDocMixin (project-detail-business-doc-mixin.js): 決済情報 card + 履歴 modal
-    mixins: [window.ProjectDetailEnergyMixin, window.ProjectFormMixin, window.ProjectNoteModalMixin, window.ProjectDetailBusinessDocMixin],
+    mixins: [window.ProjectDetailEnergyMixin, window.ProjectFormMixin, window.ProjectNoteModalMixin, window.BusinessDocumentUiMixin, window.ProjectDetailBusinessDocMixin],
     data() {
         return {
             permission: {},

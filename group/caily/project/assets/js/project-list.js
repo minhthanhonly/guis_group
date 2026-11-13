@@ -9509,7 +9509,7 @@ var projectTable;
         const { createApp } = Vue;
         app = createApp({
             // ProjectNoteModalMixin (project-note-modal-mixin.js): メモ modal shared with 案件詳細
-            mixins: [window.BusinessDocumentModalMixin, window.ProjectNoteModalMixin].filter(Boolean),
+            mixins: [window.BusinessDocumentModalMixin, window.BusinessDocumentUiMixin, window.ProjectNoteModalMixin].filter(Boolean),
             data() {
                 return {
                     loading: true,

@@ -1,99 +1,99 @@
 /*
- * 案件詳細 — 決済情報 card and 決済情報 履歴 modal (detail.php,
- * logic: assets/js/project-detail-business-doc-mixin.js).
+ * 決済情報 — card on 案件詳細 and modal on 案件一覧 / 建物詳細 (.bd-scope),
+ * 履歴 modal on all three (.bd-log-modal).
  */
 
 /* Secondary text: darker than the theme's --bs-secondary-color, which is too faint to read */
-.project-status-block,
+.bd-scope,
 .bd-log-modal {
     --bd-muted: #4b5563;
 }
-[data-bs-theme="dark"] .project-status-block,
+[data-bs-theme="dark"] .bd-scope,
 [data-bs-theme="dark"] .bd-log-modal {
     --bd-muted: #c3cad4;
 }
 
 /* ---------- card ---------- */
-.project-status-block .bd-section + .bd-section {
+.bd-scope .bd-section + .bd-section {
     margin-top: 14px;
 }
-.project-status-block .bd-section-title {
+.bd-scope .bd-section-title {
     font-size: 0.8rem;
     font-weight: 600;
     text-transform: none;
     color: var(--bd-muted);
     margin-bottom: 6px;
 }
-.project-status-block .bd-block {
+.bd-scope .bd-block {
     border: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.12));
     border-left-width: 4px;
     border-radius: 8px;
     padding: 10px 12px;
     background: var(--bs-card-bg, #fff);
 }
-.project-status-block .bd-block + .bd-block {
+.bd-scope .bd-block + .bd-block {
     margin-top: 8px;
 }
-.project-status-block .bd-block-estimate {
+.bd-scope .bd-block-estimate {
     border-left-color: var(--bs-info, #03c3ec);
 }
-.project-status-block .bd-block-invoice {
+.bd-scope .bd-block-invoice {
     border-left-color: var(--bs-primary, #696cff);
 }
-.project-status-block .bd-block-head {
+.bd-scope .bd-block-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
     margin-bottom: 8px;
 }
-.project-status-block .bd-block-title {
+.bd-scope .bd-block-title {
     font-weight: 600;
     font-size: 0.95rem;
     min-width: 0;
 }
-.project-status-block .bd-status-btn {
+.bd-scope .bd-status-btn {
     min-width: 92px;
 }
 /* date + amount side by side when there is room, stacked in a narrow column */
-.project-status-block .bd-fields {
+.bd-scope .bd-fields {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
     gap: 8px 12px;
 }
-.project-status-block .bd-field {
+.bd-scope .bd-field {
     min-width: 0;
 }
-.project-status-block .bd-label {
+.bd-scope .bd-label {
     display: block;
     font-size: 0.75rem;
     font-weight: 600;
     color: var(--bd-muted);
     margin-bottom: 3px;
 }
-.project-status-block .bd-value {
+.bd-scope .bd-value {
     font-size: 0.95rem;
     padding: 4px 0;
     font-variant-numeric: tabular-nums;
 }
-.project-status-block .bd-amount-input {
+.bd-scope .bd-amount-input {
     font-variant-numeric: tabular-nums;
 }
-.project-status-block .bd-sub {
+.bd-scope .bd-sub {
     font-size: 0.72rem;
     color: var(--bd-muted);
     margin-top: 2px;
     font-variant-numeric: tabular-nums;
 }
-.project-status-block .bd-hint {
+.bd-scope .bd-hint {
     font-size: 0.75rem;
     color: var(--bd-muted);
     margin-top: 6px;
 }
-.project-status-block .bd-note {
+.bd-scope .bd-note {
     margin-top: 14px;
 }
-.project-status-block .input-group-sm > .btn {
+.bd-scope .input-group-sm > .btn {
     white-space: nowrap;
 }
 
@@ -221,4 +221,65 @@
 }
 .bd-log-modal .bd-log-filters .btn:disabled {
     opacity: 0.5;
+}
+
+/* ---------- 決済情報 modal (案件一覧 / 建物詳細) ---------- */
+.bd-edit-modal .modal-dialog {
+    max-width: 640px;
+}
+.bd-edit-modal .modal-header {
+    align-items: flex-start;
+}
+.bd-edit-modal .bd-modal-project {
+    font-size: 0.8rem;
+    color: var(--bd-muted, #4b5563);
+    margin-top: 2px;
+    word-break: break-all;
+}
+[data-bs-theme="dark"] .bd-edit-modal .bd-modal-project {
+    color: #c3cad4;
+}
+
+/* 発行済 requirement: (i) next to the block title, text in a hover / focus tooltip */
+.bd-scope .bd-block-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.bd-scope .bd-hint-icon {
+    position: relative;
+    display: inline-flex;
+    margin-left: 2px;
+    color: var(--bs-warning, #ffab00);
+    cursor: help;
+    font-size: 0.9rem;
+    outline: none;
+}
+.bd-scope .bd-hint-icon::after {
+    content: attr(data-tip);
+    position: absolute;
+    left: 50%;
+    top: calc(100% + 6px);
+    transform: translateX(-30%);
+    z-index: 20;
+    width: max-content;
+    max-width: 260px;
+    padding: 6px 9px;
+    border-radius: 6px;
+    background: #2b2c40;
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: normal;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
+}
+.bd-scope .bd-hint-icon:hover::after,
+.bd-scope .bd-hint-icon:focus::after {
+    opacity: 1;
+    visibility: visible;
 }

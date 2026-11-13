@@ -401,7 +401,8 @@ function handleProjectVersionConflict(responseData, onReload) {
 window.handleProjectVersionConflict = handleProjectVersionConflict;
 
 createApp({
-    mixins: [window.ParentProjectCustomersMixin],
+    // BusinessDocumentUiMixin: 決済情報 modal + 履歴 (project/partials/business-document-*.php)
+    mixins: [window.ParentProjectCustomersMixin, window.BusinessDocumentUiMixin].filter(Boolean),
     data() {
         return {
             isAdmin: typeof USER_ROLE !== 'undefined' && USER_ROLE === 'administrator',

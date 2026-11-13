@@ -315,7 +315,7 @@ if($_SESSION['show_project'] == 0){
             <!-- Right Column - Stats & Comments -->
             <div class="col-xl-4">
                 <!-- Project Status Block -->
-                <div class="card mb-4 project-status-block" v-if="canViewBusinessDocuments">
+                <div class="card mb-4 project-status-block bd-scope" v-if="canViewBusinessDocuments">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center gap-2">
                             <h5 class="card-title mb-0"><span data-i18n="決済情報">決済情報</span></h5>
@@ -343,6 +343,7 @@ if($_SESSION['show_project'] == 0){
                                     <div class="bd-block-title">
                                         <i v-if="row.standard" :class="section.icon" class="me-1"></i>
                                         <span :data-i18n="bdRowTitle(section, row)">{{ bdRowTitle(section, row) }}</span>
+                                        <span v-if="canEditBusinessDocuments && bdRowShowIssuedHint(row)" class="bd-hint-icon" tabindex="0" :data-tip="'発行済にするには' + row.dateLabel + '・' + row.amountLabel + 'が必要です'" :aria-label="'発行済にするには' + row.dateLabel + '・' + row.amountLabel + 'が必要です'"><i class="fa fa-info-circle"></i></span>
                                     </div>
                                     <div v-if="canEditBusinessDocuments" class="btn-group">
                                         <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light bd-status-btn"
@@ -382,17 +383,14 @@ if($_SESSION['show_project'] == 0){
                                         <div v-if="canEditBusinessDocuments" class="input-group input-group-sm">
                                             <span class="input-group-text">¥</span>
                                             <input type="text" inputmode="numeric" autocomplete="off" class="form-control text-end bd-amount-input"
-                                                   :value="bdAmountDisplay(row.amountKey)" placeholder="未入力" data-i18n="未入力"
-                                                   @focus="onBdAmountFocus(row.amountKey, $event)" @blur="onBdAmountBlur" @input="onBdAmountInput(row.amountKey, $event)">
+                                                   :value="bdAmountDisplay(project, row.amountKey)" placeholder="未入力" data-i18n="未入力"
+                                                   @focus="onBdAmountFocus(row.amountKey, $event)" @blur="onBdAmountBlur" @input="onBdAmountInput(project, row.amountKey, $event, scheduleBusinessDocumentUpdate)">
                                             <button v-if="bdRowCanCopy(row)" type="button" class="btn btn-outline-primary" title="見積金額をコピー"
                                                     @click="bdRowCopy(row)">見積と同額</button>
                                         </div>
-                                        <div v-else class="bd-value text-end">{{ bdAmountDisplay(row.amountKey) ? '¥' + bdAmountDisplay(row.amountKey) : '—' }}</div>
+                                        <div v-else class="bd-value text-end">{{ bdAmountDisplay(project, row.amountKey) ? '¥' + bdAmountDisplay(project, row.amountKey) : '—' }}</div>
                                         <div v-if="bdRowTaxIncluded(row)" class="bd-sub text-end">税込 {{ bdRowTaxIncluded(row) }}</div>
                                     </div>
-                                </div>
-                                <div v-if="canEditBusinessDocuments && bdRowShowIssuedHint(row)" class="bd-hint">
-                                    <i class="fa fa-info-circle me-1"></i>発行済にするには{{ row.dateLabel }}・{{ row.amountLabel }}が必要です
                                 </div>
                             </div>
                         </div>
@@ -747,75 +745,7 @@ if($_SESSION['show_project'] == 0){
         </div>
         <div class="modal-backdrop fade show" v-if="showGeneralLogModal"></div>
 
-        <!-- Modal Business Document History (grouped by day, filter by 見積 / 請求 / 入金 / 備考) -->
-        <div class="modal fade bd-log-modal" tabindex="-1" :class="{show: showBusinessDocumentLogModal}" style="display: block;" v-if="showBusinessDocumentLogModal" @keydown.esc="closeBusinessDocumentLogModal">
-            <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                <div class="modal-content">
-                    <div class="modal-header flex-wrap gap-2">
-                        <h5 class="modal-title"><i class="fa fa-history me-2"></i>決済情報 履歴</h5>
-                        <button type="button" class="btn-close" @click="closeBusinessDocumentLogModal"></button>
-                        <div class="w-100 bd-log-filters" role="group" aria-label="種類で絞り込み">
-                            <button v-for="opt in bdLogFilterOptions" :key="'bdf-' + opt.value" type="button"
-                                    class="btn btn-sm" :class="bdLogFilter === opt.value ? 'btn-primary' : 'btn-outline-secondary'"
-                                    :disabled="opt.value !== '' && opt.count === 0"
-                                    @click="bdLogFilter = opt.value">
-                                {{ opt.label }} <span class="bd-log-filter-count">{{ opt.count }}</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div class="modal-body">
-                        <div v-for="group in businessDocumentLogGroups" :key="'bdg-' + group.date" class="bd-log-day">
-                            <div class="bd-log-day-label">{{ group.label }}</div>
-                            <ul class="bd-log-list">
-                                <li v-for="log in group.logs" :key="log.id" class="bd-log-item" :class="'bd-log-cat-' + getBdLogCategory(log)">
-                                    <div class="bd-log-time">{{ formatBdLogTime(log) }}</div>
-                                    <div class="bd-log-avatar avatar avatar-sm">
-                                        <span v-if="showAvatarInitials(log)" class="avatar-initial rounded-circle bg-label-primary">
-                                            {{ getInitials(log.username || log.realname || '?', log.userid || log.user_id || '', log.user_ruby || '') }}
-                                        </span>
-                                        <img v-if="!log.avatarError && getAvatarSrc(log)"
-                                            :src="getAvatarSrc(log)"
-                                            alt="avatar"
-                                            class="rounded-circle"
-                                            :class="{ 'd-none': !log.avatarLoaded }"
-                                            @load="handleAvatarLoad(log)"
-                                            @error="handleAvatarError(log)">
-                                    </div>
-                                    <div class="bd-log-body">
-                                        <div class="bd-log-head">
-                                            <span class="bd-log-cat">{{ getBdLogCategoryLabel(log) }}</span>
-                                            <i :class="historyIcon(log.action)"></i>
-                                            <span class="bd-log-note">{{ getLogNote(log) }}</span>
-                                            <span class="bd-log-user">{{ getBdLogDisplayName(log) }}</span>
-                                        </div>
-                                        <div v-if="hasLogValue(log.value1) || hasLogValue(log.value2)" class="bd-log-change">
-                                            <template v-if="getBdLogValueKind(log) === 'status'">
-                                                <span v-if="hasLogValue(log.value1)" class="badge bd-log-old-badge" :class="getBdLogStatusBadgeClass(log, 'value1')">{{ formatBdLogValue(log, 'value1') }}</span>
-                                                <i v-if="hasLogValue(log.value1)" class="fa fa-arrow-right bd-log-arrow"></i>
-                                                <span class="badge" :class="getBdLogStatusBadgeClass(log, 'value2')">{{ formatBdLogValue(log, 'value2') }}</span>
-                                            </template>
-                                            <template v-else>
-                                                <span v-if="hasLogValue(log.value1)" class="bd-log-old">{{ formatBdLogValue(log, 'value1') }}</span>
-                                                <i v-if="hasLogValue(log.value1)" class="fa fa-arrow-right bd-log-arrow"></i>
-                                                <span class="bd-log-new">{{ formatBdLogValue(log, 'value2') }}</span>
-                                            </template>
-                                        </div>
-                                    </div>
-                                </li>
-                            </ul>
-                        </div>
-                        <div v-if="businessDocumentLogGroups.length === 0" class="text-muted text-center py-4">
-                            <i class="fa fa-inbox d-block mb-2 fs-3 opacity-50"></i>
-                            {{ bdLogFilter ? 'この種類の履歴はありません。' : '決済情報の履歴はありません。' }}
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" @click="closeBusinessDocumentLogModal">閉じる</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="modal-backdrop fade show" v-if="showBusinessDocumentLogModal"></div>
+        <?php require __DIR__ . '/partials/business-document-log-modal.php'; ?>
 
         <!-- メモ modal (add / view / edit) — shared with 案件一覧 -->
         <?php $noteModalEditorId = 'quill_note_content_detail'; require __DIR__ . '/partials/project-note-modal.php'; ?>
@@ -1399,6 +1329,7 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-energy-fields-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-note-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/business-document-ui-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail-business-doc-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-detail.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
