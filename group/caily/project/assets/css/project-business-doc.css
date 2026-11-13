@@ -3,6 +3,16 @@
  * logic: assets/js/project-detail-business-doc-mixin.js).
  */
 
+/* Secondary text: darker than the theme's --bs-secondary-color, which is too faint to read */
+.project-status-block,
+.bd-log-modal {
+    --bd-muted: #4b5563;
+}
+[data-bs-theme="dark"] .project-status-block,
+[data-bs-theme="dark"] .bd-log-modal {
+    --bd-muted: #c3cad4;
+}
+
 /* ---------- card ---------- */
 .project-status-block .bd-section + .bd-section {
     margin-top: 14px;
@@ -11,7 +21,7 @@
     font-size: 0.8rem;
     font-weight: 600;
     text-transform: none;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
     margin-bottom: 6px;
 }
 .project-status-block .bd-block {
@@ -58,7 +68,7 @@
     display: block;
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
     margin-bottom: 3px;
 }
 .project-status-block .bd-value {
@@ -71,13 +81,13 @@
 }
 .project-status-block .bd-sub {
     font-size: 0.72rem;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
     margin-top: 2px;
     font-variant-numeric: tabular-nums;
 }
 .project-status-block .bd-hint {
     font-size: 0.75rem;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
     margin-top: 6px;
 }
 .project-status-block .bd-note {
@@ -137,7 +147,7 @@
 }
 .bd-log-modal .bd-log-time {
     font-size: 0.8rem;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
     font-variant-numeric: tabular-nums;
     padding-top: 6px;
 }
@@ -166,7 +176,7 @@
 }
 .bd-log-modal .bd-log-cat-note .bd-log-cat {
     background: rgba(133, 146, 163, 0.16);
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
 }
 .bd-log-modal .bd-log-note {
     font-weight: 500;
@@ -174,7 +184,7 @@
 .bd-log-modal .bd-log-user {
     margin-left: auto;
     font-size: 0.75rem;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
 }
 .bd-log-modal .bd-log-change {
     display: flex;
@@ -186,19 +196,29 @@
     font-variant-numeric: tabular-nums;
 }
 .bd-log-modal .bd-log-old {
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
     text-decoration: line-through;
 }
 .bd-log-modal .bd-log-old-badge {
-    opacity: 0.6;
+    opacity: 0.8;
 }
 .bd-log-modal .bd-log-new {
     font-weight: 600;
 }
 .bd-log-modal .bd-log-arrow {
     font-size: 0.7rem;
-    color: var(--bs-secondary-color, #6c757d);
+    color: var(--bd-muted);
 }
 [data-bs-theme="dark"] .bd-log-modal .bd-log-filter-count {
     background: rgba(255, 255, 255, 0.12);
+}
+.bd-log-modal .bd-log-filters .btn-outline-secondary {
+    color: var(--bd-muted);
+    border-color: rgba(75, 85, 99, 0.45);
+}
+.bd-log-modal .bd-log-filters .btn-outline-secondary:hover:not(:disabled) {
+    background: rgba(75, 85, 99, 0.08);
+}
+.bd-log-modal .bd-log-filters .btn:disabled {
+    opacity: 0.5;
 }
