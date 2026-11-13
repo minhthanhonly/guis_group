@@ -3271,8 +3271,38 @@ createApp({
             const item = BUSINESS_PAYMENT_STATUSES.find((s) => s.value === status);
             return item ? `bg-${item.color}` : 'bg-secondary';
         },
+        /** "a|b|c" people string of a child project (manager_id / member_id) as a list. */
+        splitChildProjectPeople(value) {
+            return String(value || '').split('|').filter(m => m.trim() !== '');
+        },
+        /** Status of a 決済情報 line, including the statuses only 省エネ uses (対象外). */
+        getChildProjectPaymentStatusMeta(kind, status) {
+            const base = kind === 'invoice' ? BUSINESS_INVOICE_STATUSES : BUSINESS_ESTIMATE_STATUSES;
+            const extra = (window.EnergyFeePayment && window.EnergyFeePayment.ENERGY_EXTRA_STATUSES) || [];
+            const item = this.findBusinessDocumentStatusOption(base.concat(extra), status);
+            return {
+                label: this.translateLabel(item ? item.label : '未発行'),
+                badgeClass: item ? `bg-${item.color}` : 'bg-secondary'
+            };
+        },
         getChildProjectPaymentLines(project) {
             if (!project) return [];
+            const Energy = window.EnergyFeePayment;
+            if (Energy && Energy.isEnergyProject && Energy.isEnergyProject(project)) {
+                // 省エネ: 見積 / 請求 are each split into 申請費 and 設計費
+                const p = Object.assign({}, project);
+                Energy.hydrateApplicationFromLegacy(p);
+                return (Energy.FEE_ROWS || []).map((row) => {
+                    const meta = this.getChildProjectPaymentStatusMeta(row.kind, p[row.statusKey]);
+                    return {
+                        key: row.kind + '_' + row.fee,
+                        label: this.translateLabel(row.kind === 'invoice' ? '請求' : '見積') + ' ' + this.translateLabel(row.title),
+                        statusLabel: meta.label,
+                        badgeClass: meta.badgeClass,
+                        amount: Number(p[row.amountKey]) || 0,
+                    };
+                });
+            }
             return [
                 {
                     key: 'estimate',

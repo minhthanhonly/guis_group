@@ -2061,10 +2061,42 @@ class ParentProject extends ApplicationModel {
         $projects = $this->fetchAll($query);
         $this->attachProjectFavoriteAggregates($projects, $user_id);
         $membersByProject = $this->fetchProjectMembersByProjectIds(array_column($projects, 'id'));
+        // Team names of every project (p.teams holds comma-separated team ids)
+        $teamIds = array();
+        foreach ($projects as $row) {
+            foreach (explode(',', (string)($row['teams'] ?? '')) as $teamId) {
+                $teamId = (int)trim($teamId);
+                if ($teamId > 0) {
+                    $teamIds[$teamId] = true;
+                }
+            }
+        }
+        $teamNameMap = array();
+        if (!empty($teamIds)) {
+            $teamRows = $this->fetchAll(sprintf(
+                "SELECT id, name FROM %steam WHERE id IN (%s)",
+                DB_PREFIX,
+                implode(',', array_keys($teamIds))
+            ));
+            foreach ($teamRows as $row) {
+                $teamNameMap[(int)$row['id']] = $row['name'];
+            }
+        }
         foreach ($projects as &$project) {
             $pid = (int)$project['id'];
             $project['manager_id'] = isset($membersByProject[$pid]['manager'])
                 ? implode('|', $membersByProject[$pid]['manager']) : '';
+            // same "authId:realname:user_image:userid:user_ruby" entries as manager_id
+            $project['member_id'] = isset($membersByProject[$pid]['member'])
+                ? implode('|', $membersByProject[$pid]['member']) : '';
+            $teamNames = array();
+            foreach (explode(',', (string)($project['teams'] ?? '')) as $teamId) {
+                $teamId = (int)trim($teamId);
+                if ($teamId > 0 && isset($teamNameMap[$teamId])) {
+                    $teamNames[] = $teamNameMap[$teamId];
+                }
+            }
+            $project['team_names'] = $teamNames;
             if (!empty($project['yotei']) && is_string($project['yotei'])) {
                 $decoded = json_decode($project['yotei'], true);
                 $project['yotei'] = is_array($decoded) ? $decoded : null;
