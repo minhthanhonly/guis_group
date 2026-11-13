@@ -236,20 +236,20 @@ $view->heading('建物詳細');
                                 </div>
                                 <div class="cp-row" v-if="project.start_date">
                                     <div class="cp-label"><span data-i18n="開始日">開始日</span></div>
-                                    <div class="cp-value" :data-time="project.start_date">{{ formatDateTimeDatePart(project.start_date) }} {{ formatDateTimeTimePart(project.start_date) }}</div>
+                                    <div class="cp-value" :data-time="project.start_date">{{ formatChildProjectDateTime(project.start_date) }}</div>
                                 </div>
                                 <!-- 省エネ departments do not use CAILY納期 / GUIS納期 -->
                                 <div class="cp-row" v-if="mapDepartmentNameToRequestType(project.department_name) !== '省エネ' && project.caily_nouki">
                                     <div class="cp-label"><span>CAILY納期</span></div>
-                                    <div class="cp-value" :data-time="project.caily_nouki">{{ formatDateTimeDatePart(project.caily_nouki) }} {{ formatDateTimeTimePart(project.caily_nouki) }}</div>
+                                    <div class="cp-value" :data-time="project.caily_nouki">{{ formatChildProjectDateTime(project.caily_nouki) }}</div>
                                 </div>
                                 <div class="cp-row" v-if="canViewEndDate && mapDepartmentNameToRequestType(project.department_name) !== '省エネ' && project.guis_nouki">
                                     <div class="cp-label"><span>GUIS納期</span></div>
-                                    <div class="cp-value" :data-time="project.guis_nouki">{{ formatDateTimeDatePart(project.guis_nouki) }} {{ formatDateTimeTimePart(project.guis_nouki) }}</div>
+                                    <div class="cp-value" :data-time="project.guis_nouki">{{ formatChildProjectDateTime(project.guis_nouki) }}</div>
                                 </div>
                                 <div class="cp-row" v-if="canViewEndDate && project.end_date">
                                     <div class="cp-label"><span data-i18n="期限日">期限日</span></div>
-                                    <div class="cp-value" :data-time="project.end_date">{{ formatDateTimeDatePart(project.end_date) }} {{ formatDateTimeTimePart(project.end_date) }}</div>
+                                    <div class="cp-value" :data-time="project.end_date">{{ formatChildProjectDateTime(project.end_date) }}</div>
                                 </div>
                                 <div class="cp-row" v-if="project.description && getDescriptionPlainText(project.description)">
                                     <div class="cp-label"><span data-i18n="説明">説明</span></div>

@@ -127,6 +127,16 @@ function formatProjectDateOnlyForDisplay(value) {
         : localized.format('M月D日');
 }
 
+/** Full date and time in the display timezone, e.g. 2026/11/12 07:00. */
+function formatProjectDateTimeFullForDisplay(value) {
+    const parsed = parseProjectDateMomentServer(value);
+    if (!parsed) return '-';
+    const localized = moment.tz
+        ? parsed.clone().tz(getProjectDisplayTimezone())
+        : parsed;
+    return localized.format('YYYY/MM/DD HH:mm');
+}
+
 function formatProjectTimeOnlyForDisplay(value) {
     const parsed = parseProjectDateMomentServer(value);
     if (!parsed) return '';
@@ -1701,6 +1711,10 @@ createApp({
         },
         formatDateTimeDatePart(dateString) {
             return formatProjectDateOnlyForDisplay(dateString);
+        },
+        /** 案件依頼 cards: full date and time (YYYY/MM/DD HH:mm). */
+        formatChildProjectDateTime(dateString) {
+            return formatProjectDateTimeFullForDisplay(dateString);
         },
         formatDateTimeTimePart(dateString) {
             return formatProjectTimeOnlyForDisplay(dateString);
