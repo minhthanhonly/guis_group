@@ -37,14 +37,30 @@
                             <div class="col-12 project-form-section">
                                 <h6 class="project-form-section-title"><span data-i18n="基本情報">基本情報</span> <span v-if="!isEditMode && inlineSaveStatus.basic === 'loading'" class="text-muted ms-1" title="保存中"><i class="fa fa-spinner fa-spin"></i></span><span v-else-if="!isEditMode && inlineSaveStatus.basic === 'saved'" class="text-success ms-1" title="保存済み"><i class="fa fa-check-circle"></i></span></h6>
                             </div>
-                            <!-- 部署: chosen in the form only when creating; it decides the fields below -->
-                            <div class="col-md-12" v-if="isEditMode && formCreateMode">
-                                <label class="form-label"><span data-i18n="部署">部署</span> <span class="text-danger">*</span></label>
-                                <select class="form-select" id="pf_department_id" v-model="project.department_id" @change="onFormDepartmentChange">
-                                    <option value="" data-i18n="選択してください">選択してください</option>
-                                    <option v-for="dept in formDepartments" :key="'pf_dept_' + dept.id" :value="dept.id">{{ dept.name }}</option>
-                                </select>
-                                <div v-if="validationErrors.department_id" class="invalid-feedback d-block">{{ validationErrors.department_id }}</div>
+                            <!-- 部署: chosen in the form when creating (it decides the fields below); shown read-only when editing -->
+                            <div class="col-md-12" v-if="isEditMode">
+                                <label class="form-label"><span data-i18n="部署">部署</span> <span v-if="formCreateMode" class="text-danger">*</span></label>
+                                <template v-if="formCreateMode">
+                                    <select class="form-select" id="pf_department_id" v-model="project.department_id" @change="onFormDepartmentChange">
+                                        <option value="" data-i18n="選択してください">選択してください</option>
+                                        <option v-for="dept in formDepartments" :key="'pf_dept_' + dept.id" :value="dept.id">{{ dept.name }}</option>
+                                    </select>
+                                    <div v-if="validationErrors.department_id" class="invalid-feedback d-block">{{ validationErrors.department_id }}</div>
+                                </template>
+                                <input v-else type="text" class="form-control" :value="project.department_name || '-'" readonly>
+                            </div>
+                            <!-- GUIS受付者: child projects, only when the host page asks for it (see loadGuisReceiverForForm in project-form-mixin.js) -->
+                            <div class="col-md-12" v-if="isEditMode && guisReceiverForm && guisReceiverForm.enabled">
+                                <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span> <span v-if="!guisReceiverForm.useParent" class="text-danger">*</span></label>
+                                <div class="form-check mb-1">
+                                    <input class="form-check-input" type="checkbox" id="pf_use_parent_guis_receiver" v-model="guisReceiverForm.useParent" @change="onUseParentGuisReceiverChange">
+                                    <label class="form-check-label" for="pf_use_parent_guis_receiver"><span data-i18n="GUIS受付者は建物と同じ">GUIS受付者は建物と同じ</span></label>
+                                </div>
+                                <div v-if="guisReceiverForm.useParent" class="small text-muted">{{ guisReceiverForm.parentName || "-" }}</div>
+                                <div v-show="!guisReceiverForm.useParent">
+                                    <select id="pf_guis_receiver" class="form-select"></select>
+                                </div>
+                                <div v-if="validationErrors.guis_receiver" class="invalid-feedback d-block">{{ validationErrors.guis_receiver }}</div>
                             </div>
                             <div class="col-md-4" v-show="!formCreateMode">
                                 <label class="form-label"><span data-i18n="ID">ID</span></label>
@@ -170,19 +186,6 @@
                                         {{ project.progress }}%
                                     </div>
                                 </div>
-                            </div>
-                            <!-- GUIS受付者: child projects only, in the form (see loadGuisReceiverForForm in project-form-mixin.js) -->
-                            <div class="col-md-12" v-if="isEditMode && guisReceiverForm && guisReceiverForm.enabled">
-                                <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span> <span v-if="!guisReceiverForm.useParent" class="text-danger">*</span></label>
-                                <div class="form-check mb-1">
-                                    <input class="form-check-input" type="checkbox" id="pf_use_parent_guis_receiver" v-model="guisReceiverForm.useParent" @change="onUseParentGuisReceiverChange">
-                                    <label class="form-check-label" for="pf_use_parent_guis_receiver"><span data-i18n="GUIS受付者は建物と同じ">GUIS受付者は建物と同じ</span></label>
-                                </div>
-                                <div v-if="guisReceiverForm.useParent" class="small text-muted">{{ guisReceiverForm.parentName || "-" }}</div>
-                                <div v-show="!guisReceiverForm.useParent">
-                                    <select id="pf_guis_receiver" class="form-select"></select>
-                                </div>
-                                <div v-if="validationErrors.guis_receiver" class="invalid-feedback d-block">{{ validationErrors.guis_receiver }}</div>
                             </div>
                             <!-- <div class="col-md-4">
                                 <label class="form-label">予定時間</label>

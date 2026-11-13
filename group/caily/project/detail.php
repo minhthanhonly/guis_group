@@ -881,7 +881,7 @@ $view->footing();
 /* caption column: as large as the values and bold; the values are regular weight */
 #app .project-detail-card:not(.edit-mode) .project-detail-grid [class*="col-"] > .form-label {
     grid-column: 1;
-    grid-row: 1;
+    grid-row: 1 / span 40;
     margin: 0;
     padding-top: 0.05rem;
     font-size: 0.9375rem;

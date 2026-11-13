@@ -2037,6 +2037,7 @@ createApp({
                     customer_id: parent.customer_id || ''
                 },
                 siblings: this.childProjects || [],
+                showGuisReceiver: true,
                 onSaved: (id, info) => this.onChildProjectFormSaved(info)
             });
         },
@@ -2067,6 +2068,7 @@ createApp({
             window.openProjectFormModal({
                 projectId: project.id,
                 siblings: this.childProjects || [],
+                showGuisReceiver: true,
                 allowRestore: true,
                 onSaved: (id, info) => this.onChildProjectFormSaved(info)
             });
