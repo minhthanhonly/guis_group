@@ -140,6 +140,10 @@
 
     function needsPaymentInfoBeforeComplete(project) {
         if (!project) return true;
+        // 決済明細 loaded (詳細 / 決済情報 modal): judge from the lines
+        if (window.PaymentItems && window.PaymentItems.uses(project)) {
+            return window.PaymentItems.needsPaymentInfoBeforeComplete(project);
+        }
         if (isEnergyProject(project)) {
             return !isReadyForCompletion(project.estimate_application_status)
                 || !isReadyForCompletion(project.estimate_design_status)
@@ -154,6 +158,9 @@
         var t = typeof translateFn === 'function' ? translateFn : function (k) { return k; };
         var missing = [];
         if (!project) return missing;
+        if (window.PaymentItems && window.PaymentItems.uses(project)) {
+            return window.PaymentItems.getMissingPaymentLabels(project, t);
+        }
         if (isEnergyProject(project)) {
             if (!isReadyForCompletion(project.estimate_application_status)) missing.push(t('見積申請費'));
             if (!isReadyForCompletion(project.estimate_design_status)) missing.push(t('見積設計費'));
@@ -187,6 +194,8 @@
         STATUS_FIELDS.forEach(function (key) {
             formData.append(key, normalizeStatusValue(project[key]));
         });
+        // 決済明細: the server derives every column above from these lines
+        if (window.PaymentItems) window.PaymentItems.appendToFormData(formData, project);
     }
 
     function pickerIdForDateKey(dateKey, prefix) {

@@ -245,6 +245,7 @@ const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
     'payment_amount_updated',
     'receipt_number_updated',
     'payment_note_updated',
+    'payment_items_updated',
 ]);
 
 const BUSINESS_DOCUMENT_FIELDS = [
@@ -2075,13 +2076,16 @@ const vueApp = createApp({
             this.isUpdatingStatus = true;
             try {
                 this.syncBusinessDocumentDatesFromPickers();
-                const energyIssuedError = this.getEnergyFeeIssuedValidationError();
+                const usesItems = !!(window.PaymentItems && window.PaymentItems.uses(this.project));
+                const energyIssuedError = usesItems
+                    ? window.PaymentItems.validationError(this.project)
+                    : this.getEnergyFeeIssuedValidationError();
                 if (energyIssuedError) {
                     this.businessDocumentSaveStatus = null;
                     this.businessDocumentError = energyIssuedError;
                     return;
                 }
-                if (!this.isEnergyDepartmentProject) {
+                if (!usesItems && !this.isEnergyDepartmentProject) {
                     if (this.normalizeBusinessDocumentStatusValue(this.project.estimate_status) === '発行済'
                         && !this.isEstimateDocumentFieldsComplete()) {
                         this.businessDocumentSaveStatus = null;
@@ -2144,6 +2148,14 @@ const vueApp = createApp({
                             }
                         }
                     });
+                    if (window.PaymentItems) {
+                        window.PaymentItems.applySaveResponse(this.project, response.data, (key, apiVal) => {
+                            this.setBusinessDocumentServerDate(key, apiVal || '');
+                            this.project[key] = apiVal
+                                ? canonicalizeProjectDateTimeInputDisplay(toProjectDateTimeInputValue(apiVal))
+                                : '';
+                        });
+                    }
                     this.$nextTick(() => {
                         setTimeout(() => {
                             this._bdSuppressAutoSave = false;

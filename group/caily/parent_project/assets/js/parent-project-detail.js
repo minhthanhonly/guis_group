@@ -284,6 +284,7 @@ const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
     'payment_amount_updated',
     'receipt_number_updated',
     'payment_note_updated',
+    'payment_items_updated',
 ]);
 
 const BUSINESS_DOCUMENT_FIELDS = [
@@ -3725,13 +3726,16 @@ createApp({
             try {
                 this.syncBdDatesFromPickers();
                 const p = this.businessDocumentProject;
-                const energyIssuedError = this.getBdEnergyFeeIssuedValidationError();
+                const usesItems = !!(window.PaymentItems && window.PaymentItems.uses(p));
+                const energyIssuedError = usesItems
+                    ? window.PaymentItems.validationError(p)
+                    : this.getBdEnergyFeeIssuedValidationError();
                 if (energyIssuedError) {
                     this.businessDocumentSaveStatus = null;
                     this.businessDocumentError = energyIssuedError;
                     return;
                 }
-                if (!this.isBdEnergyDepartment) {
+                if (!usesItems && !this.isBdEnergyDepartment) {
                     if (this.normalizeBusinessDocumentStatusValue(p.estimate_status) === '発行済'
                         && !this.isBdEstimateDocumentFieldsComplete()) {
                         this.businessDocumentSaveStatus = null;
@@ -3790,6 +3794,12 @@ createApp({
                             }
                         }
                     });
+                    if (window.PaymentItems) {
+                        window.PaymentItems.applySaveResponse(this.businessDocumentProject, response.data, (key, apiVal) => {
+                            this.setBdServerDate(key, apiVal || '');
+                            this.businessDocumentProject[key] = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                        });
+                    }
                     this.syncChildProjectFromBd();
                     if (response.data.payment_version != null) {
                         const idx = this.childProjects.findIndex((item) => String(item.id) === String(this.businessDocumentProjectId));

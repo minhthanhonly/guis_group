@@ -35,57 +35,13 @@
                 <div class="modal-body">
                     <input type="hidden" v-model.number="businessDocumentProject.payment_version">
 
+                    <!-- 見積 / 請求: any number of lines (payment-items.js) -->
                     <div v-for="section in bdmSections" :key="'bdm-' + section.kind" class="bd-section">
-                        <div v-if="isBdEnergyDepartment" class="bd-section-title">
+                        <div class="bd-section-title">
                             <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ section.heading }}</span>
                         </div>
-                        <div v-for="row in section.rows" :key="'bdm-' + section.kind + '-' + row.fee" class="bd-block" :class="'bd-block-' + row.kind">
-                            <div class="bd-block-head">
-                                <div class="bd-block-title">
-                                    <i v-if="row.standard" :class="section.icon" class="me-1"></i>
-                                    <span :data-i18n="bdmRowTitle(section, row)">{{ bdmRowTitle(section, row) }}</span>
-                                    <span v-if="bdmRowShowIssuedHint(row)" class="bd-hint-icon" tabindex="0" :data-tip="'発行済にするには' + row.dateLabel + '・' + row.amountLabel + 'が必要です'" :aria-label="'発行済にするには' + row.dateLabel + '・' + row.amountLabel + 'が必要です'"><i class="fa fa-info-circle"></i></span>
-                                </div>
-                                <div class="btn-group">
-                                    <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light bd-status-btn"
-                                            :class="bdmRowStatusButtonClass(row)"
-                                            :id="row.dropdownId" data-bs-toggle="dropdown" aria-expanded="false">
-                                        {{ bdmRowStatusLabel(row) }}
-                                    </button>
-                                    <ul class="dropdown-menu dropdown-menu-end">
-                                        <li v-for="status in bdmRowStatusOptions(row)" :key="status.value">
-                                            <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                               :class="{ disabled: status.value === '発行済' && !bdmRowIsComplete(row), active: bdmRowStatusLabel(row) === translateLabel(status.label) }"
-                                               @click="bdmRowSelectStatus(row, status.value)">{{ status.label }}</a>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                            <div class="bd-fields">
-                                <div class="bd-field">
-                                    <label class="bd-label" :for="bdModalPickerId(row.dateKey)">{{ row.dateLabel }}<span class="text-danger ms-1">*</span></label>
-                                    <div class="input-group input-group-sm">
-                                        <input type="text" class="form-control" v-model="businessDocumentProject[row.dateKey]"
-                                               :id="bdModalPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                        <button v-if="!hasBdDate(row.dateKey)" type="button" class="btn btn-outline-primary" title="今日の日付を入力"
-                                                @click="setBdDateToday(row.dateKey)">今日</button>
-                                    </div>
-                                </div>
-                                <div class="bd-field">
-                                    <label class="bd-label">{{ row.amountLabel }}<span class="text-danger ms-1">*</span></label>
-                                    <div class="input-group input-group-sm">
-                                        <span class="input-group-text">¥</span>
-                                        <input type="text" inputmode="numeric" autocomplete="off" class="form-control text-end bd-amount-input"
-                                               :value="bdAmountDisplay(businessDocumentProject, row.amountKey)" placeholder="未入力" data-i18n="未入力"
-                                               @focus="onBdAmountFocus(row.amountKey, $event)" @blur="onBdAmountBlur"
-                                               @input="onBdAmountInput(businessDocumentProject, row.amountKey, $event, scheduleBdUpdate)">
-                                        <button v-if="bdmRowCanCopy(row)" type="button" class="btn btn-outline-primary" title="見積金額をコピー"
-                                                @click="bdmRowCopy(row)">見積と同額</button>
-                                    </div>
-                                    <div v-if="bdmRowTaxIncluded(row)" class="bd-sub text-end">税込 {{ bdmRowTaxIncluded(row) }}</div>
-                                </div>
-                            </div>
-                        </div>
+                        <payment-items-editor :project="businessDocumentProject" :kind="section.kind" :editable="true"
+                                              :energy="!!isBdEnergyDepartment" :translate="translateLabel" @change="scheduleBdUpdate"></payment-items-editor>
                     </div>
 
                     <div class="mb-0 bd-note">

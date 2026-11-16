@@ -4501,6 +4501,8 @@ class Project extends ApplicationModel {
             $project['payment_version'] = isset($project['payment_version']) ? intval($project['payment_version']) : 1;
             $project['yotei'] = $this->parseYoteiField(isset($project['yotei']) ? $project['yotei'] : null);
             $project['has_energy_sibling'] = $this->hasEnergySavingSiblingProject($project) ? 1 : 0;
+            $project['payment_items'] = $this->getPaymentItemsForProject($project);
+            $project['payment_item_types'] = $this->getPaymentItemTypeSuggestions();
         }
         
         return $project;
@@ -7054,6 +7056,359 @@ class Project extends ApplicationModel {
         ];
     }
 
+    // ---------------------------------------------------------------------
+    // 決済明細 (payment items): 見積 / 請求 each hold any number of lines
+    // { item_date, item_type (free tag), amount (税抜), status }.
+    // The legacy single-value columns on projects (amount, estimate_*, invoice_*,
+    // *_application_*, *_design_*) are derived from the lines on save, so reports,
+    // filters and the 完了 check keep reading them unchanged.
+    // Migration of stored data: sql/add_project_payment_items.sql
+    // ---------------------------------------------------------------------
+
+    const PAYMENT_ITEM_ESTIMATE_STATUSES = ['未発行', '見積作成中', '発行済', '無償', '対象外'];
+    const PAYMENT_ITEM_INVOICE_STATUSES = ['未発行', '請求準備', '発行済', '無償', '対象外'];
+    /** Types stored before 決済明細 existed (省エネ fee split); always offered as suggestions. */
+    const PAYMENT_ITEM_LEGACY_TYPES = ['申請費', '設計費'];
+    const PAYMENT_ITEM_MAX_LINES = 200;
+
+    private function paymentItemsTable() {
+        return DB_PREFIX . 'project_payment_items';
+    }
+
+    private function ensurePaymentItemsTable() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        try {
+            $this->query("CREATE TABLE IF NOT EXISTS `" . $this->paymentItemsTable() . "` (
+                `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+                `project_id` INT NOT NULL,
+                `kind` VARCHAR(10) NOT NULL COMMENT 'estimate=見積, invoice=請求',
+                `item_date` DATETIME NULL DEFAULT NULL,
+                `item_type` VARCHAR(100) NOT NULL DEFAULT '' COMMENT '種別タグ',
+                `amount` DECIMAL(15,2) NULL DEFAULT NULL COMMENT '税抜',
+                `status` VARCHAR(20) NOT NULL DEFAULT '未発行',
+                `sort_order` INT NOT NULL DEFAULT 0,
+                `created_at` DATETIME NULL DEFAULT NULL,
+                `updated_at` DATETIME NULL DEFAULT NULL,
+                PRIMARY KEY (`id`),
+                KEY `idx_project_kind` (`project_id`, `kind`, `sort_order`),
+                KEY `idx_item_type` (`item_type`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+        } catch (Exception $e) {
+            error_log('ensurePaymentItemsTable failed: ' . $e->getMessage());
+        }
+    }
+
+    private function normalizePaymentItemStatus($status) {
+        $status = trim((string)$status);
+        if ($status === '発行済み') {
+            return '発行済';
+        }
+        return $status === '' ? '未発行' : $status;
+    }
+
+    private function isMeaningfulLegacyPaymentValue($amount, $date, $status) {
+        return floatval($amount) > 0
+            || trim((string)$date) !== ''
+            || $this->normalizePaymentItemStatus($status) !== '未発行';
+    }
+
+    private function legacyPaymentItem($kind, $type, $amount, $date, $status, $order) {
+        $status = $this->normalizePaymentItemStatus($status);
+        $waived = $status === '無償' || $status === '対象外';
+        return [
+            'id' => null,
+            'kind' => $kind,
+            'item_date' => trim((string)$date) !== '' ? substr((string)$date, 0, 10) : '',
+            'item_type' => $type,
+            'amount' => $waived ? 0 : (($amount === null || $amount === '') ? null : floatval($amount)),
+            'status' => $status,
+            'sort_order' => $order,
+        ];
+    }
+
+    /**
+     * Lines built from the legacy columns for a project with no stored lines yet
+     * (same rules as sql/add_project_payment_items.sql): a project not yet migrated
+     * still shows its values, and saving it does not wipe them.
+     */
+    private function buildPaymentItemsFromLegacy(array $p, $isEnergy) {
+        $items = [];
+        if (!$isEnergy) {
+            if ($this->isMeaningfulLegacyPaymentValue($p['amount'] ?? null, $p['estimate_date'] ?? '', $p['estimate_status'] ?? '')) {
+                $items[] = $this->legacyPaymentItem('estimate', '', $p['amount'] ?? null, $p['estimate_date'] ?? '', $p['estimate_status'] ?? '', 1);
+            }
+            if ($this->isMeaningfulLegacyPaymentValue($p['invoice_amount'] ?? null, $p['invoice_date'] ?? '', $p['invoice_status'] ?? '')) {
+                $items[] = $this->legacyPaymentItem('invoice', '', $p['invoice_amount'] ?? null, $p['invoice_date'] ?? '', $p['invoice_status'] ?? '', 1);
+            }
+            return $items;
+        }
+        $legacyKeys = [
+            'estimate' => ['amount', 'estimate_date', 'estimate_status'],
+            'invoice' => ['invoice_amount', 'invoice_date', 'invoice_status'],
+        ];
+        foreach ($legacyKeys as $kind => $legacy) {
+            $a = $p[$kind . '_application_amount'] ?? null;
+            $d = $p[$kind . '_application_date'] ?? '';
+            $s = $p[$kind . '_application_status'] ?? '';
+            if (($a === null || $a === '') && trim((string)$d) === '' && trim((string)$s) === '') {
+                $a = $p[$legacy[0]] ?? null;
+                $d = $p[$legacy[1]] ?? '';
+                $s = $p[$legacy[2]] ?? '';
+            }
+            if ($this->isMeaningfulLegacyPaymentValue($a, $d, $s)) {
+                $items[] = $this->legacyPaymentItem($kind, '申請費', $a, $d, $s, 1);
+            }
+            $a = $p[$kind . '_design_amount'] ?? null;
+            $d = $p[$kind . '_design_date'] ?? '';
+            $s = $p[$kind . '_design_status'] ?? '';
+            if ($this->isMeaningfulLegacyPaymentValue($a, $d, $s)) {
+                $items[] = $this->legacyPaymentItem($kind, '設計費', $a, $d, $s, 2);
+            }
+        }
+        return $items;
+    }
+
+    private function fetchPaymentItemRows($projectId) {
+        $this->ensurePaymentItemsTable();
+        $rows = $this->fetchAll(sprintf(
+            "SELECT id, kind, item_date, item_type, amount, status, sort_order FROM `%s`
+             WHERE project_id = %d ORDER BY FIELD(kind, 'estimate', 'invoice'), sort_order, id",
+            $this->paymentItemsTable(),
+            intval($projectId)
+        ));
+        return is_array($rows) ? $rows : [];
+    }
+
+    /** Lines for the 決済情報 UI: [{ id, kind, item_date (Y-m-d|''), item_type, amount|null, status }] */
+    private function getPaymentItemsForProject(array $project) {
+        $rows = $this->fetchPaymentItemRows($project['id']);
+        if (empty($rows)) {
+            return $this->buildPaymentItemsFromLegacy($project, $this->isEnergyDepartmentById($project['department_id'] ?? 0));
+        }
+        $items = [];
+        foreach ($rows as $r) {
+            $items[] = [
+                'id' => intval($r['id']),
+                'kind' => $r['kind'],
+                'item_date' => !empty($r['item_date']) ? substr($r['item_date'], 0, 10) : '',
+                'item_type' => (string)$r['item_type'],
+                'amount' => ($r['amount'] === null || $r['amount'] === '') ? null : floatval($r['amount']),
+                'status' => $this->normalizePaymentItemStatus($r['status']),
+                'sort_order' => intval($r['sort_order']),
+            ];
+        }
+        return $items;
+    }
+
+    /** Whitelist for the 種別 tag input: types saved so far (most used first) + the legacy fee types. */
+    private function getPaymentItemTypeSuggestions() {
+        $this->ensurePaymentItemsTable();
+        $rows = $this->fetchAll(sprintf(
+            "SELECT item_type, COUNT(*) AS cnt FROM `%s` WHERE item_type <> ''
+             GROUP BY item_type ORDER BY cnt DESC, item_type LIMIT 100",
+            $this->paymentItemsTable()
+        ));
+        $types = [];
+        foreach ((is_array($rows) ? $rows : []) as $r) {
+            $types[] = (string)$r['item_type'];
+        }
+        foreach (self::PAYMENT_ITEM_LEGACY_TYPES as $t) {
+            if (!in_array($t, $types, true)) {
+                $types[] = $t;
+            }
+        }
+        return $types;
+    }
+
+    /**
+     * Validate the posted JSON lines.
+     * @return array ['ok' => true, 'items' => [...]] | ['ok' => false, 'error' => '...']
+     */
+    private function parsePostedPaymentItems($raw) {
+        $decoded = json_decode((string)$raw, true);
+        if (!is_array($decoded)) {
+            return ['ok' => false, 'error' => '決済明細の形式が正しくありません。'];
+        }
+        if (count($decoded) > self::PAYMENT_ITEM_MAX_LINES) {
+            return ['ok' => false, 'error' => '決済明細が多すぎます。'];
+        }
+        $items = [];
+        $order = ['estimate' => 0, 'invoice' => 0];
+        foreach ($decoded as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $kind = isset($row['kind']) ? (string)$row['kind'] : '';
+            if ($kind !== 'estimate' && $kind !== 'invoice') {
+                continue;
+            }
+            $label = $kind === 'estimate' ? '見積' : '請求';
+            $allowed = $kind === 'estimate' ? self::PAYMENT_ITEM_ESTIMATE_STATUSES : self::PAYMENT_ITEM_INVOICE_STATUSES;
+            $status = $this->normalizePaymentItemStatus($row['status'] ?? '');
+            if (!in_array($status, $allowed, true)) {
+                $status = '未発行';
+            }
+
+            $date = str_replace('/', '-', trim((string)($row['item_date'] ?? '')));
+            if ($date !== '') {
+                $ts = strtotime($date);
+                if ($ts === false) {
+                    return ['ok' => false, 'error' => $label . 'の日付が正しくありません。'];
+                }
+                $date = date('Y-m-d', $ts);
+            }
+
+            $rawAmount = $row['amount'] ?? null;
+            $amount = null;
+            if ($rawAmount !== null && trim((string)$rawAmount) !== '') {
+                $digits = preg_replace('/[^\d.]/', '', (string)$rawAmount);
+                $amount = $digits === '' ? null : floatval($digits);
+            }
+            if ($status === '無償' || $status === '対象外') {
+                $amount = 0;
+            }
+            if ($status === '発行済' && ($date === '' || $amount === null || $amount <= 0)) {
+                return ['ok' => false, 'error' => $label . 'を発行済にするには日付・金額が必要です。'];
+            }
+
+            $type = $this->validateUTF8MB4(mb_substr(trim((string)($row['item_type'] ?? '')), 0, 100));
+
+            $order[$kind]++;
+            $items[] = [
+                'kind' => $kind,
+                'item_date' => $date,
+                'item_type' => $type,
+                'amount' => $amount,
+                'status' => $status,
+                'sort_order' => $order[$kind],
+            ];
+        }
+        return ['ok' => true, 'items' => $items];
+    }
+
+    /**
+     * One legacy value set from a group of lines.
+     * - amount: sum (null when no line has an amount)
+     * - date:   latest line date
+     * - status: all 無償/対象外 → 無償; all 発行済/無償/対象外 → 発行済;
+     *           any 見積作成中/請求準備 → that; otherwise (or no lines) 未発行
+     * @return array [amount|null, 'Y-m-d'|'', status]
+     */
+    private function summarizePaymentItems(array $items) {
+        if (empty($items)) {
+            return [null, '', '未発行'];
+        }
+        $sum = null;
+        $date = '';
+        $allWaived = true;
+        $allReady = true;
+        $inProgress = '';
+        foreach ($items as $it) {
+            if ($it['amount'] !== null) {
+                $sum = ($sum === null ? 0 : $sum) + floatval($it['amount']);
+            }
+            if ($it['item_date'] !== '' && $it['item_date'] > $date) {
+                $date = $it['item_date'];
+            }
+            $s = $it['status'];
+            $waived = $s === '無償' || $s === '対象外';
+            if (!$waived) {
+                $allWaived = false;
+                if ($s !== '発行済') {
+                    $allReady = false;
+                }
+            }
+            if ($s === '見積作成中' || $s === '請求準備') {
+                $inProgress = $s;
+            }
+        }
+        if ($allWaived) {
+            $status = '無償';
+        } elseif ($allReady) {
+            $status = '発行済';
+        } elseif ($inProgress !== '') {
+            $status = $inProgress;
+        } else {
+            $status = '未発行';
+        }
+        return [$sum, $date, $status];
+    }
+
+    /**
+     * Legacy column values derived from the lines, POST-shaped ('' = NULL).
+     * Combined columns always; the 申請費 / 設計費 columns too for a 省エネ project.
+     */
+    private function derivePaymentLegacyFields(array $items, $isEnergy) {
+        $byKind = ['estimate' => [], 'invoice' => []];
+        foreach ($items as $it) {
+            $byKind[$it['kind']][] = $it;
+        }
+        $out = [];
+        $map = [
+            'estimate' => ['amount', 'estimate_date', 'estimate_status'],
+            'invoice' => ['invoice_amount', 'invoice_date', 'invoice_status'],
+        ];
+        foreach ($map as $kind => $keys) {
+            list($sum, $date, $status) = $this->summarizePaymentItems($byKind[$kind]);
+            $out[$keys[0]] = $sum === null ? '' : (string)$sum;
+            $out[$keys[1]] = $date;
+            $out[$keys[2]] = $status;
+            if (!$isEnergy) {
+                continue;
+            }
+            foreach (['application' => '申請費', 'design' => '設計費'] as $fee => $type) {
+                $group = array_values(array_filter($byKind[$kind], function ($it) use ($type) {
+                    return $it['item_type'] === $type;
+                }));
+                list($fSum, $fDate, $fStatus) = $this->summarizePaymentItems($group);
+                $out[$kind . '_' . $fee . '_amount'] = $fSum === null ? '' : (string)$fSum;
+                $out[$kind . '_' . $fee . '_date'] = $fDate;
+                $out[$kind . '_' . $fee . '_status'] = $fStatus;
+            }
+        }
+        return $out;
+    }
+
+    private function paymentItemsSummaryText(array $items) {
+        $parts = [];
+        foreach ($items as $it) {
+            $parts[] = ($it['kind'] === 'estimate' ? '見積' : '請求')
+                . ($it['item_type'] !== '' ? '[' . $it['item_type'] . ']' : '')
+                . ' ' . ($it['item_date'] !== '' ? str_replace('-', '/', $it['item_date']) : '—')
+                . ' ' . ($it['amount'] === null ? '—' : '¥' . number_format(floatval($it['amount'])))
+                . ' ' . $it['status'];
+        }
+        return implode("\n", $parts);
+    }
+
+    private function replacePaymentItems($projectId, array $items) {
+        $this->ensurePaymentItemsTable();
+        $table = $this->paymentItemsTable();
+        $projectId = intval($projectId);
+        $this->query(sprintf("DELETE FROM `%s` WHERE project_id = %d", $table, $projectId));
+        $now = date('Y-m-d H:i:s');
+        foreach ($items as $it) {
+            $this->query(sprintf(
+                "INSERT INTO `%s` (project_id, kind, item_date, item_type, amount, status, sort_order, created_at, updated_at)
+                 VALUES (%d, '%s', %s, '%s', %s, '%s', %d, '%s', '%s')",
+                $table,
+                $projectId,
+                $this->quote($it['kind']),
+                $it['item_date'] !== '' ? "'" . $this->quote($it['item_date']) . " 18:00:00'" : 'NULL',
+                $this->quote($it['item_type']),
+                $it['amount'] === null ? 'NULL' : sprintf('%.2f', floatval($it['amount'])),
+                $this->quote($it['status']),
+                intval($it['sort_order']),
+                $now,
+                $now
+            ));
+        }
+    }
+
     function updateProjectStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
@@ -7073,7 +7428,22 @@ class Project extends ApplicationModel {
             return $versionCheck['response'];
         }
         $expectedPaymentVersion = $versionCheck['expected_version'];
-        
+
+        // 決済明細: the lines are the source; the legacy 見積/請求 columns are derived from
+        // them and override whatever single values the client posted for those columns.
+        $postedPaymentItems = null;
+        if (array_key_exists('payment_items', $_POST)) {
+            $parsedItems = $this->parsePostedPaymentItems($_POST['payment_items']);
+            if (!$parsedItems['ok']) {
+                return ['status' => 'error', 'error' => $parsedItems['error'], 'message' => $parsedItems['error']];
+            }
+            $postedPaymentItems = $parsedItems['items'];
+            $isEnergyProject = $this->isEnergyDepartmentById($old['department_id'] ?? 0);
+            foreach ($this->derivePaymentLegacyFields($postedPaymentItems, $isEnergyProject) as $key => $value) {
+                $_POST[$key] = $value;
+            }
+        }
+
         $data = array(
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['userid']
@@ -7235,9 +7605,26 @@ class Project extends ApplicationModel {
         }
         
         if ($result) {
+            $response = ['status' => 'success', 'payment_version' => $newPaymentVersion];
+            if ($postedPaymentItems !== null) {
+                $oldItemsText = $this->paymentItemsSummaryText($this->getPaymentItemsForProject($old));
+                $this->replacePaymentItems($id, $postedPaymentItems);
+                $newItemsText = $this->paymentItemsSummaryText($postedPaymentItems);
+                if ($oldItemsText !== $newItemsText) {
+                    $this->logProjectAction($id, 'payment_items_updated', '決済明細を変更', $oldItemsText, $newItemsText);
+                }
+                $saved = $this->getById($id);
+                if ($saved) {
+                    $response['payment_items'] = $saved['payment_items'];
+                    $response['derived'] = [];
+                    foreach (array_keys($this->derivePaymentLegacyFields([], true)) as $key) {
+                        $response['derived'][$key] = $saved[$key] ?? null;
+                    }
+                }
+            }
             $this->logBusinessDocumentChanges($id, $old, $data, array_merge($nullDatetimeFields, $nullAmountFields));
 
-            return ['status' => 'success', 'payment_version' => $newPaymentVersion];
+            return $response;
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
         }

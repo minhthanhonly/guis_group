@@ -3232,6 +3232,7 @@ $view->footing();
 <script src="assets/js/parent-project-tagify-options.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/energy-fee-payment.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="../project/assets/js/payment-items.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/parent-project-customers-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../project/assets/js/project-energy-fields-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

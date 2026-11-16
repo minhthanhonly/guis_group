@@ -42,6 +42,8 @@
     }
 
     window.BusinessDocumentUiMixin = {
+        // payment-items.js (loaded before this file) registers <payment-items-editor>
+        components: window.PaymentItemsEditor ? { 'payment-items-editor': window.PaymentItemsEditor } : {},
         data: function () {
             return {
                 bdAmountFocusKey: '',
@@ -187,6 +189,10 @@
             getBdLogCategory: function (log) {
                 var a = String((log && log.action) || '');
                 if (a === 'payment_note_updated') return 'note';
+                if (a === 'payment_items_updated') {
+                    var v = String((log && (log.value2 || log.value1)) || '');
+                    return /^請求/.test(v) && !/見積/.test(v) ? 'invoice' : 'estimate';
+                }
                 if (a === 'amount_updated' || a.indexOf('estimate_') === 0) return 'estimate';
                 if (a.indexOf('invoice_') === 0) return 'invoice';
                 if (a.indexOf('payment_') === 0 || a.indexOf('receipt_') === 0) return 'payment';

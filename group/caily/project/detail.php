@@ -194,66 +194,13 @@ if($_SESSION['show_project'] == 0){
                     <div class="card-body" v-if="project">
                         <input type="hidden" v-model.number="project.payment_version">
 
-                        <!-- 見積 / 請求: one block per document (省エネ: per fee). Logic: project-detail-business-doc-mixin.js -->
+                        <!-- 見積 / 請求: any number of lines (payment-items.js) -->
                         <div v-for="section in businessDocumentSections" :key="'bd-' + section.kind" class="bd-section">
-                            <div v-if="isEnergyDepartmentProject" class="bd-section-title">
-                                <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ section.heading }}</span>
+                            <div class="bd-section-title">
+                                <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ translateLabel(section.heading) }}</span>
                             </div>
-                            <div v-for="row in section.rows" :key="section.kind + '-' + row.fee" class="bd-block" :class="'bd-block-' + row.kind">
-                                <div class="bd-block-head">
-                                    <div class="bd-block-title">
-                                        <i v-if="row.standard" :class="section.icon" class="me-1"></i>
-                                        <span :data-i18n="bdRowTitle(section, row)">{{ bdRowTitle(section, row) }}</span>
-                                        <span v-if="canEditBusinessDocuments && bdRowShowIssuedHint(row)" class="bd-hint-icon" tabindex="0" :data-tip="translateLabel('発行済にするには{fields}が必要です').replace('{fields}', translateLabel(row.dateLabel) + '・' + translateLabel(row.amountLabel))" :aria-label="translateLabel('発行済にするには{fields}が必要です').replace('{fields}', translateLabel(row.dateLabel) + '・' + translateLabel(row.amountLabel))"><i class="fa fa-info-circle"></i></span>
-                                    </div>
-                                    <div v-if="canEditBusinessDocuments" class="btn-group">
-                                        <button type="button" class="btn btn-sm dropdown-toggle waves-effect waves-light bd-status-btn"
-                                                :class="getEnergyFeeStatusButtonClass(row.kind, project[row.statusKey])"
-                                                :id="row.dropdownId"
-                                                data-bs-toggle="dropdown" aria-expanded="false">
-                                            {{ translateLabel(getEnergyFeeStatusLabel(row.kind, project[row.statusKey])) }}
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end">
-                                            <li v-for="status in bdRowStatusOptions(row)" :key="status.value">
-                                                <a class="dropdown-item waves-effect" href="javascript:void(0);"
-                                                   :class="{ disabled: status.value === '発行済' && !bdRowIsComplete(row), active: getEnergyFeeStatusLabel(row.kind, project[row.statusKey]) === translateLabel(status.label) }"
-                                                   @click="bdRowSelectStatus(row, status.value)">
-                                                    {{ translateLabel(status.label) }}
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-                                    <span v-else class="badge" :class="getEnergyFeeStatusBadgeClass(row.kind, project[row.statusKey])">
-                                        {{ translateLabel(getEnergyFeeStatusLabel(row.kind, project[row.statusKey])) }}
-                                    </span>
-                                </div>
-                                <div class="bd-fields">
-                                    <div class="bd-field">
-                                        <label class="bd-label" :for="businessDocumentPickerId(row.dateKey)">{{ translateLabel(row.dateLabel) }}<span v-if="canEditBusinessDocuments" class="text-danger ms-1">*</span></label>
-                                        <div v-if="canEditBusinessDocuments" class="input-group input-group-sm">
-                                            <input type="text" class="form-control" v-model="project[row.dateKey]" :id="businessDocumentPickerId(row.dateKey)" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off">
-                                            <button v-if="!hasBusinessDocumentDate(row.dateKey)" type="button" class="btn btn-outline-primary" :title="translateLabel('今日の日付を入力')"
-                                                    @click="setBusinessDocumentDateToday(row.dateKey)">{{ translateLabel('今日') }}</button>
-                                        </div>
-                                        <div v-else class="bd-value" :data-time="getBusinessDocumentDateForTooltip(row.dateKey)" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(getBusinessDocumentDateForTooltip(row.dateKey))">
-                                            {{ formatBusinessDocumentDateTime(row.dateKey) || '—' }}
-                                        </div>
-                                    </div>
-                                    <div class="bd-field">
-                                        <label class="bd-label">{{ translateLabel(row.amountLabel) }}<span v-if="canEditBusinessDocuments" class="text-danger ms-1">*</span></label>
-                                        <div v-if="canEditBusinessDocuments" class="input-group input-group-sm">
-                                            <span class="input-group-text">¥</span>
-                                            <input type="text" inputmode="numeric" autocomplete="off" class="form-control text-end bd-amount-input"
-                                                   :value="bdAmountDisplay(project, row.amountKey)" :placeholder="translateLabel('未入力')" data-i18n="未入力"
-                                                   @focus="onBdAmountFocus(row.amountKey, $event)" @blur="onBdAmountBlur" @input="onBdAmountInput(project, row.amountKey, $event, scheduleBusinessDocumentUpdate)">
-                                            <button v-if="bdRowCanCopy(row)" type="button" class="btn btn-outline-primary" :title="translateLabel('見積金額をコピー')"
-                                                    @click="bdRowCopy(row)">{{ translateLabel('見積と同額') }}</button>
-                                        </div>
-                                        <div v-else class="bd-value text-end">{{ bdAmountDisplay(project, row.amountKey) ? '¥' + bdAmountDisplay(project, row.amountKey) : '—' }}</div>
-                                        <div v-if="bdRowTaxIncluded(row)" class="bd-sub text-end">{{ translateLabel('税込') }} {{ bdRowTaxIncluded(row) }}</div>
-                                    </div>
-                                </div>
-                            </div>
+                            <payment-items-editor :project="project" :kind="section.kind" :editable="!!canEditBusinessDocuments"
+                                                  :energy="!!isEnergyDepartmentProject" :translate="translateLabel" @change="scheduleBusinessDocumentUpdate"></payment-items-editor>
                         </div>
 
                         <div class="mb-0 bd-note">
@@ -868,6 +815,7 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/yotei-field.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-drawing-share.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/energy-fee-payment.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/payment-items.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-custom-field-composite.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../parent_project/assets/js/parent-project-error.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="../parent_project/assets/js/parent-project-tagify-options.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

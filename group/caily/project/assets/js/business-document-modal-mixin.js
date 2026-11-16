@@ -71,7 +71,8 @@
         'payment_date_updated',
         'payment_amount_updated',
         'receipt_number_updated',
-        'payment_note_updated'
+        'payment_note_updated',
+        'payment_items_updated'
     ]);
 
     var BUSINESS_DOCUMENT_FIELDS = [
@@ -835,14 +836,17 @@
 
                 this.syncBdDatesFromPickers();
                 var p = this.businessDocumentProject;
-                var energyIssuedError = this.getBdEnergyFeeIssuedValidationError();
+                var usesItems = !!(window.PaymentItems && window.PaymentItems.uses(p));
+                var energyIssuedError = usesItems
+                    ? window.PaymentItems.validationError(p)
+                    : this.getBdEnergyFeeIssuedValidationError();
                 if (energyIssuedError) {
                     this.businessDocumentSaveStatus = null;
                     this.businessDocumentError = energyIssuedError;
                     this.isUpdatingBusinessDocument = false;
                     return;
                 }
-                if (!this.isBdEnergyDepartment) {
+                if (!usesItems && !this.isBdEnergyDepartment) {
                     if (this.normalizeBusinessDocumentStatusValue(p.estimate_status) === '発行済'
                         && !this.isBdEstimateDocumentFieldsComplete()) {
                         this.businessDocumentSaveStatus = null;
@@ -912,6 +916,12 @@
                                     }
                                 }
                             });
+                            if (window.PaymentItems) {
+                                window.PaymentItems.applySaveResponse(self.businessDocumentProject, response.data, function(key, apiVal) {
+                                    self.setBdServerDate(key, apiVal || '');
+                                    self.businessDocumentProject[key] = apiVal ? toProjectDateTimeInputValue(apiVal) : '';
+                                });
+                            }
                             self.syncBusinessDocumentAfterSave();
                             self.$nextTick(function() {
                                 setTimeout(function() {

@@ -269,6 +269,7 @@
         'payment_amount_updated',
         'receipt_number_updated',
         'payment_note_updated',
+        'payment_items_updated',
     ]);
 
     const BUSINESS_DOCUMENT_FIELDS = [
