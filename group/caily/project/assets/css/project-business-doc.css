@@ -314,3 +314,14 @@
 .bd-scope .pi-footer { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px; }
 .bd-scope .pi-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .bd-scope .pi-total { margin-left: auto; font-size: 0.8125rem; text-align: right; }
+/* 日付・金額は入力済みだが状態が未更新の明細 */
+.bd-scope .pi-line-pending { background: rgba(255, 171, 0, 0.08); border-color: rgba(255, 171, 0, 0.55); }
+.bd-scope .pi-pending {
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    font-size: 0.75rem; color: #b37400;
+}
+.bd-scope .pi-pending .pi-issue-btn { flex: 0 0 auto; padding: 1px 8px; font-size: 0.75rem; }
+.bd-scope .pi-pending-summary {
+    font-size: 0.8125rem; font-weight: 600; color: #b37400;
+    background: rgba(255, 171, 0, 0.12); border-radius: 6px; padding: 4px 8px;
+}

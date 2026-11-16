@@ -68,6 +68,13 @@
         return !!item && !isEmpty(item.item_date) && hasAmount(item.amount);
     }
 
+    /** Date + amount entered, but the status was never moved on (未発行 / 見積作成中 / 請求準備). */
+    function isPendingLine(item) {
+        if (!isLineComplete(item)) return false;
+        var s = normalizeStatus(item.status);
+        return s !== '発行済' && !isWaived(s);
+    }
+
     function uses(project) {
         return !!project && Array.isArray(project.payment_items);
     }
@@ -269,8 +276,10 @@
         template: ''
             + '<div class="pi-editor" :class="\'pi-editor-\' + kind">'
             + '  <datalist :id="listId"><option v-for="t in typeOptions" :key="t" :value="t"></option></datalist>'
+            + '  <div v-if="pendingCount" class="pi-pending-summary" role="status">'
+            + '    <i class="fa fa-exclamation-triangle me-1"></i>{{ t("状態が未更新の明細") }}: {{ pendingCount }}{{ t("件") }}</div>'
             + '  <div v-if="!items.length" class="pi-empty text-muted">{{ t("明細なし") }}</div>'
-            + '  <div v-for="(item, idx) in items" :key="keyOf(item)" class="pi-line" :class="\'pi-status-\' + colorOf(item.status)">'
+            + '  <div v-for="(item, idx) in items" :key="keyOf(item)" class="pi-line" :class="[\'pi-status-\' + colorOf(item.status), { \'pi-line-pending\': isPending(item) }]">'
             + '    <div class="pi-line-row">'
             + '      <input v-if="editable" type="text" class="form-control form-control-sm pi-type" :list="listId" maxlength="100"'
             + '             v-model="item.item_type" :placeholder="t(\'種別\')" @change="emitChange">'
@@ -294,12 +303,16 @@
             + '        <span class="input-group-text">¥</span>'
             + '        <input type="text" inputmode="numeric" autocomplete="off" class="form-control text-end"'
             + '               :value="amountDisplay(item)" :placeholder="t(\'未入力\')" :disabled="isWaived(item.status)"'
-            + '               @focus="onAmountFocus(item, $event)" @blur="focusKey = \'\'" @input="onAmountInput(item, $event)">'
+            + '               @focus="onAmountFocus(item, $event)" @blur="onAmountBlur(item)" @input="onAmountInput(item, $event)">'
             + '      </div>'
             + '      <div v-else class="pi-value text-end">{{ isEmptyAmount(item) ? "—" : yen(item.amount) }}</div>'
             + '    </div>'
             + '    <div v-if="editable && normStatus(item.status) !== \'発行済\' && !isWaived(item.status) && !isComplete(item)" class="pi-hint">'
             + '      {{ t("発行済にするには{fields}が必要です").replace("{fields}", t(dateLabel) + "・" + t("金額")) }}</div>'
+            + '    <div v-if="isPending(item)" class="pi-pending">'
+            + '      <span><i class="fa fa-exclamation-triangle me-1"></i>{{ t("日付・金額は入力済みですが、状態が「{status}」のままです").replace("{status}", t(normStatus(item.status))) }}</span>'
+            + '      <button v-if="editable" type="button" class="btn btn-xs btn-success pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
+            + '    </div>'
             + '  </div>'
             + '  <div class="pi-footer">'
             + '    <div class="pi-actions" v-if="editable">'
@@ -343,7 +356,14 @@
             },
             canCopyFromEstimate: function () {
                 return itemsOf(this.project, 'estimate').length > 0;
+            },
+            pendingCount: function () {
+                return this.items.filter(isPendingLine).length;
             }
+        },
+        created: function () {
+            // _key → typing the amount turned the line complete; asked on blur (not reactive)
+            this._completedByTyping = {};
         },
         methods: {
             t: function (k) {
@@ -376,6 +396,48 @@
                 var n = Number(item.amount);
                 return Number.isFinite(n) ? n.toLocaleString('ja-JP') : String(item.amount);
             },
+            isPending: isPendingLine,
+            markIssued: function (item) {
+                if (!isLineComplete(item)) return;
+                item.status = '発行済';
+                this.emitChange();
+            },
+            /**
+             * The line just got its date and amount (it had not both before) but is still
+             * 未発行 / 見積作成中 / 請求準備: ask once whether it is 発行済 now.
+             * Lines that were already complete are only flagged (isPending), never asked.
+             */
+            askIssuedIfJustCompleted: function (item, wasComplete) {
+                if (!this.editable || wasComplete || !isPendingLine(item)) return;
+                var self = this;
+                var title = this.t('発行済にしますか？');
+                var text = this.t('{label}の日付・金額が入力されました。').replace('{label}',
+                    (this.kind === 'invoice' ? this.t('請求') : this.t('見積')) + (item.item_type ? '［' + item.item_type + '］' : ''));
+                var apply = function (yes) {
+                    if (yes && isPendingLine(item)) self.markIssued(item);
+                };
+                if (typeof window.Swal !== 'undefined' && window.Swal.fire) {
+                    window.Swal.fire({
+                        icon: 'question',
+                        title: title,
+                        text: text,
+                        showCancelButton: true,
+                        confirmButtonText: this.t('発行済にする'),
+                        cancelButtonText: this.t('あとで'),
+                        customClass: { confirmButton: 'btn btn-success me-2', cancelButton: 'btn btn-label-secondary' },
+                        buttonsStyling: false
+                    }).then(function (r) { apply(!!(r && r.isConfirmed)); });
+                } else {
+                    apply(window.confirm(title + '\n' + text));
+                }
+            },
+            /** Ask when leaving the amount, if typing it is what completed the line. */
+            onAmountBlur: function (item) {
+                this.focusKey = '';
+                var completedByTyping = !!this._completedByTyping[item._key];
+                delete this._completedByTyping[item._key];
+                this.askIssuedIfJustCompleted(item, !completedByTyping);
+            },
             onAmountFocus: function (item, e) {
                 this.focusKey = item._key;
                 var el = e && e.target;
@@ -384,7 +446,10 @@
             onAmountInput: function (item, e) {
                 var digits = String(e.target.value || '').replace(/[^\d]/g, '');
                 if (e.target.value !== digits) e.target.value = digits;
+                var wasComplete = isLineComplete(item);
                 item.amount = digits === '' ? null : Number(digits);
+                if (!wasComplete && isLineComplete(item)) this._completedByTyping[item._key] = true;
+                else if (!isLineComplete(item)) delete this._completedByTyping[item._key];
                 if (normalizeStatus(item.status) === '発行済' && !isLineComplete(item)) item.status = '未発行';
                 this.emitChange();
             },
@@ -404,6 +469,7 @@
             /** Date picked in the UI; the stored time (e.g. 18:57 from the old 見積日) is kept. */
             setDate: function (item, ymd) {
                 var current = String(item.item_date || '');
+                var was = isLineComplete(item);
                 if (!ymd) {
                     if (current === '') return;
                     item.item_date = '';
@@ -412,12 +478,15 @@
                     item.item_date = ymd + current.slice(10);
                 }
                 this.emitChange();
+                this.askIssuedIfJustCompleted(item, was);
             },
             setToday: function (item) {
                 var d = new Date();
                 var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+                var was = isLineComplete(item);
                 item.item_date = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
                 this.emitChange();
+                this.askIssuedIfJustCompleted(item, was);
             },
             newItem: function (src) {
                 return ensureKey({
