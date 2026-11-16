@@ -21,6 +21,15 @@ $noteModalEditorId = isset($noteModalEditorId) ? $noteModalEditorId : 'quill_not
                     <button type="button" class="btn-close" aria-label="閉じる" @click="closeNoteModal"></button>
                 </div>
                 <div class="modal-body">
+                    <!-- 編集ロック (project-note-modal-mixin.js) -->
+                    <div v-if="noteLockedBy && !noteLockLost" class="alert alert-warning d-flex align-items-center gap-2 py-2 mb-3" role="status">
+                        <i class="fa fa-user-edit"></i>
+                        <span>{{ noteLockedBy }}さんが編集中のため、編集できません。しばらくしてからもう一度お試しください。</span>
+                    </div>
+                    <div v-if="noteLockLost" class="alert alert-danger d-flex align-items-center gap-2 py-2 mb-3" role="alert">
+                        <i class="fa fa-user-edit"></i>
+                        <span>{{ noteLockedBy }}さんが編集を始めたため、この内容は保存できません。必要な部分をコピーしてから閉じてください。</span>
+                    </div>
                     <div class="project-note-modal-grid">
                         <!-- Left: the note itself -->
                         <div class="project-note-modal-main">

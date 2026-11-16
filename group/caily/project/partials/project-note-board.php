@@ -113,6 +113,7 @@ $nbStandalone = !empty($noteBoardStandalone);
                         <i v-if="note.is_important == 1" class="fa fa-thumb-tack text-danger" :title="translateLabel('ピン（全員）')"></i>
                         <span v-if="note.visibility === 'members'" class="note-visibility-icon" :title="translateLabel('公開範囲: 案件メンバー')"><i class="fa fa-users"></i></span>
                         <span v-else-if="note.visibility === 'self'" class="note-visibility-icon" :title="translateLabel('公開範囲: 自分のみ')"><i class="fa fa-lock"></i></span>
+                        <span v-if="note.edit_locked_name" class="note-editing-icon" :title="note.edit_locked_name + translateLabel('さんが編集中')"><i class="fa fa-user-edit"></i></span>
                         <span class="note-actions ms-auto" @click.stop>
                             <span v-if="note.visibility !== 'self'"
                                   class="note-pin-everyone-icon"

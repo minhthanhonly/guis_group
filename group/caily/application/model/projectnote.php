@@ -17,6 +17,8 @@ class ProjectNote extends ApplicationModel {
             'bg_color' => array(),
             'visibility' => array(),
             'pinned_at' => array(),
+            'edit_locked_by' => array(),
+            'edit_locked_at' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
         );
@@ -33,6 +35,8 @@ class ProjectNote extends ApplicationModel {
     const VISIBILITIES = array('all', 'members', 'self');
     /** メモボード (案件詳細): number of grid columns */
     const BOARD_COLS = 3;
+    /** 編集ロック: seconds a lock lives without a heartbeat (the open editor renews it every 30 s) */
+    const EDIT_LOCK_TTL = 120;
 
     /**
      * SQL condition: the note (alias $alias) is visible to the given user. No admin exception.
@@ -79,7 +83,7 @@ class ProjectNote extends ApplicationModel {
         $rows = $this->fetchAll(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
             . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
-            . "AND COLUMN_NAME IN ('bg_color', 'visibility', 'pinned_at')"
+            . "AND COLUMN_NAME IN ('bg_color', 'visibility', 'pinned_at', 'edit_locked_by', 'edit_locked_at')"
         );
         $have = array();
         foreach ((array)$rows as $r) {
@@ -103,6 +107,112 @@ class ProjectNote extends ApplicationModel {
                 . "COMMENT 'ピン（全員）にした日時' AFTER `visibility`"
             );
         }
+        if (empty($have['edit_locked_by'])) {
+            $this->query(
+                "ALTER TABLE `{$table}` ADD COLUMN `edit_locked_by` varchar(64) DEFAULT NULL "
+                . "COMMENT '編集中のユーザー (userid)' AFTER `pinned_at`"
+            );
+        }
+        if (empty($have['edit_locked_at'])) {
+            $this->query(
+                "ALTER TABLE `{$table}` ADD COLUMN `edit_locked_at` DATETIME DEFAULT NULL "
+                . "COMMENT '編集ロックの最終更新' AFTER `edit_locked_by`"
+            );
+        }
+    }
+
+    /* ---------- 編集ロック: one editor at a time ----------
+     * Opening a note in the editor takes the lock (lockNote) and the editor renews it every 30 s;
+     * closing, saving or leaving the page releases it. A lock not renewed for EDIT_LOCK_TTL seconds
+     * has expired. While another user holds it, update / delete / ピン are refused.
+     */
+
+    private function editLockCutoff() {
+        return date('Y-m-d H:i:s', time() - self::EDIT_LOCK_TTL);
+    }
+
+    /** userid of another user holding a live lock on the note, or '' */
+    private function otherEditor($note) {
+        $by = isset($note['edit_locked_by']) ? (string)$note['edit_locked_by'] : '';
+        if ($by === '' || $by === $this->currentUserid()) {
+            return '';
+        }
+        $at = isset($note['edit_locked_at']) ? (string)$note['edit_locked_at'] : '';
+        if ($at === '' || $at < $this->editLockCutoff()) {
+            return '';
+        }
+        return $by;
+    }
+
+    private function userRealname($userid) {
+        $row = $this->fetchOne(sprintf(
+            "SELECT realname FROM " . DB_PREFIX . "user WHERE userid = '%s' LIMIT 1",
+            $this->quote($userid)
+        ));
+        return ($row && !empty($row['realname'])) ? $row['realname'] : $userid;
+    }
+
+    /** Refusal for a change while someone else edits the note, or null */
+    private function lockedError($note) {
+        $by = $this->otherEditor($note);
+        if ($by === '') {
+            return null;
+        }
+        $name = $this->userRealname($by);
+        return [
+            'status' => 'locked',
+            'error' => $name . 'さんが編集中のため変更できません',
+            'locked_by_name' => $name
+        ];
+    }
+
+    /** Take or renew the edit lock. POST id → success | locked (locked_by_name) | error */
+    function lock($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) {
+            return ['status' => 'error', 'error' => 'No note id'];
+        }
+        $note = $this->getById($id);
+        if (!$note) {
+            return ['status' => 'error', 'error' => 'Note not found'];
+        }
+        if (!$this->canEditNote($note)) {
+            return ['status' => 'error', 'error' => 'Permission denied'];
+        }
+        $me = $this->quote($this->currentUserid());
+        // one statement, so two users opening the note at once cannot both get it
+        $this->query(sprintf(
+            "UPDATE {$this->table} SET edit_locked_by = '%s', edit_locked_at = '%s' "
+            . "WHERE id = %d AND (edit_locked_by IS NULL OR edit_locked_by = '' OR edit_locked_by = '%s' "
+            . "OR edit_locked_at IS NULL OR edit_locked_at < '%s')",
+            $me, date('Y-m-d H:i:s'), $id, $me, $this->editLockCutoff()
+        ));
+        $row = $this->fetchOne(sprintf(
+            "SELECT edit_locked_by, edit_locked_at FROM {$this->table} WHERE id = %d", $id
+        ));
+        $locked = $row ? $this->lockedError($row) : null;
+        if ($locked) {
+            return $locked;
+        }
+        return ['status' => 'success', 'ttl' => self::EDIT_LOCK_TTL];
+    }
+
+    /** Release the own edit lock. POST id */
+    function unlock($params = null) {
+        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        if (!$id) {
+            return ['status' => 'error', 'error' => 'No note id'];
+        }
+        $this->releaseLock($id);
+        return ['status' => 'success'];
+    }
+
+    private function releaseLock($id) {
+        $this->query(sprintf(
+            "UPDATE {$this->table} SET edit_locked_by = NULL, edit_locked_at = NULL "
+            . "WHERE id = %d AND edit_locked_by = '%s'",
+            intval($id), $this->quote($this->currentUserid())
+        ));
     }
 
     /* ---------- メモボード: each user arranges their own board ----------
@@ -647,7 +757,11 @@ class ProjectNote extends ApplicationModel {
         if (!$this->canEditNote($note)) {
             return ['status' => 'error', 'error' => 'Permission denied'];
         }
-        
+        $locked = $this->lockedError($note);
+        if ($locked) {
+            return $locked;
+        }
+
         $data = array(
             'content' => $this->cleanNoteContent(isset($_POST['content']) ? $_POST['content'] : ''),
             'is_important' => isset($_POST['is_important']) ? intval($_POST['is_important']) : 0,
@@ -678,6 +792,7 @@ class ProjectNote extends ApplicationModel {
             } elseif (empty($data['is_important']) && !empty($note['is_important'])) {
                 $this->markUnpinned($id);
             }
+            $this->releaseLock($id);
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Failed to update note'];
@@ -696,6 +811,10 @@ class ProjectNote extends ApplicationModel {
         }
         if (!$this->canEditNote($note)) {
             return ['status' => 'error', 'error' => 'Permission denied'];
+        }
+        $locked = $this->lockedError($note);
+        if ($locked) {
+            return $locked;
         }
         $next = empty($note['is_important']) ? 1 : 0;
         if ($next === 1 && ($note['visibility'] ?? 'all') === 'self') {
@@ -782,7 +901,11 @@ class ProjectNote extends ApplicationModel {
         if (!$this->canEditNote($note)) {
             return ['status' => 'error', 'error' => 'Permission denied'];
         }
-        
+        $locked = $this->lockedError($note);
+        if ($locked) {
+            return $locked;
+        }
+
         $result = $this->query_delete(['id' => $id]);
         if ($result) {
             $this->query(sprintf("DELETE FROM %s WHERE note_id = %d", $this->userBoardTable(), $id));
@@ -825,6 +948,16 @@ class ProjectNote extends ApplicationModel {
         
         $notes = $this->getByProject($project_id);
         $this->attachUserBoard($project_id, $notes);
+        $names = array();
+        foreach ($notes as &$n) {
+            $by = $this->otherEditor($n);
+            if ($by !== '' && !isset($names[$by])) {
+                $names[$by] = $this->userRealname($by);
+            }
+            $n['edit_locked_name'] = $by !== '' ? $names[$by] : null;
+            unset($n['edit_locked_by'], $n['edit_locked_at']);
+        }
+        unset($n);
         return ['status' => 'success', 'data' => $notes];
     }
 

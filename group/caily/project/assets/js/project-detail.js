@@ -3075,6 +3075,9 @@ const vueApp = createApp({
                     this.showNotification('メモが保存されました', 'success');
                     this.closeNoteModal();
                     await this.loadNotes();
+                } else if (response.data && response.data.status === 'locked') {
+                    // 編集ロック: someone else edits this note
+                    this.showNotification(response.data.error, 'error');
                 } else {
                     this.showNotification('メモの保存に失敗しました', 'error');
                 }
@@ -3107,7 +3110,8 @@ const vueApp = createApp({
                     await this.loadNotes();
                     return true;
                 } else {
-                    this.showNotification('メモの削除に失敗しました', 'error');
+                    const locked = response.data && response.data.status === 'locked';
+                    this.showNotification(locked ? response.data.error : 'メモの削除に失敗しました', 'error');
                 }
             } catch (error) {
                 console.error('Error deleting note:', error);

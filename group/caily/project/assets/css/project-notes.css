@@ -510,3 +510,9 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
     color: var(--bs-primary, #696cff);
     border-color: var(--bs-primary, #696cff);
 }
+
+/* 編集ロック: someone else has the note open in the editor */
+.note-board .note-editing-icon {
+    color: var(--bs-warning-text-emphasis, #997404);
+    font-size: 0.8rem;
+}

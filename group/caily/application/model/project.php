@@ -7352,6 +7352,20 @@ class Project extends ApplicationModel {
         return $noteModel->reorder($params);
     }
 
+    /** メモ 編集ロック: take / renew the lock while the note is open in the editor. POST id */
+    function lockNote($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->lock($params);
+    }
+
+    /** メモ 編集ロック: release the own lock. POST id */
+    function unlockNote($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->unlock($params);
+    }
+
     /** メモボード (案件詳細): move a note on the own grid. POST project_id, note_id, col, row */
     function moveNoteOnBoard($params = null) {
         require_once('projectnote.php');

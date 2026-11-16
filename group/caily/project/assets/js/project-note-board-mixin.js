@@ -543,6 +543,9 @@
                     const response = await axios.post('/api/index.php?model=project&method=toggleNoteImportant', formData);
                     if (response.data && response.data.status === 'success') {
                         await this.reloadNoteBoard();
+                    } else if (response.data && response.data.status === 'locked') {
+                        this.noteBoardNotify(response.data.error, 'error');
+                        await this.reloadNoteBoard();
                     } else {
                         this.noteBoardNotify('ピンの更新に失敗しました', 'error');
                     }
