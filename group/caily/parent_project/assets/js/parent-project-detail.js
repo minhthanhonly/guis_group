@@ -364,48 +364,22 @@ function applyProjectVersionFromResponse(project, responseData) {
     }
 }
 
+/**
+ * Someone else saved the project first; nothing was written. The shared dialog
+ * (assets/js/version-conflict.js) keeps what the user typed unless they choose to load the
+ * latest data, which runs onReload (the 決済情報 dialog reopens itself; a page reload when
+ * none is given).
+ */
 function handleProjectVersionConflict(responseData, onReload) {
+    if (typeof window.resolveVersionConflict === 'function') {
+        return window.resolveVersionConflict(responseData, onReload);
+    }
     if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
         return false;
     }
-    const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-    if (typeof showParentProjectError === 'function') {
-        showParentProjectError(msg, responseData, {
-            onClose: function() {
-                if (typeof onReload === 'function') {
-                    onReload();
-                } else {
-                    window.location.reload();
-                }
-            }
-        });
-        return true;
-    }
-    if (typeof hideHourglass === 'function') {
-        hideHourglass();
-    }
-    if (typeof Swal !== 'undefined' && Swal.fire) {
-        Swal.fire({
-            title: 'Error!',
-            text: msg,
-            icon: 'error',
-            customClass: {
-                confirmButton: 'btn btn-primary'
-            },
-            buttonsStyling: false
-        }).then(() => {
-            if (typeof onReload === 'function') {
-                onReload();
-            } else {
-                window.location.reload();
-            }
-        });
-    } else if (typeof showMessage === 'function') {
-        showMessage(msg, true);
-        window.location.reload();
-    } else {
-        alert(msg);
-        window.location.reload();
+    const msg = responseData.message || '他のユーザーが先に更新しました。';
+    if (window.confirm(msg + '\n\n最新の内容を読み込みますか？（入力中の内容は破棄されます）')) {
+        if (typeof onReload === 'function') onReload(); else window.location.reload();
     }
     return true;
 }
@@ -3838,6 +3812,7 @@ createApp({
                     if (handleProjectVersionConflict(response.data, async () => {
                         await this.openBusinessDocumentModal({ id: this.businessDocumentProjectId });
                     })) {
+                        this.businessDocumentSaveStatus = null;
                         return;
                     }
                     this.businessDocumentSaveStatus = null;

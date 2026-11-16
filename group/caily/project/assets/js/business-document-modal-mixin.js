@@ -303,7 +303,14 @@
         }
     }
 
+    /**
+     * Shared dialog (assets/js/version-conflict.js): keeps what the user typed unless they
+     * choose to load the latest data, which reopens this dialog (onReload).
+     */
     function resolveHandleProjectVersionConflict() {
+        if (typeof window.resolveVersionConflict === 'function') {
+            return window.resolveVersionConflict;
+        }
         if (typeof window.handleProjectVersionConflict === 'function') {
             return window.handleProjectVersionConflict;
         }
@@ -311,28 +318,9 @@
             if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
                 return false;
             }
-            var msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-            if (typeof hideHourglass === 'function') {
-                hideHourglass();
-            }
-            if (typeof Swal !== 'undefined' && Swal.fire) {
-                Swal.fire({
-                    title: 'Error!',
-                    text: msg,
-                    icon: 'error',
-                    customClass: {
-                        confirmButton: 'btn btn-primary'
-                    },
-                    buttonsStyling: false
-                }).then(function() {
-                    window.location.reload();
-                });
-            } else if (typeof showMessage === 'function') {
-                showMessage(msg, true);
-                window.location.reload();
-            } else if (typeof alert === 'function') {
-                alert(msg);
-                window.location.reload();
+            var msg = responseData.message || '他のユーザーが先に更新しました。';
+            if (window.confirm(msg + '\n\n最新の内容を読み込みますか？（入力中の内容は破棄されます）')) {
+                if (typeof onReload === 'function') onReload(); else window.location.reload();
             }
             return true;
         };
@@ -949,6 +937,7 @@
                             if (handleConflict(response.data, function() {
                                 self.openBusinessDocumentModal({ id: self.businessDocumentProjectId });
                             })) {
+                                self.businessDocumentSaveStatus = null;
                                 return;
                             }
                             self.businessDocumentSaveStatus = null;

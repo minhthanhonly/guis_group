@@ -3323,7 +3323,7 @@ class Project extends ApplicationModel {
                 'response' => [
                     'status' => 'error',
                     'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に更新しました。ページを再読み込みしてください。',
+                    'message' => '他のユーザーが先に更新しました。最新の内容を読み込んでから、もう一度編集してください。',
                     'current_version' => $dbVersion,
                 ],
             ];
@@ -3353,7 +3353,7 @@ class Project extends ApplicationModel {
                 'response' => [
                     'status' => 'error',
                     'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に決済情報を更新しました。ページを再読み込みしてください。',
+                    'message' => '他のユーザーが先に決済情報を更新しました。最新の内容を読み込んでから、もう一度編集してください。',
                     'current_payment_version' => $dbVersion,
                 ],
             ];
@@ -3377,7 +3377,7 @@ class Project extends ApplicationModel {
                 'response' => [
                     'status' => 'error',
                     'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に決済情報を更新しました。ページを再読み込みしてください。',
+                    'message' => '他のユーザーが先に決済情報を更新しました。最新の内容を読み込んでから、もう一度編集してください。',
                     'current_payment_version' => $newVersion,
                 ],
             ];
@@ -3444,7 +3444,7 @@ class Project extends ApplicationModel {
                 'response' => [
                     'status' => 'error',
                     'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に更新しました。ページを再読み込みしてください。',
+                    'message' => '他のユーザーが先に更新しました。最新の内容を読み込んでから、もう一度編集してください。',
                     'current_version' => $newVersion,
                 ],
             ];

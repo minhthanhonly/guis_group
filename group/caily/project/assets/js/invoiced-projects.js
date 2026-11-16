@@ -200,16 +200,22 @@
         }
     }
 
+    /**
+     * Someone else saved the payment first; nothing was written. The shared dialog
+     * (assets/js/version-conflict.js) keeps what the user typed unless they choose to load the
+     * latest data (onReload reopens the payment dialog). It used to reopen it at once, which
+     * dropped the user's input.
+     */
     function handleProjectVersionConflict(responseData, onReload) {
+        if (typeof window.resolveVersionConflict === 'function') {
+            return window.resolveVersionConflict(responseData, onReload);
+        }
         if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
             return false;
         }
-        const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-        if (typeof showMessage === 'function') {
-            showMessage(msg, true);
-        }
-        if (typeof onReload === 'function') {
-            onReload();
+        const msg = responseData.message || '他のユーザーが先に更新しました。';
+        if (window.confirm(msg + '\n\n最新の内容を読み込みますか？（入力中の内容は破棄されます）')) {
+            if (typeof onReload === 'function') onReload(); else window.location.reload();
         }
         return true;
     }
@@ -1331,6 +1337,7 @@
                         if (handleProjectVersionConflict(data, async function() {
                             await this.openPaymentEditModal({ id: this.paymentEditProjectId });
                         }.bind(this))) {
+                            this.paymentEditSaveStatus = null;
                             return;
                         }
                         this.paymentEditSaveStatus = null;

@@ -369,32 +369,21 @@
         }
     }
 
+    /**
+     * Someone else saved the project first; nothing was written. The shared dialog
+     * (assets/js/version-conflict.js) keeps the form and its input unless the user chooses to
+     * load the latest data, which runs onReload (a page reload when none is given).
+     */
     function handleProjectVersionConflict(responseData, onReload) {
+        if (typeof window.resolveVersionConflict === 'function') {
+            return window.resolveVersionConflict(responseData, onReload);
+        }
         if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
             return false;
         }
-        const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-        if (typeof hideHourglass === 'function') {
-            hideHourglass();
-        }
-        if (typeof Swal !== 'undefined' && Swal.fire) {
-            Swal.fire({
-                title: 'Error!',
-                text: msg,
-                icon: 'error',
-                customClass: {
-                    confirmButton: 'btn btn-primary'
-                },
-                buttonsStyling: false
-            }).then(() => {
-                window.location.reload();
-            });
-        } else if (typeof showMessage === 'function') {
-            showMessage(msg, true);
-            window.location.reload();
-        } else {
-            alert(msg);
-            window.location.reload();
+        const msg = responseData.message || '他のユーザーが先に更新しました。';
+        if (window.confirm(msg + '\n\n最新の内容を読み込みますか？（入力中の内容は破棄されます）')) {
+            if (typeof onReload === 'function') onReload(); else window.location.reload();
         }
         return true;
     }
@@ -2440,7 +2429,7 @@
                     appendProjectVersionToFormData(formData, this.project);
                     const response = await axios.post('/api/index.php?model=project&method=update', formData);
                     if (!response.data || response.data.status !== 'success') {
-                        if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                        if (handleProjectVersionConflict(response.data, () => this.reloadAfterVersionConflict())) {
                             return;
                         }
                         this.project[field] = oldVal;
@@ -2632,7 +2621,7 @@
                         // Hoãn loadProject để trình duyệt kịp vẽ thông báo trước khi xử lý nặng
                         setTimeout(() => { this.loadProject(); }, 0);
                     } else {
-                        if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                        if (handleProjectVersionConflict(response.data, () => this.reloadAfterVersionConflict())) {
                             return;
                         }
                         showMessage('プロジェクトの更新に失敗しました。', true);
@@ -3175,6 +3164,14 @@
                 return this.selectedEnergyMaterialLabels.filter(opt => composite.indexOf(opt) === -1);
             },
             /**
+             * The user chose 最新の内容を読み込む after a version conflict. On the detail page a
+             * whole reload is the only clean way out of edit mode (form widgets, original values);
+             * the project form dialog overrides this to reopen the form with the latest data.
+             */
+            reloadAfterVersionConflict() {
+                window.location.reload();
+            },
+            /**
              * Feedback of an inline save in the title of its section table (the way 決済情報 does
              * it): 'loading', 'saved' (clears itself) or null. No dialog on success.
              */
@@ -3217,7 +3214,7 @@
                         this.markInlineSave('custom', 'saved');
                     } else {
                         revert();
-                        if (handleProjectVersionConflict(res.data, () => this.loadProject())) return;
+                        if (handleProjectVersionConflict(res.data, () => this.reloadAfterVersionConflict())) return;
                         showMessage((res.data && (res.data.message || res.data.error)) || '更新に失敗しました。', true);
                     }
                 } catch (err) {
@@ -3251,7 +3248,7 @@
                         this.markInlineSave('custom', 'saved');
                     } else {
                         revert();
-                        if (handleProjectVersionConflict(res.data, () => this.loadProject())) return;
+                        if (handleProjectVersionConflict(res.data, () => this.reloadAfterVersionConflict())) return;
                         showMessage((res.data && (res.data.message || res.data.error)) || '更新に失敗しました。', true);
                     }
                 } catch (err) {
@@ -3327,7 +3324,7 @@
                         this.project.custom_fields = JSON.stringify(updated);
                         this.markInlineSave('custom', 'saved');
                     } else {
-                        if (handleProjectVersionConflict(res.data, () => this.loadProject())) {
+                        if (handleProjectVersionConflict(res.data, () => this.reloadAfterVersionConflict())) {
                             return;
                         }
                         showMessage(res.data?.message || res.data?.error || '更新に失敗しました。', true);
