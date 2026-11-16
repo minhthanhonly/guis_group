@@ -949,12 +949,12 @@ $view->footing();
     -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
     mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
 }
-/* 全画面表示: the メモ card covers the window (the browser also goes fullscreen when allowed);
-   above the navbar (1075), below the modal backdrop / modals (1089 / 1090) so the note modal opens on top */
+/* 全画面表示: the メモ card covers the window (the browser also goes fullscreen when allowed),
+   above every fixed UI of the layout (navbar, menu, logo, version, FAB / side buttons up to 99990) */
 .note-board-card.note-board-fullscreen {
     position: fixed;
     inset: 0;
-    z-index: 1080;
+    z-index: 100000;
     margin: 0 !important;
     border-radius: 0;
     display: flex;
@@ -978,6 +978,25 @@ body.note-board-fullscreen-open {
 /* the side menu sits above modals (1100): hide it while the board is fullscreen */
 body.note-board-fullscreen-open #layout-menu {
     visibility: hidden;
+}
+/* what opens from the board must stay above it: note modal, dialogs, tooltips, pickers */
+body.note-board-fullscreen-open .modal-backdrop {
+    z-index: 100005;
+}
+body.note-board-fullscreen-open .modal {
+    z-index: 100010;
+}
+body.note-board-fullscreen-open .swal2-container {
+    z-index: 100020 !important;
+}
+body.note-board-fullscreen-open > .tooltip,
+body.note-board-fullscreen-open > .popover,
+body.note-board-fullscreen-open > .dropdown-menu,
+body.note-board-fullscreen-open .flatpickr-calendar {
+    z-index: 100030 !important;
+}
+body.note-board-fullscreen-open .note-board.note-drag-layer {
+    z-index: 100040;
 }
 .note-board-full-switch {
     white-space: nowrap;

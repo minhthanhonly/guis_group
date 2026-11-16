@@ -215,12 +215,12 @@ class ProjectNote extends ApplicationModel {
         return array('pinned' => $pinned, 'cells' => $cells, 'appended' => $pending);
     }
 
-    /** Upsert the current user's rows: $values = note id => array(column => int). */
-    private function saveUserBoard($projectId, $values) {
+    /** Upsert a user's rows (default: current user): $values = note id => array(column => int|null). */
+    private function saveUserBoard($projectId, $values, $userId = null) {
         if (!$values) {
             return;
         }
-        $uid = $this->quote($this->currentUserid());
+        $uid = $this->quote($userId === null ? $this->currentUserid() : (string)$userId);
         $now = $this->quote(date('Y-m-d H:i:s'));
         $cols = array_keys(reset($values));
         $tuples = array();
@@ -284,21 +284,116 @@ class ProjectNote extends ApplicationModel {
         $cells[$idx] = $carry;
     }
 
-    /** ピン（全員） turned on: the note goes first in everyone's band. */
-    private function markPinned($noteId) {
-        $noteId = intval($noteId);
-        $this->query(sprintf("UPDATE {$this->table} SET pinned_at = '%s' WHERE id = %d", $this->quote(date('Y-m-d H:i:s')), $noteId));
-        $this->query(sprintf("UPDATE " . $this->userBoardTable() . " SET pin_order = NULL WHERE note_id = %d", $noteId));
+    /** Saved grid of one user: cell index => note id (rows without a cell are left out). */
+    private function loadUserCells($projectId, $userId) {
+        $rows = $this->fetchAll(sprintf(
+            "SELECT note_id, board_col, board_row FROM " . $this->userBoardTable() . "
+            WHERE project_id = %d AND user_id = '%s' AND board_col IS NOT NULL AND board_row IS NOT NULL
+            ORDER BY board_row, board_col, updated_at DESC",
+            intval($projectId),
+            $this->quote($userId)
+        ));
+        $cells = array();
+        foreach ((array)$rows as $r) {
+            $c = intval($r['board_col']);
+            $rw = intval($r['board_row']);
+            if ($c < 1 || $c > self::BOARD_COLS || $rw < 1) {
+                continue;
+            }
+            $idx = ($rw - 1) * self::BOARD_COLS + ($c - 1);
+            if (!isset($cells[$idx])) {
+                $cells[$idx] = intval($r['note_id']);
+            }
+        }
+        return $cells;
     }
 
-    /** ピン（全員） turned off: the note goes to the end of everyone's grid. */
+    /** Users who have their own layout for a project. */
+    private function boardUsers($projectId) {
+        $rows = $this->fetchAll(sprintf(
+            "SELECT DISTINCT user_id FROM " . $this->userBoardTable() . " WHERE project_id = %d",
+            intval($projectId)
+        ));
+        $out = array();
+        foreach ((array)$rows as $r) {
+            $out[] = (string)$r['user_id'];
+        }
+        return $out;
+    }
+
+    /** Note visible to another user (same rule as visibilitySql, with that user's ids). */
+    private function userCanSeeNote($noteId, $userId) {
+        $u = $this->fetchOne(sprintf("SELECT id FROM " . DB_PREFIX . "user WHERE userid = '%s' LIMIT 1", $this->quote($userId)));
+        $authId = isset($u['id']) ? intval($u['id']) : 0;
+        $row = $this->fetchOne(sprintf(
+            "SELECT n.id FROM {$this->table} n WHERE n.id = %d AND " . self::visibilitySql('n', $this->quote($userId), $authId),
+            intval($noteId)
+        ));
+        return !empty($row);
+    }
+
+    /** Write the cells that changed between $before and $after for one user. */
+    private function saveChangedCells($projectId, $userId, $before, $after) {
+        $values = array();
+        foreach ($after as $idx => $id) {
+            if (!isset($before[$idx]) || $before[$idx] !== $id) {
+                $values[$id] = array('board_col' => ($idx % self::BOARD_COLS) + 1, 'board_row' => intdiv($idx, self::BOARD_COLS) + 1);
+            }
+        }
+        $this->saveUserBoard($projectId, $values, $userId);
+    }
+
+    /**
+     * ピン（全員） turned on: the note goes first in everyone's band, and leaves everyone's grid —
+     * the notes after it slide back one cell (up to the next empty cell), closing the gap.
+     */
+    private function markPinned($noteId) {
+        $noteId = intval($noteId);
+        $row = $this->fetchOne(sprintf("SELECT project_id FROM {$this->table} WHERE id = %d", $noteId));
+        $projectId = isset($row['project_id']) ? intval($row['project_id']) : 0;
+        $this->query(sprintf("UPDATE {$this->table} SET pinned_at = '%s' WHERE id = %d", $this->quote(date('Y-m-d H:i:s')), $noteId));
+        foreach ($projectId ? $this->boardUsers($projectId) : array() as $userId) {
+            $before = $this->loadUserCells($projectId, $userId);
+            $at = array_search($noteId, $before, true);
+            if ($at === false) {
+                continue;
+            }
+            $after = $before;
+            unset($after[$at]);
+            for ($i = $at + 1; isset($after[$i]); $i++) {
+                $after[$i - 1] = $after[$i];
+                unset($after[$i]);
+            }
+            $this->saveChangedCells($projectId, $userId, $before, $after);
+        }
+        $this->query(sprintf(
+            "UPDATE " . $this->userBoardTable() . " SET board_col = NULL, board_row = NULL, pin_order = NULL WHERE note_id = %d",
+            $noteId
+        ));
+    }
+
+    /**
+     * ピン（全員） turned off: the note leaves the band and takes the first grid cell (right under the
+     * band) in everyone's layout; the notes there move on one cell, up to the next empty cell.
+     */
     private function markUnpinned($noteId) {
         $noteId = intval($noteId);
+        $row = $this->fetchOne(sprintf("SELECT project_id FROM {$this->table} WHERE id = %d", $noteId));
+        $projectId = isset($row['project_id']) ? intval($row['project_id']) : 0;
         $this->query(sprintf("UPDATE {$this->table} SET pinned_at = NULL WHERE id = %d", $noteId));
         $this->query(sprintf(
             "UPDATE " . $this->userBoardTable() . " SET board_col = NULL, board_row = NULL, pin_order = NULL WHERE note_id = %d",
             $noteId
         ));
+        foreach ($projectId ? $this->boardUsers($projectId) : array() as $userId) {
+            if (!$this->userCanSeeNote($noteId, $userId)) {
+                continue;
+            }
+            $before = $this->loadUserCells($projectId, $userId);
+            $after = $before;
+            self::boardInsert($after, 0, $noteId);
+            $this->saveChangedCells($projectId, $userId, $before, $after);
+        }
     }
 
     /**
