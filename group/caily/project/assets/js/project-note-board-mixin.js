@@ -138,25 +138,6 @@
                 return (this.notes || []).reduce(function (m, n) {
                     return n.is_important == 1 ? m : Math.max(m, Number(n.board_row) || 0);
                 }, 0);
-            },
-            /** The drop would move other notes: grid cell taken, or a different place in the pin band */
-            noteDragTargetOccupied() {
-                const d = this.noteDrag;
-                if (!d || !d.target) return false;
-                if (d.pinned) {
-                    return this.notePinned.findIndex(function (n) { return n.id == d.id; }) !== d.target.idx;
-                }
-                return (this.notes || []).some(function (n) {
-                    return n.id != d.id && n.is_important != 1
-                        && Number(n.board_col) === d.target.col && Number(n.board_row) === d.target.row;
-                });
-            },
-            /** Drop cell position on screen (band rows come first) */
-            noteDropCellStyle() {
-                const t = this.noteDrag && this.noteDrag.target;
-                if (!t) return null;
-                const row = this.noteDrag.pinned ? t.row : t.row + this.notePinRows;
-                return { gridColumn: String(t.col), gridRow: String(row) };
             }
         },
         watch: {
@@ -290,6 +271,82 @@
              * pointer, the target cell is outlined, and on drop the server places the note there
              * (an occupied cell pushes its note — and the ones after it — one cell on).
              */
+            /** The drop would move other notes: grid cell taken, or a different place in the pin band */
+            noteDragTargetOccupied(d) {
+                if (!d || !d.target) return false;
+                if (d.pinned) {
+                    return this.notePinned.findIndex(function (n) { return n.id == d.id; }) !== d.target.idx;
+                }
+                return (this.notes || []).some(function (n) {
+                    return n.id != d.id && n.is_important != 1
+                        && Number(n.board_col) === d.target.col && Number(n.board_row) === d.target.row;
+                });
+            },
+            /** The board's resolved grid: viewport rect, track sizes, gaps and padding */
+            noteBoardMetrics() {
+                const board = this.$refs.noteBoardGrid;
+                if (!board) return null;
+                const r = board.getBoundingClientRect();
+                const st = getComputedStyle(board);
+                const tracks = function (v) { return v.split(' ').map(parseFloat).filter(function (x) { return x > 0; }); };
+                return {
+                    r: r,
+                    cols: tracks(st.gridTemplateColumns),
+                    rows: tracks(st.gridTemplateRows),
+                    colGap: parseFloat(st.columnGap) || 0,
+                    rowGap: parseFloat(st.rowGap) || 0,
+                    padL: parseFloat(st.paddingLeft) || 0,
+                    padT: parseFloat(st.paddingTop) || 0
+                };
+            },
+            /** Viewport box of a board cell (display row: pin band rows first) */
+            noteBoardCellBox(m, col, row) {
+                const sum = function (tracks, gap, n) {
+                    let at = 0;
+                    for (let i = 0; i < n && i < tracks.length; i++) at += tracks[i] + gap;
+                    return at;
+                };
+                const w = m.cols[col - 1] || m.cols[m.cols.length - 1] || m.r.width;
+                const h = m.rows[row - 1] || m.rows[m.rows.length - 1] || 120;
+                return {
+                    x: m.r.left + m.padL + sum(m.cols, m.colGap, col - 1),
+                    y: m.r.top + m.padT + sum(m.rows, m.rowGap, row - 1),
+                    w: w,
+                    h: h
+                };
+            },
+            /**
+             * Drag visuals are moved with the Web Animations API, not inline styles or classes: on a page
+             * whose CSS has :has([style*=...]) any style attribute / class change re-styles the whole
+             * page (≈8–10 ms on 案件一覧), which made the drag stutter.
+             */
+            updateNoteDragVisuals(e) {
+                const d = this.noteDrag;
+                if (!d) return;
+                if (e && this._noteGhostAnim) {
+                    this._noteGhostAnim.effect.setKeyframes([{
+                        transform: 'translate3d(' + (e.clientX - d.offX - d.startLeft) + 'px, '
+                            + (e.clientY - d.offY - d.startTop) + 'px, 0) rotate(1.5deg)'
+                    }]);
+                }
+                if (!this._noteDropAnim) return;
+                const m = d.target ? this.noteBoardMetrics() : null;
+                if (!m) {
+                    this._noteDropAnim.effect.setKeyframes([{ opacity: 0 }]);
+                    return;
+                }
+                const row = d.pinned ? d.target.row : d.target.row + this.notePinRows;
+                const box = this.noteBoardCellBox(m, d.target.col, row);
+                const look = this.noteDragTargetOccupied(d) ? this._noteDropLook.busy : this._noteDropLook.free;
+                this._noteDropAnim.effect.setKeyframes([{
+                    opacity: 1,
+                    transform: 'translate(' + box.x + 'px, ' + box.y + 'px)',
+                    width: box.w + 'px',
+                    height: box.h + 'px',
+                    backgroundColor: look.bg,
+                    boxShadow: look.shadow
+                }]);
+            },
             onNoteDragStart(note, e) {
                 if (!this.noteBoardFree || this.noteDrag || (e.button !== undefined && e.button !== 0)) return;
                 const card = e.currentTarget && e.currentTarget.closest('.note-card');
@@ -309,19 +366,42 @@
                 const layer = document.createElement('div');
                 layer.className = board.className + ' note-drag-layer';
                 layer.appendChild(ghost);
+                // target cell outline, drawn over the board (no Vue re-render while the pointer moves)
+                const drop = document.createElement('div');
+                drop.className = 'note-drop-cell';
+                layer.appendChild(drop);
                 document.body.appendChild(layer);
                 this._noteDragGhost = layer;
+                const look = function () {
+                    const cs = getComputedStyle(drop);
+                    return { bg: cs.backgroundColor, shadow: cs.boxShadow };
+                };
+                drop.classList.add('is-occupied');
+                const busy = look();
+                drop.classList.remove('is-occupied');
+                this._noteDropLook = { free: look(), busy: busy };
+                const anim = function (el, frame) {
+                    const a = el.animate ? el.animate([frame], { duration: 1, fill: 'forwards' }) : null;
+                    if (a) a.finish();
+                    return a;
+                };
+                this._noteGhostAnim = anim(ghost, { transform: 'translate3d(0px, 0px, 0) rotate(1.5deg)' });
+                this._noteDropAnim = anim(drop, { opacity: 0 });
                 const pinned = note.is_important == 1;
                 const pinIdx = pinned ? this.notePinned.indexOf(note) : -1;
-                this.noteDrag = {
+                // raw: moving the target must not re-render the page (see updateNoteDragVisuals)
+                const raw = global.Vue && global.Vue.markRaw ? global.Vue.markRaw : function (o) { return o; };
+                this.noteDrag = raw({
                     id: note.id,
                     pinned: pinned,
                     offX: e.clientX - rect.left,
                     offY: e.clientY - rect.top,
+                    startLeft: rect.left,
+                    startTop: rect.top,
                     target: pinned
                         ? { col: (pinIdx % 3) + 1, row: Math.floor(pinIdx / 3) + 1, idx: pinIdx }
                         : { col: Number(note.board_col) || 1, row: Number(note.board_row) || 1 }
-                };
+                });
                 this._onNoteDragMove = (ev) => this.onNoteDragMove(ev);
                 this._onNoteDragUp = (ev) => this.onNoteDragEnd(ev);
                 this._onNoteDragKey = (ev) => { if (ev.key === 'Escape') this.cancelNoteDrag(); };
@@ -330,15 +410,12 @@
                 global.addEventListener('pointerup', this._onNoteDragUp);
                 global.addEventListener('pointercancel', this._onNoteDragCancel);
                 global.addEventListener('keydown', this._onNoteDragKey);
+                // after the board re-rendered for the drag (extra row below the last note)
+                this.$nextTick(() => this.updateNoteDragVisuals(null));
             },
             onNoteDragMove(e) {
                 const d = this.noteDrag;
                 if (!d) return;
-                const ghost = this._noteDragGhost && this._noteDragGhost.firstChild;
-                if (ghost) {
-                    ghost.style.left = (e.clientX - d.offX) + 'px';
-                    ghost.style.top = (e.clientY - d.offY) + 'px';
-                }
                 const t = this.noteBoardCellAt(e.clientX, e.clientY);
                 if (!t) d.target = null;
                 else if (!d.target || d.target.col !== t.col || d.target.row !== t.row || d.target.idx !== t.idx) d.target = t;
@@ -351,6 +428,7 @@
                     if (body) body.scrollTop += step;
                     else global.scrollBy(0, step);
                 }
+                this.updateNoteDragVisuals(e);
             },
             /**
              * Drop target under a viewport point, from the board's resolved tracks; null when off the board
@@ -358,16 +436,15 @@
              * stays on the grid below it ({ col, row } in grid rows).
              */
             noteBoardCellAt(x, y) {
-                const board = this.$refs.noteBoardGrid;
-                if (!board) return null;
-                const r = board.getBoundingClientRect();
+                const m = this.noteBoardMetrics();
+                if (!m) return null;
+                const r = m.r;
                 const margin = 40;
                 if (x < r.left - margin || x > r.right + margin || y < r.top - margin || y > r.bottom + margin) return null;
-                const st = getComputedStyle(board);
-                const cols = st.gridTemplateColumns.split(' ').map(parseFloat).filter(function (v) { return v > 0; });
-                const rows = st.gridTemplateRows.split(' ').map(parseFloat).filter(function (v) { return v > 0; });
-                const colGap = parseFloat(st.columnGap) || 0;
-                const rowGap = parseFloat(st.rowGap) || 0;
+                const cols = m.cols;
+                const rows = m.rows;
+                const colGap = m.colGap;
+                const rowGap = m.rowGap;
                 const pick = function (tracks, gap, offset) {
                     let edgeAt = 0;
                     for (let i = 0; i < tracks.length; i++) {
@@ -377,8 +454,8 @@
                     }
                     return Math.max(1, tracks.length);
                 };
-                let col = pick(cols.length ? cols : [r.width], colGap, x - r.left - (parseFloat(st.paddingLeft) || 0));
-                let row = pick(rows.length ? rows : [r.height], rowGap, y - r.top - (parseFloat(st.paddingTop) || 0));
+                let col = pick(cols.length ? cols : [r.width], colGap, x - r.left - m.padL);
+                let row = pick(rows.length ? rows : [r.height], rowGap, y - r.top - m.padT);
                 col = Math.min(col, 3);
                 const bandRows = this.notePinRows;
                 if (this.noteDrag && this.noteDrag.pinned) {
@@ -400,6 +477,8 @@
                     this._noteDragGhost.remove();
                     this._noteDragGhost = null;
                 }
+                this._noteGhostAnim = null;
+                this._noteDropAnim = null;
             },
             cancelNoteDrag() {
                 this.stopNoteDragListeners();

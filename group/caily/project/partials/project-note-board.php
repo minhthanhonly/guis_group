@@ -143,10 +143,7 @@ $nbStandalone = !empty($noteBoardStandalone);
                         {{ formatShortDateTime(note.created_at) }} · {{ note.realname || 'Unknown' }}
                     </div>
                 </div>
-                <!-- drag: target cell + one extra row to drop below the last note -->
-                <div v-if="noteDrag && noteDrag.target" class="note-drop-cell"
-                     :class="{ 'is-occupied': noteDragTargetOccupied }"
-                     :style="noteDropCellStyle"></div>
+                <!-- drag: one extra row to drop below the last note (the target cell is drawn by the mixin) -->
                 <div v-if="noteDrag && !noteDrag.pinned" class="note-board-spacer"
                      :style="{ gridColumn: '1 / -1', gridRow: String(noteBoardMaxRow + 1 + notePinRows) }"></div>
             </div>

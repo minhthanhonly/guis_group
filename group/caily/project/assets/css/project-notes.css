@@ -332,6 +332,8 @@
     display: flex;
     flex-direction: column;
     background: var(--bs-body-bg, #f5f5f9);
+    /* changes inside the board (drop cell, cards moving) are laid out without the page behind it */
+    contain: strict;
 }
 .note-board-card.note-board-fullscreen > .card-header {
     flex: 0 0 auto;
@@ -421,6 +423,16 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
     height: 0;
     z-index: 10050;
 }
+/* drop cell over the board while dragging: placed with the Web Animations API (project-note-board-mixin.js) */
+.note-board.note-drag-layer .note-drop-cell {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    box-sizing: border-box;
+}
 .note-board .note-board-spacer {
     pointer-events: none;
 }
@@ -432,6 +444,7 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
     opacity: 0.95;
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
     transform: rotate(1.5deg);
+    will-change: transform;
 }
 .note-board .note-card.note-drag-ghost .note-actions {
     display: none;
