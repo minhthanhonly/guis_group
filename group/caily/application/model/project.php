@@ -718,6 +718,30 @@ class Project extends ApplicationModel {
         unset($project);
     }
 
+    /**
+     * 案件一覧 memo cells list notes in the viewer's own メモボード order (ProjectNote::boardRanksForProjects),
+     * so a cell and the board never disagree. Rows without a rank keep their SQL order, after the ranked ones.
+     */
+    private function sortNotesByBoardRank(array &$rows, array $ranks) {
+        if (!$ranks) {
+            return;
+        }
+        $at = 0;
+        foreach ($rows as &$r) {
+            $id = intval($r['id']);
+            $r['__rank'] = isset($ranks[$id]) ? $ranks[$id] : PHP_INT_MAX;
+            $r['__at'] = $at++;
+        }
+        unset($r);
+        usort($rows, function ($a, $b) {
+            return $a['__rank'] === $b['__rank'] ? $a['__at'] - $b['__at'] : ($a['__rank'] < $b['__rank'] ? -1 : 1);
+        });
+        foreach ($rows as &$r) {
+            unset($r['__rank'], $r['__at']);
+        }
+        unset($r);
+    }
+
     private function attachProjectListAggregates(array &$data, $userId) {
         if (empty($data)) {
             return;
@@ -749,6 +773,7 @@ class Project extends ApplicationModel {
         // Ensure note pin/sort schema exists (lazy migrate)
         require_once dirname(__FILE__) . '/projectnote.php';
         $noteSchema = new ProjectNote();
+        $boardRanks = $noteSchema->boardRanksForProjects($projectIds);
         unset($noteSchema);
         // is_pinned_self: ピン（自分） was removed; kept as 0 so the packed format below stays the same
         $noteRows = $this->fetchAll(sprintf(
@@ -762,6 +787,7 @@ class Project extends ApplicationModel {
             DB_PREFIX,
             $idsList
         ));
+        $this->sortNotesByBoardRank($noteRows, $boardRanks);
         foreach ($noteRows as $row) {
             $pid = (int)$row['project_id'];
             $labelSafe = str_replace(array('_:_', '_|_'), array('-', '-'), trim((string)($row['label'] ?? '')));
@@ -1634,6 +1660,10 @@ class Project extends ApplicationModel {
                    AND " . $this->noteVisibilitySql('n') . "
                  ORDER BY n.is_important DESC, n.sort_order ASC, n.created_at DESC"
             );
+            require_once dirname(__FILE__) . '/projectnote.php';
+            $noteBoard = new ProjectNote();
+            $this->sortNotesByBoardRank($notesRows, $noteBoard->boardRanksForProjects($projectIds));
+            unset($noteBoard);
             foreach ($notesRows as $nr) {
                 $pid = (int) $nr['project_id'];
                 $col = trim((string) ($nr['display_column'] ?? ''));

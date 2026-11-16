@@ -880,14 +880,104 @@ class ProjectNote extends ApplicationModel {
             $ownedSet[intval($row['id'])] = true;
         }
         $ord = 0;
+        $moved = array();
         foreach ($ids as $nid) {
             if (empty($ownedSet[$nid])) {
                 continue;
             }
             $this->query_update(array('sort_order' => $ord), array('id' => $nid));
+            $moved[] = $nid;
             $ord++;
         }
+        // 案件一覧 shows the own メモボード order, so the drag has to land on the board too
+        $this->applyOrderToUserBoard($projectId, $moved);
         return ['status' => 'success', 'count' => $ord];
+    }
+
+    /**
+     * 案件一覧 drag: $ids (one memo cell, new order) take the board places those same notes already
+     * hold, in the new order — grid cells for grid notes, band places for ピン notes. Every other
+     * note keeps its place.
+     */
+    private function applyOrderToUserBoard($projectId, $ids) {
+        if ($this->currentUserid() === '' || count($ids) < 2) {
+            return;
+        }
+        $board = $this->computeUserBoard($this->userBoardRows($projectId));
+
+        $cells = $board['cells'];
+        $cellOf = array_flip($cells);
+        $sub = array_values(array_filter($ids, function ($id) use ($cellOf) { return isset($cellOf[$id]); }));
+        $slots = array();
+        foreach ($sub as $id) {
+            $slots[] = $cellOf[$id];
+        }
+        sort($slots);
+        foreach ($sub as $k => $id) {
+            $cells[$slots[$k]] = $id;
+        }
+        $values = array();
+        foreach ($cells as $idx => $id) {
+            $values[$id] = array('board_col' => ($idx % self::BOARD_COLS) + 1, 'board_row' => intdiv($idx, self::BOARD_COLS) + 1);
+        }
+        $this->saveUserBoard($projectId, $values);
+
+        $pins = $board['pinned'];
+        $pinOf = array_flip($pins);
+        $subPins = array_values(array_filter($ids, function ($id) use ($pinOf) { return isset($pinOf[$id]); }));
+        if (count($subPins) > 1) {
+            $places = array();
+            foreach ($subPins as $id) {
+                $places[] = $pinOf[$id];
+            }
+            sort($places);
+            foreach ($subPins as $k => $id) {
+                $pins[$places[$k]] = $id;
+            }
+        }
+        $values = array();
+        foreach ($pins as $rank => $id) {
+            $values[$id] = array('pin_order' => $rank);
+        }
+        $this->saveUserBoard($projectId, $values);
+    }
+
+    /**
+     * 案件一覧: the current user's メモボード reading order for several projects — ピン band first,
+     * then the grid left→right, top→bottom. Returns note id => rank (ranks compare within a project).
+     */
+    function boardRanksForProjects($projectIds) {
+        $projectIds = array_values(array_filter(array_map('intval', (array)$projectIds)));
+        if (!$projectIds) {
+            return array();
+        }
+        $rows = $this->fetchAll(sprintf(
+            "SELECT n.id, n.project_id, n.is_important, n.pinned_at, b.board_col, b.board_row, b.pin_order
+            FROM {$this->table} n
+            LEFT JOIN " . $this->userBoardTable() . " b ON b.note_id = n.id AND b.user_id = '%s'
+            WHERE n.project_id IN (%s) AND " . $this->currentVisibilitySql('n') . "
+            ORDER BY n.project_id, n.sort_order ASC, n.created_at DESC, n.id DESC",
+            $this->quote($this->currentUserid()),
+            implode(',', $projectIds)
+        ));
+        $byProject = array();
+        foreach ((array)$rows as $r) {
+            $byProject[intval($r['project_id'])][] = $r;
+        }
+        $ranks = array();
+        foreach ($byProject as $projectRows) {
+            $board = $this->computeUserBoard($projectRows);
+            $rank = 0;
+            foreach ($board['pinned'] as $id) {
+                $ranks[$id] = $rank++;
+            }
+            $cells = $board['cells'];
+            ksort($cells);
+            foreach ($cells as $id) {
+                $ranks[$id] = $rank++;
+            }
+        }
+        return $ranks;
     }
 
     function delete($params = null) {
