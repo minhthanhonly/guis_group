@@ -170,6 +170,11 @@
 #projectTable .confirmation-note-item[class*="note-bg-"] .note-text {
     color: inherit;
 }
+/* dark: index.php forces #333 on memo items (made for the cream default); a coloured note uses the
+   dark palette, so its text must be the palette's light colour */
+[data-bs-theme="dark"] #projectTable .confirmation-note-item[class*="note-bg-"] {
+    color: var(--note-fg) !important;
+}
 #projectTable .note-text-row .note-visibility-icon {
     flex: 0 0 auto;
     margin-right: 3px;
