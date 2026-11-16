@@ -298,13 +298,40 @@
                     var project = emptyProject();
                     project.guis_receiver = String(window.PARENT_PROJECT_QUICK_MODAL_USER_ID
                         || (window.currentUser && window.currentUser.id) || '');
+                    // コピー: prefill from an existing building (same fields as the former create.php copy)
+                    var src = opts.copyFrom || null;
+                    if (src) {
+                        ['construction_number', 'project_name', 'scale', 'type1', 'type2', 'type3',
+                            'structural_office', 'materials_memo'].forEach(function (key) {
+                            if (src[key] != null) project[key] = String(src[key]);
+                        });
+                        var d = new Date();
+                        var pad = function (n) { return String(n).padStart(2, '0'); };
+                        project.request_date = d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate())
+                            + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+                    }
                     this.editingParentProject = project;
-                    this.setCustomerListFromServer([]);
+                    if (src && Array.isArray(src.customers) && src.customers.length > 0) {
+                        this.setCustomerListFromServer(src.customers);
+                    } else if (src && (src.customer_id || src.company_name || src.contact_name)) {
+                        this.setCustomerListFromServer([{
+                            customer_id: src.customer_id || null,
+                            is_primary: 1,
+                            company_name: src.company_name || '',
+                            branch_name: src.branch_name || '',
+                            contact_name: src.contact_name || ''
+                        }]);
+                    } else {
+                        this.setCustomerListFromServer([]);
+                    }
+                    if (src && typeof this.syncPrimaryCustomerFields === 'function') {
+                        this.syncPrimaryCustomerFields();
+                    }
                     this.siblingProjects = [];
                     this.guisReceiverName = '';
-                    this.parseEditParentRequests('');
-                    this.parseEditParentMaterials('');
-                    this.parseEditParentFeatures('');
+                    this.parseEditParentRequests(src ? src.requests : '');
+                    this.parseEditParentMaterials(src ? src.materials : '');
+                    this.parseEditParentFeatures(src ? src.features : '');
                     this.editParentProjectLoading = false;
 
                     var modalEl = document.getElementById(MODAL_ID);
