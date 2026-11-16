@@ -6,7 +6,7 @@
  *   data:     showNoteModal, isNoteEditMode, editingNote, savingNote, NOTE_LABEL_OTHER
  *   computed: canSaveNote, canDeleteCurrentNote, cailyNoteLabel, noteLabelSelectOptions, noteDisplayColumnOptions
  *   methods:  saveNote, closeNoteModal, deleteCurrentNote, canEditNote(note), initQuillNoteEditor,
- *             onNoteLabelSelectChange, onNotePinEveryoneChange, onNotePinSelfChange,
+ *             onNoteLabelSelectChange, onNotePinEveryoneChange,
  *             getNoteLabelStyle, getNoteDisplayColumnLabel
  * editingNote also carries bg_color, visibility, created_at and realname.
  */

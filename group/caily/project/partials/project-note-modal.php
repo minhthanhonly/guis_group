@@ -76,11 +76,6 @@ $noteModalEditorId = isset($noteModalEditorId) ? $noteModalEditorId : 'quill_not
                                                 <i class="fa fa-thumb-tack me-1"></i>ピン（全員）
                                             </label>
                                         </template>
-                                        <input type="checkbox" class="btn-check" id="pnm-pin-self" autocomplete="off"
-                                               v-model="editingNote.is_pinned_self" @change="onNotePinSelfChange">
-                                        <label class="btn btn-sm btn-outline-primary" for="pnm-pin-self">
-                                            <i class="fa fa-bookmark me-1"></i>ピン（自分）
-                                        </label>
                                     </div>
                                 </div>
                                 <div class="pnm-field">
@@ -118,11 +113,10 @@ $noteModalEditorId = isset($noteModalEditorId) ? $noteModalEditorId : 'quill_not
                                     <div class="pnm-label">公開範囲</div>
                                     <div><i class="fa me-1" :class="noteVisibilityIcon(editingNote.visibility)"></i>{{ noteVisibilityLabel(editingNote.visibility) }}</div>
                                 </div>
-                                <div class="pnm-field" v-if="editingNote.is_important || editingNote.is_pinned_self">
+                                <div class="pnm-field" v-if="editingNote.is_important">
                                     <div class="pnm-label">ピン</div>
                                     <div class="d-flex flex-wrap gap-2">
                                         <span v-if="editingNote.is_important" class="badge bg-danger"><i class="fa fa-thumb-tack me-1"></i>ピン（全員）</span>
-                                        <span v-if="editingNote.is_pinned_self" class="badge bg-primary"><i class="fa fa-bookmark me-1"></i>ピン（自分）</span>
                                     </div>
                                 </div>
                                 <div class="pnm-field" v-if="editingNote.needs_confirmation">

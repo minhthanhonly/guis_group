@@ -16,8 +16,7 @@ class ProjectNote extends ApplicationModel {
             'sort_order' => array(),
             'bg_color' => array(),
             'visibility' => array(),
-            'board_col' => array(),
-            'board_row' => array(),
+            'pinned_at' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
         );
@@ -25,14 +24,14 @@ class ProjectNote extends ApplicationModel {
         $this->ensureLabelColumn();
         $this->ensureSortOrderColumn();
         $this->ensureBoardColumns();
-        $this->ensurePersonalPinTable();
+        $this->ensureUserBoardTable();
     }
 
     /** 背景色 palette keys (Keep style). '' = default (white). */
     const BG_COLORS = array('coral', 'peach', 'sand', 'mint', 'sage', 'fog', 'storm', 'dusk', 'blossom', 'clay', 'chalk');
     /** 公開範囲: all = 全員, members = 案件メンバー (+ author), self = 自分のみ */
     const VISIBILITIES = array('all', 'members', 'self');
-    /** メモボード (案件詳細): number of grid columns; a note sits in one cell (board_col, board_row) */
+    /** メモボード (案件詳細): number of grid columns */
     const BOARD_COLS = 3;
 
     /**
@@ -69,7 +68,7 @@ class ProjectNote extends ApplicationModel {
         return in_array($v, self::VISIBILITIES, true) ? $v : 'all';
     }
 
-    /** bg_color + visibility + board_col / board_row columns (メモボード) */
+    /** bg_color + visibility + pinned_at columns (メモボード) */
     private function ensureBoardColumns() {
         static $ensured = false;
         if ($ensured) {
@@ -80,7 +79,7 @@ class ProjectNote extends ApplicationModel {
         $rows = $this->fetchAll(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
             . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
-            . "AND COLUMN_NAME IN ('bg_color', 'visibility', 'board_col', 'board_row')"
+            . "AND COLUMN_NAME IN ('bg_color', 'visibility', 'pinned_at')"
         );
         $have = array();
         foreach ((array)$rows as $r) {
@@ -98,66 +97,108 @@ class ProjectNote extends ApplicationModel {
                 . "COMMENT '公開範囲 all/members/self' AFTER `bg_color`"
             );
         }
-        if (empty($have['board_col'])) {
+        if (empty($have['pinned_at'])) {
             $this->query(
-                "ALTER TABLE `{$table}` ADD COLUMN `board_col` TINYINT DEFAULT NULL "
-                . "COMMENT 'メモボード列 (1-3)' AFTER `visibility`"
-            );
-        }
-        if (empty($have['board_row'])) {
-            $this->query(
-                "ALTER TABLE `{$table}` ADD COLUMN `board_row` INT DEFAULT NULL "
-                . "COMMENT 'メモボード行 (1-)' AFTER `board_col`"
+                "ALTER TABLE `{$table}` ADD COLUMN `pinned_at` DATETIME DEFAULT NULL "
+                . "COMMENT 'ピン（全員）にした日時' AFTER `visibility`"
             );
         }
     }
 
-    /* ---------- メモボード: free placement on a 3-column grid, shared by everyone ----------
-     * A board is a map cell index => note id, index = (row - 1) * BOARD_COLS + (col - 1).
-     * Empty cells are allowed; two notes never share a cell. Every note of the project takes
-     * part (also notes the current user cannot see) so the layout is the same for everyone.
+    /* ---------- メモボード: each user arranges their own board ----------
+     * ピン（全員） notes form a band at the top, in the user's own order (pin_order);
+     * newly pinned notes (no pin_order yet) come first, newest pin first.
+     * Other notes sit on a 3-column grid below, one note per cell (board_col, board_row),
+     * empty cells allowed; notes without a cell are appended after the last occupied one.
+     * Only notes the user can see take part.
      */
 
-    /** Serialise board writes per project (two people dragging at once). */
-    private function lockBoard($projectId) {
-        $row = $this->fetchOne(sprintf("SELECT GET_LOCK('%s', 5) AS l", $this->quote($this->table . '_board_' . intval($projectId))));
-        return !empty($row['l']);
+    private function userBoardTable() {
+        return DB_PREFIX . 'project_note_user_board';
     }
 
-    private function unlockBoard($projectId) {
-        $this->fetchOne(sprintf("SELECT RELEASE_LOCK('%s') AS l", $this->quote($this->table . '_board_' . intval($projectId))));
+    private function ensureUserBoardTable() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = $this->userBoardTable();
+        $row = $this->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
+            . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "'"
+        );
+        if (!empty($row['cnt'])) {
+            return;
+        }
+        $this->query(
+            "CREATE TABLE `{$table}` ("
+            . "`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,"
+            . "`project_id` INT NOT NULL,"
+            . "`note_id` INT NOT NULL,"
+            . "`user_id` VARCHAR(64) NOT NULL COMMENT 'userid string',"
+            . "`board_col` TINYINT DEFAULT NULL COMMENT '列 (1-3)、ピン以外',"
+            . "`board_row` INT DEFAULT NULL COMMENT '行 (1-)、ピン以外',"
+            . "`pin_order` INT DEFAULT NULL COMMENT 'ピン（全員）の並び順',"
+            . "`updated_at` DATETIME NOT NULL,"
+            . "PRIMARY KEY (`id`),"
+            . "UNIQUE KEY `uniq_note_user` (`note_id`, `user_id`),"
+            . "KEY `idx_project_user` (`project_id`, `user_id`)"
+            . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='メモボード 個人の配置'"
+        );
     }
 
-    /**
-     * Current board of a project. Notes without a (valid, free) cell are appended after the last
-     * occupied cell — ピン（全員） first, then sort_order, newest first (the old list order).
-     * Returns array(cells, original rows by id).
-     */
-    private function readBoard($projectId) {
-        $rows = $this->fetchAll(sprintf(
-            "SELECT id, board_col, board_row, sort_order FROM {$this->table} WHERE project_id = %d "
-            . "ORDER BY is_important DESC, sort_order ASC, created_at DESC, id DESC",
+    /** Visible notes of a project with the current user's placement (default order first). */
+    private function userBoardRows($projectId) {
+        return $this->fetchAll(sprintf(
+            "SELECT n.id, n.is_important, n.pinned_at, b.board_col, b.board_row, b.pin_order
+            FROM {$this->table} n
+            LEFT JOIN " . $this->userBoardTable() . " b ON b.note_id = n.id AND b.user_id = '%s'
+            WHERE n.project_id = %d AND " . $this->currentVisibilitySql('n') . "
+            ORDER BY n.sort_order ASC, n.created_at DESC, n.id DESC",
+            $this->quote($this->currentUserid()),
             intval($projectId)
         ));
-        $cells = array();
-        $pending = array();
-        $orig = array();
+    }
+
+    /** array('pinned' => note ids in band order, 'cells' => cell index => note id, 'appended' => ids given a cell just now) */
+    private function computeUserBoard($rows) {
+        $fresh = array();
+        $ordered = array();
         $placed = array();
-        foreach ((array)$rows as $r) {
+        $pending = array();
+        foreach ((array)$rows as $i => $r) {
             $id = intval($r['id']);
-            $orig[$id] = $r;
+            if (!empty($r['is_important'])) {
+                if ($r['pin_order'] === null) {
+                    $fresh[] = array('id' => $id, 'at' => (string)$r['pinned_at']);
+                } else {
+                    $ordered[] = array('id' => $id, 'o' => intval($r['pin_order']), 'i' => $i);
+                }
+                continue;
+            }
             $c = $r['board_col'] === null ? 0 : intval($r['board_col']);
             $rw = $r['board_row'] === null ? 0 : intval($r['board_row']);
             if ($c >= 1 && $c <= self::BOARD_COLS && $rw >= 1) {
-                $placed[] = array('idx' => ($rw - 1) * self::BOARD_COLS + ($c - 1), 'id' => $id);
+                $placed[] = array('idx' => ($rw - 1) * self::BOARD_COLS + ($c - 1), 'id' => $id, 'i' => $i);
             } else {
                 $pending[] = $id;
             }
         }
-        // stable: earlier cell first, so a duplicate cell keeps one note and defers the other
-        usort($placed, function ($a, $b) {
-            return $a['idx'] === $b['idx'] ? 0 : ($a['idx'] < $b['idx'] ? -1 : 1);
+        usort($fresh, function ($a, $b) {
+            return $a['at'] === $b['at'] ? $b['id'] - $a['id'] : strcmp($b['at'], $a['at']);
         });
+        usort($ordered, function ($a, $b) {
+            return $a['o'] === $b['o'] ? $a['i'] - $b['i'] : $a['o'] - $b['o'];
+        });
+        $pinned = array();
+        foreach (array_merge($fresh, $ordered) as $p) {
+            $pinned[] = $p['id'];
+        }
+        usort($placed, function ($a, $b) {
+            return $a['idx'] === $b['idx'] ? $a['i'] - $b['i'] : $a['idx'] - $b['idx'];
+        });
+        $cells = array();
         foreach ($placed as $p) {
             if (isset($cells[$p['idx']])) {
                 $pending[] = $p['id'];
@@ -171,27 +212,64 @@ class ProjectNote extends ApplicationModel {
                 $cells[$next++] = $id;
             }
         }
-        return array($cells, $orig);
+        return array('pinned' => $pinned, 'cells' => $cells, 'appended' => $pending);
     }
 
-    /** Write changed cells; sort_order follows reading order (row, col) so lists elsewhere match. */
-    private function saveBoard($cells, $orig) {
-        ksort($cells);
-        $rank = 0;
-        foreach ($cells as $idx => $id) {
-            $col = ($idx % self::BOARD_COLS) + 1;
-            $row = intdiv($idx, self::BOARD_COLS) + 1;
-            $o = isset($orig[$id]) ? $orig[$id] : null;
-            if (!$o || $o['board_col'] === null || intval($o['board_col']) !== $col
-                || $o['board_row'] === null || intval($o['board_row']) !== $row
-                || intval($o['sort_order']) !== $rank) {
-                $this->query(sprintf(
-                    "UPDATE {$this->table} SET board_col = %d, board_row = %d, sort_order = %d WHERE id = %d",
-                    $col, $row, $rank, $id
-                ));
-            }
-            $rank++;
+    /** Upsert the current user's rows: $values = note id => array(column => int). */
+    private function saveUserBoard($projectId, $values) {
+        if (!$values) {
+            return;
         }
+        $uid = $this->quote($this->currentUserid());
+        $now = $this->quote(date('Y-m-d H:i:s'));
+        $cols = array_keys(reset($values));
+        $tuples = array();
+        foreach ($values as $noteId => $v) {
+            $vals = array();
+            foreach ($cols as $c) {
+                $vals[] = $v[$c] === null ? 'NULL' : intval($v[$c]);
+            }
+            $tuples[] = sprintf("(%d, %d, '%s', %s, '%s')", intval($projectId), intval($noteId), $uid, implode(', ', $vals), $now);
+        }
+        $updates = array();
+        foreach ($cols as $c) {
+            $updates[] = "`{$c}` = VALUES(`{$c}`)";
+        }
+        $updates[] = '`updated_at` = VALUES(`updated_at`)';
+        $this->query(
+            "INSERT INTO " . $this->userBoardTable() . " (`project_id`, `note_id`, `user_id`, `" . implode('`, `', $cols) . "`, `updated_at`) VALUES "
+            . implode(', ', $tuples) . " ON DUPLICATE KEY UPDATE " . implode(', ', $updates)
+        );
+    }
+
+    /** Add board_col / board_row (grid) and pin_rank (band) of the current user to each note row. */
+    private function attachUserBoard($projectId, &$notes) {
+        $board = $this->computeUserBoard($this->userBoardRows($projectId));
+        // notes that just got a cell (new / unpinned / first visit) keep it from now on
+        if ($board['appended'] && $this->currentUserid() !== '') {
+            $appended = array_flip($board['appended']);
+            $values = array();
+            foreach ($board['cells'] as $idx => $id) {
+                if (isset($appended[$id])) {
+                    $values[$id] = array('board_col' => ($idx % self::BOARD_COLS) + 1, 'board_row' => intdiv($idx, self::BOARD_COLS) + 1);
+                }
+            }
+            $this->saveUserBoard($projectId, $values);
+        }
+        $pos = array();
+        foreach ($board['pinned'] as $rank => $id) {
+            $pos[$id] = array(null, null, $rank);
+        }
+        foreach ($board['cells'] as $idx => $id) {
+            $pos[$id] = array(($idx % self::BOARD_COLS) + 1, intdiv($idx, self::BOARD_COLS) + 1, null);
+        }
+        foreach ($notes as &$n) {
+            $p = isset($pos[intval($n['id'])]) ? $pos[intval($n['id'])] : array(null, null, null);
+            $n['board_col'] = $p[0];
+            $n['board_row'] = $p[1];
+            $n['pin_rank'] = $p[2];
+        }
+        unset($n);
     }
 
     /** Put $id at $idx; an occupant moves one cell on, and so on until an empty cell takes the last one. */
@@ -206,96 +284,95 @@ class ProjectNote extends ApplicationModel {
         $cells[$idx] = $carry;
     }
 
-    private static function boardRemove(&$cells, $id) {
-        $at = array_search($id, $cells, true);
-        if ($at !== false) {
-            unset($cells[$at]);
-        }
-    }
-
-    /** Give every note a cell (notes created before the board, or after a 一覧 reorder). */
-    private function ensureBoardLayout($projectId) {
-        $projectId = intval($projectId);
-        if (!$projectId) {
-            return;
-        }
-        $missing = $this->fetchOne(sprintf(
-            "SELECT COUNT(*) AS c FROM {$this->table} WHERE project_id = %d AND (board_col IS NULL OR board_row IS NULL)",
-            $projectId
-        ));
-        if (empty($missing['c'])) {
-            return;
-        }
-        $locked = $this->lockBoard($projectId);
-        list($cells, $orig) = $this->readBoard($projectId);
-        $this->saveBoard($cells, $orig);
-        if ($locked) {
-            $this->unlockBoard($projectId);
-        }
-    }
-
-    /** ピン（全員） just turned on: the note goes to the first cell, the others shift on. */
-    private function pinToFront($projectId, $noteId) {
-        $projectId = intval($projectId);
+    /** ピン（全員） turned on: the note goes first in everyone's band. */
+    private function markPinned($noteId) {
         $noteId = intval($noteId);
-        if (!$projectId || !$noteId) {
-            return;
-        }
-        $locked = $this->lockBoard($projectId);
-        list($cells, $orig) = $this->readBoard($projectId);
-        self::boardRemove($cells, $noteId);
-        self::boardInsert($cells, 0, $noteId);
-        $this->saveBoard($cells, $orig);
-        if ($locked) {
-            $this->unlockBoard($projectId);
-        }
+        $this->query(sprintf("UPDATE {$this->table} SET pinned_at = '%s' WHERE id = %d", $this->quote(date('Y-m-d H:i:s')), $noteId));
+        $this->query(sprintf("UPDATE " . $this->userBoardTable() . " SET pin_order = NULL WHERE note_id = %d", $noteId));
     }
 
-    /** Cells of the notes the current user can see: array(note id => array(col, row)). */
-    private function visibleBoardPositions($projectId) {
-        $rows = $this->fetchAll(sprintf(
-            "SELECT n.id, n.board_col, n.board_row FROM {$this->table} n WHERE n.project_id = %d AND " . $this->currentVisibilitySql('n'),
-            intval($projectId)
+    /** ピン（全員） turned off: the note goes to the end of everyone's grid. */
+    private function markUnpinned($noteId) {
+        $noteId = intval($noteId);
+        $this->query(sprintf("UPDATE {$this->table} SET pinned_at = NULL WHERE id = %d", $noteId));
+        $this->query(sprintf(
+            "UPDATE " . $this->userBoardTable() . " SET board_col = NULL, board_row = NULL, pin_order = NULL WHERE note_id = %d",
+            $noteId
         ));
-        $out = array();
-        foreach ((array)$rows as $r) {
-            $out[intval($r['id'])] = array(intval($r['board_col']), intval($r['board_row']));
-        }
-        return $out;
     }
 
     /**
-     * Drag on the メモボード: put a note in cell (col, row). An occupied cell pushes its note
-     * (and the chain behind it) one cell on. POST: project_id, note_id, col (1-3), row (1-).
+     * Drag on the メモボード (own board): put a note that is not ピン（全員） in grid cell (col, row).
+     * An occupied cell pushes its note — and the chain behind it — one cell on.
+     * POST: project_id, note_id, col (1-3), row (1-). Returns the user's grid: note id => [col, row].
      */
     function moveOnBoard($params = null) {
         $projectId = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
         $noteId = isset($_POST['note_id']) ? intval($_POST['note_id']) : 0;
         $col = isset($_POST['col']) ? intval($_POST['col']) : 0;
         $row = isset($_POST['row']) ? intval($_POST['row']) : 0;
-        if (!$projectId || !$noteId) {
+        if (!$projectId || !$noteId || $this->currentUserid() === '') {
             return ['status' => 'error', 'error' => 'project_id and note_id required'];
         }
         $note = $this->getById($noteId); // visibility-checked
         if (!$note || intval($note['project_id']) !== $projectId) {
             return ['status' => 'error', 'error' => 'Note not found'];
         }
+        if (!empty($note['is_important'])) {
+            return ['status' => 'error', 'error' => 'ピン（全員）のメモはピンの中でのみ並べ替えできます'];
+        }
+        $board = $this->computeUserBoard($this->userBoardRows($projectId));
+        $cells = $board['cells'];
+        $at = array_search($noteId, $cells, true);
+        if ($at !== false) {
+            unset($cells[$at]);
+        }
         $col = max(1, min(self::BOARD_COLS, $col));
-        $locked = $this->lockBoard($projectId);
-        list($cells, $orig) = $this->readBoard($projectId);
-        self::boardRemove($cells, $noteId);
         $maxRow = $cells ? intdiv(max(array_keys($cells)), self::BOARD_COLS) + 1 : 0;
         $row = max(1, min($maxRow + 1, $row));
         self::boardInsert($cells, ($row - 1) * self::BOARD_COLS + ($col - 1), $noteId);
-        $this->saveBoard($cells, $orig);
-        if ($locked) {
-            $this->unlockBoard($projectId);
+        $values = array();
+        $positions = array();
+        foreach ($cells as $idx => $id) {
+            $c = ($idx % self::BOARD_COLS) + 1;
+            $r = intdiv($idx, self::BOARD_COLS) + 1;
+            $values[$id] = array('board_col' => $c, 'board_row' => $r);
+            $positions[$id] = array($c, $r);
         }
-        return ['status' => 'success', 'positions' => $this->visibleBoardPositions($projectId)];
+        $this->saveUserBoard($projectId, $values);
+        return ['status' => 'success', 'positions' => $positions];
     }
 
-    private function personalPinTable() {
-        return DB_PREFIX . 'project_note_user_pins';
+    /**
+     * Reorder the ピン（全員） band of the own board. POST: project_id, note_ids (JSON, pinned notes in
+     * the new order; pinned notes left out keep their relative order after them).
+     */
+    function reorderPinned($params = null) {
+        $projectId = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
+        if (!$projectId || $this->currentUserid() === '') {
+            return ['status' => 'error', 'error' => 'project_id required'];
+        }
+        $raw = isset($_POST['note_ids']) ? $_POST['note_ids'] : '';
+        $ids = is_string($raw) ? json_decode($raw, true) : $raw;
+        $ids = array_values(array_filter(array_map('intval', is_array($ids) ? $ids : array())));
+        $current = $this->computeUserBoard($this->userBoardRows($projectId))['pinned'];
+        $order = array();
+        foreach ($ids as $id) {
+            if (in_array($id, $current, true) && !in_array($id, $order, true)) {
+                $order[] = $id;
+            }
+        }
+        foreach ($current as $id) {
+            if (!in_array($id, $order, true)) {
+                $order[] = $id;
+            }
+        }
+        $values = array();
+        foreach ($order as $rank => $id) {
+            $values[$id] = array('pin_order' => $rank);
+        }
+        $this->saveUserBoard($projectId, $values);
+        return ['status' => 'success', 'order' => $order];
     }
 
     /**
@@ -340,34 +417,6 @@ class ProjectNote extends ApplicationModel {
         $this->query(
             "ALTER TABLE `{$table}` ADD COLUMN `sort_order` INT NOT NULL DEFAULT 0 "
             . "COMMENT 'メモ表示順' AFTER `label`"
-        );
-    }
-
-    /** Per-user pin (ピン（自分）) — note_id + userid */
-    private function ensurePersonalPinTable() {
-        static $ensured = false;
-        if ($ensured) {
-            return;
-        }
-        $ensured = true;
-        $table = $this->personalPinTable();
-        $row = $this->fetchOne(
-            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
-            . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "'"
-        );
-        if (!empty($row['cnt'])) {
-            return;
-        }
-        $this->query(
-            "CREATE TABLE `{$table}` ("
-            . "`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,"
-            . "`note_id` INT NOT NULL,"
-            . "`user_id` VARCHAR(64) NOT NULL COMMENT 'userid string',"
-            . "`created_at` DATETIME NOT NULL,"
-            . "PRIMARY KEY (`id`),"
-            . "UNIQUE KEY `uniq_note_user` (`note_id`, `user_id`),"
-            . "KEY `idx_user_id` (`user_id`)"
-            . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='メモ個人ピン'"
         );
     }
 
@@ -483,13 +532,8 @@ class ProjectNote extends ApplicationModel {
         }
         $result = $this->query_insert($data);
         if ($result) {
-            $pinSelf = isset($_POST['is_pinned_self']) ? intval($_POST['is_pinned_self']) : 0;
-            if ($pinSelf) {
-                $this->setPersonalPin(intval($result), true);
-            }
-            $this->ensureBoardLayout($projectId);
             if (!empty($data['is_important'])) {
-                $this->pinToFront($projectId, intval($result));
+                $this->markPinned(intval($result));
             }
             return ['status' => 'success', 'id' => $result];
         } else {
@@ -532,81 +576,17 @@ class ProjectNote extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Content is required'];
         }
         
-        // ピン（全員） and ピン（自分） are independent (a note can have both; ピン（自分） shows first)
-        $wantSelf = isset($_POST['is_pinned_self']) ? (intval($_POST['is_pinned_self']) === 1) : null;
-
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
-            if ($wantSelf !== null) {
-                $this->setPersonalPin($id, $wantSelf);
-            }
             if (!empty($data['is_important']) && empty($note['is_important'])) {
-                $this->pinToFront(intval($note['project_id']), $id);
+                $this->markPinned($id);
+            } elseif (empty($data['is_important']) && !empty($note['is_important'])) {
+                $this->markUnpinned($id);
             }
             return ['status' => 'success'];
         } else {
             return ['status' => 'error', 'error' => 'Failed to update note'];
         }
-    }
-
-    private function setPersonalPin($noteId, $pinned) {
-        $noteId = intval($noteId);
-        $userid = $this->currentUserid();
-        if (!$noteId || $userid === '') {
-            return false;
-        }
-        $pinTable = $this->personalPinTable();
-        if ($pinned) {
-            $exists = $this->fetchOne(sprintf(
-                "SELECT id FROM {$pinTable} WHERE note_id = %d AND user_id = '%s' LIMIT 1",
-                $noteId,
-                $this->quote($userid)
-            ));
-            if ($exists) {
-                return true;
-            }
-            return (bool)$this->query(sprintf(
-                "INSERT INTO {$pinTable} (note_id, user_id, created_at) VALUES (%d, '%s', '%s')",
-                $noteId,
-                $this->quote($userid),
-                $this->quote(date('Y-m-d H:i:s'))
-            ));
-        }
-        return (bool)$this->query(sprintf(
-            "DELETE FROM {$pinTable} WHERE note_id = %d AND user_id = '%s'",
-            $noteId,
-            $this->quote($userid)
-        ));
-    }
-
-    /** Toggle ピン（自分） for current user — no edit permission required. */
-    function togglePersonalPin($params = null) {
-        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-        if (!$id) {
-            return ['status' => 'error', 'error' => 'No note id'];
-        }
-        $note = $this->getById($id);
-        if (!$note) {
-            return ['status' => 'error', 'error' => 'Note not found'];
-        }
-        $userid = $this->currentUserid();
-        if ($userid === '') {
-            return ['status' => 'error', 'error' => 'Not logged in'];
-        }
-        $pinTable = $this->personalPinTable();
-        $exists = $this->fetchOne(sprintf(
-            "SELECT id FROM {$pinTable} WHERE note_id = %d AND user_id = '%s' LIMIT 1",
-            $id,
-            $this->quote($userid)
-        ));
-        $nowPinned = empty($exists);
-        // ピン（全員） stays as it is — both pins can be on
-        $this->setPersonalPin($id, $nowPinned);
-        return [
-            'status' => 'success',
-            'is_pinned_self' => $nowPinned ? 1 : 0,
-            'is_important' => !empty($note['is_important']) ? 1 : 0
-        ];
     }
 
     /** Toggle ピン（全員） = is_important. Requires edit permission. */
@@ -631,15 +611,12 @@ class ProjectNote extends ApplicationModel {
             array('id' => $id)
         );
         if ($ok) {
-            // personal pins (anyone's ピン（自分）) are kept
             if ($next === 1) {
-                $this->pinToFront(intval($note['project_id']), $id);
+                $this->markPinned($id);
+            } else {
+                $this->markUnpinned($id);
             }
-            return [
-                'status' => 'success',
-                'is_important' => $next,
-                'is_pinned_self' => !empty($note['is_pinned_self']) ? 1 : 0
-            ];
+            return ['status' => 'success', 'is_important' => $next];
         }
         return ['status' => 'error', 'error' => 'Failed to update'];
     }
@@ -696,13 +673,6 @@ class ProjectNote extends ApplicationModel {
             $this->query_update(array('sort_order' => $ord), array('id' => $nid));
             $ord++;
         }
-        if ($ord > 0) {
-            // 案件一覧 reorder: re-pack the メモボード in the new order on next load
-            $this->query(sprintf(
-                "UPDATE {$this->table} SET board_col = NULL, board_row = NULL WHERE project_id = %d",
-                $projectId
-            ));
-        }
         return ['status' => 'success', 'count' => $ord];
     }
 
@@ -718,12 +688,10 @@ class ProjectNote extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Permission denied'];
         }
         
-        $this->query(sprintf(
-            "DELETE FROM %s WHERE note_id = %d",
-            $this->personalPinTable(),
-            $id
-        ));
         $result = $this->query_delete(['id' => $id]);
+        if ($result) {
+            $this->query(sprintf("DELETE FROM %s WHERE note_id = %d", $this->userBoardTable(), $id));
+        }
         if ($result) {
             return ['status' => 'success'];
         } else {
@@ -732,33 +700,23 @@ class ProjectNote extends ApplicationModel {
     }
 
     function getById($id) {
-        $userid = $this->currentUserid();
-        $pinTable = $this->personalPinTable();
         $query = sprintf(
-            "SELECT n.*, u.realname,
-                CASE WHEN pin.id IS NOT NULL THEN 1 ELSE 0 END AS is_pinned_self
+            "SELECT n.*, u.realname
             FROM {$this->table} n
             LEFT JOIN " . DB_PREFIX . "user u ON n.user_id = u.userid
-            LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
             WHERE n.id = %d AND " . $this->currentVisibilitySql('n'),
-            $this->quote($userid),
             intval($id)
         );
         return $this->fetchOne($query);
     }
 
     function getByProject($project_id) {
-        $userid = $this->currentUserid();
-        $pinTable = $this->personalPinTable();
         $query = sprintf(
-            "SELECT n.*, u.realname,
-                CASE WHEN pin.id IS NOT NULL THEN 1 ELSE 0 END AS is_pinned_self
+            "SELECT n.*, u.realname
             FROM {$this->table} n
             LEFT JOIN " . DB_PREFIX . "user u ON n.user_id = u.userid
-            LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
             WHERE n.project_id = %d AND " . $this->currentVisibilitySql('n') . "
-            ORDER BY is_pinned_self DESC, n.is_important DESC, n.sort_order ASC, n.created_at DESC",
-            $this->quote($userid),
+            ORDER BY n.is_important DESC, n.sort_order ASC, n.created_at DESC",
             intval($project_id)
         );
         return $this->fetchAll($query);
@@ -770,8 +728,8 @@ class ProjectNote extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Project ID is required'];
         }
         
-        $this->ensureBoardLayout($project_id);
         $notes = $this->getByProject($project_id);
+        $this->attachUserBoard($project_id, $notes);
         return ['status' => 'success', 'data' => $notes];
     }
 

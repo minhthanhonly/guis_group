@@ -4198,7 +4198,6 @@ var projectTable;
         if (isPinnedSelf) cls += ' pinned-self-note';
         cls += noteBgClassForList(parsed.bgColor);
         var pinEveryoneTitle = isImportant ? 'ピン（全員）解除' : 'ピン（全員）';
-        var pinSelfTitle = isPinnedSelf ? 'ピン（自分）解除' : 'ピン（自分）';
         return `
             <div class="${cls}" ${parsed.id ? `data-note-id="${parsed.id}"` : ''} data-is-important="${isImportant ? 1 : 0}" data-is-pinned-self="${isPinnedSelf ? 1 : 0}">
                 <span class="note-drag-handle" title="並べ替え" aria-label="並べ替え"><i class="fa fa-grip-vertical"></i></span>
@@ -4210,9 +4209,6 @@ var projectTable;
                     ${parsed.visibility === 'self' ? '' : `<span class="note-pin-everyone-icon ${isImportant ? 'is-active' : ''}" title="${pinEveryoneTitle}" style="cursor: pointer;">
                         <i class="fa fa-thumb-tack"></i>
                     </span>`}
-                    <span class="note-pin-self-icon ${isPinnedSelf ? 'is-active' : ''}" title="${pinSelfTitle}" style="cursor: pointer;">
-                        <i class="fa fa-bookmark"></i>
-                    </span>
                 </span>
             </div>
         `;
@@ -4394,7 +4390,7 @@ var projectTable;
     async function toggleNotePinFromList($item, mode) {
         var noteId = $item.data('note-id');
         if (!noteId) return;
-        var method = mode === 'self' ? 'toggleNotePersonalPin' : 'toggleNoteImportant';
+        var method = 'toggleNoteImportant';
         try {
             var formData = new FormData();
             formData.append('id', noteId);
@@ -8804,11 +8800,6 @@ var projectTable;
             e.stopPropagation();
             toggleNotePinFromList($(this).closest('.confirmation-note-item'), 'everyone');
         });
-        $('#projectTable tbody').on('click', '.confirmation-note-item .note-pin-self-icon', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            toggleNotePinFromList($(this).closest('.confirmation-note-item'), 'self');
-        });
 
         // Prevent text-selection when starting a note drag
         $('#projectTable tbody').on('mousedown.noteDragHandle', '.note-drag-handle', function(e) {
@@ -10239,7 +10230,6 @@ var projectTable;
                         title: '',
                         content: '',
                         is_important: false,
-                        is_pinned_self: false,
                         needs_confirmation: 0,
                         display_column: '',
                         label: '',
@@ -10274,9 +10264,7 @@ var projectTable;
                         this.editingNote.labelOther = '';
                     }
                 },
-                // ピン（全員） and ピン（自分） can both be on (ピン（自分） is shown first) — nothing to sync
                 onNotePinEveryoneChange() {},
-                onNotePinSelfChange() {},
                 resolveNoteLabelForSave() {
                     if (this.editingNote.labelSelect === this.NOTE_LABEL_OTHER) {
                         return String(this.editingNote.labelOther || '').trim().slice(0, 100);
@@ -10306,7 +10294,6 @@ var projectTable;
                                 title: match.title,
                                 content: decodeHtmlForNote(match.content),
                                 is_important: match.is_important == 1,
-                                is_pinned_self: match.is_pinned_self == 1,
                                 needs_confirmation: Number(match.needs_confirmation) || 0,
                                 display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : '',
                                 bg_color: match.bg_color || '',
@@ -10354,7 +10341,6 @@ var projectTable;
                                     title: match.title,
                                     content: decodeHtmlForNote(match.content),
                                     is_important: match.is_important == 1,
-                                    is_pinned_self: match.is_pinned_self == 1,
                                     needs_confirmation: Number(match.needs_confirmation) || 0,
                                     display_column: (match.display_column != null && match.display_column !== undefined) ? String(match.display_column) : (displayColumnKey || ''),
                                     bg_color: match.bg_color || '',
@@ -10493,11 +10479,9 @@ var projectTable;
                         const formData = new FormData();
                         formData.append('project_id', this.currentNoteProjectId);
                         formData.append('content', rawContent);
-                        // both pins may be on; ピン（全員） is not offered on 自分のみ notes
+                        // ピン（全員） is not offered on 自分のみ notes
                         var pinEveryone = !!this.editingNote.is_important && this.editingNote.visibility !== 'self';
-                        var pinSelf = !!this.editingNote.is_pinned_self;
                         formData.append('is_important', pinEveryone ? 1 : 0);
-                        formData.append('is_pinned_self', pinSelf ? 1 : 0);
                         formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);
                         formData.append('display_column', this.editingNote.display_column || '');
                         formData.append('label', this.resolveNoteLabelForSave());

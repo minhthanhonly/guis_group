@@ -750,19 +750,16 @@ class Project extends ApplicationModel {
         require_once dirname(__FILE__) . '/projectnote.php';
         $noteSchema = new ProjectNote();
         unset($noteSchema);
-        $pinTable = DB_PREFIX . 'project_note_user_pins';
-        $sessionUserid = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
+        // is_pinned_self: ピン（自分） was removed; kept as 0 so the packed format below stays the same
         $noteRows = $this->fetchAll(sprintf(
             "SELECT n.project_id, n.needs_confirmation, n.id, n.content, n.is_important, n.label, n.sort_order, n.visibility, n.bg_color,
-                    CASE WHEN pin.id IS NOT NULL THEN 1 ELSE 0 END AS is_pinned_self
+                    0 AS is_pinned_self
              FROM %sproject_notes n
-             LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
              WHERE n.project_id IN (%s) AND n.needs_confirmation IN (1, 2)
                AND " . $this->noteVisibilitySql('n') . "
              ORDER BY n.project_id, n.needs_confirmation,
-                      is_pinned_self DESC, n.is_important DESC, n.sort_order ASC, n.created_at DESC",
+                      n.is_important DESC, n.sort_order ASC, n.created_at DESC",
             DB_PREFIX,
-            $this->quote($sessionUserid),
             $idsList
         ));
         foreach ($noteRows as $row) {
@@ -1629,18 +1626,14 @@ class Project extends ApplicationModel {
         if (!empty($projectIds)) {
             $idsList = implode(',', array_map('intval', $projectIds));
             $notesTable = DB_PREFIX . 'project_notes';
-            $pinTable = DB_PREFIX . 'project_note_user_pins';
-            $sessionUserid = isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '';
-            $notesRows = $this->fetchAll(sprintf(
+            $notesRows = $this->fetchAll(
                 "SELECT n.project_id, n.display_column, n.id, n.content, n.is_important, n.label, n.sort_order, n.visibility, n.bg_color,
-                        CASE WHEN pin.id IS NOT NULL THEN 1 ELSE 0 END AS is_pinned_self
+                        0 AS is_pinned_self
                  FROM {$notesTable} n
-                 LEFT JOIN {$pinTable} pin ON pin.note_id = n.id AND pin.user_id = '%s'
                  WHERE n.project_id IN ({$idsList}) AND n.display_column IS NOT NULL AND TRIM(n.display_column) != ''
                    AND " . $this->noteVisibilitySql('n') . "
-                 ORDER BY is_pinned_self DESC, n.is_important DESC, n.sort_order ASC, n.created_at DESC",
-                $this->quote($sessionUserid)
-            ));
+                 ORDER BY n.is_important DESC, n.sort_order ASC, n.created_at DESC"
+            );
             foreach ($notesRows as $nr) {
                 $pid = (int) $nr['project_id'];
                 $col = trim((string) ($nr['display_column'] ?? ''));
@@ -7347,12 +7340,6 @@ class Project extends ApplicationModel {
         return $noteModel->list($params);
     }
 
-    function toggleNotePersonalPin($params = null) {
-        require_once('projectnote.php');
-        $noteModel = new ProjectNote();
-        return $noteModel->togglePersonalPin($params);
-    }
-
     function toggleNoteImportant($params = null) {
         require_once('projectnote.php');
         $noteModel = new ProjectNote();
@@ -7365,11 +7352,18 @@ class Project extends ApplicationModel {
         return $noteModel->reorder($params);
     }
 
-    /** メモボード (案件詳細): move a note to a grid cell. POST project_id, note_id, col, row */
+    /** メモボード (案件詳細): move a note on the own grid. POST project_id, note_id, col, row */
     function moveNoteOnBoard($params = null) {
         require_once('projectnote.php');
         $noteModel = new ProjectNote();
         return $noteModel->moveOnBoard($params);
+    }
+
+    /** メモボード (案件詳細): own order of the ピン（全員） notes. POST project_id, note_ids (JSON) */
+    function reorderPinnedNotes($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->reorderPinned($params);
     }
 
   

@@ -139,7 +139,7 @@ if($_SESSION['show_project'] == 0){
                 </div>
 
                 <!-- メモ board (Keep style): equal-size cards, add/edit in the note modal -->
-                <div class="card mt-4 note-board-card">
+                <div class="card mt-4 note-board-card" :class="{ 'note-board-fullscreen': noteBoardFullscreen }">
                     <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
                         <h5 class="card-title mb-0"><i class="fa fa-sticky-note me-2 text-warning"></i><span data-i18n="メモ">メモ</span>
                             <small v-if="notes.length > 0" class="text-muted ms-1">({{ notes.length }})</small>
@@ -171,6 +171,13 @@ if($_SESSION['show_project'] == 0){
                             </div>
                             <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" :title="translateLabel('メモを追加')">
                                 <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm note-board-fullscreen-btn"
+                                    :title="noteBoardFullscreen ? translateLabel('全画面表示を終了') : translateLabel('全画面表示')"
+                                    :aria-label="noteBoardFullscreen ? translateLabel('全画面表示を終了') : translateLabel('全画面表示')"
+                                    :aria-pressed="noteBoardFullscreen ? 'true' : 'false'"
+                                    @click="toggleNoteBoardFullscreen">
+                                <i class="fa" :class="noteBoardFullscreen ? 'fa-compress' : 'fa-expand'"></i>
                             </button>
                         </div>
                     </div>
@@ -215,14 +222,13 @@ if($_SESSION['show_project'] == 0){
                                      'note-bg-' + (note.bg_color || 'default'),
                                      {
                                          'important-note': note.is_important == 1,
-                                         'pinned-self-note': note.is_pinned_self == 1,
                                          'is-dragging': noteDrag && noteDrag.id == note.id
                                      }
                                  ]"
                                  :style="noteCardGridStyle(note)"
                                  :data-note-id="note.id">
                                 <div class="note-card-top">
-                                    <span v-if="noteBoardFree && note.is_pinned_self != 1"
+                                    <span v-if="noteBoardFree"
                                           class="note-drag-handle"
                                           :title="translateLabel('ドラッグで移動')"
                                           :aria-label="translateLabel('ドラッグで移動')"
@@ -231,7 +237,6 @@ if($_SESSION['show_project'] == 0){
                                         <i class="fa fa-grip-vertical"></i>
                                     </span>
                                     <i v-if="note.is_important == 1" class="fa fa-thumb-tack text-danger" :title="translateLabel('ピン（全員）')"></i>
-                                    <i v-if="note.is_pinned_self == 1" class="fa fa-bookmark text-primary" :title="translateLabel('ピン（自分）')"></i>
                                     <span v-if="note.visibility === 'members'" class="note-visibility-icon" :title="translateLabel('公開範囲: 案件メンバー')"><i class="fa fa-users"></i></span>
                                     <span v-else-if="note.visibility === 'self'" class="note-visibility-icon" :title="translateLabel('公開範囲: 自分のみ')"><i class="fa fa-lock"></i></span>
                                     <span class="note-actions ms-auto" @click.stop>
@@ -239,14 +244,8 @@ if($_SESSION['show_project'] == 0){
                                               class="note-pin-everyone-icon"
                                               :class="{ 'is-active': note.is_important == 1 }"
                                               :title="note.is_important == 1 ? translateLabel('ピン（全員）解除') : translateLabel('ピン（全員）')"
-                                              @click="toggleNotePin(note, 'everyone')">
+                                              @click="toggleNotePin(note)">
                                             <i class="fa fa-thumb-tack"></i>
-                                        </span>
-                                        <span class="note-pin-self-icon"
-                                              :class="{ 'is-active': note.is_pinned_self == 1 }"
-                                              :title="note.is_pinned_self == 1 ? translateLabel('ピン（自分）解除') : translateLabel('ピン（自分）')"
-                                              @click="toggleNotePin(note, 'self')">
-                                            <i class="fa fa-bookmark"></i>
                                         </span>
                                         <span v-if="canDeleteNote(note)"
                                               class="detail-note-delete"
@@ -273,9 +272,9 @@ if($_SESSION['show_project'] == 0){
                             <!-- drag: target cell + one extra row to drop below the last note -->
                             <div v-if="noteDrag && noteDrag.target" class="note-drop-cell"
                                  :class="{ 'is-occupied': noteDragTargetOccupied }"
-                                 :style="{ gridColumn: String(noteDrag.target.col), gridRow: String(noteDrag.target.row + noteSelfPinRows) }"></div>
-                            <div v-if="noteDrag" class="note-board-spacer"
-                                 :style="{ gridColumn: '1 / -1', gridRow: String(noteBoardMaxRow + 1 + noteSelfPinRows) }"></div>
+                                 :style="noteDropCellStyle"></div>
+                            <div v-if="noteDrag && !noteDrag.pinned" class="note-board-spacer"
+                                 :style="{ gridColumn: '1 / -1', gridRow: String(noteBoardMaxRow + 1 + notePinRows) }"></div>
                         </div>
                         <div v-else-if="notes.length > 0" class="text-center text-muted py-3">
                             <i class="fa fa-filter fa-2x mb-2"></i>
@@ -874,13 +873,6 @@ $view->footing();
 .note-board .note-card.important-note {
     box-shadow: inset 0 3px 0 #dc3545, 0 1px 2px rgba(0, 0, 0, 0.06);
 }
-.note-board .note-card.pinned-self-note {
-    box-shadow: inset 0 3px 0 #0d6efd, 0 1px 2px rgba(0, 0, 0, 0.06);
-}
-/* both pins: blue (自分) bar over red (全員) */
-.note-board .note-card.important-note.pinned-self-note {
-    box-shadow: inset 0 3px 0 #0d6efd, inset 0 6px 0 #dc3545, 0 1px 2px rgba(0, 0, 0, 0.06);
-}
 .note-board .note-card-top {
     display: flex;
     align-items: center;
@@ -916,22 +908,16 @@ $view->footing();
     visibility: visible;
 }
 .note-board .note-pin-everyone-icon,
-.note-board .note-pin-self-icon,
 .note-board .detail-note-delete {
     cursor: pointer;
     opacity: 0.55;
 }
 .note-board .note-pin-everyone-icon:hover,
-.note-board .note-pin-self-icon:hover,
 .note-board .detail-note-delete:hover {
     opacity: 1;
 }
 .note-board .note-pin-everyone-icon.is-active {
     color: #dc3545;
-    opacity: 1;
-}
-.note-board .note-pin-self-icon.is-active {
-    color: #0d6efd;
     opacity: 1;
 }
 .note-board .detail-note-delete:hover {
@@ -962,6 +948,36 @@ $view->footing();
     word-break: break-word;
     -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
     mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
+}
+/* 全画面表示: the メモ card covers the window (the browser also goes fullscreen when allowed);
+   above the navbar (1075), below the modal backdrop / modals (1089 / 1090) so the note modal opens on top */
+.note-board-card.note-board-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 1080;
+    margin: 0 !important;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bs-body-bg, #f5f5f9);
+}
+.note-board-card.note-board-fullscreen > .card-header {
+    flex: 0 0 auto;
+    background: var(--bs-card-bg, #fff);
+    border-bottom: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.1));
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+.note-board-card.note-board-fullscreen > .card-body {
+    flex: 1 1 auto;
+    overflow: auto;
+}
+body.note-board-fullscreen-open {
+    overflow: hidden;
+}
+/* the side menu sits above modals (1100): hide it while the board is fullscreen */
+body.note-board-fullscreen-open #layout-menu {
+    visibility: hidden;
 }
 .note-board-full-switch {
     white-space: nowrap;
