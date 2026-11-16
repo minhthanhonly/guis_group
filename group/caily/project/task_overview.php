@@ -89,9 +89,9 @@ try {
             </div>
             <div class="d-flex flex-wrap align-items-center column-gap-4 row-gap-2 mt-3">
             <div class="form-check form-switch mb-0">
-                <input class="form-check-input" type="checkbox" id="excludeCompleted"
-                       v-model="filters.excludeCompleted" @change="loadOverview">
-                <label class="form-check-label" for="excludeCompleted"><span data-i18n="完了タスクを除外">完了タスクを除外</span></label>
+                <input class="form-check-input" type="checkbox" id="showClosedTasks"
+                       :checked="!filters.excludeCompleted" @change="setShowClosedTasks($event.target.checked)">
+                <label class="form-check-label text-nowrap" for="showClosedTasks"><span data-i18n="完了・キャンセルを表示">完了・キャンセルを表示</span></label>
             </div>
             <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="myTask"
@@ -268,15 +268,8 @@ try {
                             </article>
                         </div>
                         <div v-if="!col.tasks.length" class="kb-empty">
-                            <template v-if="col.hiddenByFilter">
-                                <i class="fa fa-eye-slash"></i>
-                                <span>{{ $t('完了・キャンセルは非表示中') }}</span>
-                                <button type="button" class="btn btn-sm btn-link p-0" @click="showCompletedTasks">{{ $t('表示する') }}</button>
-                            </template>
-                            <template v-else>
-                                <i class="fa fa-inbox"></i>
-                                <span>{{ $t('タスクがありません') }}</span>
-                            </template>
+                            <i class="fa fa-inbox"></i>
+                            <span>{{ $t('タスクがありません') }}</span>
                         </div>
                         <button v-if="col.tasks.length > col.visibleTasks.length" type="button" class="kb-more" @click="showMoreInColumn(col.value)">
                             {{ $t('さらに表示') }} ({{ col.tasks.length - col.visibleTasks.length }})

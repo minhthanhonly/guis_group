@@ -261,7 +261,11 @@ createApp({
             this.sortedBoardTasks.forEach(task => {
                 (grouped[task.status] || grouped['todo']).push(task);
             });
-            return this.taskStatuses.map(s => {
+            // 完了 / キャンセル columns only appear when the "show closed" switch is on
+            const statuses = this.filters.excludeCompleted
+                ? this.taskStatuses.filter(s => !this.isTerminalStatus(s.value))
+                : this.taskStatuses;
+            return statuses.map(s => {
                 const tasks = grouped[s.value];
                 const limit = this.columnLimits[s.value] || OVERVIEW_BOARD_COLUMN_PAGE;
                 let hours = 0;
@@ -275,8 +279,7 @@ createApp({
                     tasks,
                     visibleTasks: tasks.slice(0, limit),
                     hours: Math.round(hours * 100) / 100,
-                    collapsed: !!this.collapsedColumns[s.value],
-                    hiddenByFilter: this.filters.excludeCompleted && (s.value === 'completed' || s.value === 'cancelled')
+                    collapsed: !!this.collapsedColumns[s.value]
                 };
             });
         },
@@ -349,10 +352,13 @@ createApp({
             const current = this.columnLimits[status] || OVERVIEW_BOARD_COLUMN_PAGE;
             this.columnLimits = { ...this.columnLimits, [status]: current + OVERVIEW_BOARD_COLUMN_PAGE };
         },
-        showCompletedTasks() {
-            this.filters.excludeCompleted = false;
-            this.collapsedColumns = { ...this.collapsedColumns, completed: false };
-            this.persistBoardPrefs();
+        setShowClosedTasks(show) {
+            this.filters.excludeCompleted = !show;
+            if (show) {
+                // Turning the switch on should actually reveal both columns
+                this.collapsedColumns = { ...this.collapsedColumns, completed: false, cancelled: false };
+                this.persistBoardPrefs();
+            }
             this.loadOverview();
         },
         setQuickFilter(key) {
