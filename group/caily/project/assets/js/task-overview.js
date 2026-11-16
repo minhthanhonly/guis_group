@@ -31,14 +31,48 @@ const OVERVIEW_DEFAULT_TASK_KINDS = [
     { value: '相談・会議', label: '相談・会議', i18nKey: '相談・会議', color: 'dark' }
 ];
 
+const OVERVIEW_BOARD_PREFS_KEY = 'taskOverviewBoard.v1';
+const OVERVIEW_BOARD_COLUMN_PAGE = 50;
+const OVERVIEW_STATUS_ACCENTS = {
+    'todo': 'var(--bs-secondary)',
+    'in-progress': 'var(--bs-primary)',
+    'confirming': 'var(--bs-warning)',
+    'paused': 'var(--bs-info)',
+    'completed': 'var(--bs-success)',
+    'cancelled': 'var(--bs-danger)'
+};
+const OVERVIEW_PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+
+function readOverviewBoardPrefs() {
+    try {
+        const raw = window.localStorage ? window.localStorage.getItem(OVERVIEW_BOARD_PREFS_KEY) : null;
+        const parsed = raw ? JSON.parse(raw) : null;
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch (e) {
+        return {};
+    }
+}
+
 createApp({
     data() {
-        // Set default filters based on user role
+        // Default view: the department the user works in. Users without a department
+        // fall back to the previous behaviour (own tasks for non-managers).
         const isProjectManager = window.currentUser?.isProjectManager || false;
-        const userDepartmentId = window.currentUser?.department_id || '';
-        const defaultMyTask = !isProjectManager; // If not project manager, show only own tasks
-        
+        const userDepartmentId = window.currentUser?.department_id ? String(window.currentUser.department_id) : '';
+        const defaultMyTask = userDepartmentId ? false : !isProjectManager;
+        const prefs = readOverviewBoardPrefs();
+        const sortValues = ['due', 'priority', 'project', 'newest'];
+
         return {
+            viewMode: prefs.viewMode === 'list' ? 'list' : 'kanban',
+            boardSort: sortValues.includes(prefs.boardSort) ? prefs.boardSort : 'due',
+            collapsedColumns: (prefs.collapsedColumns && typeof prefs.collapsedColumns === 'object')
+                ? prefs.collapsedColumns
+                : { cancelled: true },
+            columnLimits: {},
+            searchQuery: '',
+            quickFilter: '',
+            memberFilterIds: [],
             loading: false,
             departments: [],
             teams: [],
@@ -66,13 +100,13 @@ createApp({
                 saving: false
             },
             filters: {
-                department_id: isProjectManager ? userDepartmentId : '', // Default to user's department if project manager
+                department_id: userDepartmentId,
                 team_id: '',
                 user_id: '',
                 created_month: '',
                 // Mặc định loại bỏ completed để giảm tải
                 excludeCompleted: true,
-                myTask: defaultMyTask, // Default to true if not project manager
+                myTask: defaultMyTask,
                 timerActiveOnly: false,
                 // Default OFF: hide tasks without assignee
                 showUnassignedTasks: false
@@ -134,6 +168,118 @@ createApp({
         canSelectUser() {
             return !!(window.currentUser && window.currentUser.isProjectManager);
         },
+        currentDepartmentName() {
+            if (!this.filters.department_id) return '';
+            const dep = this.departments.find(d => String(d.id) === String(this.filters.department_id));
+            return dep ? dep.name : '';
+        },
+        boardSortOptions() {
+            return [
+                { value: 'due', label: '期限が近い順' },
+                { value: 'priority', label: '優先度が高い順' },
+                { value: 'project', label: '案件順' },
+                { value: 'newest', label: '新しい順' }
+            ];
+        },
+        // Server/filter-panel filters + search box
+        baseBoardTasks() {
+            const q = String(this.searchQuery || '').trim().toLowerCase();
+            if (!q) return this.filteredTasks;
+            const terms = q.split(/\s+/).filter(Boolean);
+            return this.filteredTasks.filter(task => {
+                const hay = [
+                    task.title,
+                    task.project_name,
+                    task.project_construction_number,
+                    '#' + task.id,
+                    '#' + task.project_id
+                ].map(v => String(v || '').toLowerCase()).join(' ');
+                return terms.every(t => hay.includes(t));
+            });
+        },
+        // People shown in the member bar, with how many visible tasks each one has
+        boardMembers() {
+            if (this.filters.myTask || this.filters.user_id) return [];
+            const counts = new Map();
+            let unassigned = 0;
+            this.baseBoardTasks.forEach(task => {
+                const ids = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
+                if (!ids.length) unassigned++;
+                ids.forEach(id => counts.set(String(id), (counts.get(String(id)) || 0) + 1));
+            });
+            const seen = new Set();
+            const members = [];
+            const pushUser = (user) => {
+                const key = String(user.id);
+                if (seen.has(key)) return;
+                seen.add(key);
+                members.push({ id: key, name: user.realname || key, user, count: counts.get(key) || 0 });
+            };
+            // Department / team members (also those with no task) + assignees from elsewhere
+            this.filteredUsers.forEach(pushUser);
+            counts.forEach((count, key) => {
+                if (seen.has(key)) return;
+                const user = this.getAssigneeUser(key);
+                if (user) pushUser(user);
+            });
+            members.sort((a, b) => (b.count - a.count) || String(a.name).localeCompare(String(b.name), 'ja'));
+            if (this.filters.showUnassignedTasks && unassigned > 0) {
+                members.push({ id: 'none', name: this.$t('未割り当て'), user: null, count: unassigned });
+            }
+            return members;
+        },
+        memberFilteredTasks() {
+            const selected = this.memberFilterIds;
+            if (!selected.length) return this.baseBoardTasks;
+            const set = new Set(selected.map(String));
+            return this.baseBoardTasks.filter(task => {
+                const ids = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
+                if (!ids.length) return set.has('none');
+                return ids.some(id => set.has(String(id)));
+            });
+        },
+        quickStats() {
+            const tasks = this.memberFilteredTasks;
+            const count = (key) => tasks.filter(t => this.matchesQuickFilter(t, key)).length;
+            return [
+                { key: '', label: 'すべて', icon: 'fa fa-layer-group', tone: 'neutral', count: tasks.length },
+                { key: 'overdue', label: '期限切れ', icon: 'fa fa-exclamation-circle', tone: 'danger', count: count('overdue') },
+                { key: 'week', label: '今週期限', icon: 'fa fa-calendar-day', tone: 'warning', count: count('week') },
+                { key: 'high', label: '高・緊急', icon: 'fa fa-fire', tone: 'danger', count: count('high') },
+                { key: 'unack', label: '未受領', icon: 'fa fa-envelope', tone: 'info', count: count('unack') }
+            ];
+        },
+        sortedBoardTasks() {
+            const list = this.quickFilter
+                ? this.memberFilteredTasks.filter(t => this.matchesQuickFilter(t, this.quickFilter))
+                : this.memberFilteredTasks.slice();
+            return list.sort((a, b) => this.compareBoardTasks(a, b));
+        },
+        boardColumns() {
+            const grouped = {};
+            this.taskStatuses.forEach(s => { grouped[s.value] = []; });
+            this.sortedBoardTasks.forEach(task => {
+                (grouped[task.status] || grouped['todo']).push(task);
+            });
+            return this.taskStatuses.map(s => {
+                const tasks = grouped[s.value];
+                const limit = this.columnLimits[s.value] || OVERVIEW_BOARD_COLUMN_PAGE;
+                let hours = 0;
+                tasks.forEach(t => {
+                    const h = parseFloat(t.estimated_hours);
+                    if (!Number.isNaN(h)) hours += h;
+                });
+                return {
+                    value: s.value,
+                    accent: OVERVIEW_STATUS_ACCENTS[s.value] || 'var(--bs-secondary)',
+                    tasks,
+                    visibleTasks: tasks.slice(0, limit),
+                    hours: Math.round(hours * 100) / 100,
+                    collapsed: !!this.collapsedColumns[s.value],
+                    hiddenByFilter: this.filters.excludeCompleted && (s.value === 'completed' || s.value === 'cancelled')
+                };
+            });
+        },
         weeklyRangeLabel() {
             if (!this.weeklyWeekStart) {
                 return '';
@@ -166,6 +312,154 @@ createApp({
                 return i18next.t(label) || label;
             }
             return label;
+        },
+        // ===== Board (read-only kanban) =====
+        isMyDepartment(depId) {
+            const ids = (window.currentUser && Array.isArray(window.currentUser.department_ids))
+                ? window.currentUser.department_ids
+                : [];
+            return ids.map(String).includes(String(depId));
+        },
+        persistBoardPrefs() {
+            try {
+                if (window.localStorage) {
+                    window.localStorage.setItem(OVERVIEW_BOARD_PREFS_KEY, JSON.stringify({
+                        viewMode: this.viewMode,
+                        boardSort: this.boardSort,
+                        collapsedColumns: this.collapsedColumns
+                    }));
+                }
+            } catch (e) {
+                // storage unavailable: preferences just are not remembered
+            }
+        },
+        setViewMode(mode) {
+            this.viewMode = mode === 'list' ? 'list' : 'kanban';
+            this.persistBoardPrefs();
+            this.syncFiltersToUrl();
+            if (this.viewMode === 'list') {
+                this.$nextTick(() => this.initTooltips());
+            }
+        },
+        toggleColumn(status) {
+            this.collapsedColumns = { ...this.collapsedColumns, [status]: !this.collapsedColumns[status] };
+            this.persistBoardPrefs();
+        },
+        showMoreInColumn(status) {
+            const current = this.columnLimits[status] || OVERVIEW_BOARD_COLUMN_PAGE;
+            this.columnLimits = { ...this.columnLimits, [status]: current + OVERVIEW_BOARD_COLUMN_PAGE };
+        },
+        showCompletedTasks() {
+            this.filters.excludeCompleted = false;
+            this.collapsedColumns = { ...this.collapsedColumns, completed: false };
+            this.persistBoardPrefs();
+            this.loadOverview();
+        },
+        setQuickFilter(key) {
+            this.quickFilter = this.quickFilter === key ? '' : key;
+        },
+        isMemberSelected(id) {
+            return this.memberFilterIds.includes(String(id));
+        },
+        toggleMember(id) {
+            const key = String(id);
+            this.memberFilterIds = this.isMemberSelected(key)
+                ? this.memberFilterIds.filter(v => v !== key)
+                : [...this.memberFilterIds, key];
+        },
+        clearMemberFilter() {
+            this.memberFilterIds = [];
+        },
+        getMemberAvatarSrc(user) {
+            if (!user || user.avatarError) return '';
+            return this.getAvatarSrc(user);
+        },
+        onCardClick(event, task) {
+            if (event && event.target && event.target.closest('a, button, input, select, .dropdown-menu')) {
+                return;
+            }
+            const url = this.getTaskPageUrl(task);
+            if (url === '#') return;
+            if (event && (event.ctrlKey || event.metaKey)) {
+                window.open(url, '_blank');
+            } else {
+                window.location.href = url;
+            }
+        },
+        isTerminalStatus(status) {
+            return status === 'completed' || status === 'cancelled';
+        },
+        isDueThisWeek(task) {
+            if (!task || !task.due_date || this.isTerminalStatus(task.status)) return false;
+            if (this.isTaskOverdue(task)) return false;
+            const due = this.parseTaskDateTime(task.due_date);
+            if (!due) return false;
+            const now = moment.tz ? moment().tz(SERVER_TASK_TIMEZONE) : moment();
+            return !due.isAfter(now.clone().endOf('isoWeek'));
+        },
+        hasUnacknowledgedAssignee(task) {
+            const ids = Array.isArray(task && task.assigned_to_ids) ? task.assigned_to_ids : [];
+            if (!ids.length || this.isTerminalStatus(task.status)) return false;
+            return ids.some(id => !this.isAcknowledged(task, id));
+        },
+        matchesQuickFilter(task, key) {
+            switch (key) {
+                case 'overdue': return this.isTaskOverdue(task);
+                case 'week': return this.isDueThisWeek(task);
+                case 'high': return (task.priority === 'high' || task.priority === 'urgent') && !this.isTerminalStatus(task.status);
+                case 'unack': return this.hasUnacknowledgedAssignee(task);
+                default: return true;
+            }
+        },
+        getDueTimestamp(task) {
+            const due = this.parseTaskDateTime(task && task.due_date);
+            return due ? due.valueOf() : null;
+        },
+        compareBoardTasks(a, b) {
+            const prio = (t) => (OVERVIEW_PRIORITY_RANK[t.priority] !== undefined ? OVERVIEW_PRIORITY_RANK[t.priority] : 2);
+            const byDue = () => {
+                const da = this.getDueTimestamp(a);
+                const db = this.getDueTimestamp(b);
+                if (da === null && db === null) return 0;
+                if (da === null) return 1;
+                if (db === null) return -1;
+                return da - db;
+            };
+            const byId = () => (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);
+            switch (this.boardSort) {
+                case 'priority':
+                    return (prio(a) - prio(b)) || byDue() || byId();
+                case 'project':
+                    return ((parseInt(b.project_id, 10) || 0) - (parseInt(a.project_id, 10) || 0)) || byDue() || byId();
+                case 'newest':
+                    return byId();
+                case 'due':
+                default:
+                    return byDue() || (prio(a) - prio(b)) || byId();
+            }
+        },
+        getDueClass(task) {
+            if (!task || !task.due_date || !this.parseTaskDateTime(task.due_date)) return 'is-none';
+            if (this.isTerminalStatus(task.status)) return '';
+            if (this.isTaskOverdue(task)) return 'is-overdue';
+            const due = this.parseTaskDateTime(task.due_date);
+            const now = moment.tz ? moment().tz(SERVER_TASK_TIMEZONE) : moment();
+            return due.diff(now, 'hours') <= 48 ? 'is-soon' : '';
+        },
+        formatDueShort(task) {
+            const parsed = this.parseTaskDateTime(task && task.due_date);
+            if (!parsed) return this.$t('期限なし');
+            const local = moment.tz ? parsed.clone().tz(this.getTaskDisplayTimezone()) : parsed;
+            const now = moment.tz ? moment().tz(this.getTaskDisplayTimezone()) : moment();
+            const time = local.format('HH:mm');
+            const date = local.year() === now.year() ? local.format('M/D') : local.format('YYYY/M/D');
+            return time === '00:00' ? date : date + ' ' + time;
+        },
+        getDueTooltip(task) {
+            const parts = [this.$t('期限') + ': ' + this.formatDate(task && task.due_date)];
+            const warning = this.getPeriodWarningTooltip(task);
+            if (warning) parts.push(warning);
+            return parts.join('\n');
         },
         normalizeTaskKind(value) {
             const v = (value || '').trim();
@@ -239,6 +533,9 @@ createApp({
                 return false;
             }
 
+            if (params.has('view')) {
+                this.viewMode = params.get('view') === 'list' ? 'list' : 'kanban';
+            }
             if (params.has('department_id')) {
                 this.filters.department_id = params.get('department_id') || '';
             }
@@ -323,6 +620,9 @@ createApp({
             }
             if (this.activeTab && this.activeTab !== 'tasks') {
                 params.set('tab', this.activeTab);
+            }
+            if (this.viewMode === 'list') {
+                params.set('view', 'list');
             }
             if (this.activeTab === 'weekly' && this.weeklyWeekStart) {
                 params.set('week_start', this.weeklyWeekStart);
@@ -891,6 +1191,7 @@ createApp({
             // Reset team and user filter when department changes
             this.filters.team_id = '';
             this.filters.user_id = '';
+            this.memberFilterIds = [];
             this.loadOverview();
             if (this.activeTab === 'weekly') {
                 this.loadWeeklyTasks();
@@ -909,9 +1210,13 @@ createApp({
                 // Reload data from API with current user filter
                 this.loadOverview();
             } else {
-                // When unchecked, reload all tasks
+                // When unchecked, go back to the user's own department instead of every department
+                if (!this.filters.department_id && window.currentUser?.department_id) {
+                    this.filters.department_id = String(window.currentUser.department_id);
+                }
                 this.loadOverview();
             }
+            this.memberFilterIds = [];
             this.$nextTick(() => this.syncUserSelect2Value());
             if (this.activeTab === 'weekly') {
                 this.loadWeeklyTasks();
@@ -929,20 +1234,24 @@ createApp({
         },
         getDefaultFilters() {
             const isProjectManager = !!(window.currentUser && window.currentUser.isProjectManager);
-            const userDepartmentId = window.currentUser?.department_id || '';
+            const userDepartmentId = window.currentUser?.department_id ? String(window.currentUser.department_id) : '';
             return {
-                department_id: isProjectManager ? userDepartmentId : '',
+                department_id: userDepartmentId,
                 team_id: '',
                 user_id: '',
                 created_month: '',
                 excludeCompleted: true,
-                myTask: !isProjectManager,
+                myTask: userDepartmentId ? false : !isProjectManager,
                 timerActiveOnly: false,
                 showUnassignedTasks: false
             };
         },
         resetFilters() {
             this.filters = this.getDefaultFilters();
+            this.searchQuery = '';
+            this.quickFilter = '';
+            this.memberFilterIds = [];
+            this.columnLimits = {};
             this.weeklyHoursByWeek = true;
             this.weeklyShowEntries = false;
             this.weeklyWeekStart = this.getCurrentWeekMonday();
@@ -1171,15 +1480,9 @@ createApp({
     mounted() {
         const appliedFromUrl = this.applyFiltersFromUrl();
 
-        // If not project manager, ensure myTask is enabled and department_id is cleared
-        // unless URL explicitly provided filter values.
+        // Non-managers cannot pick another user. Defaults (own department, or own tasks
+        // when the user has no department) come from data() unless the URL overrides them.
         if (!window.currentUser?.isProjectManager) {
-            if (!appliedFromUrl || !new URLSearchParams(window.location.search).has('my_task')) {
-                this.filters.myTask = true;
-            }
-            if (!appliedFromUrl || !new URLSearchParams(window.location.search).has('department_id')) {
-                this.filters.department_id = '';
-            }
             this.filters.user_id = '';
         }
 
