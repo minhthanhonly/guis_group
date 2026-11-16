@@ -4286,6 +4286,8 @@ var projectTable;
                 if (label) label.remove();
             },
             onStart: function(evt) {
+                // only this cell scrolls while sorting (index.php: .note-sorting-here)
+                el.classList.add('note-sorting-here');
                 document.body.classList.add('note-sorting-active');
                 if (isNoteDisplayOneLine()) {
                     document.body.classList.add('project-notes-one-line');
@@ -4326,6 +4328,7 @@ var projectTable;
                 }
             },
             onEnd: function() {
+                el.classList.remove('note-sorting-here');
                 document.body.classList.remove('note-sorting-active');
                 persistConfirmationNotesOrder($wrapper);
             }

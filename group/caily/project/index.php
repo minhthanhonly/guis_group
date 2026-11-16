@@ -1020,8 +1020,13 @@ body.pl-col-resizing * {
 }
 #projectTable .confirmation-notes-wrapper:hover,
 #projectTable .confirmation-notes-wrapper:focus-within,
-body.note-sorting-active #projectTable .confirmation-notes-wrapper {
+#projectTable .confirmation-notes-wrapper.note-sorting-here {
     overflow-y: auto !important;
+}
+/* While a note is dragged, only its own cell scrolls: cells the pointer passes over stay
+   plain boxes (no scrollbar, no extra compositor layer) */
+body.note-sorting-active #projectTable .confirmation-notes-wrapper:not(.note-sorting-here) {
+    overflow: hidden !important;
 }
 
 /* Style for each confirmation note item */
@@ -1273,10 +1278,10 @@ body.project-notes-one-line .sortable-fallback.confirmation-note-item .note-text
 body.note-sorting-active {
     cursor: grabbing !important;
 }
-body.note-sorting-active #projectTable .confirmation-note-item {
+#projectTable .confirmation-notes-wrapper.note-sorting-here .confirmation-note-item {
     transition: box-shadow 180ms ease;
 }
-body.note-sorting-active #projectTable .confirmation-notes-wrapper {
+#projectTable .confirmation-notes-wrapper.note-sorting-here {
     user-select: none;
 }
 
