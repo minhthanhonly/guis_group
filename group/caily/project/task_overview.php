@@ -797,8 +797,9 @@ try {
 }
 .kb-col {
     --kb-accent: var(--bs-secondary);
-    flex: 1 0 17.5rem;
-    max-width: 22rem;
+    /* Columns share the full board width (no upper cap) */
+    flex: 1 1 0;
+    min-width: 18rem;
     display: flex;
     flex-direction: column;
     max-height: calc(100vh - 13rem);
@@ -1005,7 +1006,7 @@ try {
 .kb-unassigned { font-size: 0.75rem; color: var(--bs-secondary-color); white-space: nowrap; }
 
 @media (max-width: 575.98px) {
-    .kb-col { flex-basis: 85vw; max-width: 85vw; max-height: none; }
+    .kb-col { flex-basis: 85vw; min-width: 85vw; max-width: 85vw; max-height: none; }
     .kb-col-body { overflow-y: visible; }
     .kb-sort { min-width: 0; }
 }
