@@ -43,6 +43,13 @@ const OVERVIEW_STATUS_ACCENTS = {
 };
 const OVERVIEW_PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+// Last-used filters, per user, so coming back to the page (e.g. from the menu or a task page)
+// shows the same board. URL parameters still win when present.
+function getOverviewFilterStateKey() {
+    const uid = window.currentUser && window.currentUser.user_id ? String(window.currentUser.user_id) : 'guest';
+    return 'taskOverviewFilters.v1.' + uid;
+}
+
 function readOverviewBoardPrefs() {
     try {
         const raw = window.localStorage ? window.localStorage.getItem(OVERVIEW_BOARD_PREFS_KEY) : null;
@@ -167,6 +174,26 @@ createApp({
         },
         canSelectUser() {
             return !!(window.currentUser && window.currentUser.isProjectManager);
+        },
+        persistedFilterState() {
+            return {
+                filters: {
+                    department_id: this.filters.department_id,
+                    team_id: this.filters.team_id,
+                    user_id: this.filters.user_id,
+                    created_month: this.filters.created_month,
+                    excludeCompleted: this.filters.excludeCompleted,
+                    myTask: this.filters.myTask,
+                    timerActiveOnly: this.filters.timerActiveOnly,
+                    showUnassignedTasks: this.filters.showUnassignedTasks
+                },
+                searchQuery: this.searchQuery,
+                quickFilter: this.quickFilter,
+                memberFilterIds: this.memberFilterIds.slice(),
+                activeTab: this.activeTab,
+                weeklyHoursByWeek: this.weeklyHoursByWeek,
+                weeklyShowEntries: this.weeklyShowEntries
+            };
         },
         currentDepartmentName() {
             if (!this.filters.department_id) return '';
@@ -315,6 +342,61 @@ createApp({
                 return i18next.t(label) || label;
             }
             return label;
+        },
+        saveFilterState() {
+            try {
+                if (window.localStorage) {
+                    window.localStorage.setItem(getOverviewFilterStateKey(), JSON.stringify(this.persistedFilterState));
+                }
+            } catch (e) {
+                // storage unavailable: state just is not remembered
+            }
+        },
+        restoreFilterState() {
+            let saved = null;
+            try {
+                const raw = window.localStorage ? window.localStorage.getItem(getOverviewFilterStateKey()) : null;
+                saved = raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                saved = null;
+            }
+            if (!saved || typeof saved !== 'object') {
+                return false;
+            }
+            const f = saved.filters && typeof saved.filters === 'object' ? saved.filters : {};
+            ['department_id', 'team_id', 'user_id', 'created_month'].forEach((key) => {
+                if (typeof f[key] === 'string' || typeof f[key] === 'number') {
+                    this.filters[key] = String(f[key]);
+                }
+            });
+            ['excludeCompleted', 'myTask', 'timerActiveOnly', 'showUnassignedTasks'].forEach((key) => {
+                if (typeof f[key] === 'boolean') {
+                    this.filters[key] = f[key];
+                }
+            });
+            if (typeof saved.searchQuery === 'string') this.searchQuery = saved.searchQuery;
+            if (['', 'overdue', 'week', 'high', 'unack'].includes(saved.quickFilter)) this.quickFilter = saved.quickFilter;
+            if (Array.isArray(saved.memberFilterIds)) this.memberFilterIds = saved.memberFilterIds.map(String);
+            if (['tasks', 'weekly'].includes(saved.activeTab)
+                || (saved.activeTab === 'unassigned' && this.canSelectUser)) {
+                this.activeTab = saved.activeTab;
+            }
+            if (typeof saved.weeklyHoursByWeek === 'boolean') this.weeklyHoursByWeek = saved.weeklyHoursByWeek;
+            if (typeof saved.weeklyShowEntries === 'boolean') this.weeklyShowEntries = saved.weeklyShowEntries;
+            if (this.filters.myTask) {
+                this.filters.user_id = '';
+            }
+            return true;
+        },
+        // Drop remembered member selections that are no longer on the member bar,
+        // otherwise the board could be filtered by someone the user cannot see or unselect.
+        pruneMemberFilter() {
+            if (!this.memberFilterIds.length) return;
+            const visible = new Set(this.boardMembers.map(m => m.id));
+            const next = this.memberFilterIds.filter(id => visible.has(id));
+            if (next.length !== this.memberFilterIds.length) {
+                this.memberFilterIds = next;
+            }
         },
         // ===== Board (read-only kanban) =====
         isMyDepartment(depId) {
@@ -1126,7 +1208,10 @@ createApp({
                         (this.tasks || []).filter((task) => task.timer_active).map((task) => task.id)
                     );
                 }
-                this.$nextTick(() => this.initTooltips());
+                this.$nextTick(() => {
+                    this.pruneMemberFilter();
+                    this.initTooltips();
+                });
             } catch (e) {
                 console.error('Error loading task overview:', e);
                 console.error('Error details:', e.response?.data || e.message);
@@ -1471,6 +1556,9 @@ createApp({
         }
     },
     watch: {
+        persistedFilterState() {
+            this.saveFilterState();
+        },
         filteredUsers() {
             this.$nextTick(() => this.initUserSelect2());
         },
@@ -1484,7 +1572,11 @@ createApp({
         }
     },
     mounted() {
+        // URL parameters (shared link / reload) win; otherwise restore the last-used filters.
         const appliedFromUrl = this.applyFiltersFromUrl();
+        if (!appliedFromUrl) {
+            this.restoreFilterState();
+        }
 
         // Non-managers cannot pick another user. Defaults (own department, or own tasks
         // when the user has no department) come from data() unless the URL overrides them.
