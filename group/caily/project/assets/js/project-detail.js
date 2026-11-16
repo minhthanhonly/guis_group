@@ -3068,6 +3068,9 @@ const vueApp = createApp({
         },
         enterNoteBoardFullscreen() {
             this.noteBoardFullscreen = true;
+            // fullscreen shows whole notes; the previous 全文表示 setting comes back on exit
+            this._noteShowFullBeforeFs = this.noteShowFull;
+            this.noteShowFull = true;
             document.body.classList.add('note-board-fullscreen-open');
             if (!this._onNoteFsChange) {
                 this._onNoteFsChange = () => {
@@ -3092,6 +3095,10 @@ const vueApp = createApp({
         },
         exitNoteBoardFullscreen() {
             this.noteBoardFullscreen = false;
+            if (this._noteShowFullBeforeFs !== undefined) {
+                this.noteShowFull = this._noteShowFullBeforeFs;
+                this._noteShowFullBeforeFs = undefined;
+            }
             document.body.classList.remove('note-board-fullscreen-open');
             if (this._noteFsByUs && document.fullscreenElement && document.exitFullscreen) {
                 this._noteFsByUs = false;
