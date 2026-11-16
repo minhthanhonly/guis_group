@@ -2105,6 +2105,10 @@ class ParentProject extends ApplicationModel {
             }
         }
         unset($project);
+        // 決済明細 lines for the 決済情報 rows of each child card
+        require_once(DIR_MODEL . 'project.php');
+        $projectModel = new Project();
+        $projectModel->attachPaymentItems($projects);
         return $projects;
     }
 

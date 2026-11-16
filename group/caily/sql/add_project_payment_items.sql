@@ -147,3 +147,16 @@ FROM (
 WHERE (COALESCE(x.a, 0) > 0 OR x.d IS NOT NULL OR x.s <> '未発行')
   AND NOT EXISTS (SELECT 1 FROM `groupware_project_payment_items` i
                   WHERE i.project_id = x.id AND i.kind = 'invoice' AND i.item_type = '設計費');
+
+-- (7) 発行済の請求明細で金額が空/0 のもの: 同じ案件・同じ種別の見積金額を入れる
+-- （旧データは請求金額を入れずに発行済にしていることが多く、売上統計は見積金額で数えていた）。
+-- 画面から保存した明細は 発行済 = 金額 > 0 なので対象にならない。何度実行してもよい。
+UPDATE `groupware_project_payment_items` i
+JOIN (
+    SELECT project_id, item_type, SUM(COALESCE(amount, 0)) AS est
+    FROM `groupware_project_payment_items`
+    WHERE kind = 'estimate' AND status NOT IN ('無償', '対象外')
+    GROUP BY project_id, item_type
+) e ON e.project_id = i.project_id AND e.item_type = i.item_type
+SET i.amount = e.est, i.updated_at = NOW()
+WHERE i.kind = 'invoice' AND i.status = '発行済' AND COALESCE(i.amount, 0) <= 0 AND e.est > 0;

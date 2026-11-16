@@ -5801,22 +5801,125 @@ class Project extends ApplicationModel {
         return $name !== '' && mb_strpos($name, '省エネ') !== false;
     }
 
-    /** 省エネ fee amount: invoice fee, fallback estimate fee of same kind. */
-    private function sqlEnergyInvoiceFeeAmountExpr($fee) {
-        if ($fee === 'design') {
-            return "CASE WHEN COALESCE(p.invoice_design_amount, 0) > 0 THEN p.invoice_design_amount ELSE COALESCE(p.estimate_design_amount, 0) END";
-        }
-        return "CASE WHEN COALESCE(p.invoice_application_amount, 0) > 0 THEN p.invoice_application_amount ELSE COALESCE(p.estimate_application_amount, 0) END";
-    }
-
-    private function sqlEnergyEstimateFeeAmountExpr($fee) {
-        if ($fee === 'design') {
-            return "COALESCE(p.estimate_design_amount, 0)";
-        }
-        return "COALESCE(p.estimate_application_amount, 0)";
+    /** SQL: a 決済 status column normalized like normalizePaymentItemStatus ('' → 未発行, 発行済み → 発行済). */
+    private function sqlPaymentStatusNorm($col) {
+        return "REPLACE(COALESCE(NULLIF(TRIM({$col}), ''), '未発行'), '発行済み', '発行済')";
     }
 
     /**
+     * One legacy-column line for sqlRevenuePaymentLines (same rules as buildPaymentItemsFromLegacy):
+     * kept only when it has a value; 無償/対象外 → amount 0; a 発行済 line without an amount
+     * takes $fallbackExpr (請求 → the 見積 amount, as the stats always did).
+     */
+    private function sqlLegacyPaymentLine($kind, $type, $tag, $amountExpr, $dateExpr, $statusExpr, $fallbackExpr, $where) {
+        $typeEsc = $this->escape($type);
+        return "SELECT x.id AS project_id, CONCAT('{$tag}', x.id) AS line_id, '{$kind}' AS kind,
+                x.d AS item_date, '{$typeEsc}' AS item_type,
+                CASE WHEN x.s IN ('無償', '対象外') THEN 0
+                     WHEN x.s = '発行済' AND COALESCE(x.a, 0) <= 0 AND x.fa IS NOT NULL THEN x.fa
+                     ELSE x.a END AS amount,
+                x.s AS status
+            FROM (
+                SELECT p0.id, {$amountExpr} AS a, {$dateExpr} AS d,
+                       " . $this->sqlPaymentStatusNorm($statusExpr) . " AS s, {$fallbackExpr} AS fa
+                FROM {$this->table} p0
+                WHERE {$where}
+            ) x
+            WHERE COALESCE(x.a, 0) > 0 OR x.d IS NOT NULL OR x.s <> '未発行'";
+    }
+
+    /**
+     * Derived table of every 決済明細 line of a department's projects (deleted excluded):
+     * project_id, line_id, kind (estimate|invoice), item_date, item_type, amount, status (normalized).
+     * Projects with no stored lines contribute lines built from their legacy columns, as the
+     * 決済情報 UI shows them, so the stats are right before and after the migration SQL runs.
+     */
+    private function sqlRevenuePaymentLines($deptId, $energy) {
+        $this->ensurePaymentItemsTable();
+        $items = $this->paymentItemsTable();
+        $deptId = intval($deptId);
+        $deptWhere = "p0.department_id = {$deptId} AND p0.status != 'deleted'";
+        $legacyWhere = $deptWhere . " AND NOT EXISTS (SELECT 1 FROM `{$items}` li WHERE li.project_id = p0.id)";
+
+        $parts = [];
+        $parts[] = "SELECT i.project_id, CONCAT('i', i.id) AS line_id, i.kind, i.item_date, i.item_type, i.amount,
+                " . $this->sqlPaymentStatusNorm('i.status') . " AS status
+            FROM `{$items}` i
+            INNER JOIN {$this->table} p0 ON p0.id = i.project_id
+            WHERE {$deptWhere} AND i.kind IN ('estimate', 'invoice')";
+
+        $legacyType = self::PAYMENT_ITEM_DEFAULT_LEGACY_TYPE;
+        if (!$energy) {
+            $parts[] = $this->sqlLegacyPaymentLine('estimate', $legacyType, 'le', 'p0.amount', 'p0.estimate_date', 'p0.estimate_status', 'NULL', $legacyWhere);
+            $parts[] = $this->sqlLegacyPaymentLine('invoice', $legacyType, 'li', 'p0.invoice_amount', 'p0.invoice_date', 'p0.invoice_status', 'p0.amount', $legacyWhere);
+        } else {
+            // 申請費 with no value of its own uses the combined 見積/請求 columns (hydrateApplicationFromLegacy).
+            $emptyApp = function ($kind) {
+                return "(p0.{$kind}_application_amount IS NULL AND p0.{$kind}_application_date IS NULL
+                         AND COALESCE(TRIM(p0.{$kind}_application_status), '') = '')";
+            };
+            $app = function ($kind, $field, $legacyCol) use ($emptyApp) {
+                return "CASE WHEN " . $emptyApp($kind) . " THEN p0.{$legacyCol} ELSE p0.{$kind}_application_{$field} END";
+            };
+            $estAppAmount = $app('estimate', 'amount', 'amount');
+            $parts[] = $this->sqlLegacyPaymentLine('estimate', '申請費', 'lea', $estAppAmount,
+                $app('estimate', 'date', 'estimate_date'), $app('estimate', 'status', 'estimate_status'), 'NULL', $legacyWhere);
+            $parts[] = $this->sqlLegacyPaymentLine('estimate', '設計費', 'led', 'p0.estimate_design_amount',
+                'p0.estimate_design_date', 'p0.estimate_design_status', 'NULL', $legacyWhere);
+            $parts[] = $this->sqlLegacyPaymentLine('invoice', '申請費', 'lia', $app('invoice', 'amount', 'invoice_amount'),
+                $app('invoice', 'date', 'invoice_date'), $app('invoice', 'status', 'invoice_status'), $estAppAmount, $legacyWhere);
+            $parts[] = $this->sqlLegacyPaymentLine('invoice', '設計費', 'lid', 'p0.invoice_design_amount',
+                'p0.invoice_design_date', 'p0.invoice_design_status', 'p0.estimate_design_amount', $legacyWhere);
+        }
+        return '(' . implode("\n            UNION ALL\n            ", $parts) . ')';
+    }
+
+    /**
+     * Lines grouped per project × 区分 × 種別: total / 発行済 amounts and one status for the
+     * group, worked out like summarizePaymentItems (all 無償/対象外 → 無償; all done → 発行済;
+     * any 見積作成中/請求準備 → that; otherwise 未発行).
+     */
+    private function sqlRevenuePaymentGroups($linesSql) {
+        return "(SELECT gl.project_id, gl.kind, gl.item_type,
+                SUM(COALESCE(gl.amount, 0)) AS total_amount,
+                SUM(CASE WHEN gl.status = '発行済' THEN COALESCE(gl.amount, 0) ELSE 0 END) AS issued_amount,
+                SUM(CASE WHEN gl.status = '発行済' THEN 1 ELSE 0 END) AS issued_count,
+                CASE
+                    WHEN SUM(CASE WHEN gl.status NOT IN ('無償', '対象外') THEN 1 ELSE 0 END) = 0 THEN '無償'
+                    WHEN SUM(CASE WHEN gl.status NOT IN ('無償', '対象外', '発行済') THEN 1 ELSE 0 END) = 0 THEN '発行済'
+                    WHEN SUM(CASE WHEN gl.status IN ('見積作成中', '請求準備') THEN 1 ELSE 0 END) > 0
+                        THEN MAX(CASE WHEN gl.status IN ('見積作成中', '請求準備') THEN gl.status END)
+                    ELSE '未発行'
+                END AS group_status
+            FROM {$linesSql} gl
+            GROUP BY gl.project_id, gl.kind, gl.item_type)";
+    }
+
+    /** Project / parent columns shared by the stats detail lists. */
+    private function sqlRevenueListProjectColumns($companyLabel, $branchExpr) {
+        return "p.id,
+                p.name,
+                {$companyLabel} AS company_name,
+                {$branchExpr} AS branch_name,
+                pp.construction_number AS parent_construction_number,
+                p.status,
+                p.actual_end_date,
+                p.end_date,
+                p.payment_note,
+                p.tantou,
+                p.project_order_type,
+                pp.scale AS parent_scale,
+                pp.type1 AS parent_type1,
+                pp.type2 AS parent_type2,
+                p.caily_nouki,
+                p.guis_nouki,
+                p.teams";
+    }
+
+    /**
+     * Summary per company for one month, from the 決済明細 lines:
+     * 見積 = lines dated in the month; 請求 = 発行済 lines dated in the month;
+     * 案件数 = projects with a 請求 line or a 入金日 in the month.
      * @return array{rows: array, totals: array}
      */
     private function buildMonthlyRevenueSummaryByCompany(
@@ -5824,119 +5927,50 @@ class Project extends ApplicationModel {
         $baseWhere,
         $companyLabel,
         $monthEsc,
-        $invoiceAmountExpr,
-        $tantou = null,
-        $energySplit = false
+        $linesSql,
+        $tantou = null
     ) {
         $where = $baseWhere;
         if ($tantou === 'CAILY' || $tantou === 'GUIS') {
             $where .= " AND p.tantou = '" . $this->escape($tantou) . "'";
         }
 
-        if ($energySplit) {
-            $appInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('application');
-            $desInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('design');
-            $appEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('application');
-            $desEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('design');
-            $summaryQuery = sprintf(
-                "SELECT
-                    %s AS company_name,
-                    COUNT(DISTINCT CASE
-                        WHEN DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') = '%s'
-                          OR DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') = '%s'
-                          OR DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
-                        THEN p.id END) AS project_count,
-                    SUM(
-                        (CASE WHEN DATE_FORMAT(p.estimate_application_date, '%%Y-%%m') = '%s' THEN 1 ELSE 0 END)
-                      + (CASE WHEN DATE_FORMAT(p.estimate_design_date, '%%Y-%%m') = '%s' THEN 1 ELSE 0 END)
-                    ) AS estimate_count,
-                    SUM(
-                        (CASE WHEN DATE_FORMAT(p.estimate_application_date, '%%Y-%%m') = '%s' THEN %s ELSE 0 END)
-                      + (CASE WHEN DATE_FORMAT(p.estimate_design_date, '%%Y-%%m') = '%s' THEN %s ELSE 0 END)
-                    ) AS estimate_amount,
-                    SUM(
-                        (CASE
-                            WHEN DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') = '%s'
-                             AND p.invoice_application_status IN ('発行済', '発行済み')
-                            THEN 1 ELSE 0 END)
-                      + (CASE
-                            WHEN DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') = '%s'
-                             AND p.invoice_design_status IN ('発行済', '発行済み')
-                            THEN 1 ELSE 0 END)
-                    ) AS invoice_count,
-                    SUM(
-                        (CASE
-                            WHEN DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') = '%s'
-                             AND p.invoice_application_status IN ('発行済', '発行済み')
-                            THEN %s ELSE 0 END)
-                      + (CASE
-                            WHEN DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') = '%s'
-                             AND p.invoice_design_status IN ('発行済', '発行済み')
-                            THEN %s ELSE 0 END)
-                    ) AS invoice_amount,
-                    SUM(CASE
-                        WHEN DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
-                         AND p.payment_status = '入金済'
-                        THEN 1 ELSE 0 END) AS payment_count,
-                    SUM(CASE
-                        WHEN DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
-                         AND p.payment_status = '入金済'
-                        THEN COALESCE(p.payment_amount, 0) ELSE 0 END) AS payment_amount
-                %s
-                WHERE %s
-                GROUP BY company_name
-                HAVING project_count > 0
-                ORDER BY company_name ASC",
-                $companyLabel,
-                $monthEsc, $monthEsc, $monthEsc,
-                $monthEsc, $monthEsc,
-                $monthEsc, $appEstAmt, $monthEsc, $desEstAmt,
-                $monthEsc, $monthEsc,
-                $monthEsc, $appInvAmt, $monthEsc, $desInvAmt,
-                $monthEsc, $monthEsc,
-                $baseFrom,
-                $where
-            );
-        } else {
-        $summaryQuery = sprintf(
-            "SELECT
-                %s AS company_name,
+        // Aggregated per project first, so joining it does not repeat the 入金 columns.
+        $monthLines = "(SELECT ml.project_id,
+                SUM(CASE WHEN ml.kind = 'estimate' THEN 1 ELSE 0 END) AS estimate_count,
+                SUM(CASE WHEN ml.kind = 'estimate' THEN COALESCE(ml.amount, 0) ELSE 0 END) AS estimate_amount,
+                SUM(CASE WHEN ml.kind = 'invoice' THEN 1 ELSE 0 END) AS invoice_lines,
+                SUM(CASE WHEN ml.kind = 'invoice' AND ml.status = '発行済' THEN 1 ELSE 0 END) AS invoice_count,
+                SUM(CASE WHEN ml.kind = 'invoice' AND ml.status = '発行済' THEN COALESCE(ml.amount, 0) ELSE 0 END) AS invoice_amount
+            FROM {$linesSql} ml
+            WHERE ml.item_date IS NOT NULL AND DATE_FORMAT(ml.item_date, '%Y-%m') = '{$monthEsc}'
+            GROUP BY ml.project_id)";
+
+        $summaryQuery = "SELECT
+                {$companyLabel} AS company_name,
                 COUNT(DISTINCT CASE
-                    WHEN DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
-                      OR DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                    WHEN COALESCE(m.invoice_lines, 0) > 0
+                      OR DATE_FORMAT(p.payment_date, '%Y-%m') = '{$monthEsc}'
                     THEN p.id END) AS project_count,
-                SUM(CASE WHEN DATE_FORMAT(p.estimate_date, '%%Y-%%m') = '%s' THEN 1 ELSE 0 END) AS estimate_count,
-                SUM(CASE WHEN DATE_FORMAT(p.estimate_date, '%%Y-%%m') = '%s' THEN COALESCE(p.amount, 0) ELSE 0 END) AS estimate_amount,
+                SUM(COALESCE(m.estimate_count, 0)) AS estimate_count,
+                SUM(COALESCE(m.estimate_amount, 0)) AS estimate_amount,
+                SUM(COALESCE(m.invoice_count, 0)) AS invoice_count,
+                SUM(COALESCE(m.invoice_amount, 0)) AS invoice_amount,
                 SUM(CASE
-                    WHEN DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
-                     AND p.invoice_status IN ('発行済', '発行済み')
-                    THEN 1 ELSE 0 END) AS invoice_count,
-                SUM(CASE
-                    WHEN DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
-                     AND p.invoice_status IN ('発行済', '発行済み')
-                    THEN %s ELSE 0 END) AS invoice_amount,
-                SUM(CASE
-                    WHEN DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                    WHEN DATE_FORMAT(p.payment_date, '%Y-%m') = '{$monthEsc}'
                      AND p.payment_status = '入金済'
                     THEN 1 ELSE 0 END) AS payment_count,
                 SUM(CASE
-                    WHEN DATE_FORMAT(p.payment_date, '%%Y-%%m') = '%s'
+                    WHEN DATE_FORMAT(p.payment_date, '%Y-%m') = '{$monthEsc}'
                      AND p.payment_status = '入金済'
                     THEN COALESCE(p.payment_amount, 0) ELSE 0 END) AS payment_amount
-            %s
-            WHERE %s
+            {$baseFrom}
+            LEFT JOIN {$monthLines} m ON m.project_id = p.id
+            WHERE {$where}
             GROUP BY company_name
             HAVING project_count > 0
-            ORDER BY company_name ASC",
-            $companyLabel,
-            $monthEsc, $monthEsc,
-            $monthEsc, $monthEsc,
-            $monthEsc, $monthEsc, $invoiceAmountExpr,
-            $monthEsc, $monthEsc,
-            $baseFrom,
-            $where
-        );
-        }
+            ORDER BY company_name ASC";
+
         $summaryRows = $this->fetchAll($summaryQuery);
         $totals = [
             'project_count' => 0,
@@ -6067,548 +6101,139 @@ class Project extends ApplicationModel {
         $baseWhere = "p.department_id = {$deptId} AND p.status != 'deleted'";
         $energySplit = $this->isEnergyDepartmentById($deptId);
 
-        $invoiceAmountExpr = "CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END";
-        $cancelledEstimatedWhere = $cancelledEstimatedOnly
-            ? ($energySplit
-                ? " AND (p.estimate_application_status IN ('発行済', '発行済み') OR p.estimate_design_status IN ('発行済', '発行済み') OR p.estimate_status IN ('発行済', '発行済み'))"
-                : " AND p.estimate_status IN ('発行済', '発行済み')")
-            : "";
+        // Everything below reads the 決済明細 lines (見積 / 請求 × 種別), not the single legacy columns.
+        $lines = $this->sqlRevenuePaymentLines($deptId, $energySplit);
+        $groups = $this->sqlRevenuePaymentGroups($lines);
+        $projectColumns = $this->sqlRevenueListProjectColumns($companyLabel, $branchExpr);
+        $fiscalStartEsc = $this->escape($fiscalStartMonth);
 
-        $summaryAll = $this->buildMonthlyRevenueSummaryByCompany(
-            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, null, $energySplit
-        );
+        $summaryAll = $this->buildMonthlyRevenueSummaryByCompany($baseFrom, $baseWhere, $companyLabel, $monthEsc, $lines);
         $summaryRows = $summaryAll['rows'];
         $totals = $summaryAll['totals'];
         $monthlyActualSales = floatval($totals['invoice_amount'] ?? 0);
 
-        if ($energySplit) {
-            $appInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('application');
-            $desInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('design');
-            $cumulativeActualQuery = sprintf(
-                "SELECT COALESCE(SUM(
-                        (CASE
-                            WHEN p.invoice_application_status IN ('発行済', '発行済み')
-                             AND p.invoice_application_date IS NOT NULL
-                             AND DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') >= '%s'
-                             AND DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') <= '%s'
-                            THEN %s ELSE 0 END)
-                      + (CASE
-                            WHEN p.invoice_design_status IN ('発行済', '発行済み')
-                             AND p.invoice_design_date IS NOT NULL
-                             AND DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') >= '%s'
-                             AND DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') <= '%s'
-                            THEN %s ELSE 0 END)
-                    ), 0) AS cumulative_actual
-                 FROM {$this->table} p
-                 WHERE p.department_id = %d
-                   AND p.status != 'deleted'",
-                $this->escape($fiscalStartMonth),
-                $monthEsc,
-                $appInvAmt,
-                $this->escape($fiscalStartMonth),
-                $monthEsc,
-                $desInvAmt,
-                $deptId
-            );
-        } else {
-            $cumulativeActualQuery = sprintf(
-                "SELECT COALESCE(SUM(CASE
-                            WHEN p.invoice_status IN ('発行済', '発行済み') THEN %s
-                            ELSE 0
-                        END), 0) AS cumulative_actual
-                 FROM {$this->table} p
-                 WHERE p.department_id = %d
-                   AND p.status != 'deleted'
-                   AND p.invoice_date IS NOT NULL
-                   AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') >= '%s'
-                   AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') <= '%s'",
-                $invoiceAmountExpr,
-                $deptId,
-                $this->escape($fiscalStartMonth),
-                $monthEsc
-            );
-        }
-        $cumulativeActualRow = $this->fetchOne($cumulativeActualQuery);
+        $cumulativeActualRow = $this->fetchOne("SELECT COALESCE(SUM(COALESCE(l.amount, 0)), 0) AS cumulative_actual
+            FROM {$lines} l
+            WHERE l.kind = 'invoice'
+              AND l.status = '発行済'
+              AND l.item_date IS NOT NULL
+              AND DATE_FORMAT(l.item_date, '%Y-%m') >= '{$fiscalStartEsc}'
+              AND DATE_FORMAT(l.item_date, '%Y-%m') <= '{$monthEsc}'");
         $cumulativeActualSales = floatval($cumulativeActualRow['cumulative_actual'] ?? 0);
 
-        $summaryCaily = $this->buildMonthlyRevenueSummaryByCompany(
-            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'CAILY', $energySplit
-        );
-        $summaryGuis = $this->buildMonthlyRevenueSummaryByCompany(
-            $baseFrom, $baseWhere, $companyLabel, $monthEsc, $invoiceAmountExpr, 'GUIS', $energySplit
-        );
+        $summaryCaily = $this->buildMonthlyRevenueSummaryByCompany($baseFrom, $baseWhere, $companyLabel, $monthEsc, $lines, 'CAILY');
+        $summaryGuis = $this->buildMonthlyRevenueSummaryByCompany($baseFrom, $baseWhere, $companyLabel, $monthEsc, $lines, 'GUIS');
 
-        if ($energySplit) {
-            $appInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('application');
-            $desInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('design');
-            $appEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('application');
-            $desEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('design');
-            $invoicedSelectTpl = "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                %s AS amount,
-                %s AS estimate_status,
-                %s AS invoice_status,
-                %s AS invoice_date,
-                %s AS invoice_amount,
+        // 請求済み: one row per 発行済 請求 line dated in the month.
+        // amount / estimate_status: the 見積 lines of the same 種別.
+        $invoicedQuery = "SELECT
+                {$projectColumns},
+                COALESCE(ge.total_amount, 0) AS amount,
+                COALESCE(ge.group_status, '未発行') AS estimate_status,
+                l.status AS invoice_status,
+                l.item_date AS invoice_date,
+                COALESCE(l.amount, 0) AS invoice_amount,
                 p.payment_status,
                 p.payment_date,
                 COALESCE(p.payment_amount, 0) AS payment_amount,
-                p.payment_note,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.teams,
-                '%s' AS fee_type
-            %s
-            WHERE %s
-              AND %s IN ('発行済', '発行済み')
-              AND DATE_FORMAT(%s, '%%Y-%%m') = '%s'";
-            $invoicedQuery = '(' . sprintf(
-                $invoicedSelectTpl,
-                $companyLabel, $branchExpr, $appEstAmt,
-                'p.estimate_application_status', 'p.invoice_application_status',
-                'p.invoice_application_date', $appInvAmt, '申請費',
-                $baseFrom, $baseWhere,
-                'p.invoice_application_status', 'p.invoice_application_date', $monthEsc
-            ) . ') UNION ALL (' . sprintf(
-                $invoicedSelectTpl,
-                $companyLabel, $branchExpr, $desEstAmt,
-                'p.estimate_design_status', 'p.invoice_design_status',
-                'p.invoice_design_date', $desInvAmt, '設計費',
-                $baseFrom, $baseWhere,
-                'p.invoice_design_status', 'p.invoice_design_date', $monthEsc
-            ) . ') ORDER BY invoice_date ASC, company_name ASC, id ASC, fee_type ASC';
+                l.item_type AS fee_type,
+                l.line_id AS row_key
+            {$baseFrom}
+            INNER JOIN {$lines} l ON l.project_id = p.id
+            LEFT JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate' AND ge.item_type = l.item_type
+            WHERE {$baseWhere}
+              AND l.kind = 'invoice'
+              AND l.status = '発行済'
+              AND l.item_date IS NOT NULL
+              AND DATE_FORMAT(l.item_date, '%Y-%m') = '{$monthEsc}'
+            ORDER BY invoice_date ASC, company_name ASC, p.id ASC, fee_type ASC, row_key ASC";
 
-            $estimatedSelectTpl = "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                %s AS amount,
-                %s AS invoice_amount,
-                %s AS estimate_status,
-                %s AS estimate_date,
-                p.end_date,
-                p.payment_note,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.teams,
-                '%s' AS fee_type
-            %s
-            WHERE %s
+        // 見積済 (未完了): one row per dated 見積 line whose 種別 is not invoiced yet
+        // (no 請求 line of that 種別, or they are still 未発行 / 請求準備).
+        $estimatedMonthFilter = $estimatedAllTime ? '' : "AND DATE_FORMAT(l.item_date, '%Y-%m') = '{$monthEsc}'";
+        $estimatedQuery = "SELECT
+                {$projectColumns},
+                COALESCE(l.amount, 0) AS amount,
+                COALESCE(gi.total_amount, 0) AS invoice_amount,
+                l.status AS estimate_status,
+                l.item_date AS estimate_date,
+                COALESCE(gi.group_status, '未発行') AS invoice_status,
+                l.item_type AS fee_type,
+                l.line_id AS row_key
+            {$baseFrom}
+            INNER JOIN {$lines} l ON l.project_id = p.id
+            LEFT JOIN {$groups} gi ON gi.project_id = p.id AND gi.kind = 'invoice' AND gi.item_type = l.item_type
+            WHERE {$baseWhere}
               AND p.status NOT IN ('waiting_invoice', 'completed', 'cancelled', 'deleted')
-              AND %s IS NOT NULL
-              AND COALESCE(NULLIF(TRIM(%s), ''), '未発行') IN ('未発行', '請求準備')
-              %s";
-            $monthFilterApp = $estimatedAllTime ? '' : "AND DATE_FORMAT(p.estimate_application_date, '%Y-%m') = '{$monthEsc}'";
-            $monthFilterDes = $estimatedAllTime ? '' : "AND DATE_FORMAT(p.estimate_design_date, '%Y-%m') = '{$monthEsc}'";
-            $estimatedQuery = '(' . sprintf(
-                $estimatedSelectTpl,
-                $companyLabel, $branchExpr, $appEstAmt, $appInvAmt,
-                'p.estimate_application_status', 'p.estimate_application_date', '申請費',
-                $baseFrom, $baseWhere,
-                'p.estimate_application_date', 'p.invoice_application_status', $monthFilterApp
-            ) . ') UNION ALL (' . sprintf(
-                $estimatedSelectTpl,
-                $companyLabel, $branchExpr, $desEstAmt, $desInvAmt,
-                'p.estimate_design_status', 'p.estimate_design_date', '設計費',
-                $baseFrom, $baseWhere,
-                'p.estimate_design_date', 'p.invoice_design_status', $monthFilterDes
-            ) . ') ORDER BY estimate_date ASC, company_name ASC, id ASC, fee_type ASC';
-        } else {
-        $invoicedQuery = sprintf(
-            "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                COALESCE(p.amount, 0) AS amount,
-                p.estimate_status,
-                p.invoice_status,
-                p.invoice_date,
-                %s AS invoice_amount,
-                p.payment_status,
-                p.payment_date,
-                COALESCE(p.payment_amount, 0) AS payment_amount,
-                p.payment_note,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.teams,
-                NULL AS fee_type
-            %s
-            WHERE %s
-              AND p.invoice_status IN ('発行済', '発行済み')
-              AND DATE_FORMAT(p.invoice_date, '%%Y-%%m') = '%s'
-            ORDER BY p.invoice_date ASC, company_name ASC, p.id ASC",
-            $companyLabel,
-            $branchExpr,
-            $invoiceAmountExpr,
-            $baseFrom,
-            $baseWhere,
-            $monthEsc
-        );
-        if ($estimatedAllTime) {
-            $estimatedQuery = sprintf(
-                "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                COALESCE(p.amount, 0) AS amount,
-                %s AS invoice_amount,
-                p.estimate_status,
-                p.estimate_date,
-                p.end_date,
-                p.payment_note,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.teams,
-                NULL AS fee_type
-            %s
-            WHERE %s
-              AND p.status NOT IN ('waiting_invoice', 'completed', 'cancelled', 'deleted')
-              AND p.estimate_date IS NOT NULL
-              AND COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') IN ('未発行', '請求準備')
-            ORDER BY p.estimate_date ASC, company_name ASC, p.id ASC",
-            $companyLabel,
-            $branchExpr,
-            $invoiceAmountExpr,
-            $baseFrom,
-            $baseWhere
-            );
-        } else {
-            $estimatedQuery = sprintf(
-                "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                COALESCE(p.amount, 0) AS amount,
-                %s AS invoice_amount,
-                p.estimate_status,
-                p.estimate_date,
-                p.end_date,
-                p.payment_note,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.teams,
-                NULL AS fee_type
-            %s
-            WHERE %s
-              AND p.status NOT IN ('waiting_invoice', 'completed', 'cancelled', 'deleted')
-              AND p.estimate_date IS NOT NULL
-              AND COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') IN ('未発行', '請求準備')
-              AND DATE_FORMAT(p.estimate_date, '%%Y-%%m') = '%s'
-            ORDER BY p.estimate_date ASC, company_name ASC, p.id ASC",
-                $companyLabel,
-                $branchExpr,
-                $invoiceAmountExpr,
-                $baseFrom,
-                $baseWhere,
-                $monthEsc
-            );
-        }
-        }
+              AND l.kind = 'estimate'
+              AND l.item_date IS NOT NULL
+              AND COALESCE(gi.group_status, '未発行') IN ('未発行', '請求準備')
+              {$estimatedMonthFilter}
+            ORDER BY estimate_date ASC, company_name ASC, p.id ASC, fee_type ASC, row_key ASC";
+
         $estimatedProjects = $this->fetchAll($estimatedQuery);
         $this->enrichMonthlyRevenueStatsProjects($estimatedProjects);
 
         $invoicedProjects = $this->fetchAll($invoicedQuery);
         $this->enrichMonthlyRevenueStatsProjects($invoicedProjects);
 
-        if ($energySplit) {
-            $appEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('application');
-            $desEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('design');
-            $appInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('application');
-            $desInvAmt = $this->sqlEnergyInvoiceFeeAmountExpr('design');
-            $backlogSelectTpl = "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                %s AS amount,
-                %s AS invoice_amount,
-                p.status,
-                %s AS estimate_status,
-                %s AS invoice_status,
-                p.actual_end_date,
-                p.end_date,
-                p.payment_note,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.teams,
-                '%s' AS fee_type
-            %s
-            WHERE %s
+        // 未請求 (請求待ち・完了): per 種別 with a 発行済 見積 whose 請求 is not done.
+        // amount = 発行済 見積 − 発行済 請求 of that 種別 (what is left to invoice).
+        $backlogQuery = "SELECT
+                {$projectColumns},
+                GREATEST(ge.issued_amount - COALESCE(gi.issued_amount, 0), 0) AS amount,
+                COALESCE(gi.total_amount, 0) AS invoice_amount,
+                ge.group_status AS estimate_status,
+                COALESCE(gi.group_status, '未発行') AS invoice_status,
+                ge.item_type AS fee_type,
+                CONCAT(p.id, ':', ge.item_type) AS row_key
+            {$baseFrom}
+            INNER JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate'
+            LEFT JOIN {$groups} gi ON gi.project_id = p.id AND gi.kind = 'invoice' AND gi.item_type = ge.item_type
+            WHERE {$baseWhere}
               AND p.status IN ('waiting_invoice', 'completed')
-              AND %s IN ('発行済', '発行済み')
-              AND COALESCE(NULLIF(TRIM(%s), ''), '未発行') IN ('未発行', '請求準備')";
-            $backlogQuery = '(' . sprintf(
-                $backlogSelectTpl,
-                $companyLabel, $branchExpr, $appEstAmt, $appInvAmt,
-                'p.estimate_application_status', 'p.invoice_application_status', '申請費',
-                $baseFrom, $baseWhere,
-                'p.estimate_application_status', 'p.invoice_application_status'
-            ) . ') UNION ALL (' . sprintf(
-                $backlogSelectTpl,
-                $companyLabel, $branchExpr, $desEstAmt, $desInvAmt,
-                'p.estimate_design_status', 'p.invoice_design_status', '設計費',
-                $baseFrom, $baseWhere,
-                'p.estimate_design_status', 'p.invoice_design_status'
-            ) . ') ORDER BY (end_date IS NULL) ASC, end_date ASC, company_name ASC, id ASC, fee_type ASC';
-        } else {
-            $backlogQuery = sprintf(
-                "SELECT
-                    p.id,
-                    p.name,
-                    %s AS company_name,
-                    %s AS branch_name,
-                    pp.construction_number AS parent_construction_number,
-                    COALESCE(p.amount, 0) AS amount,
-                    %s AS invoice_amount,
-                    p.status,
-                    p.estimate_status,
-                    p.invoice_status,
-                    p.actual_end_date,
-                    p.end_date,
-                    p.payment_note,
-                    p.caily_nouki,
-                    p.guis_nouki,
-                    p.tantou,
-                    p.project_order_type,
-                    pp.scale AS parent_scale,
-                    pp.type1 AS parent_type1,
-                    pp.type2 AS parent_type2,
-                    p.teams,
-                    NULL AS fee_type
-                %s
-                WHERE %s
-                  AND p.status IN ('waiting_invoice', 'completed')
-                  AND p.invoice_status IN ('未発行', '請求準備')
-                  AND p.estimate_status IN ('発行済', '発行済み')
-                ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC",
-                $companyLabel,
-                $branchExpr,
-                $invoiceAmountExpr,
-                $baseFrom,
-                $baseWhere
-            );
-        }
+              AND ge.issued_count > 0
+              AND COALESCE(gi.group_status, '未発行') IN ('未発行', '請求準備')
+            ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC, fee_type ASC";
         $completedUninvoiced = $this->fetchAll($backlogQuery);
         $this->enrichMonthlyRevenueStatsProjects($completedUninvoiced);
 
-        if ($energySplit) {
-            $appEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('application');
-            $desEstAmt = $this->sqlEnergyEstimateFeeAmountExpr('design');
-            $cancelledSelectTpl = "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                %s AS amount,
-                p.status,
-                %s AS estimate_status,
-                p.actual_end_date,
-                p.end_date,
-                p.payment_note,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.teams,
-                '%s' AS fee_type
-            %s
-            WHERE %s
+        // キャンセル: per 見積 種別 (a project with no 見積 line: one row, amount 0).
+        // 見積済みのみ: the 種別 has a 発行済 見積 line.
+        $cancelledEstimatedWhere = $cancelledEstimatedOnly ? 'AND ge.issued_count > 0' : '';
+        $cancelledMonthFilter = $cancelledAllTime
+            ? ''
+            : "AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date), '%Y-%m') = '{$monthEsc}'";
+        $cancelledQuery = "SELECT
+                {$projectColumns},
+                COALESCE(ge.total_amount, 0) AS amount,
+                COALESCE(ge.group_status, '未発行') AS estimate_status,
+                ge.item_type AS fee_type,
+                CONCAT(p.id, ':', COALESCE(ge.item_type, '')) AS row_key
+            {$baseFrom}
+            LEFT JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate'
+            WHERE {$baseWhere}
               AND p.status = 'cancelled'
-              %s
-              %s";
-            $cancelledEstFilterApp = $cancelledEstimatedOnly
-                ? "AND p.estimate_application_status IN ('発行済', '発行済み')"
-                : '';
-            $cancelledEstFilterDes = $cancelledEstimatedOnly
-                ? "AND p.estimate_design_status IN ('発行済', '発行済み')"
-                : '';
-            $cancelledMonthFilter = $cancelledAllTime
-                ? ''
-                : "AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date), '%Y-%m') = '{$monthEsc}'";
-            $cancelledQuery = '(' . sprintf(
-                $cancelledSelectTpl,
-                $companyLabel, $branchExpr, $appEstAmt,
-                'p.estimate_application_status', '申請費',
-                $baseFrom, $baseWhere,
-                $cancelledEstFilterApp, $cancelledMonthFilter
-            ) . ') UNION ALL (' . sprintf(
-                $cancelledSelectTpl,
-                $companyLabel, $branchExpr, $desEstAmt,
-                'p.estimate_design_status', '設計費',
-                $baseFrom, $baseWhere,
-                $cancelledEstFilterDes, $cancelledMonthFilter
-            ) . ') ORDER BY company_name ASC, (end_date IS NULL) ASC, end_date ASC, id ASC, fee_type ASC';
-        } elseif ($cancelledAllTime) {
-            $cancelledQuery = sprintf(
-                "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                COALESCE(p.amount, 0) AS amount,
-                p.status,
-                p.estimate_status,
-                p.actual_end_date,
-                p.end_date,
-                p.payment_note,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.teams,
-                NULL AS fee_type
-            %s
-            WHERE %s
-              AND p.status = 'cancelled'
-              %s
-            ORDER BY company_name ASC, (p.end_date IS NULL) ASC, p.end_date ASC, p.id ASC",
-                $companyLabel,
-                $branchExpr,
-                $baseFrom,
-                $baseWhere,
-                $cancelledEstimatedWhere
-            );
-        } else {
-            $cancelledQuery = sprintf(
-                "SELECT
-                p.id,
-                p.name,
-                %s AS company_name,
-                %s AS branch_name,
-                pp.construction_number AS parent_construction_number,
-                COALESCE(p.amount, 0) AS amount,
-                p.status,
-                p.estimate_status,
-                p.actual_end_date,
-                p.end_date,
-                p.payment_note,
-                p.caily_nouki,
-                p.guis_nouki,
-                p.tantou,
-                p.project_order_type,
-                pp.scale AS parent_scale,
-                pp.type1 AS parent_type1,
-                pp.type2 AS parent_type2,
-                p.teams,
-                NULL AS fee_type
-            %s
-            WHERE %s
-              AND p.status = 'cancelled'
-              %s
-              AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date), '%%Y-%%m') = '%s'
-            ORDER BY company_name ASC, (p.end_date IS NULL) ASC, p.end_date ASC, p.id ASC",
-                $companyLabel,
-                $branchExpr,
-                $baseFrom,
-                $baseWhere,
-                $cancelledEstimatedWhere,
-                $monthEsc
-            );
-        }
+              {$cancelledEstimatedWhere}
+              {$cancelledMonthFilter}
+            ORDER BY company_name ASC, (p.end_date IS NULL) ASC, p.end_date ASC, p.id ASC, fee_type ASC";
         $cancelledProjects = $this->fetchAll($cancelledQuery);
         $this->enrichMonthlyRevenueStatsProjects($cancelledProjects);
 
-        if ($energySplit) {
-            $monthsQuery = sprintf(
-                "SELECT DISTINCT month_value AS month,
-                    DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%%Y-%%m-%%d'), '%%Y年%%m月') AS month_label
-                FROM (
-                    SELECT DATE_FORMAT(p.invoice_application_date, '%%Y-%%m') AS month_value
-                    FROM {$this->table} p
-                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.invoice_application_date IS NOT NULL
-                    UNION
-                    SELECT DATE_FORMAT(p.invoice_design_date, '%%Y-%%m') AS month_value
-                    FROM {$this->table} p
-                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.invoice_design_date IS NOT NULL
-                    UNION
-                    SELECT DATE_FORMAT(p.estimate_application_date, '%%Y-%%m') AS month_value
-                    FROM {$this->table} p
-                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.estimate_application_date IS NOT NULL
-                    UNION
-                    SELECT DATE_FORMAT(p.estimate_design_date, '%%Y-%%m') AS month_value
-                    FROM {$this->table} p
-                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.estimate_design_date IS NOT NULL
-                    UNION
-                    SELECT DATE_FORMAT(p.payment_date, '%%Y-%%m') AS month_value
-                    FROM {$this->table} p
-                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.payment_date IS NOT NULL
-                ) months
-                WHERE month_value IS NOT NULL AND month_value != ''
-                ORDER BY month_value DESC
-                LIMIT 24",
-                $deptId, $deptId, $deptId, $deptId, $deptId
-            );
-        } else {
-            $monthsQuery = sprintf(
-                "SELECT DISTINCT month_value AS month,
-                    DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%%Y-%%m-%%d'), '%%Y年%%m月') AS month_label
-                FROM (
-                    SELECT DATE_FORMAT(p.invoice_date, '%%Y-%%m') AS month_value
-                    FROM {$this->table} p
-                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.invoice_date IS NOT NULL
-                    UNION
-                    SELECT DATE_FORMAT(p.payment_date, '%%Y-%%m') AS month_value
-                    FROM {$this->table} p
-                    WHERE p.department_id = %d AND p.status != 'deleted' AND p.payment_date IS NOT NULL
-                ) months
-                WHERE month_value IS NOT NULL AND month_value != ''
-                ORDER BY month_value DESC
-                LIMIT 24",
-                $deptId,
-                $deptId
-            );
-        }
+        $monthsQuery = "SELECT DISTINCT month_value AS month,
+                DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%Y-%m-%d'), '%Y年%m月') AS month_label
+            FROM (
+                SELECT DATE_FORMAT(l.item_date, '%Y-%m') AS month_value
+                FROM {$lines} l
+                WHERE l.item_date IS NOT NULL
+                UNION
+                SELECT DATE_FORMAT(p.payment_date, '%Y-%m') AS month_value
+                FROM {$this->table} p
+                WHERE p.department_id = {$deptId} AND p.status != 'deleted' AND p.payment_date IS NOT NULL
+            ) months
+            WHERE month_value IS NOT NULL AND month_value != ''
+            ORDER BY month_value DESC
+            LIMIT 24";
         $availableMonths = $this->fetchAll($monthsQuery);
 
         return [
@@ -6685,21 +6310,22 @@ class Project extends ApplicationModel {
         $companyLabel = $this->sqlMonthlyRevenueCompanyLabel();
         $branchExpr = $this->sqlEffectiveBranchName();
         $contactExpr = $this->sqlEffectiveContactName();
-        $invoiceAmountExpr = "CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END";
+
+        // 請求済み = the project has a 発行済 請求 line (in the 請求月 when filtered). 入金 is per
+        // project, so one row per project: 請求金額 = sum of those lines, 請求日 = the latest.
+        $lines = $this->sqlRevenuePaymentLines($deptId, $this->isEnergyDepartmentById($deptId));
+        $issuedMonth = ($filterKeyword === '' && $filterInvoiceMonth !== '') ? $filterInvoiceMonth : null;
+        $baseFrom .= "\n            INNER JOIN " . $this->sqlIssuedInvoiceByProject($lines, $issuedMonth) . " inv ON inv.project_id = p.id";
+        $invoiceAmountExpr = 'inv.invoice_amount';
 
         $whereArr = [
             "p.department_id = {$deptId}",
             "p.status != 'deleted'",
-            "p.invoice_status IN ('発行済', '発行済み')",
-            "p.invoice_date IS NOT NULL",
         ];
 
         if ($filterKeyword !== '') {
             $whereArr[] = $this->buildKeywordFilterWhere($filterKeyword);
         } else {
-            if ($filterInvoiceMonth !== '') {
-                $whereArr[] = "DATE_FORMAT(p.invoice_date, '%Y-%m') = '" . $this->escape($filterInvoiceMonth) . "'";
-            }
             if ($filterPaymentMonth !== '') {
                 $whereArr[] = "p.payment_date IS NOT NULL AND DATE_FORMAT(p.payment_date, '%Y-%m') = '" . $this->escape($filterPaymentMonth) . "'";
             }
@@ -6794,8 +6420,9 @@ class Project extends ApplicationModel {
                 %s AS branch_name,
                 %s AS contact_name,
                 pp.construction_number AS parent_construction_number,
-                p.invoice_status,
-                p.invoice_date,
+                '発行済' AS invoice_status,
+                inv.invoice_date,
+                inv.line_count AS invoice_line_count,
                 p.invoice_number,
                 %s AS invoice_amount,
                 p.payment_status,
@@ -6811,7 +6438,7 @@ class Project extends ApplicationModel {
                 p.teams
              %s
              WHERE %s
-             ORDER BY p.invoice_date ASC, company_name ASC, p.id ASC
+             ORDER BY inv.invoice_date ASC, company_name ASC, p.id ASC
              LIMIT %d, %d",
             $companyLabel,
             $branchExpr,
@@ -6824,6 +6451,7 @@ class Project extends ApplicationModel {
         );
         $projects = $this->fetchAll($listQuery);
         $this->enrichMonthlyRevenueStatsProjects($projects);
+        $this->attachIssuedInvoiceLines($projects, $lines, $issuedMonth);
 
         return [
             'status' => 'success',
@@ -6868,7 +6496,9 @@ class Project extends ApplicationModel {
         $baseFrom = $this->getMonthlyRevenueStatsBaseFromSql();
         $companyLabel = $this->sqlMonthlyRevenueCompanyLabel();
         $branchExpr = $this->sqlEffectiveBranchName();
-        $invoiceAmountExpr = "CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END";
+        $lines = $this->sqlRevenuePaymentLines($deptId, $this->isEnergyDepartmentById($deptId));
+        $baseFrom .= "\n            LEFT JOIN " . $this->sqlIssuedInvoiceByProject($lines) . " inv ON inv.project_id = p.id";
+        $invoiceAmountExpr = "COALESCE(inv.invoice_amount, CASE WHEN COALESCE(p.invoice_amount, 0) > 0 THEN p.invoice_amount ELSE COALESCE(p.amount, 0) END)";
 
         $whereArr = [
             "p.department_id = {$deptId}",
@@ -6893,7 +6523,7 @@ class Project extends ApplicationModel {
                 %s AS company_name,
                 %s AS branch_name,
                 pp.construction_number AS parent_construction_number,
-                p.invoice_date,
+                COALESCE(inv.invoice_date, p.invoice_date) AS invoice_date,
                 p.invoice_number,
                 %s AS invoice_amount,
                 p.payment_status,
@@ -7056,6 +6686,55 @@ class Project extends ApplicationModel {
         ];
     }
 
+    /**
+     * Derived table per project of its 発行済 請求 lines ($month 'Y-m': only lines dated then):
+     * project_id, invoice_amount (sum), invoice_date (latest), line_count.
+     */
+    private function sqlIssuedInvoiceByProject($linesSql, $month = null) {
+        return "(SELECT il.project_id,
+                SUM(COALESCE(il.amount, 0)) AS invoice_amount,
+                MAX(il.item_date) AS invoice_date,
+                COUNT(*) AS line_count
+            FROM {$linesSql} il
+            WHERE " . $this->sqlIssuedInvoiceLineWhere('il', $month) . "
+            GROUP BY il.project_id)";
+    }
+
+    private function sqlIssuedInvoiceLineWhere($alias, $month = null) {
+        $where = "{$alias}.kind = 'invoice' AND {$alias}.status = '発行済' AND {$alias}.item_date IS NOT NULL";
+        if ($month !== null) {
+            $where .= " AND DATE_FORMAT({$alias}.item_date, '%Y-%m') = '" . $this->escape($month) . "'";
+        }
+        return $where;
+    }
+
+    /** Adds `invoice_lines` [{item_date, item_type, amount}] (発行済 請求, by date) to each row. */
+    private function attachIssuedInvoiceLines(array &$projects, $linesSql, $month = null) {
+        $ids = [];
+        foreach ($projects as $row) {
+            $ids[] = intval($row['id']);
+        }
+        $byProject = [];
+        if (!empty($ids)) {
+            $rows = $this->fetchAll("SELECT il.project_id, il.item_date, il.item_type, il.amount
+                FROM {$linesSql} il
+                WHERE " . $this->sqlIssuedInvoiceLineWhere('il', $month) . "
+                  AND il.project_id IN (" . implode(',', array_unique($ids)) . ")
+                ORDER BY il.item_date ASC, il.line_id ASC");
+            foreach ((is_array($rows) ? $rows : []) as $r) {
+                $byProject[intval($r['project_id'])][] = [
+                    'item_date' => (string)$r['item_date'],
+                    'item_type' => (string)$r['item_type'],
+                    'amount' => floatval($r['amount']),
+                ];
+            }
+        }
+        foreach ($projects as &$row) {
+            $row['invoice_lines'] = $byProject[intval($row['id'])] ?? [];
+        }
+        unset($row);
+    }
+
     // ---------------------------------------------------------------------
     // 決済明細 (payment items): 見積 / 請求 each hold any number of lines
     // { item_date, item_type (free tag), amount (税抜), status }.
@@ -7139,9 +6818,16 @@ class Project extends ApplicationModel {
             || $this->normalizePaymentItemStatus($status) !== '未発行';
     }
 
-    private function legacyPaymentItem($kind, $type, $amount, $date, $status, $order) {
+    /**
+     * $fallbackAmount: used when a 発行済 line has no amount (old 請求 rows were often
+     * saved without one; the stats then took the 見積 amount).
+     */
+    private function legacyPaymentItem($kind, $type, $amount, $date, $status, $order, $fallbackAmount = null) {
         $status = $this->normalizePaymentItemStatus($status);
         $waived = $status === '無償' || $status === '対象外';
+        if ($status === '発行済' && floatval($amount) <= 0 && floatval($fallbackAmount) > 0) {
+            $amount = $fallbackAmount;
+        }
         return [
             'id' => null,
             'kind' => $kind,
@@ -7165,7 +6851,7 @@ class Project extends ApplicationModel {
                 $items[] = $this->legacyPaymentItem('estimate', self::PAYMENT_ITEM_DEFAULT_LEGACY_TYPE, $p['amount'] ?? null, $p['estimate_date'] ?? '', $p['estimate_status'] ?? '', 1);
             }
             if ($this->isMeaningfulLegacyPaymentValue($p['invoice_amount'] ?? null, $p['invoice_date'] ?? '', $p['invoice_status'] ?? '')) {
-                $items[] = $this->legacyPaymentItem('invoice', self::PAYMENT_ITEM_DEFAULT_LEGACY_TYPE, $p['invoice_amount'] ?? null, $p['invoice_date'] ?? '', $p['invoice_status'] ?? '', 1);
+                $items[] = $this->legacyPaymentItem('invoice', self::PAYMENT_ITEM_DEFAULT_LEGACY_TYPE, $p['invoice_amount'] ?? null, $p['invoice_date'] ?? '', $p['invoice_status'] ?? '', 1, $p['amount'] ?? null);
             }
             return $items;
         }
@@ -7173,6 +6859,7 @@ class Project extends ApplicationModel {
             'estimate' => ['amount', 'estimate_date', 'estimate_status'],
             'invoice' => ['invoice_amount', 'invoice_date', 'invoice_status'],
         ];
+        $estimateFeeAmount = ['申請費' => null, '設計費' => $p['estimate_design_amount'] ?? null];
         foreach ($legacyKeys as $kind => $legacy) {
             $a = $p[$kind . '_application_amount'] ?? null;
             $d = $p[$kind . '_application_date'] ?? '';
@@ -7182,14 +6869,17 @@ class Project extends ApplicationModel {
                 $d = $p[$legacy[1]] ?? '';
                 $s = $p[$legacy[2]] ?? '';
             }
+            if ($kind === 'estimate') {
+                $estimateFeeAmount['申請費'] = $a;
+            }
             if ($this->isMeaningfulLegacyPaymentValue($a, $d, $s)) {
-                $items[] = $this->legacyPaymentItem($kind, '申請費', $a, $d, $s, 1);
+                $items[] = $this->legacyPaymentItem($kind, '申請費', $a, $d, $s, 1, $kind === 'invoice' ? $estimateFeeAmount['申請費'] : null);
             }
             $a = $p[$kind . '_design_amount'] ?? null;
             $d = $p[$kind . '_design_date'] ?? '';
             $s = $p[$kind . '_design_status'] ?? '';
             if ($this->isMeaningfulLegacyPaymentValue($a, $d, $s)) {
-                $items[] = $this->legacyPaymentItem($kind, '設計費', $a, $d, $s, 2);
+                $items[] = $this->legacyPaymentItem($kind, '設計費', $a, $d, $s, 2, $kind === 'invoice' ? $estimateFeeAmount['設計費'] : null);
             }
         }
         return $items;
@@ -7225,6 +6915,53 @@ class Project extends ApplicationModel {
             ];
         }
         return $items;
+    }
+
+    /**
+     * Adds `payment_items` to each project row (one query for all rows). Rows with no
+     * stored lines get the lines built from their legacy columns, as getById does.
+     * A row's `department_name` decides 省エネ when present.
+     */
+    public function attachPaymentItems(array &$projects) {
+        $ids = [];
+        foreach ($projects as $p) {
+            if (!empty($p['id'])) {
+                $ids[] = intval($p['id']);
+            }
+        }
+        $byProject = [];
+        if (!empty($ids)) {
+            $this->ensurePaymentItemsTable();
+            $rows = $this->fetchAll(sprintf(
+                "SELECT id, project_id, kind, item_date, item_type, amount, status, sort_order FROM `%s`
+                 WHERE project_id IN (%s) ORDER BY project_id, FIELD(kind, 'estimate', 'invoice'), sort_order, id",
+                $this->paymentItemsTable(),
+                implode(',', array_unique($ids))
+            ));
+            foreach ((is_array($rows) ? $rows : []) as $r) {
+                $byProject[intval($r['project_id'])][] = [
+                    'id' => intval($r['id']),
+                    'kind' => $r['kind'],
+                    'item_date' => !empty($r['item_date']) ? (string)$r['item_date'] : '',
+                    'item_type' => (string)$r['item_type'],
+                    'amount' => ($r['amount'] === null || $r['amount'] === '') ? null : floatval($r['amount']),
+                    'status' => $this->normalizePaymentItemStatus($r['status']),
+                    'sort_order' => intval($r['sort_order']),
+                ];
+            }
+        }
+        foreach ($projects as &$p) {
+            $pid = intval($p['id'] ?? 0);
+            if (isset($byProject[$pid])) {
+                $p['payment_items'] = $byProject[$pid];
+                continue;
+            }
+            $isEnergy = array_key_exists('department_name', $p)
+                ? mb_strpos((string)$p['department_name'], '省エネ') !== false
+                : $this->isEnergyDepartmentById($p['department_id'] ?? 0);
+            $p['payment_items'] = $this->buildPaymentItemsFromLegacy($p, $isEnergy);
+        }
+        unset($p);
     }
 
     /** Whitelist for the 種別 tag input: types saved so far (most used first) + the legacy fee types. */
@@ -7639,6 +7376,18 @@ class Project extends ApplicationModel {
                     foreach (array_keys($this->derivePaymentLegacyFields([], true)) as $key) {
                         $response['derived'][$key] = $saved[$key] ?? null;
                     }
+                }
+            }
+            // 見積 total changed (e.g. a 決済明細 line edited): re-split the drawing prices of a
+            // child project, as update() does — the task / drawing pages price from p.amount.
+            if (array_key_exists('amount', $data) || in_array('amount', $nullAmountFields, true)) {
+                $isChild = !empty($old['parent_project_id']) && (int)$old['parent_project_id'] > 0;
+                $oldAmount = isset($old['amount']) ? floatval($old['amount']) : 0;
+                $newAmount = array_key_exists('amount', $data) ? floatval($data['amount']) : 0;
+                if ($isChild && abs($oldAmount - $newAmount) > 0.0001) {
+                    require_once __DIR__ . '/drawing.php';
+                    $drawingModel = new Drawing();
+                    $drawingModel->autoCalculateAllDrawingPricesForProject($id);
                 }
             }
             $this->logBusinessDocumentChanges($id, $old, $data, array_merge($nullDatetimeFields, $nullAmountFields));

@@ -363,7 +363,7 @@ if (!$canAccessRevenueStats) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in group.projects" :key="p.id + '-' + (p.fee_type || '')">
+                                    <tr v-for="p in group.projects" :key="p.row_key || (p.id + '-' + (p.fee_type || ''))">
                                         <td>{{ p.id }}</td>
                                         <td class="revenue-stats-cell-name" :title="p.name"><a :href="'detail.php?id=' + p.id" target="_blank">{{ p.name }}</a></td>
                                         <td class="revenue-stats-cell-text" :title="p.branch_name">{{ p.branch_name || '—' }}</td>
@@ -467,7 +467,7 @@ if (!$canAccessRevenueStats) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in group.projects" :key="p.id + '-' + (p.fee_type || '')">
+                                    <tr v-for="p in group.projects" :key="p.row_key || (p.id + '-' + (p.fee_type || ''))">
                                         <td>{{ p.id }}</td>
                                         <td class="revenue-stats-cell-name" :title="p.name"><a :href="'detail.php?id=' + p.id" target="_blank">{{ p.name }}</a></td>
                                         <td class="revenue-stats-cell-text" :title="p.branch_name">{{ p.branch_name || '—' }}</td>
@@ -577,7 +577,7 @@ if (!$canAccessRevenueStats) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in group.projects" :key="p.id + '-' + (p.fee_type || '')">
+                                    <tr v-for="p in group.projects" :key="p.row_key || (p.id + '-' + (p.fee_type || ''))">
                                         <td>{{ p.id }}</td>
                                         <td class="revenue-stats-cell-name" :title="p.name"><a :href="'detail.php?id=' + p.id" target="_blank">{{ p.name }}</a></td>
                                         <td class="revenue-stats-cell-text" :title="p.branch_name">{{ p.branch_name || '—' }}</td>
@@ -686,7 +686,7 @@ if (!$canAccessRevenueStats) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="p in group.projects" :key="p.id + '-' + (p.fee_type || '')">
+                                    <tr v-for="p in group.projects" :key="p.row_key || (p.id + '-' + (p.fee_type || ''))">
                                         <td>{{ p.id }}</td>
                                         <td class="revenue-stats-cell-name" :title="p.name"><a :href="'detail.php?id=' + p.id" target="_blank">{{ p.name }}</a></td>
                                         <td class="revenue-stats-cell-text" :title="p.branch_name">{{ p.branch_name || '—' }}</td>

@@ -277,19 +277,19 @@
             + '<div class="pi-editor" :class="\'pi-editor-\' + kind">'
             + '  <datalist :id="listId"><option v-for="t in typeOptions" :key="t" :value="t"></option></datalist>'
             + '  <div v-if="pendingCount" class="pi-pending-summary" role="status">'
-            + '    <i class="fa fa-exclamation-triangle me-1"></i>{{ t("状態が未更新の明細") }}: {{ pendingCount }}{{ t("件") }}</div>'
+            + '    <i class="fa fa-exclamation-circle me-1"></i>{{ t("状態が未更新の明細") }}: {{ pendingCount }}{{ t("件") }}</div>'
             + '  <div v-if="!items.length" class="pi-empty text-muted">{{ t("明細なし") }}</div>'
-            + '  <div v-for="(item, idx) in items" :key="keyOf(item)" class="pi-line" :class="[\'pi-status-\' + colorOf(item.status), { \'pi-line-pending\': isPending(item) }]">'
+            + '  <div v-for="(item, idx) in items" :key="keyOf(item)" class="pi-line" :class="{ \'pi-line-pending\': isPending(item) }">'
             + '    <div class="pi-line-row">'
             + '      <input v-if="editable" type="text" class="form-control form-control-sm pi-type" :list="listId" maxlength="100"'
             + '             v-model="item.item_type" :placeholder="t(\'種別\')" @change="emitChange">'
             + '      <span v-else class="pi-type-badge" :class="{ \'pi-type-none\': !item.item_type }">{{ item.item_type || t("種別なし") }}</span>'
-            + '      <select v-if="editable" class="form-select form-select-sm pi-status" :class="\'text-\' + colorOf(item.status)"'
+            + '      <select v-if="editable" class="form-select form-select-sm pi-status"'
             + '              :value="normStatus(item.status)" @change="selectStatus(item, $event)">'
             + '        <option v-for="s in statusOptions" :key="s.value" :value="s.value"'
             + '                :disabled="s.value === \'発行済\' && !isComplete(item)">{{ t(s.label) }}</option>'
             + '      </select>'
-            + '      <span v-else class="badge" :class="\'bg-label-\' + colorOf(item.status)">{{ t(normStatus(item.status)) }}</span>'
+            + '      <span v-else class="pi-status-text">{{ t(normStatus(item.status)) }}</span>'
             + '      <button v-if="editable" type="button" class="btn btn-sm btn-icon btn-text-secondary pi-remove" :title="t(\'削除\')" @click="removeItem(item)">'
             + '        <i class="fa fa-times"></i></button>'
             + '    </div>'
@@ -310,14 +310,14 @@
             + '    <div v-if="editable && normStatus(item.status) !== \'発行済\' && !isWaived(item.status) && !isComplete(item)" class="pi-hint">'
             + '      {{ t("発行済にするには{fields}が必要です").replace("{fields}", t(dateLabel) + "・" + t("金額")) }}</div>'
             + '    <div v-if="isPending(item)" class="pi-pending">'
-            + '      <span><i class="fa fa-exclamation-triangle me-1"></i>{{ t("日付・金額は入力済みですが、状態が「{status}」のままです").replace("{status}", t(normStatus(item.status))) }}</span>'
-            + '      <button v-if="editable" type="button" class="btn btn-xs btn-success pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
+            + '      <span><i class="fa fa-exclamation-circle me-1"></i>{{ t("状態が「{status}」のままです").replace("{status}", t(normStatus(item.status))) }}</span>'
+            + '      <button v-if="editable" type="button" class="btn btn-link btn-sm pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
             + '    </div>'
             + '  </div>'
             + '  <div class="pi-footer">'
             + '    <div class="pi-actions" v-if="editable">'
-            + '      <button type="button" class="btn btn-sm btn-outline-primary" @click="addItem()"><i class="fa fa-plus me-1"></i>{{ t("明細を追加") }}</button>'
-            + '      <button v-if="kind === \'invoice\' && canCopyFromEstimate" type="button" class="btn btn-sm btn-outline-secondary" :title="t(\'見積の明細を請求にコピー\')" @click="copyFromEstimate">{{ t("見積からコピー") }}</button>'
+            + '      <button type="button" class="btn btn-sm btn-link" @click="addItem()"><i class="fa fa-plus me-1"></i>{{ t("明細を追加") }}</button>'
+            + '      <button v-if="kind === \'invoice\' && canCopyFromEstimate" type="button" class="btn btn-sm btn-link text-secondary" :title="t(\'見積の明細を請求にコピー\')" @click="copyFromEstimate">{{ t("見積からコピー") }}</button>'
             + '    </div>'
             + '    <div class="pi-total" v-if="items.length">'
             + '      <span class="pi-total-label">{{ t("合計(税抜き)") }}</span> <strong>{{ yen(total || 0) }}</strong>'
@@ -378,14 +378,6 @@
             isComplete: isLineComplete,
             isEmptyAmount: function (item) {
                 return isEmpty(item.amount);
-            },
-            colorOf: function (status) {
-                var s = normalizeStatus(status);
-                var all = this.statusOptions;
-                for (var i = 0; i < all.length; i++) {
-                    if (all[i].value === s) return all[i].color;
-                }
-                return 'secondary';
             },
             emitChange: function () {
                 this.$emit('change');

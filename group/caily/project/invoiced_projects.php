@@ -248,7 +248,15 @@ if (!$canAccess) {
                                     <td>{{ p.tantou || '—' }}</td>
                                     <td>{{ p.project_order_type || '—' }}</td>
                                     <td>{{ formatDate(p.invoice_date) }}</td>
-                                    <td class="text-end fw-semibold">{{ formatCurrency(p.invoice_amount) }}</td>
+                                    <td class="text-end fw-semibold">
+                                        {{ formatCurrency(p.invoice_amount) }}
+                                        <div v-if="p.invoice_lines && p.invoice_lines.length > 1" class="invoiced-lines">
+                                            <div v-for="(line, li) in p.invoice_lines" :key="li">
+                                                {{ formatDate(line.item_date) }}<span v-if="line.item_type" class="ms-1">{{ line.item_type }}</span>
+                                                <span class="ms-1">{{ formatCurrency(line.amount) }}</span>
+                                            </div>
+                                        </div>
+                                    </td>
                                     <td class="invoiced-cell-text" :title="p.invoice_number">{{ p.invoice_number || '—' }}</td>
                                     <td>
                                         <span class="badge invoiced-payment-badge" :class="paymentStatusClass(p.payment_status)">{{ p.payment_status || '—' }}</span>
@@ -703,6 +711,14 @@ $view->footing();
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
     overflow: hidden;
+}
+/* 決済明細: issued 請求 lines under the total when there are several */
+.invoiced-lines {
+    margin-top: 2px;
+    font-size: 0.75rem;
+    font-weight: normal;
+    color: var(--bs-secondary-color, #6c757d);
+    white-space: nowrap;
 }
 .invoiced-cell-text {
     max-width: 10rem;

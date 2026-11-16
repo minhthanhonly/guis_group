@@ -673,8 +673,16 @@
             currentYearMonthValue() {
                 return currentYearMonth();
             },
+            // 種類 column: always for 省エネ; elsewhere once a 決済明細 line carries a 種別
+            // other than the default 設計費 (old data is all 設計費, so the column stays hidden).
             showEnergyFeeType() {
-                return !!this.isEnergyDepartment;
+                if (this.isEnergyDepartment) return true;
+                const lists = [this.invoicedProjects, this.estimatedProjects, this.completedUninvoiced, this.cancelledProjects];
+                return lists.some(function(list) {
+                    return (list || []).some(function(p) {
+                        return !!p.fee_type && p.fee_type !== '設計費';
+                    });
+                });
             },
             estimatedGroups() {
                 return groupProjectsByCompany(this.filteredEstimatedProjects, ['amount']);

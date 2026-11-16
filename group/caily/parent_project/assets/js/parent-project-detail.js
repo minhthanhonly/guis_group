@@ -313,6 +313,7 @@ const BUSINESS_DOCUMENT_FIELDS = [
     'payment_amount',
     'receipt_number',
     'payment_note',
+    'payment_items',
 ];
 
 const BUSINESS_DOCUMENT_DATE_FIELDS = [
@@ -3315,6 +3316,20 @@ createApp({
         },
         getChildProjectPaymentLines(project) {
             if (!project) return [];
+            // 決済明細: one row per line (見積 lines first, then 請求)
+            if (Array.isArray(project.payment_items)) {
+                return project.payment_items.map((item, idx) => {
+                    const kindLabel = this.translateLabel(item.kind === 'invoice' ? '請求' : '見積');
+                    const meta = this.getChildProjectPaymentStatusMeta(item.kind, item.status);
+                    return {
+                        key: item.kind + '_' + (item.id || 'n' + idx),
+                        label: kindLabel + (item.item_type ? ' ' + item.item_type : ''),
+                        statusLabel: meta.label,
+                        badgeClass: meta.badgeClass,
+                        amount: Number(item.amount) || 0,
+                    };
+                });
+            }
             const Energy = window.EnergyFeePayment;
             if (Energy && Energy.isEnergyProject && Energy.isEnergyProject(project)) {
                 // 省エネ: 見積 / 請求 are each split into 申請費 and 設計費

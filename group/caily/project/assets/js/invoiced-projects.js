@@ -1153,6 +1153,17 @@
                 project.payment_status = project.payment_status || '未入金';
                 project.payment_amount = project.payment_amount != null ? Number(project.payment_amount) : 0;
                 project.invoice_amount = project.invoice_amount != null ? Number(project.invoice_amount) : 0;
+                // 決済明細: 請求金額 = the 発行済 請求 lines only (invoice_amount sums every 請求 line).
+                if (Array.isArray(project.payment_items)) {
+                    const issued = project.payment_items.filter(function(it) {
+                        return it.kind === 'invoice' && it.status === '発行済';
+                    });
+                    if (issued.length) {
+                        project.invoice_amount = issued.reduce(function(sum, it) {
+                            return sum + (Number(it.amount) || 0);
+                        }, 0);
+                    }
+                }
                 if (!project.payment_date || !String(project.payment_date).trim()) {
                     project.payment_date = '';
                 }
