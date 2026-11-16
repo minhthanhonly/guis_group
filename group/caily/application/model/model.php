@@ -688,6 +688,45 @@ class Model extends Connection {
 		return $this->update_query($query);
 	}
 
+	/**
+	 * query_update() that also adds 1 to the optimistic-lock column in the same statement,
+	 * so an edit form loaded before this write fails its version check instead of silently
+	 * overwriting it. With $expectedVersion the row is written only while it still has that
+	 * version (0 affected rows = someone else saved first).
+	 *
+	 * @return int affected rows
+	 */
+	function query_update_versioned($data, $where, $expectedVersion = null, $versionColumn = 'version') {
+		$array = array();
+		foreach ($data as $key => $value) {
+			if ($key === $versionColumn) {
+				continue;
+			}
+			if(!in_array($key, $this->donotquote)){
+				$array[] = $key." = '".$this->quote((string)$value)."'";
+			} else {
+				if($value == '' || $value == null) $value = 0;
+				$array[] = $key." = ".(is_numeric($value) ? $value : "'".$this->quote((string)$value)."'");
+			}
+		}
+		$array[] = "`".$versionColumn."` = `".$versionColumn."` + 1";
+		$whereClause = array();
+		foreach ($where as $key => $value) {
+			$whereClause[] = $key." = ".intval($value);
+		}
+		if ($expectedVersion !== null) {
+			$whereClause[] = "`".$versionColumn."` = ".intval($expectedVersion);
+		}
+		$query = "UPDATE ".$this->table." SET ".implode(",", $array)." WHERE ".implode(" AND ", $whereClause);
+		return $this->update_query($query);
+	}
+
+	/** Current optimistic-lock version of one row (1 when the row or column is missing). */
+	function fetchRowVersion($id, $versionColumn = 'version') {
+		$row = $this->fetchOne(sprintf("SELECT `%s` AS v FROM %s WHERE id = %d", $versionColumn, $this->table, intval($id)));
+		return ($row && isset($row['v'])) ? intval($row['v']) : 1;
+	}
+
 	function query_delete($where, $table = null) {
 		if($table){
 			$this->table = $table;

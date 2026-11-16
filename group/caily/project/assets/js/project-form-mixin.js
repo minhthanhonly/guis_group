@@ -346,6 +346,23 @@
         }
     }
 
+    /**
+     * Quick edits (status / priority / progress / tags) save one value without a version
+     * check but add 1 to the project version. Take the new version only when this page's
+     * own write is the only one since the page loaded (exactly +1): a bigger jump means
+     * someone else saved too, and the next full save must report that conflict instead of
+     * overwriting their change with this page's older data.
+     */
+    function applyQuickEditVersionFromResponse(project, responseData) {
+        if (!project || !responseData || typeof responseData !== 'object' || responseData.version == null) {
+            return;
+        }
+        const next = normalizeProjectVersion(responseData.version);
+        if (next === normalizeProjectVersion(project.version) + 1) {
+            project.version = next;
+        }
+    }
+
     function applyPaymentVersionFromResponse(project, responseData) {
         if (project && responseData && responseData.payment_version != null) {
             project.payment_version = normalizeProjectVersion(responseData.payment_version);
@@ -1542,6 +1559,7 @@
                     formData.append('priority', this.project.priority);
                     const response = await axios.post('/api/index.php?model=project&method=updatePriority', formData);
                     if (this.isQuickEditSaved(response.data)) {
+                        applyQuickEditVersionFromResponse(this.project, response.data);
                         this.markInlineSave('basic', 'saved');
                     } else {
                         showMessage('優先度の更新に失敗しました。', true);
@@ -1605,6 +1623,7 @@
                     formData.append('progress', this.project.progress);
                     const response = await axios.post('/api/index.php?model=project&method=updateProgress', formData);
                     if (this.isQuickEditSaved(response.data)) {
+                        applyQuickEditVersionFromResponse(this.project, response.data);
                         this.markInlineSave('basic', 'saved');
                     } else {
                         showMessage('進捗率の更新に失敗しました。', true);
@@ -1687,7 +1706,8 @@
                     const formData = new FormData();
                     formData.append('id', this.projectId);
                     formData.append('tags', this.project.tags || '');
-                    await axios.post('/api/index.php?model=project&method=updatePojectTags', formData);
+                    const response = await axios.post('/api/index.php?model=project&method=updatePojectTags', formData);
+                    applyQuickEditVersionFromResponse(this.project, response && response.data);
                 } catch (error) {
                     console.error('Error saving project tags:', error);
                 }
@@ -2519,7 +2539,13 @@
                     // formData.append('building_type', this.project.building_type);
                     // formData.append('building_number', this.project.building_number);
                     formData.append('project_number', isCreate ? '' : this.project.project_number);
-                    formData.append('progress', this.project.progress);
+                    // 進捗率 is also recalculated from the tasks while the form is open (without a
+                    // version change): send it only when it was changed here, so the form does not
+                    // put back the value it was opened with.
+                    if (isCreate || !this.originalProject
+                        || String(this.originalProject.progress) !== String(this.project.progress)) {
+                        formData.append('progress', this.project.progress);
+                    }
                     formData.append('priority', this.project.priority || (isCreate ? 'medium' : ''));
                     formData.append('status', this.project.status);
                     // Use Tagify current value (kể cả khi rỗng) hoặc project khi chưa có tagify

@@ -73,7 +73,9 @@
             requests: '',
             materials: '',
             materials_memo: '',
-            features: ''
+            features: '',
+            // optimistic lock: the row version this form was loaded from (sent back on save)
+            version: 1
         };
     }
 
@@ -892,6 +894,9 @@
                         var formData = new FormData();
                         if (!creating) {
                             formData.append('id', p.id);
+                            // The server refuses the save when someone else saved the building
+                            // after this form was loaded (instead of overwriting their changes)
+                            formData.append('version', Number(p.version) > 0 ? Number(p.version) : 1);
                         }
                         formData.append('company_name', company);
                         formData.append('branch_name', p.branch_name || '');
@@ -933,6 +938,8 @@
                                 this.applyI18n();
                             }
                             this.notifySaved(savedId);
+                        } else if (!creating && response.data && response.data.error === 'version_conflict') {
+                            await this.handleSaveVersionConflict(response.data);
                         } else {
                             notifyError(creating ? '建物の登録に失敗しました。' : '更新に失敗しました。', response && response.data);
                         }
@@ -942,6 +949,43 @@
                     } finally {
                         this.editParentProjectSaving = false;
                     }
+                },
+                /**
+                 * Someone else saved this building after the form was loaded. Nothing was written.
+                 * Let the user reload the latest data (their input is dropped) or keep editing
+                 * so they can copy what they typed first; saving again fails until they reload.
+                 */
+                handleSaveVersionConflict: async function (data) {
+                    var msg = (data && data.message) || '他のユーザーが先にこの建物を更新しました。最新の内容を読み込んでから、もう一度編集してください。';
+                    var note = '「最新の内容を読み込む」を押すと、入力中の内容は破棄されます。';
+                    var reload;
+                    if (typeof Swal === 'undefined' || !Swal.fire) {
+                        reload = window.confirm(msg + '\n\n' + note + '\n最新の内容を読み込みますか？');
+                    } else {
+                        var result = await Swal.fire({
+                            icon: 'warning',
+                            title: '保存できませんでした',
+                            text: msg + '\n' + note,
+                            showCancelButton: true,
+                            confirmButtonText: '最新の内容を読み込む',
+                            cancelButtonText: '編集を続ける',
+                            confirmButtonColor: '#3085d6',
+                            cancelButtonColor: '#6c757d',
+                            reverseButtons: true
+                        });
+                        reload = !!result.isConfirmed;
+                    }
+                    if (!reload) {
+                        return;
+                    }
+                    this.destroyEditParentWidgets();
+                    this.mode = 'view';
+                    var loaded = await this.loadParentProject(this.editingParentProject.id);
+                    if (!loaded) {
+                        return;
+                    }
+                    // Back to the form with the latest values
+                    await this.enterEditMode();
                 },
                 notifySaved: function (savedId) {
                     if (this.onSavedCallback) {

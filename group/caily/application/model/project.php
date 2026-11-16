@@ -4139,7 +4139,8 @@ class Project extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
         }
         $old = $this->getById($id);
-        $result = $this->query_update(['status' => 'cancelled'], ['id' => $id]);
+        // version + 1: an edit form opened before this must not save the old status back
+        $result = $this->query_update_versioned(['status' => 'cancelled'], ['id' => $id]);
         if ($result) {
             $this->logProjectAction($id, 'deleted', '案件を削除', $old['status'], 'cancelled');
             return ['status' => 'success'];
@@ -4344,17 +4345,18 @@ class Project extends ApplicationModel {
             }
             $result = $this->updateMemberRole($project_id, $user_id, $newRole);
             return $result
-                ? ['status' => 'success', 'message' => 'Role updated to ' . $newRole]
+                ? ['status' => 'success', 'message' => 'Role updated to ' . $newRole, 'version' => $this->bumpProjectVersion($project_id)]
                 : ['status' => 'error', 'message' => 'Failed to update role'];
         }
 
         // Call the original addMember method
         $result = $this->addMember($project_id, $user_id, $username, $role);
-        
+
         if ($result) {
             return [
                 'status' => 'success',
-                'message' => 'Member added successfully'
+                'message' => 'Member added successfully',
+                'version' => $this->bumpProjectVersion($project_id)
             ];
         }
         
@@ -4606,7 +4608,7 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
         $this->applyProgressStartedAt(is_array($old) ? $old : [], $data);
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update_versioned($data, ['id' => $id]);
 
         // Ghi project log nếu tiến độ thay đổi
         if ($result && $oldProgress !== null && (int)$oldProgress !== (int)$progress) {
@@ -4619,7 +4621,32 @@ class Project extends ApplicationModel {
             );
         }
 
-        return $result;
+        return $this->quickEditResponse($id, $result);
+    }
+
+    /**
+     * Response of the single-field quick edits (status, priority, progress, tags, teams, dates).
+     * They are saved without a version check (the user picked that one value) but add 1 to
+     * `version`, so an edit form opened before them fails its check instead of overwriting
+     * them; `version` lets the page that made the change keep its own copy current.
+     */
+    /**
+     * The edit form posts the whole member / manager list and update() removes whoever is
+     * missing from it: a member change made outside the form (addMemberApi) adds 1 to the
+     * project version, so a form opened before it cannot drop that member again.
+     * @return int the new version
+     */
+    private function bumpProjectVersion($projectId) {
+        $this->table = DB_PREFIX . 'projects';
+        $this->query(sprintf("UPDATE %s SET `version` = `version` + 1 WHERE id = %d", $this->table, intval($projectId)));
+        return $this->fetchRowVersion($projectId);
+    }
+
+    private function quickEditResponse($id, $affectedRows, array $extra = []) {
+        if (!$affectedRows) {
+            return array_merge(['status' => 'error', 'error' => 'Update failed', 'message' => 'Update failed'], $extra);
+        }
+        return array_merge(['status' => 'success', 'version' => $this->fetchRowVersion($id)], $extra);
     }
 
     function updatePojectTags($params = null) {
@@ -4634,7 +4661,7 @@ class Project extends ApplicationModel {
             'tags' => $tags,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        return $this->query_update($data, ['id' => $id]);
+        return $this->quickEditResponse($id, $this->query_update_versioned($data, ['id' => $id]));
     }
 
     /**
@@ -4683,7 +4710,7 @@ class Project extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Project not found'];
         }
         $this->table = DB_PREFIX . 'projects';
-        $ok = $this->query_update(
+        $ok = $this->query_update_versioned(
             [
                 'project_order_type' => $project_order_type,
                 'updated_at' => date('Y-m-d H:i:s'),
@@ -4839,8 +4866,8 @@ class Project extends ApplicationModel {
 
         $this->applyEnergyDrawingShareFromPost($data, $old);
         $this->applyProgressStartedAt($old, $data);
-        
-        $result = $this->query_update($data, ['id' => $id]);
+
+        $result = $this->query_update_versioned($data, ['id' => $id]);
         if ($result) {
             if($old['status'] != $status) {
                 $statusRecipients = $this->getProjectInteractionNotifyUserids($id);
@@ -4864,7 +4891,7 @@ class Project extends ApplicationModel {
         }
         
         if ($result) {
-            return ['status' => 'success', 'message' => 'Status updated successfully'];
+            return ['status' => 'success', 'message' => 'Status updated successfully', 'version' => $this->fetchRowVersion($id)];
         } else {
             return ['status' => 'error', 'message' => 'Failed to update status'];
         }
@@ -4887,10 +4914,10 @@ class Project extends ApplicationModel {
             'end_date' => $end_date,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update_versioned($data, ['id' => $id]);
         if ($result) {
             $this->logProjectAction($id, 'date_updated', '日程変更', $old['start_date'].'~'.$old['end_date'], $start_date.'~'.$end_date);
-            return ['status' => 'success'];
+            return ['status' => 'success', 'version' => $this->fetchRowVersion($id)];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
         }
@@ -4914,13 +4941,13 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
 
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update_versioned($data, ['id' => $id]);
         if ($result) {
             if($old['priority'] != $priority) {
                 $this->logProjectAction($id, 'priority_updated', '優先度変更', $old['priority'], $priority);
             }
         }
-        return $result;
+        return $this->quickEditResponse($id, $result);
     }
 
     function getComments() {
@@ -7493,9 +7520,9 @@ class Project extends ApplicationModel {
             'teams' => $teams,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update_versioned($data, ['id' => $id]);
         if ($result) {
-            return ['success' => true];
+            return ['success' => true, 'version' => $this->fetchRowVersion($id)];
         } else {
             return ['success' => false, 'error' => 'Update failed'];
         }
@@ -10175,13 +10202,15 @@ class Project extends ApplicationModel {
                 'updated_by' => $_SESSION['userid']
             );
             
-            // Perform update
-            $result = $this->query_update($data, ['id' => $id]);
-            
+            // Perform update. amount belongs to the 決済情報 form: bump payment_version so a
+            // payment form opened earlier cannot overwrite it.
+            $result = $this->query_update_versioned($data, ['id' => $id], null, 'payment_version');
+
             if ($result) {
                 return [
-                    'status' => 'success', 
+                    'status' => 'success',
                     'message' => 'Project amount updated successfully',
+                    'payment_version' => $this->fetchRowVersion($id, 'payment_version'),
                     'data' => [
                         'id' => $id,
                         'amount' => $amount,

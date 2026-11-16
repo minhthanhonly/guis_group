@@ -627,13 +627,14 @@ class Quotation extends ApplicationModel {
                 return;
             }
             
-            // Update project amounts
+            // Update project amounts. amount belongs to the 決済情報 form: add 1 to
+            // payment_version so a payment form opened earlier cannot overwrite it.
             $project_table = DB_PREFIX . 'projects';
             foreach ($projectAmounts as $project_id => $total_amount) {
                 if ($status === 'キャンセル' || $status === '却下') {
                     // Set amount to 0 for cancelled or rejected quotations
                     $update_query = sprintf(
-                        "UPDATE %s SET amount = 0, updated_at = NOW(), updated_by = '%s' WHERE id = %d",
+                        "UPDATE %s SET amount = 0, payment_version = payment_version + 1, updated_at = NOW(), updated_by = '%s' WHERE id = %d",
                         $project_table,
                         mysqli_real_escape_string($this->handler, $_SESSION['userid'] ?? ''),
                         $project_id
@@ -641,7 +642,7 @@ class Quotation extends ApplicationModel {
                 } else {
                     // Update amount based on quotation items for other statuses
                     $update_query = sprintf(
-                        "UPDATE %s SET amount = %.2f, updated_at = NOW(), updated_by = '%s' WHERE id = %d",
+                        "UPDATE %s SET amount = %.2f, payment_version = payment_version + 1, updated_at = NOW(), updated_by = '%s' WHERE id = %d",
                         $project_table,
                         $total_amount,
                         mysqli_real_escape_string($this->handler, $_SESSION['userid'] ?? ''),
