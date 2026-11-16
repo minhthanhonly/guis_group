@@ -291,10 +291,13 @@
 .bd-scope .pi-line + .pi-line { border-top: 1px solid var(--bs-border-color, #e4e6e8); }
 .bd-scope .pi-line-row { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .bd-scope .pi-type { flex: 1 1 auto; min-width: 0; }
-.bd-scope .pi-status { flex: 0 0 auto; width: auto; max-width: 9.5rem; }
+.bd-scope .pi-status { flex: 0 0 auto; align-self: stretch; display: flex; }
+.bd-scope .pi-status-toggle { display: inline-flex; align-items: center; gap: 4px; min-width: 6.5rem; }
+.bd-scope .pi-status-toggle::after { margin-left: auto; }
+.bd-scope .pi-status .dropdown-menu { min-width: 8rem; }
 .bd-scope .pi-remove { flex: 0 0 auto; }
-.bd-scope .pi-date-group { flex: 1 1 45%; min-width: 0; }
-.bd-scope .pi-amount-group { flex: 1 1 55%; min-width: 0; }
+.bd-scope .pi-date-group { flex: 0 1 11.5rem; min-width: 0; }
+.bd-scope .pi-amount-group { flex: 1 1 auto; min-width: 0; }
 .bd-scope .pi-value { flex: 1 1 50%; font-size: 0.875rem; }
 .bd-scope .pi-type-badge { flex: 1 1 auto; font-size: 0.875rem; }
 .bd-scope .pi-type-none { color: var(--bs-secondary-color, #8592a3); }

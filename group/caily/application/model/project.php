@@ -7036,6 +7036,11 @@ class Project extends ApplicationModel {
             if ($status === '無償' || $status === '対象外') {
                 $amount = 0;
             }
+            // a blank line (the editor's default 設計費/申請費 rows left untouched) carries nothing:
+            // storing it would add empty rows to the stats (e.g. キャンセル per 種別)
+            if ($date === '' && $amount === null && $status === '未発行') {
+                continue;
+            }
             if ($status === '発行済' && ($date === '' || $amount === null || $amount <= 0)) {
                 return ['ok' => false, 'error' => $label . 'を発行済にするには日付・金額が必要です。'];
             }

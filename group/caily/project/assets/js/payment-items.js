@@ -32,6 +32,9 @@
     };
     var ENERGY_EXTRA = { value: '対象外', label: '対象外', color: 'dark' };
     var LEGACY_TYPES = ['申請費', '設計費'];
+    // default blank lines per 見積/請求 when there is none (the old fixed fields)
+    var DEFAULT_TYPES = ['設計費'];
+    var DEFAULT_TYPES_ENERGY = ['申請費', '設計費'];
 
     var DERIVED_DATE_KEYS = [
         'estimate_date', 'invoice_date',
@@ -319,25 +322,20 @@
             + '    <i class="fa fa-exclamation-circle me-1"></i>{{ t("状態が未更新の明細") }}: {{ pendingCount }}{{ t("件") }}</div>'
             + '  <div v-if="!items.length" class="pi-empty text-muted">{{ t("明細なし") }}</div>'
             + '  <div v-for="(item, idx) in items" :key="keyOf(item)" class="pi-line" :class="{ \'pi-line-pending\': isPending(item) }">'
-            + '    <div class="pi-line-row">'
-            + '      <input v-if="editable" type="text" class="form-control form-control-sm pi-type" :list="listId" maxlength="100"'
-            + '             v-model="item.item_type" :placeholder="t(\'種別\')" @change="emitChange">'
-            + '      <span v-else class="pi-type-badge" :class="{ \'pi-type-none\': !item.item_type }">{{ item.item_type || t("種別なし") }}</span>'
-            + '      <select v-if="editable" class="form-select form-select-sm pi-status"'
-            + '              :value="normStatus(item.status)" @change="selectStatus(item, $event)">'
-            + '        <option v-for="s in statusOptions" :key="s.value" :value="s.value"'
-            + '                :disabled="s.value === \'発行済\' && !isComplete(item)">{{ t(s.label) }}</option>'
-            + '      </select>'
-            + '      <span v-else class="pi-status-text">{{ t(normStatus(item.status)) }}</span>'
-            + '      <button v-if="editable" type="button" class="btn btn-sm btn-icon btn-text-secondary pi-remove" :title="t(\'削除\')" @click="removeItem(item)">'
-            + '        <i class="fa fa-times"></i></button>'
-            + '    </div>'
+            // input order: 日付 → 種別 (row 1), 金額 → 状態 (row 2, status last)
             + '    <div class="pi-line-row">'
             + '      <div v-if="editable" class="input-group input-group-sm pi-date-group">'
             + '        <payment-item-date-input :model-value="datePart(item)" :placeholder="t(dateLabel)" @update:model-value="setDate(item, $event)"></payment-item-date-input>'
             + '        <button v-if="!item.item_date" type="button" class="btn btn-outline-primary" :title="t(\'今日の日付を入力\')" @click="setToday(item)">{{ t("今日") }}</button>'
             + '      </div>'
             + '      <div v-else class="pi-value">{{ item.item_date ? datePart(item).replace(/-/g, "/") : "—" }}</div>'
+            + '      <input v-if="editable" type="text" class="form-control form-control-sm pi-type" :list="listId" maxlength="100"'
+            + '             v-model="item.item_type" :placeholder="t(\'種別\')" @change="emitChange">'
+            + '      <span v-else class="pi-type-badge" :class="{ \'pi-type-none\': !item.item_type }">{{ item.item_type || t("種別なし") }}</span>'
+            + '      <button v-if="editable" type="button" class="btn btn-sm btn-icon btn-text-secondary pi-remove" :title="t(\'削除\')" @click="removeItem(item)">'
+            + '        <i class="fa fa-times"></i></button>'
+            + '    </div>'
+            + '    <div class="pi-line-row">'
             + '      <div v-if="editable" class="input-group input-group-sm pi-amount-group">'
             + '        <span class="input-group-text">¥</span>'
             + '        <input type="text" inputmode="decimal" autocomplete="off" class="form-control text-end"'
@@ -345,6 +343,17 @@
             + '               @focus="onAmountFocus(item, $event)" @blur="onAmountBlur(item)" @input="onAmountInput(item, $event)">'
             + '      </div>'
             + '      <div v-else class="pi-value text-end">{{ isEmptyAmount(item) ? "—" : yen(item.amount) }}</div>'
+            + '      <div v-if="editable" class="dropdown pi-status">'
+            + '        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle pi-status-toggle"'
+            + '                data-bs-toggle="dropdown" aria-expanded="false">{{ t(normStatus(item.status)) }}</button>'
+            + '        <ul class="dropdown-menu dropdown-menu-end">'
+            + '          <li v-for="s in statusOptions" :key="s.value">'
+            + '            <a href="javascript:void(0);" class="dropdown-item"'
+            + '               :class="{ active: s.value === normStatus(item.status), disabled: s.value === \'発行済\' && !isComplete(item) }"'
+            + '               @click="selectStatus(item, s.value)">{{ t(s.label) }}</a></li>'
+            + '        </ul>'
+            + '      </div>'
+            + '      <span v-else class="pi-status-text">{{ t(normStatus(item.status)) }}</span>'
             + '    </div>'
             + '    <div v-if="editable && normStatus(item.status) !== \'発行済\' && !isWaived(item.status) && !isComplete(item)" class="pi-hint">'
             + '      {{ t("発行済にするには{fields}が必要です").replace("{fields}", t(dateLabel) + "・" + t("金額")) }}</div>'
@@ -401,8 +410,16 @@
             }
         },
         watch: {
-            // lines loaded from the API (a new array on every load): decode their 種別
-            'project.payment_items': { handler: decodeItems, immediate: true }
+            // lines loaded from the API (a new array on every load): decode their 種別,
+            // and give an empty 見積/請求 its default blank lines
+            'project.payment_items': {
+                handler: function (list) {
+                    decodeItems(list);
+                    this.fillDefaultItems();
+                },
+                immediate: true
+            },
+            editable: function () { this.fillDefaultItems(); }
         },
         created: function () {
             // _key → typing the amount turned the line complete; asked on blur (not reactive)
@@ -494,12 +511,9 @@
                 if (normalizeStatus(item.status) === '発行済' && !isLineComplete(item)) item.status = '未発行';
                 this.emitChange();
             },
-            selectStatus: function (item, e) {
-                var value = e.target.value;
-                if (value === '発行済' && !isLineComplete(item)) {
-                    e.target.value = normalizeStatus(item.status);
-                    return;
-                }
+            selectStatus: function (item, value) {
+                if (value === normalizeStatus(item.status)) return;
+                if (value === '発行済' && !isLineComplete(item)) return;
                 item.status = value;
                 if (isWaived(value)) item.amount = 0;
                 this.emitChange();
@@ -558,6 +572,21 @@
                     amount: src && !isEmpty(src.amount) ? Number(src.amount) : null,
                     status: src && isWaived(src.status) ? normalizeStatus(src.status) : '未発行'
                 });
+            },
+            /**
+             * No line of this kind yet: show the default blank lines, like the old fixed fields
+             * (省エネ: 申請費 + 設計費, other departments: 設計費). Blank lines are not stored
+             * (the server skips them), so an untouched project comes back with them again.
+             */
+            fillDefaultItems: function () {
+                if (!this.editable || !uses(this.project) || itemsOf(this.project, this.kind).length) return;
+                var self = this;
+                var types = this.energy ? DEFAULT_TYPES_ENERGY : DEFAULT_TYPES;
+                this.insertItems(types.map(function (t) {
+                    var it = self.newItem(null);
+                    it.item_type = t;
+                    return it;
+                }));
             },
             /** Insert after the last line of this kind, keeping 見積 lines before 請求 lines. */
             insertItems: function (newItems) {
