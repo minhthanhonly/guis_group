@@ -7,7 +7,7 @@ if($_SESSION['show_project'] == 0){
 }
 
 // Departments the current user belongs to (active only). The board opens on the first one;
-// a user with no department gets the first active department (same order as the department filter).
+// a user with no department gets the second active department (same order as the department filter).
 $overviewMyDepartmentIds = array();
 $overviewDefaultDepartmentId = '';
 try {
@@ -26,11 +26,13 @@ try {
     if ($overviewMyDepartmentIds) {
         $overviewDefaultDepartmentId = (string)$overviewMyDepartmentIds[0];
     } else {
-        $overviewFirstDept = $overviewDeptModel->fetchOne(
-            "SELECT id FROM " . DB_PREFIX . "departments WHERE is_active = 1 ORDER BY id ASC LIMIT 1"
+        // Second active department (falls back to the first when only one exists)
+        $overviewFallbackDepts = $overviewDeptModel->fetchAll(
+            "SELECT id FROM " . DB_PREFIX . "departments WHERE is_active = 1 ORDER BY id ASC LIMIT 2"
         );
-        if (!empty($overviewFirstDept['id'])) {
-            $overviewDefaultDepartmentId = (string)(int)$overviewFirstDept['id'];
+        $overviewFallbackDept = isset($overviewFallbackDepts[1]) ? $overviewFallbackDepts[1] : ($overviewFallbackDepts[0] ?? null);
+        if (!empty($overviewFallbackDept['id'])) {
+            $overviewDefaultDepartmentId = (string)(int)$overviewFallbackDept['id'];
         }
     }
 } catch (Exception $e) {
