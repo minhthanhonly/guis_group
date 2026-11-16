@@ -15,6 +15,9 @@
 .note-bg-blossom { --note-bg: #f6e2dd; --note-fg: #202124; }
 .note-bg-clay    { --note-bg: #e9e3d4; --note-fg: #202124; }
 .note-bg-chalk   { --note-bg: #efeff1; --note-fg: #202124; }
+/* No 背景色: the pale yellow of a 案件一覧 memo cell (index.php #fff9e6 / #333), the same in dark mode —
+   board card, Quill editor, view mode and the swatch */
+.note-bg-default { --note-bg: #fff9e6; --note-fg: #333; }
 /* Palette — dark */
 [data-bs-theme="dark"] .note-bg-coral   { --note-bg: #77172e; --note-fg: #e8eaed; }
 [data-bs-theme="dark"] .note-bg-peach   { --note-bg: #692b17; --note-fg: #e8eaed; }
@@ -153,7 +156,7 @@
     box-shadow: 0 0 0 2px rgba(161, 66, 244, 0.25);
 }
 .note-color-swatch.note-bg-default {
-    background-image: linear-gradient(135deg, transparent 46%, rgba(0, 0, 0, 0.3) 48%, rgba(0, 0, 0, 0.3) 52%, transparent 54%);
+    background-image: none;
 }
 
 /* 公開範囲 icon next to a memo (board card, list cell) */
@@ -243,10 +246,8 @@
 .note-board .note-card:not(.note-bg-default) {
     border-color: transparent;
 }
-/* No 背景色: the same pale yellow as a 案件一覧 memo cell (index.php #fff9e6 / #333), in dark mode too */
+/* No 背景色: pale yellow (palette above) */
 .note-board .note-card.note-bg-default {
-    --note-bg: #fff9e6;
-    --note-fg: #333;
     border-color: rgba(0, 0, 0, 0.08);
 }
 .note-board .note-card:hover,
