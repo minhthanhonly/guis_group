@@ -6,8 +6,10 @@ if($_SESSION['show_project'] == 0){
     exit;
 }
 
-// Departments the current user belongs to (active only). The board opens on the first one.
+// Departments the current user belongs to (active only). The board opens on the first one;
+// a user with no department gets the first active department (same order as the department filter).
 $overviewMyDepartmentIds = array();
+$overviewDefaultDepartmentId = '';
 try {
     $overviewDeptModel = new ApplicationModel();
     $overviewDeptModel->connect();
@@ -20,6 +22,16 @@ try {
     );
     foreach ($overviewDeptRows as $overviewDeptRow) {
         $overviewMyDepartmentIds[] = (int)$overviewDeptRow['department_id'];
+    }
+    if ($overviewMyDepartmentIds) {
+        $overviewDefaultDepartmentId = (string)$overviewMyDepartmentIds[0];
+    } else {
+        $overviewFirstDept = $overviewDeptModel->fetchOne(
+            "SELECT id FROM " . DB_PREFIX . "departments WHERE is_active = 1 ORDER BY id ASC LIMIT 1"
+        );
+        if (!empty($overviewFirstDept['id'])) {
+            $overviewDefaultDepartmentId = (string)(int)$overviewFirstDept['id'];
+        }
     }
 } catch (Exception $e) {
     $overviewMyDepartmentIds = array();
@@ -1146,7 +1158,7 @@ $view->footing();
 window.currentUser = {
     user_id: <?= json_encode($_SESSION['id'] ?? '') ?>,
     id: <?= json_encode($_SESSION['userid'] ?? '') ?>,
-    department_id: <?= json_encode($overviewMyDepartmentIds ? (string)$overviewMyDepartmentIds[0] : '') ?>,
+    department_id: <?= json_encode($overviewDefaultDepartmentId) ?>,
     department_ids: <?= json_encode(array_map('strval', $overviewMyDepartmentIds)) ?>,
     isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>
 };
