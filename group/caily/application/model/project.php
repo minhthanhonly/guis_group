@@ -7110,6 +7110,27 @@ class Project extends ApplicationModel {
         return $status === '' ? '未発行' : $status;
     }
 
+    /**
+     * Line date as 'Y-m-d H:i:s' ('' when empty). The time is kept: the legacy
+     * 見積日/請求日 carry one (e.g. 18:57), and saving a line whose date was not
+     * touched must not move it to 18:00. A date without time gets 18:00, like the
+     * other 決済 dates.
+     */
+    private function paymentItemDateValue($value) {
+        $value = str_replace('/', '-', trim((string)$value));
+        if ($value === '') {
+            return '';
+        }
+        $ts = strtotime($value);
+        if ($ts === false) {
+            return false;
+        }
+        if (preg_match('/^\d{4}-\d{1,2}-\d{1,2}$/', $value)) {
+            return date('Y-m-d', $ts) . ' 18:00:00';
+        }
+        return date('Y-m-d H:i:s', $ts);
+    }
+
     private function isMeaningfulLegacyPaymentValue($amount, $date, $status) {
         return floatval($amount) > 0
             || trim((string)$date) !== ''
@@ -7122,7 +7143,7 @@ class Project extends ApplicationModel {
         return [
             'id' => null,
             'kind' => $kind,
-            'item_date' => trim((string)$date) !== '' ? substr((string)$date, 0, 10) : '',
+            'item_date' => $this->paymentItemDateValue($date),
             'item_type' => $type,
             'amount' => $waived ? 0 : (($amount === null || $amount === '') ? null : floatval($amount)),
             'status' => $status,
@@ -7183,7 +7204,7 @@ class Project extends ApplicationModel {
         return is_array($rows) ? $rows : [];
     }
 
-    /** Lines for the 決済情報 UI: [{ id, kind, item_date (Y-m-d|''), item_type, amount|null, status }] */
+    /** Lines for the 決済情報 UI: [{ id, kind, item_date ('Y-m-d H:i:s'|''), item_type, amount|null, status }] */
     private function getPaymentItemsForProject(array $project) {
         $rows = $this->fetchPaymentItemRows($project['id']);
         if (empty($rows)) {
@@ -7194,7 +7215,7 @@ class Project extends ApplicationModel {
             $items[] = [
                 'id' => intval($r['id']),
                 'kind' => $r['kind'],
-                'item_date' => !empty($r['item_date']) ? substr($r['item_date'], 0, 10) : '',
+                'item_date' => !empty($r['item_date']) ? (string)$r['item_date'] : '',
                 'item_type' => (string)$r['item_type'],
                 'amount' => ($r['amount'] === null || $r['amount'] === '') ? null : floatval($r['amount']),
                 'status' => $this->normalizePaymentItemStatus($r['status']),
@@ -7253,13 +7274,9 @@ class Project extends ApplicationModel {
                 $status = '未発行';
             }
 
-            $date = str_replace('/', '-', trim((string)($row['item_date'] ?? '')));
-            if ($date !== '') {
-                $ts = strtotime($date);
-                if ($ts === false) {
-                    return ['ok' => false, 'error' => $label . 'の日付が正しくありません。'];
-                }
-                $date = date('Y-m-d', $ts);
+            $date = $this->paymentItemDateValue($row['item_date'] ?? '');
+            if ($date === false) {
+                return ['ok' => false, 'error' => $label . 'の日付が正しくありません。'];
             }
 
             $rawAmount = $row['amount'] ?? null;
@@ -7378,7 +7395,7 @@ class Project extends ApplicationModel {
         foreach ($items as $it) {
             $parts[] = ($it['kind'] === 'estimate' ? '見積' : '請求')
                 . ($it['item_type'] !== '' ? '[' . $it['item_type'] . ']' : '')
-                . ' ' . ($it['item_date'] !== '' ? str_replace('-', '/', $it['item_date']) : '—')
+                . ' ' . ($it['item_date'] !== '' ? str_replace('-', '/', substr($it['item_date'], 0, 10)) : '—')
                 . ' ' . ($it['amount'] === null ? '—' : '¥' . number_format(floatval($it['amount'])))
                 . ' ' . $it['status'];
         }
@@ -7398,7 +7415,7 @@ class Project extends ApplicationModel {
                 $table,
                 $projectId,
                 $this->quote($it['kind']),
-                $it['item_date'] !== '' ? "'" . $this->quote($it['item_date']) . " 18:00:00'" : 'NULL',
+                $it['item_date'] !== '' ? "'" . $this->quote($it['item_date']) . "'" : 'NULL',
                 $this->quote($it['item_type']),
                 $it['amount'] === null ? 'NULL' : sprintf('%.2f', floatval($it['amount'])),
                 $this->quote($it['status']),

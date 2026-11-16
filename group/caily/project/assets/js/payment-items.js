@@ -1,7 +1,8 @@
 /**
  * 決済明細: 見積 / 請求 as any number of lines { item_date, item_type, amount, status }.
  *
- * - project.payment_items  [{ id, kind: 'estimate'|'invoice', item_date: 'YYYY-MM-DD'|'', item_type, amount|null, status }]
+ * - project.payment_items  [{ id, kind: 'estimate'|'invoice', item_date: 'YYYY-MM-DD HH:mm:ss'|'', item_type, amount|null, status }]
+ *   (the UI edits the date part only and keeps the time; a new date gets 18:00 on the server)
  * - project.payment_item_types  whitelist for the 種別 tag (types saved so far + 申請費 / 設計費)
  *   Both come from project getById.
  *
@@ -285,10 +286,10 @@
             + '    </div>'
             + '    <div class="pi-line-row">'
             + '      <div v-if="editable" class="input-group input-group-sm pi-date-group">'
-            + '        <payment-item-date-input v-model="item.item_date" :placeholder="t(dateLabel)" @update:model-value="emitChange"></payment-item-date-input>'
+            + '        <payment-item-date-input :model-value="datePart(item)" :placeholder="t(dateLabel)" @update:model-value="setDate(item, $event)"></payment-item-date-input>'
             + '        <button v-if="!item.item_date" type="button" class="btn btn-outline-primary" :title="t(\'今日の日付を入力\')" @click="setToday(item)">{{ t("今日") }}</button>'
             + '      </div>'
-            + '      <div v-else class="pi-value">{{ item.item_date ? item.item_date.replace(/-/g, "/") : "—" }}</div>'
+            + '      <div v-else class="pi-value">{{ item.item_date ? datePart(item).replace(/-/g, "/") : "—" }}</div>'
             + '      <div v-if="editable" class="input-group input-group-sm pi-amount-group">'
             + '        <span class="input-group-text">¥</span>'
             + '        <input type="text" inputmode="numeric" autocomplete="off" class="form-control text-end"'
@@ -395,6 +396,21 @@
                 }
                 item.status = value;
                 if (isWaived(value)) item.amount = 0;
+                this.emitChange();
+            },
+            datePart: function (item) {
+                return item && item.item_date ? String(item.item_date).slice(0, 10) : '';
+            },
+            /** Date picked in the UI; the stored time (e.g. 18:57 from the old 見積日) is kept. */
+            setDate: function (item, ymd) {
+                var current = String(item.item_date || '');
+                if (!ymd) {
+                    if (current === '') return;
+                    item.item_date = '';
+                } else {
+                    if (ymd === current.slice(0, 10)) return;
+                    item.item_date = ymd + current.slice(10);
+                }
                 this.emitChange();
             },
             setToday: function (item) {
