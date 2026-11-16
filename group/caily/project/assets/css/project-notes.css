@@ -174,3 +174,325 @@
     flex: 0 0 auto;
     margin-right: 3px;
 }
+
+/* ---------- メモ board (partials/project-note-board.php) ---------- */
+/* メモ board (Keep style): equal-size cards, background colour per note */
+.note-board-filter {
+    width: auto;
+    max-width: 180px;
+}
+.note-board-radio-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 20px;
+    margin-bottom: 14px;
+}
+.note-board-radio-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.note-board-radio-label {
+    font-size: 0.75rem;
+    opacity: 0.75;
+}
+/* the theme only tints a checked outline button faintly — fill it so the active filter is obvious */
+.note-board-radio-group .btn-check:checked + .btn {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: #fff;
+}
+.note-board-radio-group .btn-check:checked + .btn .fa {
+    color: #fff !important;
+}
+.note-board {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+}
+@media (max-width: 991.98px) {
+    .note-board {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 575.98px) {
+    .note-board {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+.note-board .note-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 200px;
+    padding: 8px 12px 8px;
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 8px;
+    background: var(--note-bg, var(--bs-card-bg, #fff));
+    color: var(--note-fg, inherit);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+    transition: box-shadow 0.15s ease;
+    overflow: hidden;
+}
+.note-board .note-card:not(.note-bg-default) {
+    border-color: transparent;
+}
+.note-board .note-card:hover,
+.note-board .note-card:focus-within {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.note-board .note-card.important-note {
+    box-shadow: inset 0 3px 0 #dc3545, 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.note-board .note-card-top {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 22px;
+    font-size: 0.8rem;
+}
+.note-board .note-visibility-icon {
+    opacity: 0.6;
+}
+.note-board .note-drag-handle {
+    color: currentColor;
+    opacity: 0.35;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+}
+.note-board .note-drag-handle:hover {
+    opacity: 0.8;
+}
+.note-board .note-drag-handle:active {
+    cursor: grabbing;
+}
+.note-board .note-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    visibility: hidden;
+}
+.note-board .note-card:hover .note-actions,
+.note-board .note-card:focus-within .note-actions {
+    visibility: visible;
+}
+.note-board .note-pin-everyone-icon,
+.note-board .detail-note-delete {
+    cursor: pointer;
+    opacity: 0.55;
+}
+.note-board .note-pin-everyone-icon:hover,
+.note-board .detail-note-delete:hover {
+    opacity: 1;
+}
+.note-board .note-pin-everyone-icon.is-active {
+    color: #dc3545;
+    opacity: 1;
+}
+.note-board .detail-note-delete:hover {
+    color: #dc3545;
+}
+.note-board .note-main {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    padding-top: 4px;
+}
+.note-board .note-card-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+}
+.note-board .note-card-content.ql-editor {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    color: inherit;
+    word-break: break-word;
+    -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
+    mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
+}
+/* 全画面表示: the メモ card covers the window (the browser also goes fullscreen when allowed),
+   above every fixed UI of the layout (navbar, menu, logo, version, FAB / side buttons up to 99990) */
+.note-board-card.note-board-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    margin: 0 !important;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bs-body-bg, #f5f5f9);
+}
+.note-board-card.note-board-fullscreen > .card-header {
+    flex: 0 0 auto;
+    background: var(--bs-card-bg, #fff);
+    border-bottom: 1px solid var(--bs-border-color, rgba(0, 0, 0, 0.1));
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+.note-board-card.note-board-fullscreen > .card-body {
+    flex: 1 1 auto;
+    overflow: auto;
+}
+body.note-board-fullscreen-open {
+    overflow: hidden;
+}
+/* the side menu sits above modals (1100): hide it while the board is fullscreen */
+body.note-board-fullscreen-open #layout-menu {
+    visibility: hidden;
+}
+/* what opens from the board must stay above it: note modal, dialogs, tooltips, pickers */
+body.note-board-fullscreen-open .modal-backdrop {
+    z-index: 100005;
+}
+body.note-board-fullscreen-open .modal {
+    z-index: 100010;
+}
+body.note-board-fullscreen-open .swal2-container {
+    z-index: 100020 !important;
+}
+body.note-board-fullscreen-open > .tooltip,
+body.note-board-fullscreen-open > .popover,
+body.note-board-fullscreen-open > .dropdown-menu,
+body.note-board-fullscreen-open .flatpickr-calendar {
+    z-index: 100030 !important;
+}
+body.note-board-fullscreen-open .note-board.note-drag-layer {
+    z-index: 100040;
+}
+.note-board-full-switch {
+    white-space: nowrap;
+    font-size: 0.85rem;
+}
+/* 全文表示: cards grow with their content (no fixed height, no fade-out); a row is as tall as its tallest card */
+.note-board.note-board-full {
+    align-items: start;
+}
+.note-board.note-board-full .note-card {
+    height: auto;
+    min-height: 0;
+}
+/* free board (3 columns, no filter): each note sits in its own cell (board_col / board_row),
+   empty cells keep a minimum height so they can be seen and dropped into */
+.note-board.note-board-free {
+    grid-auto-rows: minmax(200px, auto);
+}
+.note-board.note-board-free.note-board-full {
+    grid-auto-rows: minmax(96px, auto);
+}
+.note-board.note-board-dragging {
+    user-select: none;
+    -webkit-user-select: none;
+}
+.note-board.note-board-dragging .note-card {
+    transition: none;
+}
+.note-board .note-card.is-dragging {
+    opacity: 0.3;
+}
+.note-board .note-drop-cell {
+    align-self: stretch;
+    z-index: 3;
+    pointer-events: none;
+    border: 2px dashed var(--bs-primary, #696cff);
+    border-radius: 8px;
+    background: rgba(105, 108, 255, 0.08);
+}
+/* occupied cell: the note there (and the ones after it) will move on by one cell */
+.note-board .note-drop-cell.is-occupied {
+    background: rgba(105, 108, 255, 0.18);
+    box-shadow: inset 4px 0 0 var(--bs-primary, #696cff);
+}
+.note-board.note-drag-layer {
+    display: block;
+    position: fixed;
+    inset: 0 auto auto 0;
+    width: 0;
+    height: 0;
+    z-index: 10050;
+}
+.note-board .note-board-spacer {
+    pointer-events: none;
+}
+.note-board .note-card.note-drag-ghost {
+    position: fixed;
+    z-index: 10050;
+    margin: 0;
+    pointer-events: none;
+    opacity: 0.95;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+    transform: rotate(1.5deg);
+}
+.note-board .note-card.note-drag-ghost .note-actions {
+    display: none;
+}
+.note-board.note-board-full .note-card-content.ql-editor {
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+.note-board .note-card-footer {
+    flex: 0 0 auto;
+    padding-top: 6px;
+    font-size: 0.72rem;
+    opacity: 0.65;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+/* Board card borders in dark mode (palette: assets/css/project-notes.css) */
+[data-bs-theme="dark"] .note-board .note-card { border-color: rgba(255, 255, 255, 0.15); }
+[data-bs-theme="dark"] .note-board .note-card:not(.note-bg-default) { border-color: transparent; }
+.note-board-card .note-board-project-name {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--bs-secondary-color, #6c757d);
+}
+/* 案件一覧: the board opens full screen only (partials/project-note-board.php, $noteBoardStandalone) */
+.note-board-card.note-board-standalone:not(.note-board-fullscreen) {
+    display: none;
+}
+
+/* 案件一覧: full screen メモボード button on a memo cell (shown on hover) */
+#projectTable td.note-board-open-host {
+    position: relative;
+}
+#projectTable .note-board-open-btn {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    z-index: 3;
+    display: none;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 1px solid var(--bs-border-color, #d9dee3);
+    border-radius: 4px;
+    background: var(--bs-body-bg, #fff);
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.7rem;
+    line-height: 20px;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+#projectTable td.note-board-open-host:hover .note-board-open-btn,
+#projectTable .note-board-open-btn:focus-visible {
+    display: block;
+}
+#projectTable .note-board-open-btn:hover {
+    color: var(--bs-primary, #696cff);
+    border-color: var(--bs-primary, #696cff);
+}

@@ -228,9 +228,8 @@ const PROJECT_DATETIME_PARSE_FORMATS = [
 ];
 
 /** メモボード 全文表示 switch — localStorage key (default off) */
-const NOTE_SHOW_FULL_STORAGE_KEY = 'projectDetail.noteShowFull';
-/** メモボード: free placement (board_col / board_row) from this width up — 3 columns, see detail.php .note-board */
-const NOTE_BOARD_FREE_MEDIA = '(min-width: 992px)';
+
+
 
 const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
     'amount_updated',
@@ -604,7 +603,7 @@ const vueApp = createApp({
     // shared with the edit / create dialog. This file keeps what only the detail page needs.
     // ProjectNoteModalMixin (project-note-modal-mixin.js): メモ modal shared with 案件一覧
     // ProjectDetailBusinessDocMixin (project-detail-business-doc-mixin.js): 決済情報 card + 履歴 modal
-    mixins: [window.ProjectDetailEnergyMixin, window.ProjectFormMixin, window.ProjectNoteModalMixin, window.BusinessDocumentUiMixin, window.ProjectDetailBusinessDocMixin],
+    mixins: [window.ProjectDetailEnergyMixin, window.ProjectFormMixin, window.ProjectNoteModalMixin, window.ProjectNoteBoardMixin, window.BusinessDocumentUiMixin, window.ProjectDetailBusinessDocMixin],
     data() {
         return {
             permission: {},
@@ -727,10 +726,6 @@ const vueApp = createApp({
             isNoteEditMode: false,
             NOTE_LABEL_OTHER: (typeof NOTE_LABEL_OTHER !== 'undefined' ? NOTE_LABEL_OTHER : '__other__'),
             noteLabels: [],
-            noteFilterLabel: '',
-            noteFilterType: '',
-            noteFilterVisibility: '', // '' | all | members | self
-            noteFilterPin: '',        // '' | everyone | none
             editingNote: {
                 id: null,
                 title: '',
@@ -745,30 +740,7 @@ const vueApp = createApp({
                 visibility: 'all',
                 user_id: null
             },
-            noteFilterVisibilityOptions: [
-                { value: '', text: 'すべて' },
-                { value: 'all', text: '全員', icon: 'fa-globe' },
-                { value: 'members', text: '案件メンバー', icon: 'fa-users' },
-                { value: 'self', text: '自分のみ', icon: 'fa-lock' }
-            ],
-            noteFilterPinOptions: [
-                { value: '', text: 'すべて' },
-                { value: 'everyone', text: 'ピン（全員）', icon: 'fa-thumb-tack text-danger' },
-                { value: 'none', text: 'ピンなし' }
-            ],
             savingNote: false,
-            // メモボード: 全文表示 switch, remembered per browser (default off); 全画面表示 turns it on
-            // for the time being without saving that
-            noteShowFull: (function () {
-                try { return localStorage.getItem(NOTE_SHOW_FULL_STORAGE_KEY) === '1'; } catch (e) { return false; }
-            })(),
-            /** メモボード 全画面表示 */
-            noteBoardFullscreen: false,
-            /** メモボード drag: { id, pinned, offX, offY, target: { col, row[, idx] } | null } */
-            noteDrag: null,
-            noteBoardWide: (function() {
-                try { return window.matchMedia(NOTE_BOARD_FREE_MEDIA).matches; } catch (e) { return true; }
-            })(),
             quillNoteInstance: null,
             quillNoteContent: '',
             // Project status update loading
@@ -1020,21 +992,6 @@ const vueApp = createApp({
                 return l && l.name && l.name !== 'その他' && l.name !== otherVal;
             });
         },
-        /** Unique labels present on current notes (for filter dropdown) */
-        noteFilterLabelOptions() {
-            const seen = {};
-            const out = [];
-            (this.notes || []).forEach(function(n) {
-                const name = n && n.label != null ? String(n.label).trim() : '';
-                if (!name || seen[name]) return;
-                seen[name] = true;
-                out.push(name);
-            });
-            out.sort(function(a, b) {
-                return a.localeCompare(b, 'ja');
-            });
-            return out;
-        },
         /** 保存 enabled once the editor has text */
         canSaveNote() {
             const raw = (this.quillNoteContent && this.quillNoteContent.trim()) || (this.editingNote.content && this.editingNote.content.trim()) || '';
@@ -1042,93 +999,6 @@ const vueApp = createApp({
         },
         canDeleteCurrentNote() {
             return !!(this.editingNote && this.editingNote.id && this.canDeleteNote(this.editingNote));
-        },
-        /** Any board filter set — the board falls back to reading order and drag is off */
-        noteFiltersActive() {
-            return !!(this.noteFilterLabel || this.noteFilterType !== ''
-                || this.noteFilterVisibility || this.noteFilterPin);
-        },
-        filteredNotes() {
-            const labelFilter = this.noteFilterLabel;
-            const visibilityFilter = this.noteFilterVisibility;
-            const pinFilter = this.noteFilterPin;
-            const typeFilter = this.noteFilterType === '' || this.noteFilterType === null || this.noteFilterType === undefined
-                ? ''
-                : String(this.noteFilterType);
-            return (this.notes || []).filter(function(note) {
-                if (labelFilter === '__none__') {
-                    if (note.label != null && String(note.label).trim() !== '') return false;
-                } else if (labelFilter) {
-                    if (String(note.label || '').trim() !== labelFilter) return false;
-                }
-                if (typeFilter !== '') {
-                    const t = Number(note.needs_confirmation) || 0;
-                    if (String(t) !== typeFilter) return false;
-                }
-                if (visibilityFilter && (note.visibility || 'all') !== visibilityFilter) return false;
-                if (pinFilter) {
-                    const everyone = note.is_important == 1;
-                    if (pinFilter === 'everyone' && !everyone) return false;
-                    if (pinFilter === 'none' && everyone) return false;
-                }
-                return true;
-            });
-        },
-        /**
-         * Free board: the user's own layout — ピン（全員） band on top, other notes on a 3-column grid
-         * (board_col / board_row from the server, per user). Off while filtering and below 3 columns.
-         */
-        noteBoardFree() {
-            return this.noteBoardWide && !this.noteFiltersActive;
-        },
-        /** ピン（全員） first in the user's own pin order, then the others in reading order (row, column) */
-        boardNotes() {
-            const key = function(n) {
-                if (n.is_important == 1) {
-                    const r = n.pin_rank === null || n.pin_rank === undefined ? 9999 : Number(n.pin_rank);
-                    return [0, r];
-                }
-                const row = Number(n.board_row) || 0;
-                const col = Number(n.board_col) || 0;
-                return [1, row > 0 && col > 0 ? row * 10 + col : Number.MAX_SAFE_INTEGER];
-            };
-            return this.filteredNotes
-                .map(function(n, i) { return { n: n, i: i, k: key(n) }; })
-                .sort(function(a, b) { return a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.i - b.i; })
-                .map(function(x) { return x.n; });
-        },
-        /** ピン（全員） notes in the user's order — the band at the top of the board */
-        notePinned() {
-            return this.boardNotes.filter(function(n) { return n.is_important == 1; });
-        },
-        /** Rows taken by the pin band; the grid is drawn this many rows lower */
-        notePinRows() {
-            return this.noteBoardFree ? Math.ceil(this.notePinned.length / 3) : 0;
-        },
-        /** Last grid row in use (pinned notes are not on the grid) */
-        noteBoardMaxRow() {
-            return (this.notes || []).reduce(function(m, n) {
-                return n.is_important == 1 ? m : Math.max(m, Number(n.board_row) || 0);
-            }, 0);
-        },
-        /** The drop would move other notes: grid cell taken, or a different place in the pin band */
-        noteDragTargetOccupied() {
-            const d = this.noteDrag;
-            if (!d || !d.target) return false;
-            if (d.pinned) {
-                return this.notePinned.findIndex(function(n) { return n.id == d.id; }) !== d.target.idx;
-            }
-            return (this.notes || []).some(function(n) {
-                return n.id != d.id && n.is_important != 1
-                    && Number(n.board_col) === d.target.col && Number(n.board_row) === d.target.row;
-            });
-        },
-        /** Drop cell position on screen (band rows come first) */
-        noteDropCellStyle() {
-            const t = this.noteDrag && this.noteDrag.target;
-            if (!t) return null;
-            const row = this.noteDrag.pinned ? t.row : t.row + this.notePinRows;
-            return { gridColumn: String(t.col), gridRow: String(row) };
         },
         /** Options cho select "表示列" (display_column): cột danh sách project + custom fields. Loại trùng tên khác suffix 状況 */
         noteDisplayColumnOptions() {
@@ -3044,261 +2914,15 @@ const vueApp = createApp({
                 this.notes = [];
             }
         },
-        /** Grid placement of a card on the free board (null = auto-flow) */
-        noteCardGridStyle(note) {
-            if (!this.noteBoardFree) return null;
-            if (note.is_important == 1) {
-                const i = this.notePinned.indexOf(note);
-                if (i < 0) return null;
-                return { gridColumn: String((i % 3) + 1), gridRow: String(Math.floor(i / 3) + 1) };
-            }
-            const c = Number(note.board_col) || 0;
-            const r = Number(note.board_row) || 0;
-            if (!c || !r) return null;
-            return { gridColumn: String(c), gridRow: String(r + this.notePinRows) };
+        /** メモボード host hooks (project-note-board-mixin.js) */
+        getNoteBoardProjectId() {
+            return this.projectId;
         },
-        /**
-         * 全画面表示: the メモ card is laid over the whole window (CSS .note-board-fullscreen) and the
-         * browser goes fullscreen too when it allows it. The page itself goes fullscreen (not the card)
-         * so the note modal, which lives outside the card, still shows. Esc / the browser's own exit
-         * close it.
-         */
-        toggleNoteBoardFullscreen() {
-            if (this.noteBoardFullscreen) this.exitNoteBoardFullscreen();
-            else this.enterNoteBoardFullscreen();
+        reloadNoteBoard() {
+            return this.loadNotes();
         },
-        enterNoteBoardFullscreen() {
-            this.noteBoardFullscreen = true;
-            // fullscreen shows whole notes; the previous 全文表示 setting comes back on exit
-            this._noteShowFullBeforeFs = this.noteShowFull;
-            this.noteShowFull = true;
-            document.body.classList.add('note-board-fullscreen-open');
-            if (!this._onNoteFsChange) {
-                this._onNoteFsChange = () => {
-                    if (!document.fullscreenElement && this._noteFsByUs) {
-                        this._noteFsByUs = false;
-                        this.exitNoteBoardFullscreen();
-                    }
-                };
-                this._onNoteFsKey = (e) => {
-                    // Esc without real fullscreen (not allowed / not supported); an open modal or drag takes Esc first
-                    if (e.key !== 'Escape' || !this.noteBoardFullscreen || this.noteDrag) return;
-                    if (document.fullscreenElement || document.querySelector('.modal.show')) return;
-                    this.exitNoteBoardFullscreen();
-                };
-                document.addEventListener('fullscreenchange', this._onNoteFsChange);
-                document.addEventListener('keydown', this._onNoteFsKey);
-            }
-            const el = document.documentElement;
-            if (el.requestFullscreen && !document.fullscreenElement) {
-                el.requestFullscreen().then(() => { this._noteFsByUs = true; }).catch(() => { /* overlay only */ });
-            }
-        },
-        exitNoteBoardFullscreen() {
-            this.noteBoardFullscreen = false;
-            if (this._noteShowFullBeforeFs !== undefined) {
-                this.noteShowFull = this._noteShowFullBeforeFs;
-                this._noteShowFullBeforeFs = undefined;
-            }
-            document.body.classList.remove('note-board-fullscreen-open');
-            if (this._noteFsByUs && document.fullscreenElement && document.exitFullscreen) {
-                this._noteFsByUs = false;
-                document.exitFullscreen().catch(() => {});
-            }
-        },
-        onNoteBoardMediaChange(e) {
-            this.noteBoardWide = !!(e && e.matches);
-            if (!this.noteBoardWide) this.cancelNoteDrag();
-        },
-        initNoteBoardMedia() {
-            if (!window.matchMedia) return;
-            this._noteBoardMql = window.matchMedia(NOTE_BOARD_FREE_MEDIA);
-            this._onNoteBoardMedia = (e) => this.onNoteBoardMediaChange(e);
-            if (this._noteBoardMql.addEventListener) this._noteBoardMql.addEventListener('change', this._onNoteBoardMedia);
-            else if (this._noteBoardMql.addListener) this._noteBoardMql.addListener(this._onNoteBoardMedia);
-            this.noteBoardWide = this._noteBoardMql.matches;
-        },
-        /**
-         * Drag a note by its handle to any cell of the board: a floating copy follows the
-         * pointer, the target cell is outlined, and on drop the server places the note there
-         * (an occupied cell pushes its note — and the ones after it — one cell on).
-         */
-        onNoteDragStart(note, e) {
-            if (!this.noteBoardFree || this.noteDrag || (e.button !== undefined && e.button !== 0)) return;
-            const card = e.currentTarget && e.currentTarget.closest('.note-card');
-            const board = this.$refs.detailNotesList;
-            if (!card || !board) return;
-            e.preventDefault();
-            const rect = card.getBoundingClientRect();
-            const ghost = card.cloneNode(true);
-            ghost.classList.add('note-drag-ghost');
-            ghost.classList.remove('is-dragging');
-            ghost.removeAttribute('data-note-id');
-            ghost.style.width = rect.width + 'px';
-            ghost.style.height = rect.height + 'px';
-            ghost.style.left = rect.left + 'px';
-            ghost.style.top = rect.top + 'px';
-            // a body-level .note-board layer keeps the board styles without touching Vue's DOM
-            const layer = document.createElement('div');
-            layer.className = board.className + ' note-drag-layer';
-            layer.appendChild(ghost);
-            document.body.appendChild(layer);
-            this._noteDragGhost = layer;
-            const pinned = note.is_important == 1;
-            const pinIdx = pinned ? this.notePinned.indexOf(note) : -1;
-            this.noteDrag = {
-                id: note.id,
-                pinned: pinned,
-                offX: e.clientX - rect.left,
-                offY: e.clientY - rect.top,
-                target: pinned
-                    ? { col: (pinIdx % 3) + 1, row: Math.floor(pinIdx / 3) + 1, idx: pinIdx }
-                    : { col: Number(note.board_col) || 1, row: Number(note.board_row) || 1 }
-            };
-            this._onNoteDragMove = (ev) => this.onNoteDragMove(ev);
-            this._onNoteDragUp = (ev) => this.onNoteDragEnd(ev);
-            this._onNoteDragKey = (ev) => { if (ev.key === 'Escape') this.cancelNoteDrag(); };
-            this._onNoteDragCancel = () => this.cancelNoteDrag();
-            window.addEventListener('pointermove', this._onNoteDragMove);
-            window.addEventListener('pointerup', this._onNoteDragUp);
-            window.addEventListener('pointercancel', this._onNoteDragCancel);
-            window.addEventListener('keydown', this._onNoteDragKey);
-        },
-        onNoteDragMove(e) {
-            const d = this.noteDrag;
-            if (!d) return;
-            const ghost = this._noteDragGhost && this._noteDragGhost.firstChild;
-            if (ghost) {
-                ghost.style.left = (e.clientX - d.offX) + 'px';
-                ghost.style.top = (e.clientY - d.offY) + 'px';
-            }
-            const t = this.noteBoardCellAt(e.clientX, e.clientY);
-            if (!t) d.target = null;
-            else if (!d.target || d.target.col !== t.col || d.target.row !== t.row || d.target.idx !== t.idx) d.target = t;
-            // keep the page scrolling while dragging near the top / bottom edge
-            const edge = 60;
-            if (e.clientY < edge) window.scrollBy(0, -14);
-            else if (e.clientY > window.innerHeight - edge) window.scrollBy(0, 14);
-        },
-        /**
-         * Drop target under a viewport point, from the board's resolved tracks; null when off the board
-         * or in the other zone: a pinned note stays in the pin band ({ col, row, idx }), any other note
-         * stays on the grid below it ({ col, row } in grid rows).
-         */
-        noteBoardCellAt(x, y) {
-            const board = this.$refs.detailNotesList;
-            if (!board) return null;
-            const r = board.getBoundingClientRect();
-            const margin = 40;
-            if (x < r.left - margin || x > r.right + margin || y < r.top - margin || y > r.bottom + margin) return null;
-            const st = getComputedStyle(board);
-            const cols = st.gridTemplateColumns.split(' ').map(parseFloat).filter(function(v) { return v > 0; });
-            const rows = st.gridTemplateRows.split(' ').map(parseFloat).filter(function(v) { return v > 0; });
-            const colGap = parseFloat(st.columnGap) || 0;
-            const rowGap = parseFloat(st.rowGap) || 0;
-            const pick = function(tracks, gap, offset) {
-                let edgeAt = 0;
-                for (let i = 0; i < tracks.length; i++) {
-                    edgeAt += tracks[i] + (i < tracks.length - 1 ? gap / 2 : 0);
-                    if (offset < edgeAt) return i + 1;
-                    edgeAt += gap / 2;
-                }
-                return Math.max(1, tracks.length);
-            };
-            let col = pick(cols.length ? cols : [r.width], colGap, x - r.left - (parseFloat(st.paddingLeft) || 0));
-            let row = pick(rows.length ? rows : [r.height], rowGap, y - r.top - (parseFloat(st.paddingTop) || 0));
-            col = Math.min(col, 3);
-            const bandRows = this.notePinRows;
-            if (this.noteDrag && this.noteDrag.pinned) {
-                if (row > bandRows) return null;
-                const idx = Math.min((row - 1) * 3 + (col - 1), this.notePinned.length - 1);
-                return { col: (idx % 3) + 1, row: Math.floor(idx / 3) + 1, idx: idx };
-            }
-            row -= bandRows;             // display row → grid row
-            if (row < 1) return null;    // over the pin band
-            row = Math.min(row, this.noteBoardMaxRow + 1);
-            return { col: col, row: row };
-        },
-        stopNoteDragListeners() {
-            window.removeEventListener('pointermove', this._onNoteDragMove);
-            window.removeEventListener('pointerup', this._onNoteDragUp);
-            window.removeEventListener('pointercancel', this._onNoteDragCancel);
-            window.removeEventListener('keydown', this._onNoteDragKey);
-            if (this._noteDragGhost) {
-                this._noteDragGhost.remove();
-                this._noteDragGhost = null;
-            }
-        },
-        cancelNoteDrag() {
-            this.stopNoteDragListeners();
-            this.noteDrag = null;
-        },
-        async onNoteDragEnd() {
-            const d = this.noteDrag;
-            this.stopNoteDragListeners();
-            this.noteDrag = null;
-            if (!d || !d.target) return;
-            const note = (this.notes || []).find(function(n) { return n.id == d.id; });
-            if (!note) return;
-            if (d.pinned) {
-                await this.dropPinnedNote(note, d.target.idx);
-                return;
-            }
-            if (Number(note.board_col) === d.target.col && Number(note.board_row) === d.target.row) return;
-            try {
-                const fd = new FormData();
-                fd.append('project_id', this.projectId);
-                fd.append('note_id', d.id);
-                fd.append('col', d.target.col);
-                fd.append('row', d.target.row);
-                const res = await axios.post('/api/index.php?model=project&method=moveNoteOnBoard', fd);
-                const positions = res.data && res.data.status === 'success' ? res.data.positions : null;
-                if (!positions) throw new Error((res.data && res.data.error) || 'move failed');
-                (this.notes || []).forEach(function(n) {
-                    const p = positions[n.id];
-                    if (p) { n.board_col = p[0]; n.board_row = p[1]; }
-                });
-            } catch (err) {
-                console.error('Failed to move note', err);
-                this.showNotification('メモの移動に失敗しました', 'error');
-                await this.loadNotes();
-            }
-        },
-        /** Pin band: move a pinned note to place idx in the user's own pin order */
-        async dropPinnedNote(note, idx) {
-            const order = this.notePinned.slice();
-            const from = order.indexOf(note);
-            if (from < 0 || from === idx) return;
-            order.splice(from, 1);
-            order.splice(idx, 0, note);
-            order.forEach(function(n, i) { n.pin_rank = i; });
-            try {
-                const fd = new FormData();
-                fd.append('project_id', this.projectId);
-                fd.append('note_ids', JSON.stringify(order.map(function(n) { return n.id; })));
-                const res = await axios.post('/api/index.php?model=project&method=reorderPinnedNotes', fd);
-                if (!res.data || res.data.status !== 'success') throw new Error((res.data && res.data.error) || 'reorder failed');
-            } catch (err) {
-                console.error('Failed to reorder pinned notes', err);
-                this.showNotification('メモの移動に失敗しました', 'error');
-                await this.loadNotes();
-            }
-        },
-        async toggleNotePin(note) {
-            if (!note || !note.id) return;
-            try {
-                var formData = new FormData();
-                formData.append('id', note.id);
-                var response = await axios.post('/api/index.php?model=project&method=toggleNoteImportant', formData);
-                if (response.data && response.data.status === 'success') {
-                    await this.loadNotes();
-                } else {
-                    this.showNotification('ピンの更新に失敗しました', 'error');
-                }
-            } catch (error) {
-                console.error('Error toggling note pin:', error);
-                this.showNotification('ピンの更新に失敗しました', 'error');
-            }
+        noteBoardNotify(message, type) {
+            this.showNotification(message, type);
         },
         buildEmptyEditingNote(overrides = {}) {
             return Object.assign({
@@ -3410,12 +3034,6 @@ const vueApp = createApp({
             const found = (this.noteLabels || []).find(l => l && l.name === labelName);
             const color = (found && found.color) ? found.color : '#6c757d';
             return { '--note-label-color': color };
-        },
-        clearNoteFilters() {
-            this.noteFilterLabel = '';
-            this.noteFilterType = '';
-            this.noteFilterVisibility = '';
-            this.noteFilterPin = '';
         },
         async saveNote() {
             if (this.savingNote) return;
@@ -3692,17 +3310,6 @@ const vueApp = createApp({
             }
             this.quillNoteContent = '';
         },
-        decodeNoteHtml(str) {
-            if (!str) return '';
-            // Nếu đã là HTML thuần thì không cần decode
-            // Chỉ decode nếu có HTML entities
-            if (str.indexOf('&lt;') !== -1 || str.indexOf('&gt;') !== -1 || str.indexOf('&amp;') !== -1) {
-                const txt = document.createElement('textarea');
-                txt.innerHTML = str;
-                return txt.value;
-            }
-            return str;
-        },
         
         removeImagePlaceholder() {
             try {
@@ -3939,11 +3546,6 @@ const vueApp = createApp({
 
     },
     watch: {
-        // save the user's choice — not the temporary on of 全画面表示 (restored on exit)
-        noteShowFull(on) {
-            if (this.noteBoardFullscreen) return;
-            try { localStorage.setItem(NOTE_SHOW_FULL_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
-        },
         // Leaving edit mode removes the editor's DOM: drop the Quill instance with it,
         // otherwise the next 編集 / メモを追加 reuses an instance bound to a detached node.
         isNoteEditMode(editing) {
@@ -4013,28 +3615,13 @@ const vueApp = createApp({
             },
             deep: true
         },
-        // a filter turned on mid-drag: the board is no longer free
-        noteBoardFree(free) {
-            if (!free) this.cancelNoteDrag();
-        },
     },
     beforeUnmount() {
         if (window.toggleNoteBoardFullscreen) delete window.toggleNoteBoardFullscreen;
-        this.cancelNoteDrag();
-        if (this.noteBoardFullscreen) this.exitNoteBoardFullscreen();
-        if (this._onNoteFsChange) {
-            document.removeEventListener('fullscreenchange', this._onNoteFsChange);
-            document.removeEventListener('keydown', this._onNoteFsKey);
-        }
-        if (this._noteBoardMql) {
-            if (this._noteBoardMql.removeEventListener) this._noteBoardMql.removeEventListener('change', this._onNoteBoardMedia);
-            else if (this._noteBoardMql.removeListener) this._noteBoardMql.removeListener(this._onNoteBoardMedia);
-        }
     },
     async mounted() {
         // D1: permission ∥ getById(+secondary); notes/logs/categories ∥ critical path (projectId từ URL)
         this.loadCurrentUser();
-        this.initNoteBoardMedia();
         // F12 (command palette shortcut) → メモ board fullscreen
         window.toggleNoteBoardFullscreen = () => this.toggleNoteBoardFullscreen();
         await Promise.all([

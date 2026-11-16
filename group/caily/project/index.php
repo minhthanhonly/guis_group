@@ -501,6 +501,7 @@ if($_SESSION['show_project'] == 0){
     <?php require __DIR__ . '/partials/business-document-log-modal.php'; ?>
 
     <!-- メモ modal (add / view / edit) — shared with 案件詳細 -->
+    <?php $noteBoardStandalone = true; require __DIR__ . '/partials/project-note-board.php'; ?>
     <?php $noteModalEditorId = 'quill_note_content'; require __DIR__ . '/partials/project-note-modal.php'; ?>
 
     <!-- Kadai Projects Queue - Fixed Bottom -->
@@ -1707,6 +1708,7 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-energy-fields-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-note-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/project-note-board-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/business-document-ui-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

@@ -273,6 +273,17 @@ var projectTable;
      * the row data and re-runs the cell/row callbacks DataTables only runs on creation.
      * Falls back to a full reload whenever the row cannot be refreshed in place.
      */
+    /** メモボード: expand button on a cell that shows notes — visible on hover (project-notes.css) */
+    function appendNoteBoardOpenButton(td) {
+        var $td = $(td);
+        $td.children('.note-board-open-btn').remove();
+        var title = typeof translateText === 'function' ? translateText('メモボードを全画面表示') : 'メモボードを全画面表示';
+        $td.addClass('note-board-open-host').append(
+            $('<button type="button" class="note-board-open-btn"><i class="fa fa-expand" aria-hidden="true"></i></button>')
+                .attr({ title: title, 'aria-label': title })
+        );
+    }
+
     async function refreshProjectRow(projectId) {
         var fallback = function() { reloadProjectTable(false); };
         var id = parseInt(projectId, 10);
@@ -6183,6 +6194,7 @@ var projectTable;
                         var $wrap = $(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                         $(td).empty().append($wrap);
                         initConfirmationNotesSortable($wrap);
+                        appendNoteBoardOpenButton(td);
                     },
                     title: buildI18nHeaderTitle(getProjectBaseColumnTitle('confirmation_notes_caily', 'CAILYメモ')),
                     orderable: false
@@ -6229,6 +6241,7 @@ var projectTable;
                         var $wrap = $(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                         $(td).empty().append($wrap);
                         initConfirmationNotesSortable($wrap);
+                        appendNoteBoardOpenButton(td);
                     },
                     title: buildI18nHeaderTitle('GUISメモ'),
                     orderable: false
@@ -7341,6 +7354,7 @@ var projectTable;
                         );
                     });
                     $cell.append('<div class="cell-note-snippets">' + parts.join('') + '</div>');
+                    appendNoteBoardOpenButton(node);
                 });
             });
             applyI18nToProjectTableUI();
@@ -8751,6 +8765,17 @@ var projectTable;
             }
         });
 
+        // メモボード full screen for the row's project
+        $('#projectTable tbody').on('pointerdown mousedown', '.note-board-open-btn', function(e) {
+            e.stopPropagation();
+        }).on('click', '.note-board-open-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (!projectTable || !window.app || !app.openNoteBoardForProject) return;
+            var rowData = projectTable.row($(this).closest('tr')).data();
+            if (rowData && rowData.id) app.openNoteBoardForProject(rowData.id, rowData.name || '');
+        });
+
         // Hover to show/hide add note icon for empty cells
         $('#projectTable tbody').on('mouseenter', 'td.confirmation-notes-column .empty-notes-cell', function() {
             $(this).find('.add-note-icon').removeClass('d-none');
@@ -9500,7 +9525,7 @@ var projectTable;
         const { createApp } = Vue;
         app = createApp({
             // ProjectNoteModalMixin (project-note-modal-mixin.js): メモ modal shared with 案件詳細
-            mixins: [window.BusinessDocumentModalMixin, window.BusinessDocumentUiMixin, window.ProjectNoteModalMixin].filter(Boolean),
+            mixins: [window.BusinessDocumentModalMixin, window.BusinessDocumentUiMixin, window.ProjectNoteModalMixin, window.ProjectNoteBoardMixin].filter(Boolean),
             data() {
                 return {
                     loading: true,
@@ -9576,6 +9601,8 @@ var projectTable;
                     },
                     currentNoteProjectId: null,
                     currentNoteDepartmentId: null,
+                    /** メモボード (full screen): the project it shows, null while closed */
+                    noteBoardProjectId: null,
                     quillNoteInstance: null,
                     quillNoteContent: '',
                     savingNote: false,
@@ -9695,6 +9722,10 @@ var projectTable;
                 },
                 canDeleteCurrentNote() {
                     return !!(this.editingNote && this.editingNote.id);
+                },
+                /** メモボード: 案件一覧 lets everyone add / edit notes (see canEditNote) */
+                canAddNote() {
+                    return true;
                 }
             },
             mounted() {
@@ -10367,7 +10398,10 @@ var projectTable;
                     this.isNoteEditMode = false;
                     this.savingNote = false;
                     this.currentEditingNoteId = null; // Clear editing note tracking
-                    this.currentNoteDepartmentId = null;
+                    // the open メモボード keeps its project's labels (colours of the label chips)
+                    this.currentNoteDepartmentId = this.noteBoardProjectId
+                        ? this.resolveNoteDepartmentId(this.noteBoardProjectId)
+                        : null;
                     this.destroyQuillNoteEditor();
                 
                     this.editingNote = this.buildEmptyEditingNote();
@@ -10499,7 +10533,9 @@ var projectTable;
                         if (response.data && response.data.status === 'success') {
                             showMessage('メモが保存されました');
                             this.closeNoteModal();
-                            if (projectTable) {
+                            if (this.noteBoardProjectId) {
+                                this.reloadNoteBoard();
+                            } else if (projectTable) {
                                 // Only this project's row changed
                                 refreshProjectRow(this.currentNoteProjectId);
                             }
@@ -10523,7 +10559,9 @@ var projectTable;
                         if (response.data && response.data.status === 'success') {
                             showMessage('メモが削除されました');
                             this.closeNoteModal();
-                            if (projectTable) {
+                            if (this.noteBoardProjectId) {
+                                this.reloadNoteBoard();
+                            } else if (projectTable) {
                                 // Only this project's row changed
                                 refreshProjectRow(this.currentNoteProjectId);
                             }
@@ -10538,6 +10576,72 @@ var projectTable;
                 canEditNote(note) {
                     // 案件一覧ではひとまず全ユーザーに編集を許可
                     return true;
+                },
+                // ----- メモボード (project-note-board-mixin.js): one project's board, full screen -----
+                async openNoteBoardForProject(projectId, projectName) {
+                    if (!projectId) return;
+                    this.clearNoteFilters();
+                    this.noteBoardProjectId = projectId;
+                    this.noteBoardProjectName = projectName || '';
+                    this.currentNoteProjectId = projectId;
+                    this.currentNoteDepartmentId = this.resolveNoteDepartmentId(projectId);
+                    this.notes = [];
+                    this.noteBoardLoading = true;
+                    this.enterNoteBoardFullscreen();
+                    try {
+                        await Promise.all([
+                            this.loadNotesForProject(projectId),
+                            this.ensureNoteLabelsForDepartment(this.currentNoteDepartmentId)
+                        ]);
+                    } finally {
+                        this.noteBoardLoading = false;
+                    }
+                },
+                onNoteBoardClosed() {
+                    this.noteBoardProjectId = null;
+                    this.noteBoardProjectName = '';
+                },
+                getNoteBoardProjectId() {
+                    return this.noteBoardProjectId;
+                },
+                /** After a change on the board: its notes and the project's row in the table */
+                async reloadNoteBoard() {
+                    const projectId = this.noteBoardProjectId;
+                    if (!projectId) return;
+                    await this.loadNotesForProject(projectId);
+                    if (projectTable) refreshProjectRow(projectId);
+                },
+                noteBoardNotify(message, type) {
+                    if (type === 'error') showProjectListError(message);
+                    else showMessage(message);
+                },
+                /** Board card / メモを追加 → the note modal for the board's project */
+                openNoteModal(note) {
+                    const projectId = this.noteBoardProjectId;
+                    if (!projectId) return;
+                    if (note && note.id) this.openNoteModalFromListById(projectId, note.id);
+                    else this.openNoteModalFromList(projectId, null, 0);
+                },
+                canDeleteNote(note) {
+                    return !!(note && note.id);
+                },
+                async deleteNote(noteId) {
+                    if (!noteId || !confirm('このメモを削除しますか？')) return false;
+                    try {
+                        const formData = new FormData();
+                        formData.append('id', noteId);
+                        const response = await axios.post('/api/index.php?model=project&method=deleteNote', formData);
+                        if (response.data && response.data.status === 'success') {
+                            showMessage('メモが削除されました');
+                            await this.reloadNoteBoard();
+                            return true;
+                        }
+                        showProjectListError('メモの削除に失敗しました', response.data);
+                    } catch (error) {
+                        console.error('Error deleting note:', error);
+                        showProjectListError('メモの削除に失敗しました', error);
+                    }
+                    return false;
                 },
                 async loadUsers() {
                     try {
