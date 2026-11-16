@@ -243,6 +243,12 @@
 .note-board .note-card:not(.note-bg-default) {
     border-color: transparent;
 }
+/* No 背景色: the same pale yellow as a 案件一覧 memo cell (index.php #fff9e6 / #333), in dark mode too */
+.note-board .note-card.note-bg-default {
+    --note-bg: #fff9e6;
+    --note-fg: #333;
+    border-color: rgba(0, 0, 0, 0.08);
+}
 .note-board .note-card:hover,
 .note-board .note-card:focus-within {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
@@ -463,7 +469,7 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
     flex: 0 0 auto;
     padding-top: 6px;
     font-size: 0.72rem;
-    opacity: 0.65;
+    opacity: 0.85; /* ≥ 4.5:1 on every note colour in both themes (0.72 left peach / dark sage, fog below) */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -473,6 +479,7 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
 /* Board card borders in dark mode (palette: assets/css/project-notes.css) */
 [data-bs-theme="dark"] .note-board .note-card { border-color: rgba(255, 255, 255, 0.15); }
 [data-bs-theme="dark"] .note-board .note-card:not(.note-bg-default) { border-color: transparent; }
+[data-bs-theme="dark"] .note-board .note-card.note-bg-default { border-color: transparent; }
 .note-board-card .note-board-project-name {
     font-size: 0.8rem;
     font-weight: 500;
