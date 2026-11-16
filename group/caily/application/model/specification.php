@@ -14,12 +14,20 @@ class Specification extends ApplicationModel {
         $this->connect();
     }
 
+    // Security: files here are web-accessible, so never accept server-executable or inline-rendered types.
+    function isDangerousFile($name) {
+        return preg_match('/\.(php\d?|phtml|phar|pht|phps|cgi|pl|py|sh|asp|aspx|jsp|exe|bat|cmd|htaccess|svg|html?|xhtml|xml)(\.|$)/i', basename((string)$name)) === 1;
+    }
+
     function handleUploadedFile($file) {
         $uploadDir = DIR_ASSETS . 'upload/specs/';
         if (!is_dir($uploadDir)) {
             mkdir($uploadDir, 0777, true);
         }
 
+        if ($this->isDangerousFile($file['name'])) {
+            return null;
+        }
         $filePath = $uploadDir . basename($file['name']);
         if (move_uploaded_file($file['tmp_name'], $filePath)) {
             return $filePath;
@@ -36,7 +44,7 @@ class Specification extends ApplicationModel {
 
         $filePaths = [];
         foreach ($files['name'] as $index => $name) {
-            if ($files['error'][$index] === UPLOAD_ERR_OK) {
+            if ($files['error'][$index] === UPLOAD_ERR_OK && !$this->isDangerousFile($name)) {
                 $filePath = $uploadDir . basename($name);
                 if (move_uploaded_file($files['tmp_name'][$index], $filePath)) {
                     $filePaths[] = realpath($filePath);

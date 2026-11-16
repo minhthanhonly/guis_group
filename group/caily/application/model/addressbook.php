@@ -193,8 +193,8 @@ class Addressbook extends ApplicationModel {
 		}
 		$string = implode(',', array_keys($field));
 		$query = "SELECT ".$string." FROM ".$this->table." WHERE ".implode(" AND ", $where);
-		if (isset($_REQUEST['sort']) && strlen($_REQUEST['sort']) > 0) {
-			$query .= " ORDER BY ".$this->quote($_REQUEST['sort']);
+		if (isset($_REQUEST['sort']) && preg_match('/^[A-Za-z_][A-Za-z0-9_.]*$/', $_REQUEST['sort'])) {
+			$query .= " ORDER BY ".$_REQUEST['sort'];
 		} else {
 			$query .= " ORDER BY id";
 		}

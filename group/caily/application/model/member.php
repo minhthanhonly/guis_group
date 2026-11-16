@@ -671,7 +671,7 @@ class Member extends ApplicationModel {
 
 	/*API*/
 	function suspend_member() {
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
@@ -707,7 +707,7 @@ class Member extends ApplicationModel {
 	
 	/*API*/
 	function active_member() {
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
@@ -742,7 +742,7 @@ class Member extends ApplicationModel {
 
 	/*API*/
 	function change_password_api() {
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		$password = md5(trim($_POST['password']));
 		if(!$id){
 			$hash['status'] = 'error';
@@ -784,7 +784,7 @@ class Member extends ApplicationModel {
 	}
 
 	function delete_member() {
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		$hash['data'] = $this->permitFindApi('edit');
 		if(count($this->error) > 0){
 			$hash['status'] = 'error';
@@ -814,7 +814,7 @@ class Member extends ApplicationModel {
 
 
 	function get_user_by_id() {
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
@@ -847,7 +847,7 @@ class Member extends ApplicationModel {
 
 	/*API*/
 	function resign_member() {
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		$hash['data'] = $this->permitFindApi('edit');
 		if(count($this->error) > 0){
 			$hash['status'] = 'error';

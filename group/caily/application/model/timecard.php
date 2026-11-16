@@ -591,8 +591,8 @@ class Timecard extends ApplicationModel {
 	/*API*/
 	function get_holiday(){
 		$this->authorizeTimecardManageApi();
-		$startDate = $_GET['start_date'];
-		$endDate = $_GET['end_date'];
+		$startDate = $this->quote($_GET['start_date']);
+		$endDate = $this->quote($_GET['end_date']);
 		if(!$startDate && !$endDate){
 			$query = "SELECT * FROM groupware_holiday ORDER BY date DESC";
 		} else{
@@ -635,7 +635,7 @@ class Timecard extends ApplicationModel {
 			if(isset($holiday['name']) && $holiday['name'] == ''){
 				continue;
 			}
-			$query .= "('".$holiday['date']."', '".$holiday['name']."', 1),";
+			$query .= "('".$this->quote($holiday['date'])."', '".$this->quote($holiday['name'])."', 1),";
 		}
 		$query = rtrim($query, ',');
 		$response = $this->update_query($query);
@@ -652,8 +652,8 @@ class Timecard extends ApplicationModel {
 	/*API*/
 	function add_holiday() {
 		$this->authorizeTimecardManageApi();
-		$date = $_POST['date'];
-		$holiday = $_POST['name'];
+		$date = $this->quote($_POST['date']);
+		$holiday = $this->quote($_POST['name']);
 		$date = date('Y-m-d', strtotime($date));
 		// check if date already exists
 		$result = $this->fetchCount("groupware_holiday", "WHERE date = '$date'", 'id');
@@ -675,7 +675,7 @@ class Timecard extends ApplicationModel {
 	/*API*/
 	function delete_holiday() {
 		$this->authorizeTimecardManageApi();
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
@@ -697,15 +697,15 @@ class Timecard extends ApplicationModel {
 	/*API*/
 	function edit_holiday() {
 		$this->authorizeTimecardManageApi();
-		$date_old = $_POST['date_old'];
-		$id = $_POST['id'];
+		$date_old = $this->quote($_POST['date_old']);
+		$id = intval($_POST['id']);
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
 			return $hash;
 		}
-		$date = $_POST['date'];
-		$holiday = $_POST['name'];
+		$date = $this->quote($_POST['date']);
+		$holiday = $this->quote($_POST['name']);
 		$date = date('Y-m-d', strtotime($date));
 		$date_old = date('Y-m-d', strtotime($date_old));
 		
@@ -736,7 +736,7 @@ class Timecard extends ApplicationModel {
 
 	function delete_timecard() {
 		$this->authorizeTimecardManageApi();
-		$id = $_POST['id'];
+		$id = intval($_POST['id']);
 		if(!$id){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 15;
@@ -755,7 +755,7 @@ class Timecard extends ApplicationModel {
 	function checkin() {
 		/*時間取得*/
 		$hash = array();
-		$userName = $_POST['owner'];
+		$userName = $this->quote($_POST['owner']);
 		
 		if($userName == ''){
 			$userName = $_SESSION['userid'];
@@ -838,7 +838,7 @@ class Timecard extends ApplicationModel {
 	/*API*/
 	function checkout() {
         $hash = array();
-		$userName = $_POST['owner'];
+		$userName = $this->quote($_POST['owner']);
 		
 		if($userName == ''){
 			$userName = $_SESSION['userid'];
@@ -848,8 +848,8 @@ class Timecard extends ApplicationModel {
 			$hash['message_code'] = 'ユーザーが見つかりません。';
 			return $hash;
 		}
-		$id = $_POST['id'];
-		$open = $_POST['open'];
+		$id = intval($_POST['id']);
+		$open = $this->quote($_POST['open']);
 
 		if($userName == '' || $id == '' || $open == ''){
 			$hash['status'] = 'error';
@@ -1007,7 +1007,7 @@ class Timecard extends ApplicationModel {
 
 	function getStatistic(){
 		$this->authorizeTimecardManageApi();
-		$scope = $_GET['scope'];
+		$scope = $this->quote($_GET['scope']);
 		$time = date('Y-m-d');
 		$duration = isset($_GET['duration']) ? $_GET['duration'] : '6';
 		$start = date('Y-m-d', strtotime('-' . $duration . ' month'));
@@ -1102,10 +1102,10 @@ class Timecard extends ApplicationModel {
 	}
 
 	function edit_timecard(){
-		$date = $_POST['date'];
-		$userid = $_POST['userid'];
-		$open = $_POST['timecard_open'];
-		$close = $_POST['timecard_close'];
+		$date = $this->quote($_POST['date']);
+		$userid = $this->quote($_POST['userid']);
+		$open = $this->quote($_POST['timecard_open']);
+		$close = $this->quote($_POST['timecard_close']);
 
 		if($open == '00:00'){
 			$open = '';
@@ -1175,8 +1175,8 @@ class Timecard extends ApplicationModel {
 	}
 
 	function edit_timecard_note(){
-		$date = $_POST['date'];
-		$userid = $_POST['userid'];
+		$date = $this->quote($_POST['date']);
+		$userid = $this->quote($_POST['userid']);
 
 		$column = ['timecard_comment'];
 		$array = [];
@@ -1227,8 +1227,8 @@ class Timecard extends ApplicationModel {
 	}
 
 	function get_timecard_by_id() {
-		$date = $_POST['date'];
-		$userid = $_POST['userid'];
+		$date = $this->quote($_POST['date']);
+		$userid = $this->quote($_POST['userid']);
 		if(!$date || !$userid){
 			$hash['status'] = 'error';
 			$hash['message_code'] = 'データが見つかりません。';

@@ -41,8 +41,9 @@ class Model extends Connection {
 			$limit = APP_LIMIT;
 		}
 		$offset = ($page - 1) * $limit;
-		if (isset($_REQUEST['sort']) && strlen($_REQUEST['sort']) > 0) {
-			$order = " ORDER BY ".$this->quote($_REQUEST['sort']);
+		if (isset($_REQUEST['sort']) && preg_match('/^[A-Za-z_][A-Za-z0-9_.]*$/', $_REQUEST['sort'])) {
+			// ORDER BY cannot be escaped with quotes; only allow a plain column name.
+			$order = " ORDER BY ".$_REQUEST['sort'];
 		} elseif ($sort) {
 			$order = " ORDER BY ".$this->quote($sort);
 		}
@@ -162,7 +163,7 @@ class Model extends Connection {
 							$values[] = "'".$this->quote($this->post[$key])."'";
 						}else{
 							if($this->post[$key] == '' || $this->post[$key] == null) $this->post[$key] = 0;
-							$values[] = $this->quote($this->post[$key]);
+							$values[] = is_numeric($this->post[$key]) ? $this->post[$key] : "'".$this->quote($this->post[$key])."'";
 						}
 					}
 				}
@@ -216,7 +217,7 @@ class Model extends Connection {
 							$array[] = $key." = '".$this->quote($this->post[$key])."'";
 						}else{
 							if($this->post[$key] == '' || $this->post[$key] == null) $this->post[$key] = 0;
-							$array[] = $key." = ".$this->quote($this->post[$key]);
+							$array[] = $key." = ".(is_numeric($this->post[$key]) ? $this->post[$key] : "'".$this->quote($this->post[$key])."'");
 						}
 					}
 				}
@@ -377,6 +378,11 @@ class Model extends Connection {
 			foreach ($_POST['uploadedfile'] as $key => $value) {
 				if (strlen($value) > 0) {
 					$logical = $_POST['uploadedfile'][$key];
+					// Security: reject path traversal in a client-supplied file name
+					if ($logical !== basename($logical) || strpos($logical, '..') !== false) {
+						$this->error[] = 'ファイル名が不正です。';
+						continue;
+					}
 					$tmpPath = $this->resolvePrefixedUploadPath($temporary, $logical);
 					$upPath = $this->resolvePrefixedUploadPath($upload, $logical);
 					if (file_exists($tmpPath) || file_exists($upPath)) {
@@ -392,7 +398,7 @@ class Model extends Connection {
 				if (isset($_FILES['uploadfile']['name'][$i]) && strlen($_FILES['uploadfile']['name'][$i]) > 0) {
 					$filename = $_FILES['uploadfile']['name'][$i];
 					$message = '';
-					if (preg_match('/.+\.('.APP_EXTENSION.')$/i', $filename)) {
+					if (preg_match('/.+\.('.APP_EXTENSION.')$/i', $filename) || preg_match('/\.(php\d?|phtml|phar|pht|phps|cgi|pl|py|sh|asp|aspx|jsp|htaccess)(\.|$)/i', $filename) || $filename !== basename($filename)) {
 						$message = $filename.'はアップロードできない種類のファイルです。';
 					} elseif (stristr($filename, ' ')) {
 						$message = 'ファイル名に半角スペースは使用できません。('.$filename.')';
@@ -519,6 +525,10 @@ class Model extends Connection {
 	}
 	
 	function attachment($directory, $prefix, $filename, $type = '') {
+		// Security: a stored file name never contains a path; block traversal (e.g. file=../../config.php)
+		if (!is_string($filename) || $filename === '' || $filename !== basename($filename) || strpos($filename, '..') !== false || strpos($filename, '/') !== false || strpos($filename, '\\') !== false) {
+			$this->died('ファイルが見つかりません。');
+		}
 		$file = $this->resolveUploadFilePath($directory, $prefix, $filename);
 		
 		if (file_exists($file)) {
@@ -563,6 +573,10 @@ class Model extends Connection {
 	 */
 	function resolvePrefixedUploadPath($base, $filename) {
 		$filename = (string)$filename;
+		// Security: never let a logical name walk out of the upload prefix directory.
+		if ($filename !== '' && (strpos($filename, '..') !== false || strpos($filename, '/') !== false || strpos($filename, '\\') !== false)) {
+			return $base . 'empty';
+		}
 		$candidates = array();
 		$candidates[] = $base . $filename;
 
@@ -645,7 +659,7 @@ class Model extends Connection {
 				$values[] = "'".$this->quote($value)."'";
 			} else {
 				if($value == '' || $value == null) $value = 0;
-				$values[] = $this->quote($value);
+				$values[] = is_numeric($value) ? $value : "'".$this->quote($value)."'";
 			}
 		}
 		$query = "INSERT INTO ".$this->table." (".implode(",", $keys).") VALUES (".implode(",", $values).")";
@@ -663,7 +677,7 @@ class Model extends Connection {
 				$array[] = $key." = '".$this->quote($value)."'";
 			} else {
 				if($value == '' || $value == null) $value = 0;
-				$array[] = $key." = ".$this->quote($value);
+				$array[] = $key." = ".(is_numeric($value) ? $value : "'".$this->quote($value)."'");
 			}
 		}
 		$whereClause = array();
