@@ -1422,9 +1422,16 @@ body:not(.project-notes-one-line) #projectTable .note-more-lines-icon,
 
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-pin-everyone-icon,
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-pin-self-icon,
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-board-open-btn,
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-drag-handle {
     pointer-events: auto;
     cursor: pointer;
+}
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-board-open-btn {
+    color: var(--bs-secondary-color, #6c757d);
+}
+#projectTable td.confirmation-notes-column .confirmation-note-item .note-board-open-btn:hover {
+    color: var(--bs-primary, #696cff);
 }
 #projectTable td.confirmation-notes-column .confirmation-note-item .note-drag-handle {
     cursor: grab;

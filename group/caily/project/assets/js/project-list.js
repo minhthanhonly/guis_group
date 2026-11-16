@@ -273,13 +273,16 @@ var projectTable;
      * the row data and re-runs the cell/row callbacks DataTables only runs on creation.
      * Falls back to a full reload whenever the row cannot be refreshed in place.
      */
-    /** メモボード: expand button on a cell that shows notes — visible on hover (project-notes.css) */
+    /**
+     * メモボード: expand button in the corner of a cell with note snippets (other columns) — visible on
+     * hover (project-notes.css). CAILYメモ / GUISメモ notes have it next to the pin instead.
+     */
     function appendNoteBoardOpenButton(td) {
         var $td = $(td);
         $td.children('.note-board-open-btn').remove();
         var title = typeof translateText === 'function' ? translateText('メモボードを全画面表示') : 'メモボードを全画面表示';
         $td.addClass('note-board-open-host').append(
-            $('<button type="button" class="note-board-open-btn"><i class="fa fa-expand" aria-hidden="true"></i></button>')
+            $('<button type="button" class="note-board-open-btn note-board-open-corner"><i class="fa fa-expand" aria-hidden="true"></i></button>')
                 .attr({ title: title, 'aria-label': title })
         );
     }
@@ -4209,6 +4212,7 @@ var projectTable;
         if (isPinnedSelf) cls += ' pinned-self-note';
         cls += noteBgClassForList(parsed.bgColor);
         var pinEveryoneTitle = isImportant ? 'ピン（全員）解除' : 'ピン（全員）';
+        var boardTitle = typeof translateText === 'function' ? translateText('メモボードを全画面表示') : 'メモボードを全画面表示';
         return `
             <div class="${cls}" ${parsed.id ? `data-note-id="${parsed.id}"` : ''} data-is-important="${isImportant ? 1 : 0}" data-is-pinned-self="${isPinnedSelf ? 1 : 0}">
                 <span class="note-drag-handle" title="並べ替え" aria-label="並べ替え"><i class="fa fa-grip-vertical"></i></span>
@@ -4220,6 +4224,9 @@ var projectTable;
                     ${parsed.visibility === 'self' ? '' : `<span class="note-pin-everyone-icon ${isImportant ? 'is-active' : ''}" title="${pinEveryoneTitle}" style="cursor: pointer;">
                         <i class="fa fa-thumb-tack"></i>
                     </span>`}
+                    <span class="note-board-open-btn" role="button" tabindex="-1" title="${boardTitle}" aria-label="${boardTitle}">
+                        <i class="fa fa-expand"></i>
+                    </span>
                 </span>
             </div>
         `;
@@ -6197,7 +6204,6 @@ var projectTable;
                         var $wrap = $(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                         $(td).empty().append($wrap);
                         initConfirmationNotesSortable($wrap);
-                        appendNoteBoardOpenButton(td);
                     },
                     title: buildI18nHeaderTitle(getProjectBaseColumnTitle('confirmation_notes_caily', 'CAILYメモ')),
                     orderable: false
@@ -6244,7 +6250,6 @@ var projectTable;
                         var $wrap = $(`<div class="confirmation-notes-wrapper" style="max-height: 200px; overflow-y: auto;">${html}</div>`);
                         $(td).empty().append($wrap);
                         initConfirmationNotesSortable($wrap);
-                        appendNoteBoardOpenButton(td);
                     },
                     title: buildI18nHeaderTitle('GUISメモ'),
                     orderable: false
@@ -8801,7 +8806,7 @@ var projectTable;
 
         // Click note item (entire block) to edit the corresponding note
         $('#projectTable tbody').on('click', '.confirmation-note-item', function(e) {
-            if ($(e.target).closest('.note-pin-everyone-icon, .note-pin-self-icon, .note-drag-handle').length > 0) {
+            if ($(e.target).closest('.note-pin-everyone-icon, .note-pin-self-icon, .note-drag-handle, .note-board-open-btn').length > 0) {
                 return;
             }
             

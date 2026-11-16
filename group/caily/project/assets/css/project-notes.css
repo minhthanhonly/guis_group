@@ -478,11 +478,12 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
     display: none;
 }
 
-/* 案件一覧: full screen メモボード button on a memo cell (shown on hover) */
+/* 案件一覧: full screen メモボード button in the corner of a note-snippet cell (shown on hover);
+   CAILYメモ / GUISメモ notes have it among their own actions (index.php) */
 #projectTable td.note-board-open-host {
     position: relative;
 }
-#projectTable .note-board-open-btn {
+#projectTable .note-board-open-corner {
     position: absolute;
     top: 2px;
     right: 2px;
@@ -501,11 +502,11 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
     cursor: pointer;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
 }
-#projectTable td.note-board-open-host:hover .note-board-open-btn,
-#projectTable .note-board-open-btn:focus-visible {
+#projectTable td.note-board-open-host:hover .note-board-open-corner,
+#projectTable .note-board-open-corner:focus-visible {
     display: block;
 }
-#projectTable .note-board-open-btn:hover {
+#projectTable .note-board-open-corner:hover {
     color: var(--bs-primary, #696cff);
     border-color: var(--bs-primary, #696cff);
 }
