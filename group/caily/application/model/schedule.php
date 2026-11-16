@@ -49,8 +49,8 @@ class Schedule extends ApplicationModel {
 	}
 
 	function get_event(){
-		$start = $_GET['start'];
-		$end = $_GET['end'];
+		$start = $this->quote($_GET['start']);
+		$end = $this->quote($_GET['end']);
 		$isTop = $_GET['isTop'];
 		$data = array();
 
@@ -72,8 +72,6 @@ class Schedule extends ApplicationModel {
 			);
 		}
 		$owner = $this->quote($_SESSION['userid']);
-		$start = $this->quote($start);
-		$end = $this->quote($end);
 		$arrayWhere = array(
 			"schedule_type = 0",
 			"((schedule_date BETWEEN '".$start."' AND '".$end."') OR (schedule_date_end BETWEEN '".$start."' AND '".$end."'))",
@@ -114,15 +112,15 @@ class Schedule extends ApplicationModel {
 		if($id == null) {
 			return array('status' => 'error', 'message' => 'IDが指定されていません。');
 		}
-		$title = $_POST['title'];
-		$start_date = $_POST['start_date'];
-		$start_time = $_POST['start_time'];
-		$end_date = $_POST['end_date'];
-		$end_time = $_POST['end_time'];
+		$title = $this->quote($_POST['title']);
+		$start_date = $this->quote($_POST['start_date']);
+		$start_time = $this->quote($_POST['start_time']);
+		$end_date = $this->quote($_POST['end_date']);
+		$end_time = $this->quote($_POST['end_time']);
 		$allDay = $_POST['allDay']  == 'true' ? 1 : 0;
-		$comment = $_POST['comment'];
+		$comment = $this->quote($_POST['comment']);
 		$public_level = isset($_POST['public_level']) ? intval($_POST['public_level']) : 0;
-		$calendar = $_POST['calendar'];
+		$calendar = $this->quote($_POST['calendar']);
 		$editor = $_SESSION['userid'];
 		$updated = date('Y-m-d H:i:s');
 
@@ -138,15 +136,15 @@ class Schedule extends ApplicationModel {
 
 	function add_event() {
 		
-		$title = $_POST['title'];
-		$start_date = $_POST['start_date'];
-		$start_time = $_POST['start_time'];
-		$end_date = $_POST['end_date'];
-		$end_time = $_POST['end_time'];
+		$title = $this->quote($_POST['title']);
+		$start_date = $this->quote($_POST['start_date']);
+		$start_time = $this->quote($_POST['start_time']);
+		$end_date = $this->quote($_POST['end_date']);
+		$end_time = $this->quote($_POST['end_time']);
 		$allDay = $_POST['allDay']  == 'true' ? 1 : 0;
-		$comment = $_POST['comment'];
+		$comment = $this->quote($_POST['comment']);
 		$public_level = isset($_POST['public_level']) ? intval($_POST['public_level']) : 0;
-		$calendar = $_POST['calendar'];
+		$calendar = $this->quote($_POST['calendar']);
 		$created = date('Y-m-d H:i:s');
 		$owner = $_SESSION['userid'];
 		$query = sprintf("INSERT INTO %s (schedule_title, schedule_date, schedule_time, schedule_date_end, schedule_endtime, schedule_allday, schedule_comment, public_level, created, schedule_category, owner) VALUES ('%s', '%s', '%s', '%s', '%s', '%s', '%s', %d, '%s', '%s', '%s')", "groupware_schedule", $title, $start_date, $start_time, $end_date, $end_time, $allDay, $comment, $public_level, $created, $calendar, $owner);
@@ -279,7 +277,7 @@ class Schedule extends ApplicationModel {
 		
 		$hash['data'] = $this->permitFind();
 		if (strlen($_GET['member']) > 0) {
-			$owner = $_GET['member'];
+			$owner = $this->quote($_GET['member']);
 		} elseif ($hash['data']['schedule_level'] == 1) {
 			$owner = $hash['data']['owner'];
 		} elseif ($hash['data']['schedule_level'] == 2 && !stristr($hash['data']['schedule_group'], '['.$_SESSION['group'].']') && !stristr($hash['data']['schedule_user'], '['.$_SESSION['userid'].']')) {

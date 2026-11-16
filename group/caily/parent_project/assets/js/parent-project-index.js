@@ -321,6 +321,20 @@ createApp({
             if (!project || !project.id || !this.isProjectManager) return;
             await this.openEditParentProjectModal(project.id);
         },
+        // 建物登録: same shared modal as 建物編集, in create mode
+        async openCreateParentProjectModal() {
+            this.clearParentProjectHighlight();
+            if (typeof window.openParentProjectCreateModal !== 'function') {
+                window.location.href = 'create.php';
+                return;
+            }
+            await window.openParentProjectCreateModal({
+                onSaved: async (savedId) => {
+                    this.highlightedParentProjectId = savedId != null ? Number(savedId) || savedId : null;
+                    await this.loadParentProjects();
+                }
+            });
+        },
         // 建物編集: shared standalone modal (parent-project-quick-modal.js), opened directly in edit mode
         async openEditParentProjectModal(parentProjectId) {
             if (typeof window.openParentProjectModal !== 'function') {
@@ -997,6 +1011,7 @@ createApp({
                 notes: source.notes || '',
                 requests: String(source.requests || '').trim(),
                 materials: String(source.materials || '').trim(),
+                materials_memo: source.materials_memo || '',
                 status: 'draft'
             };
         },
@@ -1019,8 +1034,21 @@ createApp({
                 });
                 const source = response && response.data && response.data.id ? response.data : project;
                 const payload = this.buildCopyParentProjectPayload(source);
-                sessionStorage.setItem('copyParentProjectData', JSON.stringify(payload));
-                window.location.href = 'create.php';
+                if (typeof window.openParentProjectCreateModal === 'function') {
+                    // 建物登録 modal, prefilled with the copied building
+                    this.clearParentProjectHighlight();
+                    this.copyingParentProjectId = null;
+                    await window.openParentProjectCreateModal({
+                        copyFrom: payload,
+                        onSaved: async (savedId) => {
+                            this.highlightedParentProjectId = savedId != null ? Number(savedId) || savedId : null;
+                            await this.loadParentProjects();
+                        }
+                    });
+                } else {
+                    sessionStorage.setItem('copyParentProjectData', JSON.stringify(payload));
+                    window.location.href = 'create.php';
+                }
             } catch (error) {
                 console.error('Error copying parent project:', error);
                 showMessage('建物のコピーに失敗しました。', true);

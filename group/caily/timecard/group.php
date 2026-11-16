@@ -90,7 +90,7 @@ $weekday = date('w', $timestamp);
 						}
 						$sum2 = sprintf('%d:%02d', (($sum2 - ($sum2 % 60)) / 60), ($sum2 % 60));
 				?>
-					<tr><td><a href="index.php?year=<?=$_GET['year']?>&month=<?=$_GET['month']?>&member=<?=$key?>"><?=$value?></a>&nbsp;</td>
+					<tr><td><a href="index.php?year=<?=intval($_GET['year'])?>&month=<?=intval($_GET['month'])?>&member=<?=$key?>"><?=$value?></a>&nbsp;</td>
 					<td><?=$day?>&nbsp;</td>
 					<td><?=$sum?>&nbsp;</td>
 					<td><?=$intervalsum?>&nbsp;</td>

@@ -13,6 +13,7 @@
  *       mode: 'view' | 'edit',   // default 'view'; 'edit' is ignored without edit permission
  *       onSaved: function (id)   // called after a successful save
  *   })
+ *   window.openParentProjectCreateModal({ onSaved: function (newId) })   // 建物登録 (new building)
  * A `parent-project:saved` event ({ detail: { id } }) is also dispatched on document.
  *
  * Edit permission: window.PARENT_PROJECT_QUICK_MODAL_CAN_EDIT (set by the partial from the session).
@@ -76,6 +77,10 @@
         };
     }
 
+    function emptyErrors() {
+        return { company_name: '', project_name: '', project_number: '', request_date: '', guis_receiver: '', requests: '' };
+    }
+
     function notifyError(message, errorOrResponse) {
         if (typeof showParentProjectError === 'function') {
             showParentProjectError(message, errorOrResponse);
@@ -106,14 +111,14 @@
                     // ids of this app's own customer modals (see the partial)
                     customerSearchModalId: 'qmCustomerSearchModal',
                     customerListModalId: 'qmCustomerListModal',
-                    mode: 'view',            // 'view' | 'edit'
+                    mode: 'view',            // 'view' | 'edit' | 'create'
                     openedInMode: 'view',    // mode the modal was opened in: decides what cancel / save do
                     onSavedCallback: null,
                     guisReceiverName: '',
                     siblingProjects: [],
                     editParentProjectLoading: false,
                     editParentProjectSaving: false,
-                    editParentProjectErrors: { company_name: '', project_name: '' },
+                    editParentProjectErrors: emptyErrors(),
                     editingParentProject: emptyProject(),
                     nonResidentialMainUseOptions: [
                         { value: '08340', label: '08340 工場' },
@@ -143,7 +148,10 @@
             },
             computed: {
                 isEditMode: function () {
-                    return this.mode === 'edit';
+                    return this.mode === 'edit' || this.mode === 'create';
+                },
+                isCreateMode: function () {
+                    return this.mode === 'create';
                 },
                 editHasNonResidentialType: function () {
                     return splitList(this.editingParentProject.type2).includes('非住宅');
@@ -251,7 +259,7 @@
                     this.openedInMode = (opts.mode === 'edit' && this.canEdit) ? 'edit' : 'view';
                     this.destroyEditParentWidgets();
                     this.mode = 'view';
-                    this.editParentProjectErrors = { company_name: '', project_name: '' };
+                    this.editParentProjectErrors = emptyErrors();
                     this.duplicateDismissedKey = '';
                     this.editingParentProject = Object.assign(emptyProject(), { id: parentProjectId });
                     this.setCustomerListFromServer([]);
@@ -275,6 +283,83 @@
                     } else {
                         await this.$nextTick();
                         this.applyI18n();
+                    }
+                },
+                // 建物登録: empty form, saved with parentproject.create
+                openCreate: async function (options) {
+                    var opts = options || {};
+                    this.onSavedCallback = typeof opts.onSaved === 'function' ? opts.onSaved : null;
+                    this.openedInMode = 'create';
+                    this.destroyEditParentWidgets();
+                    this.mode = 'view';
+                    this.editParentProjectErrors = emptyErrors();
+                    this.customerListError = '';
+                    this.duplicateDismissedKey = '';
+                    var project = emptyProject();
+                    project.guis_receiver = String(window.PARENT_PROJECT_QUICK_MODAL_USER_ID
+                        || (window.currentUser && window.currentUser.id) || '');
+                    // コピー: prefill from an existing building (same fields as the former create.php copy)
+                    var src = opts.copyFrom || null;
+                    if (src) {
+                        ['construction_number', 'project_name', 'scale', 'type1', 'type2', 'type3',
+                            'structural_office', 'materials_memo'].forEach(function (key) {
+                            if (src[key] != null) project[key] = String(src[key]);
+                        });
+                        var d = new Date();
+                        var pad = function (n) { return String(n).padStart(2, '0'); };
+                        project.request_date = d.getFullYear() + '/' + pad(d.getMonth() + 1) + '/' + pad(d.getDate())
+                            + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+                    }
+                    this.editingParentProject = project;
+                    if (src && Array.isArray(src.customers) && src.customers.length > 0) {
+                        this.setCustomerListFromServer(src.customers);
+                    } else if (src && (src.customer_id || src.company_name || src.contact_name)) {
+                        this.setCustomerListFromServer([{
+                            customer_id: src.customer_id || null,
+                            is_primary: 1,
+                            company_name: src.company_name || '',
+                            branch_name: src.branch_name || '',
+                            contact_name: src.contact_name || ''
+                        }]);
+                    } else {
+                        this.setCustomerListFromServer([]);
+                    }
+                    if (src && typeof this.syncPrimaryCustomerFields === 'function') {
+                        this.syncPrimaryCustomerFields();
+                    }
+                    this.siblingProjects = [];
+                    this.guisReceiverName = '';
+                    this.parseEditParentRequests(src ? src.requests : '');
+                    this.parseEditParentMaterials(src ? src.materials : '');
+                    this.parseEditParentFeatures(src ? src.features : '');
+                    this.editParentProjectLoading = false;
+
+                    var modalEl = document.getElementById(MODAL_ID);
+                    if (modalEl) {
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                    }
+                    this.mode = 'create';
+                    await this.$nextTick();
+                    this.initEditParentSelect2();
+                    this.initEditParentDatePicker();
+                    this.initEditParentTagify();
+                    this.applyI18n();
+                    await this.generateProjectNumber();
+                },
+                generateProjectNumber: async function () {
+                    try {
+                        var response = await axios.get('/api/index.php?model=parentproject&method=generateProjectNumber');
+                        if (response.data && response.data.status === 'success') {
+                            this.editingParentProject.project_number = response.data.project_number;
+                            this.editParentProjectErrors.project_number = '';
+                        } else if (typeof showMessage === 'function') {
+                            showMessage('管理番号の生成に失敗しました', true);
+                        }
+                    } catch (error) {
+                        console.error('Error generating project number:', error);
+                        if (typeof showMessage === 'function') {
+                            showMessage('管理番号の生成に失敗しました', true);
+                        }
                     }
                 },
                 loadParentProject: async function (parentProjectId) {
@@ -342,7 +427,7 @@
                     if (!this.canEdit || this.editParentProjectLoading) {
                         return;
                     }
-                    this.editParentProjectErrors = { company_name: '', project_name: '' };
+                    this.editParentProjectErrors = emptyErrors();
                     this.customerListError = '';
                     this.mode = 'edit';
                     await this.$nextTick();
@@ -353,7 +438,7 @@
                 },
                 // キャンセル: opened for editing -> close; opened for viewing -> back to the (reloaded) view
                 cancelEdit: async function () {
-                    if (this.openedInMode === 'edit') {
+                    if (this.openedInMode !== 'view') {
                         this.closeModal();
                         return;
                     }
@@ -761,10 +846,11 @@
 
                 // ---- save ----
                 saveParentProjectFromModal: async function () {
-                    if (!this.canEdit) {
+                    var creating = this.isCreateMode;
+                    if (!creating && !this.canEdit) {
                         return;
                     }
-                    this.editParentProjectErrors = { company_name: '', project_name: '' };
+                    this.editParentProjectErrors = emptyErrors();
                     this.syncPrimaryCustomerFields();
                     var company = String(this.editingParentProject.company_name || '').trim();
                     var name = String(this.editingParentProject.project_name || '').trim();
@@ -777,6 +863,26 @@
                         this.editParentProjectErrors.project_name = 'お施主様名は必須です';
                         hasError = true;
                     }
+                    if (creating) {
+                        // Same required fields as the create.php page
+                        if (!this.editingParentProject.guis_receiver) {
+                            this.editParentProjectErrors.guis_receiver = 'GUIS受付者は必須です';
+                            hasError = true;
+                        }
+                        if (!String(this.editingParentProject.project_number || '').trim()) {
+                            this.editParentProjectErrors.project_number = '管理番号は必須です';
+                            hasError = true;
+                        }
+                        if (!String(this.editingParentProject.request_date || '').trim()) {
+                            this.editParentProjectErrors.request_date = '依頼日は必須です';
+                            hasError = true;
+                        }
+                        var f = this.editParentRequestFlags;
+                        if (!(f.design || f.equipment || f.equipment3d || f.energy || f.other)) {
+                            this.editParentProjectErrors.requests = '依頼は1つ以上選択してください';
+                            hasError = true;
+                        }
+                    }
                     if (hasError) return;
                     if (!(await this.confirmDuplicateBuildingIfNeeded())) return;
 
@@ -784,7 +890,9 @@
                     try {
                         var p = this.editingParentProject;
                         var formData = new FormData();
-                        formData.append('id', p.id);
+                        if (!creating) {
+                            formData.append('id', p.id);
+                        }
                         formData.append('company_name', company);
                         formData.append('branch_name', p.branch_name || '');
                         formData.append('contact_name', p.contact_name || '');
@@ -809,14 +917,14 @@
                         formData.append('features', this.buildEditParentFeaturesString());
                         // 省エネ向け資料 / 審査機関 / BELS are edited on the 省エネ child project, not on the building:
                         // not sent here, so the legacy building columns keep their old values.
-                        var response = await axios.post('/api/index.php?model=parentproject&method=update', formData);
+                        var response = await axios.post('/api/index.php?model=parentproject&method=' + (creating ? 'create' : 'update'), formData);
                         if (response.data && response.data.status === 'success') {
-                            var savedId = p.id;
+                            var savedId = creating ? response.data.parent_project_id : p.id;
                             if (typeof showMessage === 'function') {
-                                showMessage(response.data.message || '建物情報を更新しました。', false);
+                                showMessage(creating ? '建物を登録しました。' : (response.data.message || '建物情報を更新しました。'), false);
                             }
                             this.destroyEditParentWidgets();
-                            if (this.openedInMode === 'edit') {
+                            if (this.openedInMode !== 'view') {
                                 this.closeModal();
                             } else {
                                 this.mode = 'view';
@@ -826,11 +934,11 @@
                             }
                             this.notifySaved(savedId);
                         } else {
-                            notifyError('更新に失敗しました。', response && response.data);
+                            notifyError(creating ? '建物の登録に失敗しました。' : '更新に失敗しました。', response && response.data);
                         }
                     } catch (error) {
                         console.error('Error saving parent project:', error);
-                        notifyError('更新に失敗しました。', error);
+                        notifyError(creating ? '建物の登録に失敗しました。' : '更新に失敗しました。', error);
                     } finally {
                         this.editParentProjectSaving = false;
                     }
@@ -886,5 +994,16 @@
             return Promise.resolve(false);
         }
         return instance.open(id, options).then(function () { return true; });
+    };
+
+    window.openParentProjectCreateModal = function (options) {
+        var instance = getVm();
+        if (!instance) {
+            if (typeof showMessage === 'function') {
+                showMessage('建物登録を開けません。ページを再読み込みしてください。', true);
+            }
+            return Promise.resolve(false);
+        }
+        return instance.openCreate(options).then(function () { return true; });
     };
 })();

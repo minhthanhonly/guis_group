@@ -36,9 +36,9 @@ $view->heading('建物一覧');
                                 <!-- <a v-if="canManagePriceList" href="../price_list/index.php" class="btn btn-outline-info btn-sm me-2">
                                     <i class="fa fa-list me-1"></i> <span data-i18n="価格表管理">価格表管理</span>
                                 </a> -->
-                                <a v-if="canCreateParentProject" href="create.php" class="btn btn-primary btn-sm" @click="clearParentProjectHighlight">
+                                <button v-if="canCreateParentProject" type="button" class="btn btn-primary btn-sm" @click="openCreateParentProjectModal">
                                     <i class="fa fa-plus me-1"></i> <span data-i18n="建物登録">建物登録</span>
-                                </a>
+                                </button>
                             </div>
                     </div>
                 </div>

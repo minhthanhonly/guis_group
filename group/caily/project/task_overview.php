@@ -5,52 +5,95 @@ if($_SESSION['show_project'] == 0){
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
 }
+
+// Departments the current user belongs to (active only). The board opens on the first one;
+// a user with no department gets the second active department (same order as the department filter).
+$overviewMyDepartmentIds = array();
+$overviewDefaultDepartmentId = '';
+try {
+    $overviewDeptModel = new ApplicationModel();
+    $overviewDeptModel->connect();
+    $overviewDeptRows = $overviewDeptModel->fetchAll(
+        "SELECT DISTINCT ud.department_id
+         FROM " . DB_PREFIX . "user_department ud
+         JOIN " . DB_PREFIX . "departments d ON d.id = ud.department_id AND d.is_active = 1
+         WHERE ud.userid = '" . $overviewDeptModel->quote((string)($_SESSION['userid'] ?? '')) . "'
+         ORDER BY ud.department_id ASC"
+    );
+    foreach ($overviewDeptRows as $overviewDeptRow) {
+        $overviewMyDepartmentIds[] = (int)$overviewDeptRow['department_id'];
+    }
+    if ($overviewMyDepartmentIds) {
+        $overviewDefaultDepartmentId = (string)$overviewMyDepartmentIds[0];
+    } else {
+        // Second active department (falls back to the first when only one exists)
+        $overviewFallbackDepts = $overviewDeptModel->fetchAll(
+            "SELECT id FROM " . DB_PREFIX . "departments WHERE is_active = 1 ORDER BY id ASC LIMIT 2"
+        );
+        $overviewFallbackDept = isset($overviewFallbackDepts[1]) ? $overviewFallbackDepts[1] : ($overviewFallbackDepts[0] ?? null);
+        if (!empty($overviewFallbackDept['id'])) {
+            $overviewDefaultDepartmentId = (string)(int)$overviewFallbackDept['id'];
+        }
+    }
+} catch (Exception $e) {
+    $overviewMyDepartmentIds = array();
+}
 ?>
 
 <div id="app" class="container-fluid mt-4" v-cloak>
-    <div class="row mb-3">
-        <div class="col-12 d-flex justify-content-between align-items-center">
-            <h4 class="mb-0">
-                <i class="fa fa-tasks me-2"></i><span data-i18n="全タスク一覧">全タスク一覧</span>
-            </h4>
-        </div>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <h4 class="mb-0">
+            <i class="fa fa-tasks me-2"></i><span data-i18n="全タスク一覧">全タスク一覧</span>
+            <span v-if="currentDepartmentName" class="kb-dept-pill ms-2">{{ currentDepartmentName }}</span>
+        </h4>
     </div>
 
     <!-- Filters -->
-    <div class="row mb-3">
-        <div class="col-md-3 mb-2">
-            <label class="form-label"><span data-i18n="部署">部署</span></label>
-            <select class="form-select" v-model="filters.department_id" @change="onDepartmentChange">
-                <option value="" data-i18n="すべて">すべて</option>
-                <option v-for="dep in departments" :key="dep.id" :value="dep.id">{{ dep.name }}</option>
-            </select>
-        </div>
-        <div class="col-md-3 mb-2">
-            <label class="form-label"><span data-i18n="チーム">チーム</span></label>
-            <select class="form-select" v-model="filters.team_id" @change="loadOverview">
-                <option value="" data-i18n="すべて">すべて</option>
-                <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
-            </select>
-        </div>
-        <div class="col-md-3 mb-2" v-if="canSelectUser">
-            <label class="form-label"><span data-i18n="ユーザー">ユーザー</span></label>
-            <select id="overviewUserFilter" class="form-select" ref="userFilterSelect">
-                <option value="" data-i18n="すべて">すべて</option>
-                <option v-for="user in filteredUsers" :key="user.id" :value="String(user.id)">{{ user.realname }}</option>
-            </select>
-        </div>
-        <div class="col-md-3 mb-2">
-            <label class="form-label"><span data-i18n="作成月">作成月</span></label>
-            <select class="form-select" v-model="filters.created_month" @change="loadOverview">
-                <option value="" data-i18n="すべて">すべて</option>
-                <option v-for="month in createdMonthOptions" :key="month.value" :value="month.value">{{ month.label }}</option>
-            </select>
-        </div>
-        <div class="col-md-12 mt-4 d-flex flex-wrap align-items-center gap-4">
-            <div class="form-check form-switch mb-1">
-                <input class="form-check-input" type="checkbox" id="excludeCompleted"
-                       v-model="filters.excludeCompleted" @change="loadOverview">
-                <label class="form-check-label" for="excludeCompleted"><span data-i18n="完了タスクを除外">完了タスクを除外</span></label>
+    <div class="card kb-filter-card mb-3">
+        <div class="card-body py-3">
+            <div class="row g-2 align-items-end">
+                <div class="col-6 col-md-3 col-xl-2">
+                    <label class="form-label small mb-1"><span data-i18n="部署">部署</span></label>
+                    <select class="form-select form-select-sm" v-model="filters.department_id" @change="onDepartmentChange">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option v-for="dep in departments" :key="dep.id" :value="String(dep.id)">{{ isMyDepartment(dep.id) ? '★ ' : '' }}{{ dep.name }}</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3 col-xl-2">
+                    <label class="form-label small mb-1"><span data-i18n="チーム">チーム</span></label>
+                    <select class="form-select form-select-sm" v-model="filters.team_id" @change="loadOverview">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3 col-xl-2" v-if="canSelectUser">
+                    <label class="form-label small mb-1"><span data-i18n="ユーザー">ユーザー</span></label>
+                    <select id="overviewUserFilter" class="form-select form-select-sm" ref="userFilterSelect">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option v-for="user in filteredUsers" :key="user.id" :value="String(user.id)">{{ user.realname }}</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3 col-xl-2">
+                    <label class="form-label small mb-1"><span data-i18n="作成月">作成月</span></label>
+                    <select class="form-select form-select-sm" v-model="filters.created_month" @change="loadOverview">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option v-for="month in createdMonthOptions" :key="month.value" :value="month.value">{{ month.label }}</option>
+                    </select>
+                </div>
+                <div class="col-12 col-md-6 col-xl-4" v-show="activeTab === 'tasks'">
+                    <label class="form-label small mb-1" for="kbSearch"><span data-i18n="検索">検索</span></label>
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fa fa-search"></i></span>
+                        <input id="kbSearch" type="search" class="form-control" v-model.trim="searchQuery"
+                               :placeholder="$t('タスク名・案件名・番号で検索')">
+                    </div>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap align-items-center column-gap-4 row-gap-2 mt-3">
+            <div class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" id="showClosedTasks"
+                       :checked="!filters.excludeCompleted" @change="setShowClosedTasks($event.target.checked)">
+                <label class="form-check-label text-nowrap" for="showClosedTasks"><span data-i18n="完了・キャンセルを表示">完了・キャンセルを表示</span></label>
             </div>
             <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="myTask"
@@ -67,9 +110,11 @@ if($_SESSION['show_project'] == 0){
                        v-model="filters.showUnassignedTasks" @change="syncFiltersToUrl">
                 <label class="form-check-label text-nowrap" for="showUnassignedTasks" data-i18n="未割り当てタスクを表示">未割り当てタスクを表示</label>
             </div>
-            <button class="btn btn-sm btn-outline-secondary" type="button" @click="resetFilters" :disabled="loading || weeklyLoading">
+            <button class="btn btn-sm btn-outline-secondary ms-auto" type="button" @click="resetFilters" :disabled="loading || weeklyLoading"
+                    :title="$t('自分の部署の表示に戻す')">
                 <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
             </button>
+            </div>
         </div>
     </div>
 
@@ -101,23 +146,150 @@ if($_SESSION['show_project'] == 0){
         </div>
     </div>
 
-    <!-- Task list (1 task per row, filters only by department / team / user) -->
-    <div class="row" v-show="activeTab === 'tasks'">
-        <div class="col-12">
-            <div class="card mb-3">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <h5 class="card-title mb-0"><span data-i18n="タスク一覧">タスク一覧</span></h5>
-                    <button class="btn btn-sm btn-outline-secondary" @click="loadOverview" :disabled="loading">
-                        <i class="fa fa-refresh me-1"></i><span data-i18n="更新">更新</span>
+    <!-- Task board (kanban) / list -->
+    <div v-show="activeTab === 'tasks'">
+        <!-- Toolbar: quick filters, sort, view mode -->
+        <div class="kb-toolbar d-flex flex-wrap align-items-center gap-2 mb-2">
+            <div class="kb-stats d-flex flex-wrap gap-2" role="group">
+                <button v-for="stat in quickStats" :key="stat.key" type="button" class="kb-stat"
+                        :class="['kb-stat--' + stat.tone, { 'is-active': quickFilter === stat.key }]"
+                        :aria-pressed="quickFilter === stat.key ? 'true' : 'false'"
+                        @click="setQuickFilter(stat.key)">
+                    <i :class="stat.icon"></i>
+                    <span>{{ $t(stat.label) }}</span>
+                    <b>{{ stat.count }}</b>
+                </button>
+            </div>
+            <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
+                <select class="form-select form-select-sm kb-sort" v-model="boardSort" @change="persistBoardPrefs" :aria-label="$t('並び替え')">
+                    <option v-for="opt in boardSortOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</option>
+                </select>
+                <div class="btn-group btn-group-sm" role="group">
+                    <button type="button" class="btn" :class="viewMode === 'kanban' ? 'btn-primary' : 'btn-outline-primary'" @click="setViewMode('kanban')">
+                        <i class="fa fa-columns me-1"></i><span data-i18n="カンバン">カンバン</span>
+                    </button>
+                    <button type="button" class="btn" :class="viewMode === 'list' ? 'btn-primary' : 'btn-outline-primary'" @click="setViewMode('list')">
+                        <i class="fa fa-list me-1"></i><span data-i18n="リスト">リスト</span>
                     </button>
                 </div>
-                <div class="card-body">
+                <button type="button" class="btn btn-sm btn-outline-secondary" @click="loadOverview" :disabled="loading" :title="$t('更新')" :aria-label="$t('更新')">
+                    <i class="fa fa-refresh" :class="{ 'fa-spin': loading }"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Member bar: click a person to see only their tasks -->
+        <div v-if="boardMembers.length" class="kb-members mb-3">
+            <span class="kb-members-label small text-muted text-nowrap"><i class="fa fa-users me-1"></i><span data-i18n="担当者">担当者</span></span>
+            <div class="kb-members-scroll">
+                <button v-for="m in boardMembers" :key="m.id" type="button" class="kb-member"
+                        :class="{ 'is-active': isMemberSelected(m.id), 'is-idle': m.count === 0 }"
+                        :aria-pressed="isMemberSelected(m.id) ? 'true' : 'false'"
+                        :title="m.name + ' : ' + m.count"
+                        @click="toggleMember(m.id)">
+                    <span class="kb-avatar" :class="{ 'kb-avatar--none': m.id === 'none' }">
+                        <i v-if="m.id === 'none'" class="fa fa-user-slash"></i>
+                        <img v-else-if="m.user && getMemberAvatarSrc(m.user)" :src="getMemberAvatarSrc(m.user)" alt="" @error="handleAvatarError(m.user)">
+                        <template v-else>{{ getInitials(m.user || m.name) }}</template>
+                    </span>
+                    <span class="kb-member-name">{{ m.name }}</span>
+                    <span class="kb-member-count">{{ m.count }}</span>
+                </button>
+            </div>
+            <button v-if="memberFilterIds.length" type="button" class="btn btn-sm btn-outline-secondary kb-members-clear text-nowrap" @click="clearMemberFilter">
+                <i class="fa fa-times me-1"></i><span data-i18n="選択解除">選択解除</span>
+            </button>
+        </div>
+
+        <!-- Kanban board -->
+        <div v-if="viewMode === 'kanban'" class="kb-board-wrap" :class="{ 'is-loading': loading }">
+            <div v-if="loading" class="kb-loading">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            <div class="kb-board">
+                <section v-for="col in boardColumns" :key="col.value" class="kb-col"
+                         :class="['kb-col--' + col.value, { 'is-collapsed': col.collapsed }]"
+                         :style="{ '--kb-accent': col.accent }">
+                    <header class="kb-col-head" @click="col.collapsed && toggleColumn(col.value)">
+                        <button type="button" class="kb-col-toggle" @click.stop="toggleColumn(col.value)"
+                                :title="col.collapsed ? $t('列を開く') : $t('列を折りたたむ')"
+                                :aria-label="col.collapsed ? $t('列を開く') : $t('列を折りたたむ')"
+                                :aria-expanded="col.collapsed ? 'false' : 'true'">
+                            <i class="fa" :class="col.collapsed ? 'fa-chevron-right' : 'fa-chevron-down'"></i>
+                        </button>
+                        <span class="kb-col-dot"></span>
+                        <span class="kb-col-title">{{ getStatusLabel(col.value) }}</span>
+                        <span class="kb-col-count">{{ col.tasks.length }}</span>
+                        <span v-if="col.hours && !col.collapsed" class="kb-col-hours" :title="$t('工数合計')">{{ formatEstimatedHours(col.hours) }}</span>
+                    </header>
+                    <div class="kb-col-body">
+                        <div class="kb-list" :data-status="col.value">
+                            <article v-for="task in col.visibleTasks" :key="task.id" class="kb-card"
+                                     :class="['kb-prio--' + (task.priority || 'medium'), { 'is-timer': hasActiveTaskTimer(task) }]"
+                                     :data-task-id="task.id"
+                                     @click="onCardClick($event, task)">
+                                <div class="kb-card-top">
+                                    <a :href="`detail.php?id=${task.project_id}`" class="kb-card-project" :title="task.project_name">
+                                        <span v-if="task.project_construction_number" class="kb-card-cno">{{ task.project_construction_number }}</span>
+                                        <span class="kb-card-pid">#{{ task.project_id }}</span>
+                                        {{ task.project_name }}
+                                    </a>
+                                </div>
+                                <a :href="getTaskPageUrl(task)" class="kb-card-title">{{ task.title }}</a>
+                                <div class="kb-card-tags">
+                                    <span class="kb-prio-tag" :class="'kb-prio-tag--' + (task.priority || 'medium')">{{ getPriorityLabel(task.priority) }}</span>
+                                    <span v-if="getTaskKindDisplayValue(task)" class="badge kb-kind" :class="getTaskKindBadgeClass(getTaskKindDisplayValue(task))">{{ getTaskKindLabel(getTaskKindDisplayValue(task)) }}</span>
+                                    <span v-if="shouldShowTaskDrawingCount(task)" class="kb-meta" :title="$t('図面')"><i class="fa fa-drafting-compass"></i>{{ getTaskDrawingCount(task) }}</span>
+                                    <span v-if="getTaskNoteSnippet(task.note)" class="kb-meta" :title="getTaskNoteSnippet(task.note, 300)"><i class="far fa-sticky-note"></i></span>
+                                </div>
+                                <div v-if="Number(task.progress) > 0" class="kb-progress" :title="$t('進捗') + ' ' + (task.progress || 0) + '%'">
+                                    <div class="kb-progress-bar" :style="{ width: Math.min(100, Number(task.progress) || 0) + '%' }"></div>
+                                </div>
+                                <div class="kb-card-foot">
+                                    <span class="kb-due" :class="getDueClass(task)" :title="getDueTooltip(task)">
+                                        <i class="far fa-calendar"></i>{{ formatDueShort(task) }}
+                                        <i v-if="isTaskDueExceedsProjectDue(task)" class="fas fa-exclamation-triangle text-warning"></i>
+                                    </span>
+                                    <span v-if="formatEstimatedHours(task.estimated_hours)" class="kb-meta" :title="$t('工数')"><i class="far fa-clock"></i>{{ formatEstimatedHours(task.estimated_hours) }}</span>
+                                    <span v-if="hasActiveTaskTimer(task)" class="kb-timer" :title="$t('作業計測中')"><span class="kb-timer-dot"></span></span>
+                                    <div class="kb-assignees">
+                                        <template v-if="task.assigned_to_ids && task.assigned_to_ids.length">
+                                            <span v-for="userId in task.assigned_to_ids.slice(0, 3)" :key="userId"
+                                                  class="kb-avatar kb-avatar--sm" :class="{ 'is-unack': !isAcknowledged(task, userId) }"
+                                                  :title="getAssigneeTooltip(task, userId)">
+                                                <img v-if="getMemberAvatarSrc(getAssigneeUser(userId))" :src="getMemberAvatarSrc(getAssigneeUser(userId))" alt="" @error="handleAvatarError(getAssigneeUser(userId))">
+                                                <template v-else>{{ getInitials(getAssigneeUser(userId) || '') }}</template>
+                                            </span>
+                                            <span v-if="task.assigned_to_ids.length > 3" class="kb-avatar kb-avatar--sm kb-avatar--more">+{{ task.assigned_to_ids.length - 3 }}</span>
+                                        </template>
+                                        <span v-else class="kb-unassigned"><i class="fa fa-user-slash me-1"></i><span data-i18n="未選択">未選択</span></span>
+                                    </div>
+                                </div>
+                            </article>
+                        </div>
+                        <div v-if="!col.tasks.length" class="kb-empty">
+                            <i class="fa fa-inbox"></i>
+                            <span>{{ $t('タスクがありません') }}</span>
+                        </div>
+                        <button v-if="col.tasks.length > col.visibleTasks.length" type="button" class="kb-more" @click="showMoreInColumn(col.value)">
+                            {{ $t('さらに表示') }} ({{ col.tasks.length - col.visibleTasks.length }})
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </div>
+
+        <!-- List view -->
+        <div v-else class="card mb-3">
+            <div class="card-body">
                     <div v-if="loading" class="text-center py-4">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
                     </div>
-                    <div v-else-if="filteredTasks.length === 0" class="text-center text-muted py-3">
+                    <div v-else-if="sortedBoardTasks.length === 0" class="text-center text-muted py-3">
                         <i class="fa fa-inbox fa-2x mb-2"></i>
                         <p class="mb-0"><span data-i18n="タスクがありません">タスクがありません</span></p>
                     </div>
@@ -140,7 +312,7 @@ if($_SESSION['show_project'] == 0){
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="task in filteredTasks" :key="task.id">
+                                <tr v-for="task in sortedBoardTasks" :key="task.id">
                                     <td>
                                         <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
                                             <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
@@ -226,7 +398,6 @@ if($_SESSION['show_project'] == 0){
                             </tbody>
                         </table>
                     </div>
-                </div>
             </div>
         </div>
     </div>
@@ -487,6 +658,359 @@ if($_SESSION['show_project'] == 0){
 </div>
 
 <style>
+/* ===== Task board (kanban, read-only) ===== */
+.kb-dept-pill {
+    display: inline-block;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.2rem 0.65rem;
+    border-radius: 999px;
+    vertical-align: middle;
+    color: var(--bs-primary);
+    background: rgba(var(--bs-primary-rgb), 0.12);
+}
+.kb-filter-card .form-label { color: var(--bs-secondary-color); }
+
+/* Quick stats */
+.kb-stat {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    border-radius: 999px;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-paper-bg, var(--bs-body-bg));
+    color: var(--bs-body-color);
+    cursor: pointer;
+    transition: background-color .15s, border-color .15s, color .15s;
+}
+.kb-stat b { font-weight: 700; }
+.kb-stat:hover { border-color: var(--kb-stat-color, var(--bs-primary)); }
+.kb-stat--neutral { --kb-stat-color: var(--bs-primary); --kb-stat-rgb: var(--bs-primary-rgb); }
+.kb-stat--danger  { --kb-stat-color: var(--bs-danger);  --kb-stat-rgb: var(--bs-danger-rgb); }
+.kb-stat--warning { --kb-stat-color: var(--bs-warning); --kb-stat-rgb: var(--bs-warning-rgb); }
+.kb-stat--info    { --kb-stat-color: var(--bs-info);    --kb-stat-rgb: var(--bs-info-rgb); }
+.kb-stat i { color: var(--kb-stat-color); }
+.kb-stat.is-active {
+    border-color: var(--kb-stat-color);
+    background: rgba(var(--kb-stat-rgb), 0.12);
+    color: var(--kb-stat-color);
+}
+.kb-sort { width: auto; min-width: 9.5rem; }
+
+/* Member bar */
+.kb-members {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+}
+.kb-members-scroll {
+    display: flex;
+    gap: 0.4rem;
+    overflow-x: auto;
+    padding: 0.15rem 0.1rem 0.35rem;
+    min-width: 0;
+    flex: 1 1 auto;
+    scrollbar-width: thin;
+}
+.kb-member {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 0 auto;
+    padding: 0.2rem 0.6rem 0.2rem 0.2rem;
+    border-radius: 999px;
+    border: 1px solid var(--bs-border-color);
+    background: var(--bs-paper-bg, var(--bs-body-bg));
+    color: var(--bs-body-color);
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background-color .15s, border-color .15s;
+}
+.kb-member:hover { border-color: var(--bs-primary); }
+.kb-member.is-active {
+    border-color: var(--bs-primary);
+    background: rgba(var(--bs-primary-rgb), 0.12);
+    color: var(--bs-primary);
+}
+.kb-member.is-idle:not(.is-active) { opacity: 0.55; }
+.kb-member-name { max-width: 8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-member-count {
+    min-width: 1.4rem;
+    padding: 0 0.35rem;
+    border-radius: 999px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 0.75rem;
+    background: rgba(var(--bs-secondary-rgb), 0.14);
+}
+.kb-member.is-active .kb-member-count { background: var(--bs-primary); color: #fff; }
+
+/* Avatars */
+.kb-avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 50%;
+    overflow: hidden;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--bs-primary);
+    background: rgba(var(--bs-primary-rgb), 0.16);
+}
+.kb-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.kb-avatar--none { color: var(--bs-secondary-color); background: rgba(var(--bs-secondary-rgb), 0.16); }
+.kb-avatar--sm {
+    width: 1.5rem;
+    height: 1.5rem;
+    font-size: 0.625rem;
+    box-shadow: 0 0 0 2px var(--bs-paper-bg, var(--bs-body-bg));
+}
+.kb-avatar--sm + .kb-avatar--sm { margin-left: -0.35rem; }
+.kb-avatar--sm.is-unack { opacity: 0.5; }
+.kb-avatar--more { color: var(--bs-secondary-color); background: rgba(var(--bs-secondary-rgb), 0.18); }
+
+/* Board */
+.kb-board-wrap { position: relative; }
+.kb-board-wrap.is-loading .kb-board { opacity: 0.45; pointer-events: none; }
+.kb-loading {
+    position: absolute;
+    inset: 3rem 0 auto 0;
+    display: flex;
+    justify-content: center;
+    z-index: 2;
+}
+.kb-board {
+    display: flex;
+    gap: 0.875rem;
+    align-items: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.75rem;
+    scroll-snap-type: x proximity;
+    transition: opacity .15s;
+}
+.kb-col {
+    --kb-accent: var(--bs-secondary);
+    /* Columns share the full board width (no upper cap) */
+    flex: 1 1 0;
+    min-width: 18rem;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 13rem);
+    min-height: 12rem;
+    border-radius: 0.6rem;
+    background: rgba(var(--bs-secondary-rgb), 0.07);
+    border-top: 3px solid var(--kb-accent);
+    scroll-snap-align: start;
+}
+[data-bs-theme=dark] .kb-col { background: rgba(255, 255, 255, 0.035); }
+.kb-col-head {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.6rem 0.75rem 0.5rem 0.4rem;
+}
+.kb-col-toggle {
+    border: 0;
+    background: transparent;
+    color: var(--bs-secondary-color);
+    width: 1.5rem;
+    height: 1.5rem;
+    padding: 0;
+    border-radius: 0.35rem;
+    font-size: 0.7rem;
+}
+.kb-col-toggle:hover { background: rgba(var(--bs-secondary-rgb), 0.15); }
+.kb-col-dot { width: 0.55rem; height: 0.55rem; border-radius: 50%; background: var(--kb-accent); flex: 0 0 auto; }
+.kb-col-title { font-weight: 650; font-size: 0.875rem; color: var(--bs-heading-color); white-space: nowrap; }
+.kb-col-count {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0 0.45rem;
+    border-radius: 999px;
+    color: var(--bs-secondary-color);
+    background: rgba(var(--bs-secondary-rgb), 0.16);
+}
+.kb-col-hours { margin-left: auto; font-size: 0.75rem; color: var(--bs-secondary-color); white-space: nowrap; }
+.kb-col-body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0 0.5rem 0.6rem;
+    overflow-y: auto;
+    min-height: 6rem;
+    scrollbar-width: thin;
+}
+.kb-list { display: flex; flex-direction: column; gap: 0.5rem; }
+
+/* Collapsed column: narrow vertical strip */
+.kb-col.is-collapsed {
+    flex: 0 0 2.75rem;
+    min-width: 2.75rem;
+    cursor: pointer;
+}
+.kb-col.is-collapsed .kb-col-head {
+    flex-direction: column;
+    padding: 0.5rem 0;
+    gap: 0.6rem;
+}
+.kb-col.is-collapsed .kb-col-title { writing-mode: vertical-rl; }
+.kb-col.is-collapsed .kb-col-body { display: none; }
+
+.kb-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 1.25rem 0.5rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    color: var(--bs-secondary-color);
+    border: 1px dashed var(--bs-border-color);
+    border-radius: 0.5rem;
+}
+.kb-empty i { font-size: 1.1rem; opacity: 0.6; }
+.kb-more {
+    border: 0;
+    border-radius: 0.4rem;
+    padding: 0.35rem;
+    font-size: 0.8125rem;
+    color: var(--bs-primary);
+    background: rgba(var(--bs-primary-rgb), 0.08);
+}
+.kb-more:hover { background: rgba(var(--bs-primary-rgb), 0.16); }
+
+/* Card */
+.kb-card {
+    --kb-prio: var(--bs-primary);
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.6rem 0.7rem 0.55rem 0.8rem;
+    border-radius: 0.5rem;
+    background: var(--bs-paper-bg, var(--bs-body-bg));
+    border: 1px solid var(--bs-border-color);
+    border-left: 3px solid var(--kb-prio);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    cursor: pointer;
+    transition: box-shadow .15s, transform .15s, border-color .15s;
+}
+.kb-card:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.09); transform: translateY(-1px); }
+.kb-card:focus-within { outline: 2px solid rgba(var(--bs-primary-rgb), 0.45); outline-offset: 1px; }
+.kb-card.kb-prio--low    { --kb-prio: var(--bs-secondary); }
+.kb-card.kb-prio--medium { --kb-prio: var(--bs-primary); }
+.kb-card.kb-prio--high   { --kb-prio: var(--bs-warning); }
+.kb-card.kb-prio--urgent { --kb-prio: var(--bs-danger); }
+.kb-card.is-timer { border-color: rgba(var(--bs-success-rgb), 0.55); border-left-color: var(--kb-prio); }
+.kb-card-project {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.kb-card-project:hover { color: var(--bs-primary); }
+.kb-card-pid { font-weight: 600; margin-right: 0.15rem; }
+.kb-card-cno {
+    display: inline-block;
+    margin-right: 0.3rem;
+    padding: 0 0.3rem;
+    border-radius: 0.25rem;
+    font-weight: 600;
+    color: var(--bs-info);
+    background: rgba(var(--bs-info-rgb), 0.12);
+}
+.kb-card-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    line-height: 1.35;
+    color: var(--bs-heading-color);
+    text-decoration: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+.kb-card-title:hover { color: var(--bs-primary); }
+.kb-card-tags, .kb-card-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+}
+.kb-card-foot { flex-wrap: nowrap; }
+.kb-prio-tag {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    padding: 0.05rem 0.4rem;
+    border-radius: 0.25rem;
+    color: var(--kb-prio);
+    background: color-mix(in sRGB, var(--kb-prio) 13%, transparent);
+}
+.kb-kind { font-size: 0.6875rem; font-weight: 600; }
+.kb-meta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--bs-secondary-color);
+    white-space: nowrap;
+}
+.kb-progress {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(var(--bs-secondary-rgb), 0.18);
+    overflow: hidden;
+}
+.kb-progress-bar { height: 100%; background: var(--bs-primary); border-radius: inherit; }
+.kb-col--completed .kb-progress-bar { background: var(--bs-success); }
+.kb-due {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    color: var(--bs-secondary-color);
+}
+.kb-due.is-overdue { color: var(--bs-danger); font-weight: 650; }
+.kb-due.is-soon { color: var(--bs-warning); font-weight: 600; }
+.kb-due.is-none { opacity: 0.7; }
+.kb-timer { display: inline-flex; align-items: center; }
+.kb-timer-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--bs-success);
+    animation: kb-pulse 1.6s ease-in-out infinite;
+}
+@keyframes kb-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(var(--bs-success-rgb), 0.55); }
+    50% { box-shadow: 0 0 0 5px rgba(var(--bs-success-rgb), 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+    .kb-timer-dot { animation: none; }
+    .kb-card, .kb-card:hover { transition: none; transform: none; }
+}
+.kb-assignees { display: inline-flex; align-items: center; margin-left: auto; }
+.kb-unassigned { font-size: 0.75rem; color: var(--bs-secondary-color); white-space: nowrap; }
+
+@media (max-width: 575.98px) {
+    .kb-col { flex-basis: 85vw; min-width: 85vw; max-width: 85vw; max-height: none; }
+    .kb-col-body { overflow-y: visible; }
+    .kb-sort { min-width: 0; }
+}
+
 .overview-task-note {
     max-width: 7rem;
     vertical-align: bottom;
@@ -630,7 +1154,8 @@ $view->footing();
 window.currentUser = {
     user_id: <?= json_encode($_SESSION['id'] ?? '') ?>,
     id: <?= json_encode($_SESSION['userid'] ?? '') ?>,
-    department_id: <?= json_encode($_SESSION['department_id'] ?? '') ?>,
+    department_id: <?= json_encode($overviewDefaultDepartmentId) ?>,
+    department_ids: <?= json_encode(array_map('strval', $overviewMyDepartmentIds)) ?>,
     isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>
 };
 </script>
