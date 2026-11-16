@@ -227,6 +227,8 @@ const PROJECT_DATETIME_PARSE_FORMATS = [
     'Y/m/d H:i'
 ];
 
+/** メモボード 全文表示 switch — localStorage key (default off) */
+const NOTE_SHOW_FULL_STORAGE_KEY = 'projectDetail.noteShowFull';
 /** メモボード: free placement (board_col / board_row) from this width up — 3 columns, see detail.php .note-board */
 const NOTE_BOARD_FREE_MEDIA = '(min-width: 992px)';
 
@@ -755,8 +757,11 @@ const vueApp = createApp({
                 { value: 'none', text: 'ピンなし' }
             ],
             savingNote: false,
-            // メモボード: 全文表示 — off on load, turned on by 全画面表示 (the switch still works by hand)
-            noteShowFull: false,
+            // メモボード: 全文表示 switch, remembered per browser (default off); 全画面表示 turns it on
+            // for the time being without saving that
+            noteShowFull: (function () {
+                try { return localStorage.getItem(NOTE_SHOW_FULL_STORAGE_KEY) === '1'; } catch (e) { return false; }
+            })(),
             /** メモボード 全画面表示 */
             noteBoardFullscreen: false,
             /** メモボード drag: { id, pinned, offX, offY, target: { col, row[, idx] } | null } */
@@ -3934,6 +3939,11 @@ const vueApp = createApp({
 
     },
     watch: {
+        // save the user's choice — not the temporary on of 全画面表示 (restored on exit)
+        noteShowFull(on) {
+            if (this.noteBoardFullscreen) return;
+            try { localStorage.setItem(NOTE_SHOW_FULL_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+        },
         // Leaving edit mode removes the editor's DOM: drop the Quill instance with it,
         // otherwise the next 編集 / メモを追加 reuses an instance bound to a detached node.
         isNoteEditMode(editing) {
