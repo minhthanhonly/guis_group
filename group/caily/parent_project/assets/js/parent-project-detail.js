@@ -3321,9 +3321,10 @@ createApp({
                 return project.payment_items.map((item, idx) => {
                     const kindLabel = this.translateLabel(item.kind === 'invoice' ? '請求' : '見積');
                     const meta = this.getChildProjectPaymentStatusMeta(item.kind, item.status);
+                    const type = window.PaymentItems ? window.PaymentItems.decodeText(item.item_type) : (item.item_type || '');
                     return {
                         key: item.kind + '_' + (item.id || 'n' + idx),
-                        label: kindLabel + (item.item_type ? ' ' + item.item_type : ''),
+                        label: kindLabel + (type ? ' ' + type : ''),
                         statusLabel: meta.label,
                         badgeClass: meta.badgeClass,
                         amount: Number(item.amount) || 0,
@@ -3828,6 +3829,7 @@ createApp({
                         }, 300);
                     });
                     this.businessDocumentSaveStatus = 'saved';
+                    this.flushPaymentItemsResave(true);
                     this.businessDocumentSaveHideTimer = setTimeout(() => {
                         this.businessDocumentSaveStatus = null;
                         this.businessDocumentSaveHideTimer = null;
@@ -3845,6 +3847,7 @@ createApp({
                 this.businessDocumentSaveStatus = null;
             } finally {
                 this.isUpdatingBusinessDocument = false;
+                this.flushPaymentItemsResave(false); // no-op after a success (already flushed)
             }
         },
         syncChildProjectFromBd() {

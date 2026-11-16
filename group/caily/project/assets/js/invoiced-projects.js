@@ -1,4 +1,12 @@
 (function() {
+    /** 種別 (決済明細 tag) arrives entity-encoded like every API string; show it as plain text. */
+    function decodeTypeText(s) {
+        s = s == null ? '' : String(s);
+        if (s.indexOf('&') === -1) return s;
+        return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+            .replace(/&#0?39;/g, "'").replace(/&amp;/g, '&');
+    }
+
     const STORAGE_KEY_DEPT = 'invoiced_projects_selected_department';
     const PER_PAGE = 50;
     const FILTER_DEBOUNCE_MS = 500;
@@ -867,6 +875,9 @@
                         return;
                     }
 
+                    (data.projects || []).forEach(function(p) {
+                        (p.invoice_lines || []).forEach(function(line) { line.item_type = decodeTypeText(line.item_type); });
+                    });
                     this.projects = data.projects || [];
                     this.meta = Object.assign(emptyMeta(), data.meta || {});
                     if (!this.meta.totals) {

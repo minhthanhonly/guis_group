@@ -45,6 +45,45 @@
         return v === null || v === undefined || String(v).trim() === '';
     }
 
+    /**
+     * The API entity-encodes every string ("A&B" arrives as "A&amp;B"). 種別 is plain text shown
+     * through text bindings and inputs, so decode it; otherwise each save would store it encoded
+     * once more. Same entities as htmlspecialchars(ENT_QUOTES).
+     */
+    function decodeText(s) {
+        s = s === null || s === undefined ? '' : String(s);
+        if (s.indexOf('&') === -1) return s;
+        return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+            .replace(/&#0?39;/g, "'").replace(/&amp;/g, '&');
+    }
+
+    /** Decode the 種別 of lines that came from the API (once per line object). */
+    function decodeItems(list) {
+        (Array.isArray(list) ? list : []).forEach(function (it) {
+            if (!it || it._decoded) return;
+            Object.defineProperty(it, '_decoded', { value: true, enumerable: false });
+            if (typeof it.item_type === 'string' && it.item_type.indexOf('&') !== -1) {
+                it.item_type = decodeText(it.item_type);
+            }
+        });
+    }
+
+    /** Today in the server's time zone (JST), 'YYYY-MM-DD' — what the old 今日 button used. */
+    function todayServer() {
+        try {
+            if (window.moment && typeof window.moment.tz === 'function') {
+                return window.moment.tz('Asia/Tokyo').format('YYYY-MM-DD');
+            }
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit'
+            }).format(new Date());
+        } catch (e) {
+            var d = new Date();
+            var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+        }
+    }
+
     function normalizeStatus(s) {
         if (s === '発行済み') return '発行済';
         return isEmpty(s) ? '未発行' : String(s);
@@ -301,7 +340,7 @@
             + '      <div v-else class="pi-value">{{ item.item_date ? datePart(item).replace(/-/g, "/") : "—" }}</div>'
             + '      <div v-if="editable" class="input-group input-group-sm pi-amount-group">'
             + '        <span class="input-group-text">¥</span>'
-            + '        <input type="text" inputmode="numeric" autocomplete="off" class="form-control text-end"'
+            + '        <input type="text" inputmode="decimal" autocomplete="off" class="form-control text-end"'
             + '               :value="amountDisplay(item)" :placeholder="t(\'未入力\')" :disabled="isWaived(item.status)"'
             + '               @focus="onAmountFocus(item, $event)" @blur="onAmountBlur(item)" @input="onAmountInput(item, $event)">'
             + '      </div>'
@@ -337,7 +376,7 @@
                 var seen = {};
                 var out = [];
                 var add = function (t) {
-                    t = String(t || '').trim();
+                    t = decodeText(t).trim();
                     if (t && !seen[t]) { seen[t] = true; out.push(t); }
                 };
                 (this.project.payment_item_types || []).forEach(add);
@@ -360,6 +399,10 @@
             pendingCount: function () {
                 return this.items.filter(isPendingLine).length;
             }
+        },
+        watch: {
+            // lines loaded from the API (a new array on every load): decode their 種別
+            'project.payment_items': { handler: decodeItems, immediate: true }
         },
         created: function () {
             // _key → typing the amount turned the line complete; asked on blur (not reactive)
@@ -436,10 +479,16 @@
                 this.$nextTick(function () { if (el && el.select) el.select(); });
             },
             onAmountInput: function (item, e) {
-                var digits = String(e.target.value || '').replace(/[^\d]/g, '');
+                // digits, plus one "." with up to 2 decimals: old amounts written from 見積書 are
+                // tax-included decimals (e.g. 12345.6), which must not turn into 123456 when edited
+                var raw = String(e.target.value || '').replace(/[^\d.]/g, '');
+                var dot = raw.indexOf('.');
+                var digits = dot === -1 ? raw
+                    : raw.slice(0, dot + 1) + raw.slice(dot + 1).replace(/\./g, '').slice(0, 2);
                 if (e.target.value !== digits) e.target.value = digits;
                 var wasComplete = isLineComplete(item);
-                item.amount = digits === '' ? null : Number(digits);
+                var num = digits.replace(/\.$/, '');
+                item.amount = num === '' || num === '.' ? null : Number(num);
                 if (!wasComplete && isLineComplete(item)) this._completedByTyping[item._key] = true;
                 else if (!isLineComplete(item)) delete this._completedByTyping[item._key];
                 if (normalizeStatus(item.status) === '発行済' && !isLineComplete(item)) item.status = '未発行';
@@ -465,6 +514,8 @@
                 if (!ymd) {
                     if (current === '') return;
                     item.item_date = '';
+                    // like clearing the amount: a 発行済 line needs a date, or every save fails
+                    if (normalizeStatus(item.status) === '発行済') item.status = '未発行';
                 } else {
                     if (ymd === current.slice(0, 10)) return;
                     item.item_date = ymd + current.slice(10);
@@ -473,19 +524,37 @@
                 this.askIssuedIfJustCompleted(item, was);
             },
             setToday: function (item) {
-                var d = new Date();
-                var pad = function (n) { return (n < 10 ? '0' : '') + n; };
                 var was = isLineComplete(item);
-                item.item_date = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+                item.item_date = todayServer();
                 this.emitChange();
                 this.askIssuedIfJustCompleted(item, was);
+            },
+            /**
+             * 種別 for a line added with 明細を追加. The stats match 見積 and 請求 by 種別, so a blank
+             * tag next to the migrated 設計費 lines would split them:
+             * 請求 → the first 見積 種別 with no 請求 line yet, else the last 請求 / 見積 種別;
+             * 見積 → the last 見積 種別.
+             */
+            defaultType: function () {
+                var typesOf = function (list) {
+                    return list.map(function (it) { return String(it.item_type || '').trim(); })
+                        .filter(function (t) { return t !== ''; });
+                };
+                var est = typesOf(itemsOf(this.project, 'estimate'));
+                if (this.kind !== 'invoice') return est.length ? est[est.length - 1] : '';
+                var inv = typesOf(itemsOf(this.project, 'invoice'));
+                for (var i = 0; i < est.length; i++) {
+                    if (inv.indexOf(est[i]) === -1) return est[i];
+                }
+                if (inv.length) return inv[inv.length - 1];
+                return est.length ? est[est.length - 1] : '';
             },
             newItem: function (src) {
                 return ensureKey({
                     id: null,
                     kind: this.kind,
                     item_date: '',
-                    item_type: src ? (src.item_type || '') : '',
+                    item_type: src ? (src.item_type || '') : this.defaultType(),
                     amount: src && !isEmpty(src.amount) ? Number(src.amount) : null,
                     status: src && isWaived(src.status) ? normalizeStatus(src.status) : '未発行'
                 });
@@ -507,7 +576,11 @@
                 var self = this;
                 this.$nextTick(function () {
                     var inputs = self.$el.querySelectorAll('.pi-type');
-                    if (inputs.length) inputs[inputs.length - 1].focus();
+                    if (inputs.length) {
+                        var input = inputs[inputs.length - 1];
+                        input.focus();
+                        if (input.select) input.select(); // prefilled 種別: typing replaces it
+                    }
                 });
             },
             removeItem: function (item) {
@@ -544,7 +617,8 @@
         getMissingPaymentLabels: getMissingPaymentLabels,
         validationError: validationError,
         appendToFormData: appendToFormData,
-        applySaveResponse: applySaveResponse
+        applySaveResponse: applySaveResponse,
+        decodeText: decodeText
     };
     window.PaymentItemsEditor = PaymentItemsEditor;
 

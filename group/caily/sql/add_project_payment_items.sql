@@ -32,14 +32,14 @@ CREATE TABLE IF NOT EXISTS `groupware_project_payment_items` (
 INSERT INTO `groupware_project_payment_items`
     (project_id, kind, item_date, item_type, amount, status, sort_order, created_at, updated_at)
 SELECT p.id, 'estimate', p.estimate_date, '設計費',
-       CASE WHEN p.estimate_status = '無償' THEN 0 ELSE p.amount END,
+       CASE WHEN p.estimate_status = '無償' THEN 0 ELSE CAST(CASE WHEN TRIM(REPLACE(p.amount, ',', '')) REGEXP '^[0-9]+([.][0-9]+)?$' THEN TRIM(REPLACE(p.amount, ',', '')) END AS DECIMAL(15,2)) END,
        CASE WHEN p.estimate_status = '発行済み' THEN '発行済'
             ELSE COALESCE(NULLIF(TRIM(p.estimate_status), ''), '未発行') END,
        1, NOW(), NOW()
 FROM `groupware_projects` p
 LEFT JOIN `groupware_departments` d ON d.id = p.department_id
 WHERE (d.name IS NULL OR d.name NOT LIKE '%省エネ%')
-  AND (COALESCE(p.amount, 0) > 0 OR p.estimate_date IS NOT NULL
+  AND (COALESCE(CAST(CASE WHEN TRIM(REPLACE(p.amount, ',', '')) REGEXP '^[0-9]+([.][0-9]+)?$' THEN TRIM(REPLACE(p.amount, ',', '')) END AS DECIMAL(15,2)), 0) > 0 OR p.estimate_date IS NOT NULL
        OR COALESCE(NULLIF(TRIM(p.estimate_status), ''), '未発行') <> '未発行')
   AND NOT EXISTS (SELECT 1 FROM `groupware_project_payment_items` i
                   WHERE i.project_id = p.id AND i.kind = 'estimate');
@@ -74,7 +74,7 @@ FROM (
     SELECT p.id,
            CASE WHEN p.estimate_application_amount IS NULL AND p.estimate_application_date IS NULL
                      AND COALESCE(TRIM(p.estimate_application_status), '') = ''
-                THEN p.amount ELSE p.estimate_application_amount END AS a,
+                THEN CAST(CASE WHEN TRIM(REPLACE(p.amount, ',', '')) REGEXP '^[0-9]+([.][0-9]+)?$' THEN TRIM(REPLACE(p.amount, ',', '')) END AS DECIMAL(15,2)) ELSE p.estimate_application_amount END AS a,
            CASE WHEN p.estimate_application_amount IS NULL AND p.estimate_application_date IS NULL
                      AND COALESCE(TRIM(p.estimate_application_status), '') = ''
                 THEN p.estimate_date ELSE p.estimate_application_date END AS d,

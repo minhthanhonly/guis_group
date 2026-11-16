@@ -6225,7 +6225,7 @@ class Project extends ApplicationModel {
             FROM (
                 SELECT DATE_FORMAT(l.item_date, '%Y-%m') AS month_value
                 FROM {$lines} l
-                WHERE l.item_date IS NOT NULL
+                WHERE l.item_date IS NOT NULL AND l.item_date >= '1900-01-01'
                 UNION
                 SELECT DATE_FORMAT(p.payment_date, '%Y-%m') AS month_value
                 FROM {$this->table} p
@@ -7013,7 +7013,13 @@ class Project extends ApplicationModel {
                 $status = '未発行';
             }
 
-            $date = $this->paymentItemDateValue($row['item_date'] ?? '');
+            $rawDate = str_replace('/', '-', trim((string)($row['item_date'] ?? '')));
+            $date = $this->paymentItemDateValue($rawDate);
+            // strtotime() rolls impossible dates over (2026-02-30 -> 03-02): reject them instead.
+            if ($date !== false && preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})/', $rawDate, $dm)
+                && !checkdate((int)$dm[2], (int)$dm[3], (int)$dm[1])) {
+                $date = false;
+            }
             if ($date === false) {
                 return ['ok' => false, 'error' => $label . 'の日付が正しくありません。'];
             }
@@ -7021,6 +7027,9 @@ class Project extends ApplicationModel {
             $rawAmount = $row['amount'] ?? null;
             $amount = null;
             if ($rawAmount !== null && trim((string)$rawAmount) !== '') {
+                if (strpos((string)$rawAmount, '-') !== false) {
+                    return ['ok' => false, 'error' => $label . 'の金額が正しくありません。'];
+                }
                 $digits = preg_replace('/[^\d.]/', '', (string)$rawAmount);
                 $amount = $digits === '' ? null : floatval($digits);
             }
@@ -7031,7 +7040,10 @@ class Project extends ApplicationModel {
                 return ['ok' => false, 'error' => $label . 'を発行済にするには日付・金額が必要です。'];
             }
 
-            $type = $this->validateUTF8MB4(mb_substr(trim((string)($row['item_type'] ?? '')), 0, 100));
+            // The API entity-encodes its output, so a client may send back "A&amp;B" for "A&B":
+            // store the plain text, or every save would encode the tag once more.
+            $type = htmlspecialchars_decode(trim((string)($row['item_type'] ?? '')), ENT_QUOTES);
+            $type = $this->validateUTF8MB4(mb_substr(trim($type), 0, 100));
 
             $order[$kind]++;
             $items[] = [

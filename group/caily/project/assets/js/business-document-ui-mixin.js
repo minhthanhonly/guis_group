@@ -95,6 +95,35 @@
             }
         },
         methods: {
+            // ---------- 決済明細 autosave ----------
+            /**
+             * <payment-items-editor @change>. A line edit is a user action, so it is never dropped:
+             * - while a save is running, save again once it succeeded (flushPaymentItemsResave);
+             * - right after a save (_bdSuppressAutoSave, which only mutes the field watchers), save now.
+             * Hosts: 詳細 (isUpdatingStatus / scheduleBusinessDocumentUpdate),
+             * list modal and 建物詳細 (isUpdatingBusinessDocument / scheduleBdUpdate).
+             */
+            onPaymentItemsChange: function () {
+                if (this.isUpdatingStatus || this.isUpdatingBusinessDocument) {
+                    this._paymentItemsResave = true;
+                    return;
+                }
+                var suppressed = this._bdSuppressAutoSave;
+                this._bdSuppressAutoSave = false;
+                if (typeof this.scheduleBdUpdate === 'function') this.scheduleBdUpdate();
+                else if (typeof this.scheduleBusinessDocumentUpdate === 'function') this.scheduleBusinessDocumentUpdate();
+                this._bdSuppressAutoSave = suppressed;
+            },
+            /** Call when a 決済 save finished: saved=true → send the line edits made meanwhile. */
+            flushPaymentItemsResave: function (saved) {
+                if (!this._paymentItemsResave) return;
+                this._paymentItemsResave = false;
+                if (!saved) return;
+                var self = this;
+                // after the host's finally/then has cleared its "saving" flag
+                setTimeout(function () { self.onPaymentItemsChange(); }, 0);
+            },
+
             // ---------- amount input ----------
             bdAmountDisplay: function (obj, key) {
                 var v = obj ? obj[key] : null;

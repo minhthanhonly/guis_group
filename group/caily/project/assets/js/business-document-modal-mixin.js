@@ -100,7 +100,9 @@
         'payment_date',
         'payment_amount',
         'receipt_number',
-        'payment_note'
+        'payment_note',
+        // 決済明細: the list row then judges 完了 from the lines, as the modal does
+        'payment_items'
     ];
 
     var BUSINESS_DOCUMENT_DATE_FIELDS = [
@@ -937,6 +939,7 @@
                                 }
                             }
                             self.businessDocumentSaveStatus = 'saved';
+                            self.flushPaymentItemsResave(true);
                             self.businessDocumentSaveHideTimer = setTimeout(function() {
                                 self.businessDocumentSaveStatus = null;
                                 self.businessDocumentSaveHideTimer = null;
@@ -957,6 +960,7 @@
                     })
                     .then(function() {
                         self.isUpdatingBusinessDocument = false;
+                        self.flushPaymentItemsResave(false); // no-op after a success (already flushed)
                     });
             },
             syncBusinessDocumentAfterSave: function() {

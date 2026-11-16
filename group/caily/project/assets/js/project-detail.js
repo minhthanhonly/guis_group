@@ -274,6 +274,8 @@ const BUSINESS_DOCUMENT_FIELDS = [
     'payment_amount',
     'receipt_number',
     'payment_note',
+    // 決済明細: kept across a reload while a save is pending, like the fields above
+    'payment_items',
 ];
 
 const BUSINESS_DOCUMENT_DATE_FIELDS = [
@@ -2162,6 +2164,7 @@ const vueApp = createApp({
                         }, 200);
                     });
                     this.businessDocumentSaveStatus = 'saved';
+                    this.flushPaymentItemsResave(true);
                     this.refreshLogsIfOpen();
                     this.businessDocumentSaveHideTimer = setTimeout(() => {
                         this.businessDocumentSaveStatus = null;
@@ -2178,6 +2181,7 @@ const vueApp = createApp({
                 this.businessDocumentSaveStatus = null;
             } finally {
                 this.isUpdatingStatus = false;
+                this.flushPaymentItemsResave(false); // no-op after a success (already flushed)
             }
         },
         normalizeBusinessDocumentStatus(status, fallback) {

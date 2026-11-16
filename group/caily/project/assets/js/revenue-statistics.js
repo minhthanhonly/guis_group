@@ -3,6 +3,14 @@
     const STORAGE_KEY_DEPT = 'revenue_statistics_selected_department';
     const VALID_SUB_TABS = ['summary', 'detail', 'backlog', 'estimated', 'cancelled'];
 
+    /** 種別 (決済明細 tag) arrives entity-encoded like every API string; show it as plain text. */
+    function decodeTypeText(s) {
+        s = s == null ? '' : String(s);
+        if (s.indexOf('&') === -1) return s;
+        return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+            .replace(/&#0?39;/g, "'").replace(/&amp;/g, '&');
+    }
+
     function escapeHtml(text) {
         if (text == null) return '';
         return String(text)
@@ -680,7 +688,8 @@
                 const lists = [this.invoicedProjects, this.estimatedProjects, this.completedUninvoiced, this.cancelledProjects];
                 return lists.some(function(list) {
                     return (list || []).some(function(p) {
-                        return !!p.fee_type && p.fee_type !== '設計費';
+                        // '' = a line saved without 種別 (null = cancelled project without 見積)
+                        return p.fee_type != null && p.fee_type !== '設計費';
                     });
                 });
             },
@@ -1172,6 +1181,9 @@
                         cumulative_actual_sales: 0
                     }, data.meta && data.meta.target_summary ? data.meta.target_summary : {});
                     this.isEnergyDepartment = !!(data.meta && Number(data.meta.is_energy_department) === 1);
+                    ['estimated_projects', 'invoiced_projects', 'completed_uninvoiced', 'cancelled_projects'].forEach(function(key) {
+                        (data[key] || []).forEach(function(p) { if (p.fee_type) p.fee_type = decodeTypeText(p.fee_type); });
+                    });
                     this.estimatedProjects = data.estimated_projects || [];
                     this.invoicedProjects = data.invoiced_projects || [];
                     this.completedUninvoiced = data.completed_uninvoiced || [];

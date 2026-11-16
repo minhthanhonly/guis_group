@@ -41,7 +41,7 @@
                             <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ section.heading }}</span>
                         </div>
                         <payment-items-editor :project="businessDocumentProject" :kind="section.kind" :editable="true"
-                                              :energy="!!isBdEnergyDepartment" :translate="translateLabel" @change="scheduleBdUpdate"></payment-items-editor>
+                                              :energy="!!isBdEnergyDepartment" :translate="translateLabel" @change="onPaymentItemsChange"></payment-items-editor>
                     </div>
 
                     <div class="mb-0 bd-note">
