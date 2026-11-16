@@ -227,12 +227,13 @@
             action: function () { navigate(ROOT); }
         },
         {
-            id: 'forum',
-            labelKey: 'お知らせへ',
-            labelDefault: 'お知らせへ',
+            // pages with a メモ board (案件詳細) expose window.toggleNoteBoardFullscreen
+            id: 'note-board-fullscreen',
+            labelKey: 'メモを全画面表示',
+            labelDefault: 'メモを全画面表示',
             keys: ['F12'],
-            when: canShowExtended,
-            action: function () { navigate(ROOT + 'forum/?folder=0'); }
+            when: function () { return typeof window.toggleNoteBoardFullscreen === 'function'; },
+            action: function () { window.toggleNoteBoardFullscreen(); }
         }
     ];
 
@@ -432,6 +433,7 @@
         if (!instance) {
             return;
         }
+        renderShortcutList(); // `when` can change after load (e.g. the メモ board mounts later)
         instance.show();
         window.setTimeout(function () {
             if (focusSection === 'search' && searchInput) {

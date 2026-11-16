@@ -173,7 +173,7 @@ if($_SESSION['show_project'] == 0){
                                 <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
                             </button>
                             <button type="button" class="btn btn-outline-secondary btn-sm note-board-fullscreen-btn"
-                                    :title="noteBoardFullscreen ? translateLabel('全画面表示を終了') : translateLabel('全画面表示')"
+                                    :title="(noteBoardFullscreen ? translateLabel('全画面表示を終了') : translateLabel('全画面表示')) + ' (F12)'"
                                     :aria-label="noteBoardFullscreen ? translateLabel('全画面表示を終了') : translateLabel('全画面表示')"
                                     :aria-pressed="noteBoardFullscreen ? 'true' : 'false'"
                                     @click="toggleNoteBoardFullscreen">

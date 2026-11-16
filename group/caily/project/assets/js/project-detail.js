@@ -4018,6 +4018,7 @@ const vueApp = createApp({
         },
     },
     beforeUnmount() {
+        if (window.toggleNoteBoardFullscreen) delete window.toggleNoteBoardFullscreen;
         this.cancelNoteDrag();
         if (this.noteBoardFullscreen) this.exitNoteBoardFullscreen();
         if (this._onNoteFsChange) {
@@ -4033,6 +4034,8 @@ const vueApp = createApp({
         // D1: permission ∥ getById(+secondary); notes/logs/categories ∥ critical path (projectId từ URL)
         this.loadCurrentUser();
         this.initNoteBoardMedia();
+        // F12 (command palette shortcut) → メモ board fullscreen
+        window.toggleNoteBoardFullscreen = () => this.toggleNoteBoardFullscreen();
         await Promise.all([
             this.loadPermission(),
             this.loadProject(),
