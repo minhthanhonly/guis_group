@@ -968,6 +968,22 @@ $view->footing();
     height: auto;
     min-height: 0;
 }
+/* drag in 全文表示: cards are pinned (project-detail.js freezeNoteMasonry); the drop
+   target shows a bar on the side the dragged note will be inserted (before = left, after = right) */
+.note-board.note-board-frozen .note-card {
+    transition: none;
+}
+.note-board .note-card.note-drop-before,
+.note-board .note-card.note-drop-after {
+    outline: 2px dashed var(--bs-primary, #696cff);
+    outline-offset: 2px;
+}
+.note-board .note-card.note-drop-before {
+    box-shadow: inset 4px 0 0 var(--bs-primary, #696cff);
+}
+.note-board .note-card.note-drop-after {
+    box-shadow: inset -4px 0 0 var(--bs-primary, #696cff);
+}
 .note-board.note-board-full .note-card-content.ql-editor {
     overflow: visible;
     -webkit-mask-image: none;

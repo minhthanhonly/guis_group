@@ -3066,6 +3066,55 @@ const vueApp = createApp({
                 if (card.style.gridRowEnd !== next) card.style.gridRowEnd = next;
             });
         },
+        /**
+         * Drag in 全文表示: cards are auto-placed in DOM order, so every step of the drag
+         * would re-place all following cards into other columns. Pin each card to its
+         * current grid cell while dragging (only the dragged note moves, the target note
+         * is highlighted) and let masonry re-flow once on drop.
+         */
+        freezeNoteMasonry() {
+            const board = this.$refs.detailNotesList;
+            if (!board || !this.noteShowFull) return;
+            const style = getComputedStyle(board);
+            const rowH = parseFloat(style.gridAutoRows) || 2;
+            const colGap = parseFloat(style.columnGap) || NOTE_MASONRY_GAP;
+            const cols = style.gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+            const bRect = board.getBoundingClientRect();
+            const originX = bRect.left + (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.paddingLeft) || 0);
+            const originY = bRect.top + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.paddingTop) || 0);
+            const colW = parseFloat(style.gridTemplateColumns.split(' ')[0]) || 1;
+            board.querySelectorAll('.note-card').forEach((card) => {
+                const r = card.getBoundingClientRect();
+                const col = Math.min(cols, Math.max(1, Math.round((r.left - originX) / (colW + colGap)) + 1));
+                const row = Math.max(1, Math.round((r.top - originY) / rowH) + 1);
+                card.style.gridColumnStart = String(col);
+                card.style.gridRowStart = String(row);
+            });
+            board.classList.add('note-board-frozen');
+            this._noteMasonryFrozen = true;
+        },
+        unfreezeNoteMasonry() {
+            const board = this.$refs.detailNotesList;
+            this._noteMasonryFrozen = false;
+            if (!board) return;
+            board.classList.remove('note-board-frozen');
+            board.querySelectorAll('.note-card').forEach((card) => {
+                card.style.gridColumnStart = '';
+                card.style.gridRowStart = '';
+                card.classList.remove('note-drop-before', 'note-drop-after');
+            });
+            this.scheduleNoteMasonryLayout();
+        },
+        markNoteDropTarget(target, after) {
+            const board = this.$refs.detailNotesList;
+            if (!board || !this._noteMasonryFrozen) return;
+            board.querySelectorAll('.note-drop-before, .note-drop-after').forEach((c) => {
+                c.classList.remove('note-drop-before', 'note-drop-after');
+            });
+            if (target && target.classList && target.classList.contains('note-card') && !target.classList.contains('note-sortable-ghost')) {
+                target.classList.add(after ? 'note-drop-after' : 'note-drop-before');
+            }
+        },
         teardownNoteMasonry() {
             if (this._noteMasonryRO) {
                 this._noteMasonryRO.disconnect();
@@ -3104,7 +3153,14 @@ const vueApp = createApp({
                         var trailing = clone.querySelector('.detail-note-trailing');
                         if (trailing) trailing.remove();
                     },
+                    onStart: function() {
+                        self.freezeNoteMasonry();
+                    },
+                    onMove: function(evt) {
+                        self.markNoteDropTarget(evt.related, evt.willInsertAfter);
+                    },
                     onEnd: function() {
+                        self.unfreezeNoteMasonry();
                         self.persistDetailNotesOrder();
                     }
                 });
