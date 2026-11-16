@@ -222,7 +222,7 @@ if($_SESSION['show_project'] == 0){
                                  :style="noteCardGridStyle(note)"
                                  :data-note-id="note.id">
                                 <div class="note-card-top">
-                                    <span v-if="noteBoardFree"
+                                    <span v-if="noteBoardFree && note.is_pinned_self != 1"
                                           class="note-drag-handle"
                                           :title="translateLabel('ドラッグで移動')"
                                           :aria-label="translateLabel('ドラッグで移動')"
@@ -273,9 +273,9 @@ if($_SESSION['show_project'] == 0){
                             <!-- drag: target cell + one extra row to drop below the last note -->
                             <div v-if="noteDrag && noteDrag.target" class="note-drop-cell"
                                  :class="{ 'is-occupied': noteDragTargetOccupied }"
-                                 :style="{ gridColumn: String(noteDrag.target.col), gridRow: String(noteDrag.target.row) }"></div>
+                                 :style="{ gridColumn: String(noteDrag.target.col), gridRow: String(noteDrag.target.row + noteSelfPinRows) }"></div>
                             <div v-if="noteDrag" class="note-board-spacer"
-                                 :style="{ gridColumn: '1 / -1', gridRow: String(noteBoardMaxRow + 1) }"></div>
+                                 :style="{ gridColumn: '1 / -1', gridRow: String(noteBoardMaxRow + 1 + noteSelfPinRows) }"></div>
                         </div>
                         <div v-else-if="notes.length > 0" class="text-center text-muted py-3">
                             <i class="fa fa-filter fa-2x mb-2"></i>

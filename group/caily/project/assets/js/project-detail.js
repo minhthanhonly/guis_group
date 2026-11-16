@@ -1082,7 +1082,10 @@ const vueApp = createApp({
         noteBoardFree() {
             return this.noteBoardWide && !this.noteFiltersActive;
         },
-        /** Board notes in reading order (row, then column) — DOM / tab order and the order on narrow screens */
+        /**
+         * Board notes: ピン（自分） first (only on this user's screen — cells are shared), then the
+         * others in reading order (row, then column). DOM / tab order and the order on narrow screens.
+         */
         boardNotes() {
             const pos = function(n) {
                 const r = Number(n.board_row) || 0;
@@ -1091,17 +1094,33 @@ const vueApp = createApp({
             };
             return this.filteredNotes
                 .map(function(n, i) { return { n: n, i: i, p: pos(n) }; })
-                .sort(function(a, b) { return a.p - b.p || a.i - b.i; })
+                .sort(function(a, b) {
+                    const sa = a.n.is_pinned_self == 1 ? 0 : 1;
+                    const sb = b.n.is_pinned_self == 1 ? 0 : 1;
+                    return sa - sb || a.p - b.p || a.i - b.i;
+                })
                 .map(function(x) { return x.n; });
         },
+        /** ピン（自分） notes: shown in their own rows at the top of the free board, for this user only */
+        noteSelfPinned() {
+            return this.boardNotes.filter(function(n) { return n.is_pinned_self == 1; });
+        },
+        /** Rows taken by the ピン（自分） band; the shared grid is drawn this many rows lower */
+        noteSelfPinRows() {
+            return this.noteBoardFree ? Math.ceil(this.noteSelfPinned.length / 3) : 0;
+        },
+        /** Last shared row in use (ピン（自分） notes leave their shared cell, so they don't count) */
         noteBoardMaxRow() {
-            return (this.notes || []).reduce(function(m, n) { return Math.max(m, Number(n.board_row) || 0); }, 0);
+            return (this.notes || []).reduce(function(m, n) {
+                return n.is_pinned_self == 1 ? m : Math.max(m, Number(n.board_row) || 0);
+            }, 0);
         },
         noteDragTargetOccupied() {
             const d = this.noteDrag;
             if (!d || !d.target) return false;
             return (this.notes || []).some(function(n) {
-                return n.id != d.id && Number(n.board_col) === d.target.col && Number(n.board_row) === d.target.row;
+                return n.id != d.id && n.is_pinned_self != 1
+                    && Number(n.board_col) === d.target.col && Number(n.board_row) === d.target.row;
             });
         },
         /** Options cho select "表示列" (display_column): cột danh sách project + custom fields. Loại trùng tên khác suffix 状況 */
@@ -3021,10 +3040,15 @@ const vueApp = createApp({
         /** Grid placement of a card on the free board (null = auto-flow) */
         noteCardGridStyle(note) {
             if (!this.noteBoardFree) return null;
+            if (note.is_pinned_self == 1) {
+                const i = this.noteSelfPinned.indexOf(note);
+                if (i < 0) return null;
+                return { gridColumn: String((i % 3) + 1), gridRow: String(Math.floor(i / 3) + 1) };
+            }
             const c = Number(note.board_col) || 0;
             const r = Number(note.board_row) || 0;
             if (!c || !r) return null;
-            return { gridColumn: String(c), gridRow: String(r) };
+            return { gridColumn: String(c), gridRow: String(r + this.noteSelfPinRows) };
         },
         onNoteBoardMediaChange(e) {
             this.noteBoardWide = !!(e && e.matches);
@@ -3118,8 +3142,10 @@ const vueApp = createApp({
             };
             const col = pick(cols.length ? cols : [r.width], colGap, x - r.left - (parseFloat(st.paddingLeft) || 0));
             let row = pick(rows.length ? rows : [r.height], rowGap, y - r.top - (parseFloat(st.paddingTop) || 0));
+            row -= this.noteSelfPinRows; // display row → shared row
+            if (row < 1) return null;    // over the ピン（自分） band
             row = Math.min(row, this.noteBoardMaxRow + 1);
-            return { col: Math.min(col, 3), row: Math.max(1, row) };
+            return { col: Math.min(col, 3), row: row };
         },
         stopNoteDragListeners() {
             window.removeEventListener('pointermove', this._onNoteDragMove);
