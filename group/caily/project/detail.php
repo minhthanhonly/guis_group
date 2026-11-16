@@ -165,6 +165,10 @@ if($_SESSION['show_project'] == 0){
                                     <i class="fa fa-times me-1"></i>{{ translateLabel('クリア') }} ({{ filteredNotes.length }} / {{ notes.length }})
                                 </button>
                             </template>
+                            <div v-if="notes.length > 0" class="form-check form-switch mb-0 note-board-full-switch" :title="translateLabel('メモの内容をすべて表示')">
+                                <input class="form-check-input" type="checkbox" role="switch" id="noteShowFullSwitch" v-model="noteShowFull">
+                                <label class="form-check-label" for="noteShowFullSwitch">{{ translateLabel('全文表示') }}</label>
+                            </div>
                             <button v-if="canAddNote" class="btn btn-primary btn-sm" @click="openNoteModal()" :title="translateLabel('メモを追加')">
                                 <i class="fa fa-plus me-1"></i> <span data-i18n="メモを追加">メモを追加</span>
                             </button>
@@ -203,7 +207,7 @@ if($_SESSION['show_project'] == 0){
                         <div v-if="notes.length > 0 && filteredNotes.length > 0"
                              ref="detailNotesList"
                              class="note-board detail-notes-list"
-                             :class="{ 'note-filters-active': noteFiltersActive }">
+                             :class="{ 'note-filters-active': noteFiltersActive, 'note-board-full': noteShowFull }">
                             <div v-for="note in filteredNotes"
                                  :key="note.id"
                                  class="detail-note-item note-card"
@@ -948,6 +952,23 @@ $view->footing();
     word-break: break-word;
     -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
     mask-image: linear-gradient(to bottom, #000 75%, transparent 100%);
+}
+.note-board-full-switch {
+    white-space: nowrap;
+    font-size: 0.85rem;
+}
+/* 全文表示: cards grow with their content (no fixed height, no fade-out) */
+.note-board.note-board-full {
+    align-items: start;
+}
+.note-board.note-board-full .note-card {
+    height: auto;
+    min-height: 200px;
+}
+.note-board.note-board-full .note-card-content.ql-editor {
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
 }
 .note-board .note-card-footer {
     flex: 0 0 auto;

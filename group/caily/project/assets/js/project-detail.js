@@ -227,6 +227,9 @@ const PROJECT_DATETIME_PARSE_FORMATS = [
     'Y/m/d H:i'
 ];
 
+/** メモボード 全文表示 switch — localStorage key */
+const NOTE_SHOW_FULL_STORAGE_KEY = 'projectDetail.noteShowFull';
+
 const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
     'amount_updated',
     'estimate_status_updated',
@@ -754,6 +757,10 @@ const vueApp = createApp({
                 { value: 'none', text: 'ピンなし' }
             ],
             savingNote: false,
+            // メモボード: 全文表示 switch (per browser)
+            noteShowFull: (function () {
+                try { return localStorage.getItem(NOTE_SHOW_FULL_STORAGE_KEY) === '1'; } catch (e) { return false; }
+            })(),
             _detailNotesSortable: null,
             _detailNotesSortablePending: false,
             quillNoteInstance: null,
@@ -3762,6 +3769,9 @@ const vueApp = createApp({
 
     },
     watch: {
+        noteShowFull(on) {
+            try { localStorage.setItem(NOTE_SHOW_FULL_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+        },
         // Leaving edit mode removes the editor's DOM: drop the Quill instance with it,
         // otherwise the next 編集 / メモを追加 reuses an instance bound to a detached node.
         isNoteEditMode(editing) {
