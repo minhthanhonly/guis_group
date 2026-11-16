@@ -7069,6 +7069,8 @@ class Project extends ApplicationModel {
     const PAYMENT_ITEM_INVOICE_STATUSES = ['未発行', '請求準備', '発行済', '無償', '対象外'];
     /** Types stored before 決済明細 existed (省エネ fee split); always offered as suggestions. */
     const PAYMENT_ITEM_LEGACY_TYPES = ['申請費', '設計費'];
+    /** 種別 of the single 見積 / 請求 value stored before 決済明細 (通常部署). */
+    const PAYMENT_ITEM_DEFAULT_LEGACY_TYPE = '設計費';
     const PAYMENT_ITEM_MAX_LINES = 200;
 
     private function paymentItemsTable() {
@@ -7160,10 +7162,10 @@ class Project extends ApplicationModel {
         $items = [];
         if (!$isEnergy) {
             if ($this->isMeaningfulLegacyPaymentValue($p['amount'] ?? null, $p['estimate_date'] ?? '', $p['estimate_status'] ?? '')) {
-                $items[] = $this->legacyPaymentItem('estimate', '', $p['amount'] ?? null, $p['estimate_date'] ?? '', $p['estimate_status'] ?? '', 1);
+                $items[] = $this->legacyPaymentItem('estimate', self::PAYMENT_ITEM_DEFAULT_LEGACY_TYPE, $p['amount'] ?? null, $p['estimate_date'] ?? '', $p['estimate_status'] ?? '', 1);
             }
             if ($this->isMeaningfulLegacyPaymentValue($p['invoice_amount'] ?? null, $p['invoice_date'] ?? '', $p['invoice_status'] ?? '')) {
-                $items[] = $this->legacyPaymentItem('invoice', '', $p['invoice_amount'] ?? null, $p['invoice_date'] ?? '', $p['invoice_status'] ?? '', 1);
+                $items[] = $this->legacyPaymentItem('invoice', self::PAYMENT_ITEM_DEFAULT_LEGACY_TYPE, $p['invoice_amount'] ?? null, $p['invoice_date'] ?? '', $p['invoice_status'] ?? '', 1);
             }
             return $items;
         }

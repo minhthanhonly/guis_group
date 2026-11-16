@@ -4,7 +4,8 @@
 -- projects の旧カラム (amount, estimate_*, invoice_*, *_application_*, *_design_*) は削除しない。
 -- 保存時に明細から再計算されるため、既存の集計・フィルタ・完了チェックはそのまま動く。
 --
--- このファイルは何度実行しても同じ結果になる（同じ案件・区分・種別の明細が既にあれば挿入しない）。
+-- 旧データの種別: 通常部署は「設計費」、省エネは「申請費」「設計費」。
+-- このファイルは何度実行しても同じ結果になる（既に明細がある案件・区分・種別には挿入しない）。
 
 CREATE TABLE IF NOT EXISTS `groupware_project_payment_items` (
     `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -27,10 +28,10 @@ CREATE TABLE IF NOT EXISTS `groupware_project_payment_items` (
 -- 「意味のある値」= 金額 > 0、日付あり、または状態が 未発行 以外
 -- ---------------------------------------------------------------------------
 
--- (1) 通常部署: 見積 → 種別なしの明細 1 行
+-- (1) 通常部署: 見積 → 種別「設計費」の明細 1 行
 INSERT INTO `groupware_project_payment_items`
     (project_id, kind, item_date, item_type, amount, status, sort_order, created_at, updated_at)
-SELECT p.id, 'estimate', p.estimate_date, '',
+SELECT p.id, 'estimate', p.estimate_date, '設計費',
        CASE WHEN p.estimate_status = '無償' THEN 0 ELSE p.amount END,
        CASE WHEN p.estimate_status = '発行済み' THEN '発行済'
             ELSE COALESCE(NULLIF(TRIM(p.estimate_status), ''), '未発行') END,
@@ -41,12 +42,12 @@ WHERE (d.name IS NULL OR d.name NOT LIKE '%省エネ%')
   AND (COALESCE(p.amount, 0) > 0 OR p.estimate_date IS NOT NULL
        OR COALESCE(NULLIF(TRIM(p.estimate_status), ''), '未発行') <> '未発行')
   AND NOT EXISTS (SELECT 1 FROM `groupware_project_payment_items` i
-                  WHERE i.project_id = p.id AND i.kind = 'estimate' AND i.item_type = '');
+                  WHERE i.project_id = p.id AND i.kind = 'estimate');
 
--- (2) 通常部署: 請求 → 種別なしの明細 1 行
+-- (2) 通常部署: 請求 → 種別「設計費」の明細 1 行
 INSERT INTO `groupware_project_payment_items`
     (project_id, kind, item_date, item_type, amount, status, sort_order, created_at, updated_at)
-SELECT p.id, 'invoice', p.invoice_date, '',
+SELECT p.id, 'invoice', p.invoice_date, '設計費',
        CASE WHEN p.invoice_status = '無償' THEN 0 ELSE p.invoice_amount END,
        CASE WHEN p.invoice_status = '発行済み' THEN '発行済'
             ELSE COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') END,
@@ -57,7 +58,7 @@ WHERE (d.name IS NULL OR d.name NOT LIKE '%省エネ%')
   AND (COALESCE(p.invoice_amount, 0) > 0 OR p.invoice_date IS NOT NULL
        OR COALESCE(NULLIF(TRIM(p.invoice_status), ''), '未発行') <> '未発行')
   AND NOT EXISTS (SELECT 1 FROM `groupware_project_payment_items` i
-                  WHERE i.project_id = p.id AND i.kind = 'invoice' AND i.item_type = '');
+                  WHERE i.project_id = p.id AND i.kind = 'invoice');
 
 -- (3)-(6) 省エネ: 申請費 / 設計費 をそれぞれ種別付きの明細に。
 -- 申請費が空（金額・日付・状態すべて未設定）の場合は旧の見積/請求の値を申請費として使う
