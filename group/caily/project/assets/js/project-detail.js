@@ -229,8 +229,8 @@ const PROJECT_DATETIME_PARSE_FORMATS = [
 
 /** メモボード 全文表示 switch — localStorage key */
 const NOTE_SHOW_FULL_STORAGE_KEY = 'projectDetail.noteShowFull';
-/** vertical gap between masonry cards (px) — the board's column gap is the same 14px */
-const NOTE_MASONRY_GAP = 14;
+/** メモボード: free placement (board_col / board_row) from this width up — 3 columns, see detail.php .note-board */
+const NOTE_BOARD_FREE_MEDIA = '(min-width: 992px)';
 
 const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
     'amount_updated',
@@ -763,8 +763,11 @@ const vueApp = createApp({
             noteShowFull: (function () {
                 try { return localStorage.getItem(NOTE_SHOW_FULL_STORAGE_KEY) === '1'; } catch (e) { return false; }
             })(),
-            _detailNotesSortable: null,
-            _detailNotesSortablePending: false,
+            /** メモボード drag: { id, offX, offY, target: { col, row } | null } */
+            noteDrag: null,
+            noteBoardWide: (function() {
+                try { return window.matchMedia(NOTE_BOARD_FREE_MEDIA).matches; } catch (e) { return true; }
+            })(),
             quillNoteInstance: null,
             quillNoteContent: '',
             // Project status update loading
@@ -1039,7 +1042,7 @@ const vueApp = createApp({
         canDeleteCurrentNote() {
             return !!(this.editingNote && this.editingNote.id && this.canDeleteNote(this.editingNote));
         },
-        /** Any board filter set — drag reorder is off while filtering (would scramble sort_order) */
+        /** Any board filter set — the board falls back to reading order and drag is off */
         noteFiltersActive() {
             return !!(this.noteFilterLabel || this.noteFilterType !== ''
                 || this.noteFilterVisibility || this.noteFilterPin);
@@ -1070,6 +1073,35 @@ const vueApp = createApp({
                     if (pinFilter === 'none' && (everyone || self)) return false;
                 }
                 return true;
+            });
+        },
+        /**
+         * Free board: every note in its own cell (board_col / board_row, shared by everyone).
+         * Off while filtering (holes would be meaningless) and below 3 columns (tablet / phone).
+         */
+        noteBoardFree() {
+            return this.noteBoardWide && !this.noteFiltersActive;
+        },
+        /** Board notes in reading order (row, then column) — DOM / tab order and the order on narrow screens */
+        boardNotes() {
+            const pos = function(n) {
+                const r = Number(n.board_row) || 0;
+                const c = Number(n.board_col) || 0;
+                return r > 0 && c > 0 ? r * 10 + c : Number.MAX_SAFE_INTEGER;
+            };
+            return this.filteredNotes
+                .map(function(n, i) { return { n: n, i: i, p: pos(n) }; })
+                .sort(function(a, b) { return a.p - b.p || a.i - b.i; })
+                .map(function(x) { return x.n; });
+        },
+        noteBoardMaxRow() {
+            return (this.notes || []).reduce(function(m, n) { return Math.max(m, Number(n.board_row) || 0); }, 0);
+        },
+        noteDragTargetOccupied() {
+            const d = this.noteDrag;
+            if (!d || !d.target) return false;
+            return (this.notes || []).some(function(n) {
+                return n.id != d.id && Number(n.board_col) === d.target.col && Number(n.board_row) === d.target.row;
             });
         },
         /** Options cho select "表示列" (display_column): cột danh sách project + custom fields. Loại trùng tên khác suffix 状況 */
@@ -2985,231 +3017,150 @@ const vueApp = createApp({
                 console.error('Error loading notes:', error);
                 this.notes = [];
             }
-            this.$nextTick(() => this.initDetailNotesSortable());
         },
-        ensureSortableLoadedForDetailNotes() {
-            if (typeof Sortable !== 'undefined') {
-                return Promise.resolve();
-            }
-            if (window.__sortableJsLoading) {
-                return window.__sortableJsLoading;
-            }
-            var loader = window.AppLoader;
-            if (loader && typeof loader.loadScript === 'function') {
-                window.__sortableJsLoading = loader.loadScript(
-                    'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'
-                ).catch(function(err) {
-                    delete window.__sortableJsLoading;
-                    throw err;
-                });
-                return window.__sortableJsLoading;
-            }
-            window.__sortableJsLoading = new Promise(function(resolve, reject) {
-                var s = document.createElement('script');
-                s.src = 'https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js';
-                s.async = true;
-                s.onload = function() { resolve(); };
-                s.onerror = function() {
-                    delete window.__sortableJsLoading;
-                    reject(new Error('Failed to load Sortable'));
-                };
-                document.head.appendChild(s);
-            });
-            return window.__sortableJsLoading;
+        /** Grid placement of a card on the free board (null = auto-flow) */
+        noteCardGridStyle(note) {
+            if (!this.noteBoardFree) return null;
+            const c = Number(note.board_col) || 0;
+            const r = Number(note.board_row) || 0;
+            if (!c || !r) return null;
+            return { gridColumn: String(c), gridRow: String(r) };
         },
-        destroyDetailNotesSortable() {
-            if (this._detailNotesSortable) {
-                try { this._detailNotesSortable.destroy(); } catch (e) { /* ignore */ }
-                this._detailNotesSortable = null;
-            }
+        onNoteBoardMediaChange(e) {
+            this.noteBoardWide = !!(e && e.matches);
+            if (!this.noteBoardWide) this.cancelNoteDrag();
+        },
+        initNoteBoardMedia() {
+            if (!window.matchMedia) return;
+            this._noteBoardMql = window.matchMedia(NOTE_BOARD_FREE_MEDIA);
+            this._onNoteBoardMedia = (e) => this.onNoteBoardMediaChange(e);
+            if (this._noteBoardMql.addEventListener) this._noteBoardMql.addEventListener('change', this._onNoteBoardMedia);
+            else if (this._noteBoardMql.addListener) this._noteBoardMql.addListener(this._onNoteBoardMedia);
+            this.noteBoardWide = this._noteBoardMql.matches;
         },
         /**
-         * 全文表示 masonry: the board is a grid with 2px rows (CSS .note-board-full);
-         * each card spans as many rows as its height + the 14px gap, so short notes
-         * fill the space under shorter neighbours while the order stays left → right.
-         * A ResizeObserver re-measures on content / width changes (images, resize).
+         * Drag a note by its handle to any cell of the board: a floating copy follows the
+         * pointer, the target cell is outlined, and on drop the server places the note there
+         * (an occupied cell pushes its note — and the ones after it — one cell on).
          */
-        refreshNoteMasonry() {
+        onNoteDragStart(note, e) {
+            if (!this.noteBoardFree || this.noteDrag || (e.button !== undefined && e.button !== 0)) return;
+            const card = e.currentTarget && e.currentTarget.closest('.note-card');
             const board = this.$refs.detailNotesList;
-            if (this._noteMasonryRO) this._noteMasonryRO.disconnect();
-            if (!board) return;
-            const cards = board.querySelectorAll('.note-card');
-            if (!this.noteShowFull) {
-                cards.forEach((c) => { c.style.gridRowEnd = ''; });
-                return;
-            }
-            if (typeof ResizeObserver === 'undefined') return;
-            if (!this._noteMasonryRO) {
-                this._noteMasonryRO = new ResizeObserver(() => this.scheduleNoteMasonryLayout());
-            }
-            this._noteMasonryRO.observe(board);
-            cards.forEach((c) => this._noteMasonryRO.observe(c));
-            this.layoutNoteMasonry();
-        },
-        scheduleNoteMasonryLayout() {
-            if (this._noteMasonryFrame) return;
-            this._noteMasonryFrame = requestAnimationFrame(() => {
-                this._noteMasonryFrame = null;
-                this.layoutNoteMasonry();
-            });
-        },
-        layoutNoteMasonry() {
-            const board = this.$refs.detailNotesList;
-            if (!board || !this.noteShowFull) return;
-            const style = getComputedStyle(board);
-            const rowH = parseFloat(style.gridAutoRows) || 2;
-            const gap = NOTE_MASONRY_GAP;
-            board.querySelectorAll('.note-card').forEach((card) => {
-                const h = card.getBoundingClientRect().height;
-                const span = Math.max(1, Math.ceil((h + gap) / rowH));
-                const next = 'span ' + span;
-                if (card.style.gridRowEnd !== next) card.style.gridRowEnd = next;
-            });
-        },
-        /**
-         * Drag in 全文表示: cards are auto-placed in DOM order, so every step of the drag
-         * would re-place all following cards into other columns. Pin each card to its
-         * current grid cell while dragging (only the dragged note moves, the target note
-         * is highlighted) and let masonry re-flow once on drop.
-         */
-        freezeNoteMasonry() {
-            const board = this.$refs.detailNotesList;
-            if (!board || !this.noteShowFull) return;
-            const style = getComputedStyle(board);
-            const rowH = parseFloat(style.gridAutoRows) || 2;
-            const colGap = parseFloat(style.columnGap) || NOTE_MASONRY_GAP;
-            const cols = style.gridTemplateColumns.split(' ').filter(Boolean).length || 1;
-            const bRect = board.getBoundingClientRect();
-            const originX = bRect.left + (parseFloat(style.borderLeftWidth) || 0) + (parseFloat(style.paddingLeft) || 0);
-            const originY = bRect.top + (parseFloat(style.borderTopWidth) || 0) + (parseFloat(style.paddingTop) || 0);
-            const colW = parseFloat(style.gridTemplateColumns.split(' ')[0]) || 1;
-            board.querySelectorAll('.note-card').forEach((card) => {
-                const r = card.getBoundingClientRect();
-                const col = Math.min(cols, Math.max(1, Math.round((r.left - originX) / (colW + colGap)) + 1));
-                const row = Math.max(1, Math.round((r.top - originY) / rowH) + 1);
-                card.style.gridColumnStart = String(col);
-                card.style.gridRowStart = String(row);
-            });
-            board.classList.add('note-board-frozen');
-            this._noteMasonryFrozen = true;
-        },
-        unfreezeNoteMasonry() {
-            const board = this.$refs.detailNotesList;
-            this._noteMasonryFrozen = false;
-            if (!board) return;
-            board.classList.remove('note-board-frozen');
-            board.querySelectorAll('.note-card').forEach((card) => {
-                card.style.gridColumnStart = '';
-                card.style.gridRowStart = '';
-                card.classList.remove('note-drop-before', 'note-drop-after');
-            });
-            this.scheduleNoteMasonryLayout();
-        },
-        markNoteDropTarget(target, after) {
-            const board = this.$refs.detailNotesList;
-            if (!board || !this._noteMasonryFrozen) return;
-            board.querySelectorAll('.note-drop-before, .note-drop-after').forEach((c) => {
-                c.classList.remove('note-drop-before', 'note-drop-after');
-            });
-            if (target && target.classList && target.classList.contains('note-card') && !target.classList.contains('note-sortable-ghost')) {
-                target.classList.add(after ? 'note-drop-after' : 'note-drop-before');
-            }
-        },
-        teardownNoteMasonry() {
-            if (this._noteMasonryRO) {
-                this._noteMasonryRO.disconnect();
-                this._noteMasonryRO = null;
-            }
-            if (this._noteMasonryFrame) {
-                cancelAnimationFrame(this._noteMasonryFrame);
-                this._noteMasonryFrame = null;
-            }
-        },
-        initDetailNotesSortable() {
-            var self = this;
-            this.destroyDetailNotesSortable();
-            var el = this.$refs.detailNotesList;
-            if (!el || !this.filteredNotes || this.filteredNotes.length < 2) return;
-            // Filters active → don't allow reorder (would scramble global sort_order)
-            if (this.noteFiltersActive) return;
-
-            var bind = function() {
-                if (typeof Sortable === 'undefined') return;
-                var live = self.$refs.detailNotesList;
-                if (!live || !live.isConnected) return;
-                self._detailNotesSortable = Sortable.create(live, {
-                    handle: '.note-drag-handle',
-                    animation: 180,
-                    ghostClass: 'note-sortable-ghost',
-                    chosenClass: 'note-sortable-chosen',
-                    dragClass: 'note-sortable-drag',
-                    fallbackClass: 'note-sortable-fallback',
-                    forceFallback: true,
-                    fallbackOnBody: true,
-                    draggable: '.detail-note-item',
-                    onClone: function(evt) {
-                        var clone = evt.clone;
-                        if (!clone) return;
-                        var trailing = clone.querySelector('.detail-note-trailing');
-                        if (trailing) trailing.remove();
-                    },
-                    onStart: function() {
-                        self.freezeNoteMasonry();
-                    },
-                    onMove: function(evt) {
-                        self.markNoteDropTarget(evt.related, evt.willInsertAfter);
-                    },
-                    onEnd: function() {
-                        self.unfreezeNoteMasonry();
-                        self.persistDetailNotesOrder();
-                    }
-                });
+            if (!card || !board) return;
+            e.preventDefault();
+            const rect = card.getBoundingClientRect();
+            const ghost = card.cloneNode(true);
+            ghost.classList.add('note-drag-ghost');
+            ghost.classList.remove('is-dragging');
+            ghost.removeAttribute('data-note-id');
+            ghost.style.width = rect.width + 'px';
+            ghost.style.height = rect.height + 'px';
+            ghost.style.left = rect.left + 'px';
+            ghost.style.top = rect.top + 'px';
+            // a body-level .note-board layer keeps the board styles without touching Vue's DOM
+            const layer = document.createElement('div');
+            layer.className = board.className + ' note-drag-layer';
+            layer.appendChild(ghost);
+            document.body.appendChild(layer);
+            this._noteDragGhost = layer;
+            this.noteDrag = {
+                id: note.id,
+                offX: e.clientX - rect.left,
+                offY: e.clientY - rect.top,
+                target: { col: Number(note.board_col) || 1, row: Number(note.board_row) || 1 }
             };
-
-            if (typeof Sortable !== 'undefined') {
-                bind();
-                return;
-            }
-            if (this._detailNotesSortablePending) return;
-            this._detailNotesSortablePending = true;
-            this.ensureSortableLoadedForDetailNotes().then(function() {
-                self._detailNotesSortablePending = false;
-                bind();
-            }).catch(function(err) {
-                self._detailNotesSortablePending = false;
-                console.error('Failed to load Sortable for detail notes', err);
-            });
+            this._onNoteDragMove = (ev) => this.onNoteDragMove(ev);
+            this._onNoteDragUp = (ev) => this.onNoteDragEnd(ev);
+            this._onNoteDragKey = (ev) => { if (ev.key === 'Escape') this.cancelNoteDrag(); };
+            this._onNoteDragCancel = () => this.cancelNoteDrag();
+            window.addEventListener('pointermove', this._onNoteDragMove);
+            window.addEventListener('pointerup', this._onNoteDragUp);
+            window.addEventListener('pointercancel', this._onNoteDragCancel);
+            window.addEventListener('keydown', this._onNoteDragKey);
         },
-        persistDetailNotesOrder() {
-            var el = this.$refs.detailNotesList;
-            if (!el) return;
-            var ids = [];
-            el.querySelectorAll('.detail-note-item').forEach(function(node) {
-                var id = node.getAttribute('data-note-id');
-                if (id) ids.push(id);
-            });
-            if (ids.length < 2) return;
-
-            // Keep local array order in sync with DOM before reload
-            var byId = {};
-            (this.notes || []).forEach(function(n) { byId[String(n.id)] = n; });
-            var reordered = [];
-            ids.forEach(function(id) {
-                if (byId[String(id)]) reordered.push(byId[String(id)]);
-            });
-            (this.notes || []).forEach(function(n) {
-                if (ids.indexOf(String(n.id)) === -1 && ids.indexOf(n.id) === -1) {
-                    reordered.push(n);
+        onNoteDragMove(e) {
+            const d = this.noteDrag;
+            if (!d) return;
+            const ghost = this._noteDragGhost && this._noteDragGhost.firstChild;
+            if (ghost) {
+                ghost.style.left = (e.clientX - d.offX) + 'px';
+                ghost.style.top = (e.clientY - d.offY) + 'px';
+            }
+            const t = this.noteBoardCellAt(e.clientX, e.clientY);
+            if (!t) d.target = null;
+            else if (!d.target || d.target.col !== t.col || d.target.row !== t.row) d.target = t;
+            // keep the page scrolling while dragging near the top / bottom edge
+            const edge = 60;
+            if (e.clientY < edge) window.scrollBy(0, -14);
+            else if (e.clientY > window.innerHeight - edge) window.scrollBy(0, 14);
+        },
+        /** Grid cell under a viewport point, from the board's resolved tracks; null when off the board */
+        noteBoardCellAt(x, y) {
+            const board = this.$refs.detailNotesList;
+            if (!board) return null;
+            const r = board.getBoundingClientRect();
+            const margin = 40;
+            if (x < r.left - margin || x > r.right + margin || y < r.top - margin || y > r.bottom + margin) return null;
+            const st = getComputedStyle(board);
+            const cols = st.gridTemplateColumns.split(' ').map(parseFloat).filter(function(v) { return v > 0; });
+            const rows = st.gridTemplateRows.split(' ').map(parseFloat).filter(function(v) { return v > 0; });
+            const colGap = parseFloat(st.columnGap) || 0;
+            const rowGap = parseFloat(st.rowGap) || 0;
+            const pick = function(tracks, gap, offset) {
+                let edgeAt = 0;
+                for (let i = 0; i < tracks.length; i++) {
+                    edgeAt += tracks[i] + (i < tracks.length - 1 ? gap / 2 : 0);
+                    if (offset < edgeAt) return i + 1;
+                    edgeAt += gap / 2;
                 }
-            });
-            this.notes = reordered;
-
-            var formData = new FormData();
-            formData.append('project_id', this.projectId);
-            formData.append('note_ids', JSON.stringify(ids));
-            axios.post('/api/index.php?model=project&method=reorderNotes', formData).catch(function(err) {
-                console.error('Failed to reorder notes', err);
-            });
+                return Math.max(1, tracks.length);
+            };
+            const col = pick(cols.length ? cols : [r.width], colGap, x - r.left - (parseFloat(st.paddingLeft) || 0));
+            let row = pick(rows.length ? rows : [r.height], rowGap, y - r.top - (parseFloat(st.paddingTop) || 0));
+            row = Math.min(row, this.noteBoardMaxRow + 1);
+            return { col: Math.min(col, 3), row: Math.max(1, row) };
+        },
+        stopNoteDragListeners() {
+            window.removeEventListener('pointermove', this._onNoteDragMove);
+            window.removeEventListener('pointerup', this._onNoteDragUp);
+            window.removeEventListener('pointercancel', this._onNoteDragCancel);
+            window.removeEventListener('keydown', this._onNoteDragKey);
+            if (this._noteDragGhost) {
+                this._noteDragGhost.remove();
+                this._noteDragGhost = null;
+            }
+        },
+        cancelNoteDrag() {
+            this.stopNoteDragListeners();
+            this.noteDrag = null;
+        },
+        async onNoteDragEnd() {
+            const d = this.noteDrag;
+            this.stopNoteDragListeners();
+            this.noteDrag = null;
+            if (!d || !d.target) return;
+            const note = (this.notes || []).find(function(n) { return n.id == d.id; });
+            if (!note) return;
+            if (Number(note.board_col) === d.target.col && Number(note.board_row) === d.target.row) return;
+            try {
+                const fd = new FormData();
+                fd.append('project_id', this.projectId);
+                fd.append('note_id', d.id);
+                fd.append('col', d.target.col);
+                fd.append('row', d.target.row);
+                const res = await axios.post('/api/index.php?model=project&method=moveNoteOnBoard', fd);
+                const positions = res.data && res.data.status === 'success' ? res.data.positions : null;
+                if (!positions) throw new Error((res.data && res.data.error) || 'move failed');
+                (this.notes || []).forEach(function(n) {
+                    const p = positions[n.id];
+                    if (p) { n.board_col = p[0]; n.board_row = p[1]; }
+                });
+            } catch (err) {
+                console.error('Failed to move note', err);
+                this.showNotification('メモの移動に失敗しました', 'error');
+                await this.loadNotes();
+            }
         },
         async toggleNotePin(note, mode) {
             if (!note || !note.id) return;
@@ -3883,16 +3834,7 @@ const vueApp = createApp({
         noteShowFull: {
             handler(on) {
                 try { localStorage.setItem(NOTE_SHOW_FULL_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
-                this.refreshNoteMasonry();
-            },
-            flush: 'post'
-        },
-        // Board re-rendered (load / filter / reorder): re-measure the masonry cards
-        filteredNotes: {
-            handler() {
-                this.refreshNoteMasonry();
-            },
-            flush: 'post'
+            }
         },
         // Leaving edit mode removes the editor's DOM: drop the Quill instance with it,
         // otherwise the next 編集 / メモを追加 reuses an instance bound to a detached node.
@@ -3963,26 +3905,22 @@ const vueApp = createApp({
             },
             deep: true
         },
-        noteFilterLabel() {
-            this.$nextTick(() => this.initDetailNotesSortable());
-        },
-        noteFilterType() {
-            this.$nextTick(() => this.initDetailNotesSortable());
-        },
-        noteFilterVisibility() {
-            this.$nextTick(() => this.initDetailNotesSortable());
-        },
-        noteFilterPin() {
-            this.$nextTick(() => this.initDetailNotesSortable());
+        // a filter turned on mid-drag: the board is no longer free
+        noteBoardFree(free) {
+            if (!free) this.cancelNoteDrag();
         },
     },
     beforeUnmount() {
-        this.destroyDetailNotesSortable();
-        this.teardownNoteMasonry();
+        this.cancelNoteDrag();
+        if (this._noteBoardMql) {
+            if (this._noteBoardMql.removeEventListener) this._noteBoardMql.removeEventListener('change', this._onNoteBoardMedia);
+            else if (this._noteBoardMql.removeListener) this._noteBoardMql.removeListener(this._onNoteBoardMedia);
+        }
     },
     async mounted() {
         // D1: permission ∥ getById(+secondary); notes/logs/categories ∥ critical path (projectId từ URL)
         this.loadCurrentUser();
+        this.initNoteBoardMedia();
         await Promise.all([
             this.loadPermission(),
             this.loadProject(),

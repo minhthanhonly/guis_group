@@ -7365,6 +7365,13 @@ class Project extends ApplicationModel {
         return $noteModel->reorder($params);
     }
 
+    /** メモボード (案件詳細): move a note to a grid cell. POST project_id, note_id, col, row */
+    function moveNoteOnBoard($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->moveOnBoard($params);
+    }
+
   
     function sendProjectNotification($params = null) {
         try {

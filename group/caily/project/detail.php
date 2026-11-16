@@ -207,24 +207,27 @@ if($_SESSION['show_project'] == 0){
                         <div v-if="notes.length > 0 && filteredNotes.length > 0"
                              ref="detailNotesList"
                              class="note-board detail-notes-list"
-                             :class="{ 'note-filters-active': noteFiltersActive, 'note-board-full': noteShowFull }">
-                            <div v-for="note in filteredNotes"
+                             :class="{ 'note-filters-active': noteFiltersActive, 'note-board-full': noteShowFull, 'note-board-free': noteBoardFree, 'note-board-dragging': !!noteDrag }">
+                            <div v-for="note in boardNotes"
                                  :key="note.id"
                                  class="detail-note-item note-card"
                                  :class="[
                                      'note-bg-' + (note.bg_color || 'default'),
                                      {
                                          'important-note': note.is_important == 1,
-                                         'pinned-self-note': note.is_pinned_self == 1
+                                         'pinned-self-note': note.is_pinned_self == 1,
+                                         'is-dragging': noteDrag && noteDrag.id == note.id
                                      }
                                  ]"
+                                 :style="noteCardGridStyle(note)"
                                  :data-note-id="note.id">
                                 <div class="note-card-top">
-                                    <span class="note-drag-handle"
-                                          :title="translateLabel('並べ替え')"
-                                          :aria-label="translateLabel('並べ替え')"
-                                          @click.stop
-                                          @mousedown.stop>
+                                    <span v-if="noteBoardFree"
+                                          class="note-drag-handle"
+                                          :title="translateLabel('ドラッグで移動')"
+                                          :aria-label="translateLabel('ドラッグで移動')"
+                                          @pointerdown="onNoteDragStart(note, $event)"
+                                          @click.stop>
                                         <i class="fa fa-grip-vertical"></i>
                                     </span>
                                     <i v-if="note.is_important == 1" class="fa fa-thumb-tack text-danger" :title="translateLabel('ピン（全員）')"></i>
@@ -267,6 +270,12 @@ if($_SESSION['show_project'] == 0){
                                     {{ formatShortDateTime(note.created_at) }} · {{ note.realname || 'Unknown' }}
                                 </div>
                             </div>
+                            <!-- drag: target cell + one extra row to drop below the last note -->
+                            <div v-if="noteDrag && noteDrag.target" class="note-drop-cell"
+                                 :class="{ 'is-occupied': noteDragTargetOccupied }"
+                                 :style="{ gridColumn: String(noteDrag.target.col), gridRow: String(noteDrag.target.row) }"></div>
+                            <div v-if="noteDrag" class="note-board-spacer"
+                                 :style="{ gridColumn: '1 / -1', gridRow: String(noteBoardMaxRow + 1) }"></div>
                         </div>
                         <div v-else-if="notes.length > 0" class="text-center text-muted py-3">
                             <i class="fa fa-filter fa-2x mb-2"></i>
@@ -884,16 +893,13 @@ $view->footing();
     cursor: grab;
     user-select: none;
     -webkit-user-select: none;
+    touch-action: none;
 }
 .note-board .note-drag-handle:hover {
     opacity: 0.8;
 }
 .note-board .note-drag-handle:active {
     cursor: grabbing;
-}
-.note-board.note-filters-active .note-drag-handle {
-    opacity: 0.15;
-    cursor: not-allowed;
 }
 .note-board .note-actions {
     display: inline-flex;
@@ -957,32 +963,67 @@ $view->footing();
     white-space: nowrap;
     font-size: 0.85rem;
 }
-/* 全文表示: cards grow with their content (no fixed height, no fade-out) */
+/* 全文表示: cards grow with their content (no fixed height, no fade-out); a row is as tall as its tallest card */
 .note-board.note-board-full {
     align-items: start;
-    /* masonry: 2px rows, each card spans rows for its height + gap (project-detail.js refreshNoteMasonry) */
-    grid-auto-rows: 2px;
-    row-gap: 0;
 }
 .note-board.note-board-full .note-card {
     height: auto;
     min-height: 0;
 }
-/* drag in 全文表示: cards are pinned (project-detail.js freezeNoteMasonry); the drop
-   target shows a bar on the side the dragged note will be inserted (before = left, after = right) */
-.note-board.note-board-frozen .note-card {
+/* free board (3 columns, no filter): each note sits in its own cell (board_col / board_row),
+   empty cells keep a minimum height so they can be seen and dropped into */
+.note-board.note-board-free {
+    grid-auto-rows: minmax(200px, auto);
+}
+.note-board.note-board-free.note-board-full {
+    grid-auto-rows: minmax(96px, auto);
+}
+.note-board.note-board-dragging {
+    user-select: none;
+    -webkit-user-select: none;
+}
+.note-board.note-board-dragging .note-card {
     transition: none;
 }
-.note-board .note-card.note-drop-before,
-.note-board .note-card.note-drop-after {
-    outline: 2px dashed var(--bs-primary, #696cff);
-    outline-offset: 2px;
+.note-board .note-card.is-dragging {
+    opacity: 0.3;
 }
-.note-board .note-card.note-drop-before {
+.note-board .note-drop-cell {
+    align-self: stretch;
+    z-index: 3;
+    pointer-events: none;
+    border: 2px dashed var(--bs-primary, #696cff);
+    border-radius: 8px;
+    background: rgba(105, 108, 255, 0.08);
+}
+/* occupied cell: the note there (and the ones after it) will move on by one cell */
+.note-board .note-drop-cell.is-occupied {
+    background: rgba(105, 108, 255, 0.18);
     box-shadow: inset 4px 0 0 var(--bs-primary, #696cff);
 }
-.note-board .note-card.note-drop-after {
-    box-shadow: inset -4px 0 0 var(--bs-primary, #696cff);
+.note-board.note-drag-layer {
+    display: block;
+    position: fixed;
+    inset: 0 auto auto 0;
+    width: 0;
+    height: 0;
+    z-index: 10050;
+}
+.note-board .note-board-spacer {
+    pointer-events: none;
+}
+.note-board .note-card.note-drag-ghost {
+    position: fixed;
+    z-index: 10050;
+    margin: 0;
+    pointer-events: none;
+    opacity: 0.95;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+    transform: rotate(1.5deg);
+}
+.note-board .note-card.note-drag-ghost .note-actions {
+    display: none;
 }
 .note-board.note-board-full .note-card-content.ql-editor {
     overflow: visible;
@@ -998,19 +1039,6 @@ $view->footing();
     overflow: hidden;
     text-overflow: ellipsis;
     cursor: pointer;
-}
-.note-board .note-card.note-sortable-ghost {
-    opacity: 0.35;
-}
-.note-card.note-sortable-fallback,
-.sortable-fallback.note-card {
-    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28) !important;
-    opacity: 1 !important;
-    z-index: 10050 !important;
-}
-.note-card.note-sortable-fallback .note-actions,
-.sortable-fallback.note-card .note-actions {
-    display: none !important;
 }
 
 /* Board card borders in dark mode (palette: assets/css/project-notes.css) */
