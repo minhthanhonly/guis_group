@@ -960,10 +960,13 @@ $view->footing();
 /* 全文表示: cards grow with their content (no fixed height, no fade-out) */
 .note-board.note-board-full {
     align-items: start;
+    /* masonry: 2px rows, each card spans rows for its height + gap (project-detail.js refreshNoteMasonry) */
+    grid-auto-rows: 2px;
+    row-gap: 0;
 }
 .note-board.note-board-full .note-card {
     height: auto;
-    min-height: 200px;
+    min-height: 0;
 }
 .note-board.note-board-full .note-card-content.ql-editor {
     overflow: visible;

@@ -229,6 +229,8 @@ const PROJECT_DATETIME_PARSE_FORMATS = [
 
 /** メモボード 全文表示 switch — localStorage key */
 const NOTE_SHOW_FULL_STORAGE_KEY = 'projectDetail.noteShowFull';
+/** vertical gap between masonry cards (px) — the board's column gap is the same 14px */
+const NOTE_MASONRY_GAP = 14;
 
 const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
     'amount_updated',
@@ -3021,6 +3023,59 @@ const vueApp = createApp({
                 this._detailNotesSortable = null;
             }
         },
+        /**
+         * 全文表示 masonry: the board is a grid with 2px rows (CSS .note-board-full);
+         * each card spans as many rows as its height + the 14px gap, so short notes
+         * fill the space under shorter neighbours while the order stays left → right.
+         * A ResizeObserver re-measures on content / width changes (images, resize).
+         */
+        refreshNoteMasonry() {
+            const board = this.$refs.detailNotesList;
+            if (this._noteMasonryRO) this._noteMasonryRO.disconnect();
+            if (!board) return;
+            const cards = board.querySelectorAll('.note-card');
+            if (!this.noteShowFull) {
+                cards.forEach((c) => { c.style.gridRowEnd = ''; });
+                return;
+            }
+            if (typeof ResizeObserver === 'undefined') return;
+            if (!this._noteMasonryRO) {
+                this._noteMasonryRO = new ResizeObserver(() => this.scheduleNoteMasonryLayout());
+            }
+            this._noteMasonryRO.observe(board);
+            cards.forEach((c) => this._noteMasonryRO.observe(c));
+            this.layoutNoteMasonry();
+        },
+        scheduleNoteMasonryLayout() {
+            if (this._noteMasonryFrame) return;
+            this._noteMasonryFrame = requestAnimationFrame(() => {
+                this._noteMasonryFrame = null;
+                this.layoutNoteMasonry();
+            });
+        },
+        layoutNoteMasonry() {
+            const board = this.$refs.detailNotesList;
+            if (!board || !this.noteShowFull) return;
+            const style = getComputedStyle(board);
+            const rowH = parseFloat(style.gridAutoRows) || 2;
+            const gap = NOTE_MASONRY_GAP;
+            board.querySelectorAll('.note-card').forEach((card) => {
+                const h = card.getBoundingClientRect().height;
+                const span = Math.max(1, Math.ceil((h + gap) / rowH));
+                const next = 'span ' + span;
+                if (card.style.gridRowEnd !== next) card.style.gridRowEnd = next;
+            });
+        },
+        teardownNoteMasonry() {
+            if (this._noteMasonryRO) {
+                this._noteMasonryRO.disconnect();
+                this._noteMasonryRO = null;
+            }
+            if (this._noteMasonryFrame) {
+                cancelAnimationFrame(this._noteMasonryFrame);
+                this._noteMasonryFrame = null;
+            }
+        },
         initDetailNotesSortable() {
             var self = this;
             this.destroyDetailNotesSortable();
@@ -3769,8 +3824,19 @@ const vueApp = createApp({
 
     },
     watch: {
-        noteShowFull(on) {
-            try { localStorage.setItem(NOTE_SHOW_FULL_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+        noteShowFull: {
+            handler(on) {
+                try { localStorage.setItem(NOTE_SHOW_FULL_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
+                this.refreshNoteMasonry();
+            },
+            flush: 'post'
+        },
+        // Board re-rendered (load / filter / reorder): re-measure the masonry cards
+        filteredNotes: {
+            handler() {
+                this.refreshNoteMasonry();
+            },
+            flush: 'post'
         },
         // Leaving edit mode removes the editor's DOM: drop the Quill instance with it,
         // otherwise the next 編集 / メモを追加 reuses an instance bound to a detached node.
@@ -3856,6 +3922,7 @@ const vueApp = createApp({
     },
     beforeUnmount() {
         this.destroyDetailNotesSortable();
+        this.teardownNoteMasonry();
     },
     async mounted() {
         // D1: permission ∥ getById(+secondary); notes/logs/categories ∥ critical path (projectId từ URL)
