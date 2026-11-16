@@ -17,7 +17,8 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
             <div class="modal-content">
                 <div class="modal-header">
                     <h5 class="modal-title" id="editParentProjectModalLabel">
-                        <span v-if="isEditMode" data-i18n="建物編集">建物編集</span>
+                        <span v-if="isCreateMode" data-i18n="建物登録">建物登録</span>
+                        <span v-else-if="isEditMode" data-i18n="建物編集">建物編集</span>
                         <span v-else data-i18n="建物情報">建物情報</span>
                         <span v-if="editingParentProject.id" class="badge bg-label-primary ms-2">#{{ editingParentProject.id }}</span>
                     </h5>
@@ -78,8 +79,17 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                             </div>
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="管理番号">管理番号</span></label>
-                                    <input type="text" class="form-control" :value="editingParentProject.project_number || '-'" readonly>
+                                    <label class="form-label">
+                                        <span data-i18n="管理番号">管理番号</span>
+                                        <template v-if="isCreateMode">
+                                            <span class="text-danger">*</span>
+                                            <button class="btn btn-sm btn-outline-primary py-0 small ms-2" type="button" @click="generateProjectNumber" title="生成">生成</button>
+                                        </template>
+                                    </label>
+                                    <input v-if="isCreateMode" type="text" class="form-control" v-model="editingParentProject.project_number"
+                                           :class="{ 'is-invalid': !!editParentProjectErrors.project_number }">
+                                    <input v-else type="text" class="form-control" :value="editingParentProject.project_number || '-'" readonly>
+                                    <div class="invalid-feedback d-block" v-if="editParentProjectErrors.project_number">{{ editParentProjectErrors.project_number }}</div>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -90,7 +100,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                             </div>
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="依頼日">依頼日</span></label>
+                                    <label class="form-label"><span data-i18n="依頼日">依頼日</span> <span v-if="isCreateMode" class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <input type="text" class="form-control" v-model="editingParentProject.request_date"
                                                id="edit_pp_request_date" placeholder="YYYY/MM/DD HH:mm" autocomplete="off">
@@ -98,14 +108,16 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                             現在時刻
                                         </button>
                                     </div>
+                                    <div class="invalid-feedback d-block" v-if="editParentProjectErrors.request_date">{{ editParentProjectErrors.request_date }}</div>
                                 </div>
                             </div>
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span></label>
+                                    <label class="form-label"><span data-i18n="GUIS受付者">GUIS受付者</span> <span v-if="isCreateMode" class="text-danger">*</span></label>
                                     <select id="edit_pp_guis_receiver" class="form-select" name="edit_pp_guis_receiver">
                                         <option value="">選択してください</option>
                                     </select>
+                                    <div class="invalid-feedback d-block" v-if="editParentProjectErrors.guis_receiver">{{ editParentProjectErrors.guis_receiver }}</div>
                                 </div>
                             </div>
                         </div>
@@ -188,7 +200,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                             </div>
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="依頼">依頼</span></label>
+                                    <label class="form-label"><span data-i18n="依頼">依頼</span> <span v-if="isCreateMode" class="text-danger">*</span></label>
                                     <div class="row">
                                         <div class="col-md-3">
                                             <div class="form-check">
@@ -221,6 +233,7 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                             </div>
                                         </div>
                                     </div>
+                                    <div class="invalid-feedback d-block" v-if="editParentProjectErrors.requests">{{ editParentProjectErrors.requests }}</div>
                                 </div>
                             </div>
                             <div class="col-12">
@@ -319,6 +332,8 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
 </div>
 <script>
 window.PARENT_PROJECT_QUICK_MODAL_CAN_EDIT = <?php echo $parentProjectQuickModalCanEdit ? 'true' : 'false'; ?>;
+// 建物登録: default GUIS受付者
+window.PARENT_PROJECT_QUICK_MODAL_USER_ID = <?php echo json_encode((string)($_SESSION['userid'] ?? '')); ?>;
 </script>
 <style>
 #parent-project-quick-modal-app[v-cloak] {

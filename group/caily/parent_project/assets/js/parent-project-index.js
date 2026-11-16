@@ -321,6 +321,20 @@ createApp({
             if (!project || !project.id || !this.isProjectManager) return;
             await this.openEditParentProjectModal(project.id);
         },
+        // 建物登録: same shared modal as 建物編集, in create mode
+        async openCreateParentProjectModal() {
+            this.clearParentProjectHighlight();
+            if (typeof window.openParentProjectCreateModal !== 'function') {
+                window.location.href = 'create.php';
+                return;
+            }
+            await window.openParentProjectCreateModal({
+                onSaved: async (savedId) => {
+                    this.highlightedParentProjectId = savedId != null ? Number(savedId) || savedId : null;
+                    await this.loadParentProjects();
+                }
+            });
+        },
         // 建物編集: shared standalone modal (parent-project-quick-modal.js), opened directly in edit mode
         async openEditParentProjectModal(parentProjectId) {
             if (typeof window.openParentProjectModal !== 'function') {
