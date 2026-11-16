@@ -316,9 +316,9 @@
                 };
             },
             /**
-             * Drag visuals are moved with the Web Animations API, not inline styles or classes: on a page
-             * whose CSS has :has([style*=...]) any style attribute / class change re-styles the whole
-             * page (≈8–10 ms on 案件一覧), which made the drag stutter.
+             * Drag visuals are moved with the Web Animations API, not inline styles or classes: those make
+             * the page re-style, which costs a lot on pages with heavy :has() rules (a demo.css rule, since
+             * removed, made it ≈8–10 ms per pointer move on 案件一覧). Nothing re-renders while dragging.
              */
             updateNoteDragVisuals(e) {
                 const d = this.noteDrag;

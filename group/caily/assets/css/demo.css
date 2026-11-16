@@ -1301,10 +1301,9 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     border: 1px solid var(--bs-border-color);
     border-radius: var(--bs-border-radius);
 }
-/* a section whose every child is hidden (e.g. no custom fields, nothing else in it) */
-.project-form-modal .project-form-grid .pd-section:not(:has(> :not([style*="display: none"]):not(.d-none))) {
-    display: none;
-}
+/* An empty section is hidden by the template itself: each .pd-section carries the same v-show / v-if
+   as its title (project/partials/project-form-grid.php). No :has([style*="display: none"]) rule here:
+   it made every inline style or class change anywhere on the page re-style the whole page (8-10 ms). */
 .project-form-modal .project-form-grid .pd-section > .project-form-section,
 .project-detail-card.edit-mode .project-detail-grid .pd-section > .project-form-section {
     width: 100%;
