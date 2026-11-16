@@ -877,6 +877,10 @@ $view->footing();
 .note-board .note-card.pinned-self-note {
     box-shadow: inset 0 3px 0 #0d6efd, 0 1px 2px rgba(0, 0, 0, 0.06);
 }
+/* both pins: blue (自分) bar over red (全員) */
+.note-board .note-card.important-note.pinned-self-note {
+    box-shadow: inset 0 3px 0 #0d6efd, inset 0 6px 0 #dc3545, 0 1px 2px rgba(0, 0, 0, 0.06);
+}
 .note-board .note-card-top {
     display: flex;
     align-items: center;

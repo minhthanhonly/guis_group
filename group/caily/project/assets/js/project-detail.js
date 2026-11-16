@@ -3246,16 +3246,9 @@ const vueApp = createApp({
                 this.editingNote.labelOther = '';
             }
         },
-        onNotePinEveryoneChange() {
-            if (this.editingNote && this.editingNote.is_important) {
-                this.editingNote.is_pinned_self = false;
-            }
-        },
-        onNotePinSelfChange() {
-            if (this.editingNote && this.editingNote.is_pinned_self) {
-                this.editingNote.is_important = false;
-            }
-        },
+        // ピン（全員） and ピン（自分） can both be on (ピン（自分） is shown first) — nothing to sync
+        onNotePinEveryoneChange() {},
+        onNotePinSelfChange() {},
         resolveNoteLabelForSave() {
             if (this.editingNote.labelSelect === this.NOTE_LABEL_OTHER) {
                 return String(this.editingNote.labelOther || '').trim().slice(0, 100);
@@ -3350,9 +3343,9 @@ const vueApp = createApp({
                 const formData = new FormData();
                 formData.append('project_id', this.projectId);
                 formData.append('content', rawContent);
-                // Mutual exclusivity: prefer ピン（全員） if both somehow set
+                // both pins may be on; ピン（全員） is not offered on 自分のみ notes
                 var pinEveryone = !!this.editingNote.is_important && this.editingNote.visibility !== 'self';
-                var pinSelf = !!this.editingNote.is_pinned_self && !pinEveryone;
+                var pinSelf = !!this.editingNote.is_pinned_self;
                 formData.append('is_important', pinEveryone ? 1 : 0);
                 formData.append('is_pinned_self', pinSelf ? 1 : 0);
                 formData.append('needs_confirmation', this.editingNote.needs_confirmation ? this.editingNote.needs_confirmation : 0);

@@ -481,14 +481,10 @@ class ProjectNote extends ApplicationModel {
         if ($data['visibility'] === 'self') {
             $data['is_important'] = 0;
         }
-        // Mutual exclusivity: ピン（全員） wins over ピン（自分）
-        if (!empty($data['is_important'])) {
-            $_POST['is_pinned_self'] = 0;
-        }
         $result = $this->query_insert($data);
         if ($result) {
             $pinSelf = isset($_POST['is_pinned_self']) ? intval($_POST['is_pinned_self']) : 0;
-            if ($pinSelf && empty($data['is_important'])) {
+            if ($pinSelf) {
                 $this->setPersonalPin(intval($result), true);
             }
             $this->ensureBoardLayout($projectId);
@@ -536,20 +532,13 @@ class ProjectNote extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Content is required'];
         }
         
-        // Mutual exclusivity: only one of ピン（全員） / ピン（自分）
+        // ピン（全員） and ピン（自分） are independent (a note can have both; ピン（自分） shows first)
         $wantSelf = isset($_POST['is_pinned_self']) ? (intval($_POST['is_pinned_self']) === 1) : null;
-        if (!empty($data['is_important'])) {
-            $wantSelf = false;
-        } elseif ($wantSelf === true) {
-            $data['is_important'] = 0;
-        }
 
         $result = $this->query_update($data, ['id' => $id]);
         if ($result) {
             if ($wantSelf !== null) {
                 $this->setPersonalPin($id, $wantSelf);
-            } elseif (!empty($data['is_important'])) {
-                $this->clearAllPersonalPins($id);
             }
             if (!empty($data['is_important']) && empty($note['is_important'])) {
                 $this->pinToFront(intval($note['project_id']), $id);
@@ -558,19 +547,6 @@ class ProjectNote extends ApplicationModel {
         } else {
             return ['status' => 'error', 'error' => 'Failed to update note'];
         }
-    }
-
-    /** Remove every user's personal pin for a note (used when pinning for everyone). */
-    private function clearAllPersonalPins($noteId) {
-        $noteId = intval($noteId);
-        if (!$noteId) {
-            return false;
-        }
-        $pinTable = $this->personalPinTable();
-        return (bool)$this->query(sprintf(
-            "DELETE FROM {$pinTable} WHERE note_id = %d",
-            $noteId
-        ));
     }
 
     private function setPersonalPin($noteId, $pinned) {
@@ -624,24 +600,12 @@ class ProjectNote extends ApplicationModel {
             $this->quote($userid)
         ));
         $nowPinned = empty($exists);
-        // Mutual exclusivity: turning on ピン（自分） clears ピン（全員）
-        if ($nowPinned && !empty($note['is_important'])) {
-            if (!$this->canEditNote($note)) {
-                return ['status' => 'error', 'error' => 'Permission denied'];
-            }
-            $cleared = $this->query_update(
-                array('is_important' => 0, 'updated_at' => date('Y-m-d H:i:s')),
-                array('id' => $id)
-            );
-            if (!$cleared) {
-                return ['status' => 'error', 'error' => 'Failed to update'];
-            }
-        }
+        // ピン（全員） stays as it is — both pins can be on
         $this->setPersonalPin($id, $nowPinned);
         return [
             'status' => 'success',
             'is_pinned_self' => $nowPinned ? 1 : 0,
-            'is_important' => $nowPinned ? 0 : (!empty($note['is_important']) ? 1 : 0)
+            'is_important' => !empty($note['is_important']) ? 1 : 0
         ];
     }
 
@@ -667,15 +631,14 @@ class ProjectNote extends ApplicationModel {
             array('id' => $id)
         );
         if ($ok) {
-            // Mutual exclusivity: ピン（全員） clears all ピン（自分）
+            // personal pins (anyone's ピン（自分）) are kept
             if ($next === 1) {
-                $this->clearAllPersonalPins($id);
                 $this->pinToFront(intval($note['project_id']), $id);
             }
             return [
                 'status' => 'success',
                 'is_important' => $next,
-                'is_pinned_self' => $next === 1 ? 0 : null
+                'is_pinned_self' => !empty($note['is_pinned_self']) ? 1 : 0
             ];
         }
         return ['status' => 'error', 'error' => 'Failed to update'];
