@@ -7264,6 +7264,8 @@ class Project extends ApplicationModel {
      * 注文書 fields posted with updateProjectStatus, and the rule that a 請求 line of 申請費 / 設計費
      * becomes 発行済 only while that 注文書 is checked. Only a change is refused (a new 発行済 line,
      * or unchecking while one is 発行済): projects issued before 注文書 existed still save.
+     * 省エネ departments only: other projects have no 注文書, so the fields are ignored and
+     * their 請求 lines are not restricted.
      *
      * @param array      $old         project before the save (getById)
      * @param array|null $postedItems parsed 決済明細, null when the lines were not posted
@@ -7272,6 +7274,9 @@ class Project extends ApplicationModel {
     private function checkPostedOrderForms(array $old, $postedItems) {
         $values = [];
         $nullFields = [];
+        if (!$this->isEnergyDepartmentById($old['department_id'] ?? 0)) {
+            return ['ok' => true, 'values' => $values, 'null_fields' => $nullFields];
+        }
         $final = [];
         foreach (self::ORDER_FORM_FIELDS as $type => $field) {
             $final[$type] = trim((string)($old[$field] ?? ''));

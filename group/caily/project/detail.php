@@ -194,9 +194,9 @@ if($_SESSION['show_project'] == 0){
                     <div class="card-body" v-if="project">
                         <input type="hidden" v-model.number="project.payment_version">
 
-                        <!-- 見積 / 注文書 / 請求: any number of lines (payment-items.js) -->
+                        <!-- 見積 / 注文書 (省エネ only) / 請求: any number of lines (payment-items.js) -->
                         <template v-for="section in businessDocumentSections" :key="'bd-' + section.kind">
-                            <div v-if="section.kind === 'invoice'" class="bd-section bd-order-section">
+                            <div v-if="section.kind === 'invoice' && isEnergyDepartmentProject" class="bd-section bd-order-section">
                                 <div class="bd-section-title">
                                     <i class="fa fa-file-signature me-1"></i><span data-i18n="注文書">{{ translateLabel('注文書') }}</span>
                                 </div>

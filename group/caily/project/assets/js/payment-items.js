@@ -16,6 +16,7 @@
  * 注文書 (<payment-order-form>, between 見積 and 請求): one check per 種別 申請費 / 設計費, stored as
  * project.order_form_application_at / order_form_design_at ('YYYY-MM-DD HH:mm:ss' = checked at, '' = not
  * checked). A 請求 line of that 種別 can be set to 発行済 only while it is checked (the server checks too).
+ * 省エネ departments only: other departments have no 注文書 and no such restriction.
  */
 (function (window) {
     'use strict';
@@ -160,11 +161,11 @@
         return !!field && !!project && !isEmpty(project[field]);
     }
 
-    /** The line may be set to 発行済: date + amount, and its 注文書 checked when it needs one. */
-    function canIssueLine(project, item) {
+    /** The line may be set to 発行済: date + amount, and (省エネ only) its 注文書 checked when it needs one. */
+    function canIssueLine(project, item, energy) {
         if (!isLineComplete(item)) return false;
         var type = orderFormTypeOf(item);
-        return !type || hasOrderForm(project, type);
+        return !energy || !type || hasOrderForm(project, type);
     }
 
     /** 請求 lines of a 種別 that are 発行済 (a 注文書 cannot be unchecked while there is one). */
@@ -539,16 +540,16 @@
             },
             isPending: isPendingLine,
             canIssue: function (item) {
-                return canIssueLine(this.project, item);
+                return canIssueLine(this.project, item, this.energy);
             },
             orderFormType: orderFormTypeOf,
             /** Date + amount entered, but the line's 注文書 is not checked yet. */
             needsOrderForm: function (item) {
                 var type = orderFormTypeOf(item);
-                return !!type && isLineComplete(item) && !hasOrderForm(this.project, type);
+                return this.energy && !!type && isLineComplete(item) && !hasOrderForm(this.project, type);
             },
             markIssued: function (item) {
-                if (!canIssueLine(this.project, item)) return;
+                if (!canIssueLine(this.project, item, this.energy)) return;
                 item.status = '発行済';
                 this.emitChange();
             },
@@ -558,7 +559,7 @@
              * Lines that were already complete are only flagged (isPending), never asked.
              */
             askIssuedIfJustCompleted: function (item, wasComplete) {
-                if (!this.editable || wasComplete || !isPendingLine(item) || !canIssueLine(this.project, item)) return;
+                if (!this.editable || wasComplete || !isPendingLine(item) || !canIssueLine(this.project, item, this.energy)) return;
                 var self = this;
                 var title = this.t('発行済にしますか？');
                 var text = this.t('{label}の日付・金額が入力されました。').replace('{label}',
@@ -611,7 +612,7 @@
             },
             selectStatus: function (item, value) {
                 if (value === normalizeStatus(item.status)) return;
-                if (value === '発行済' && !canIssueLine(this.project, item)) return;
+                if (value === '発行済' && !canIssueLine(this.project, item, this.energy)) return;
                 item.status = value;
                 if (isWaived(value)) item.amount = 0;
                 this.emitChange();

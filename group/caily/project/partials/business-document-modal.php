@@ -35,9 +35,9 @@
                 <div class="modal-body">
                     <input type="hidden" v-model.number="businessDocumentProject.payment_version">
 
-                    <!-- 見積 / 注文書 / 請求: any number of lines (payment-items.js) -->
+                    <!-- 見積 / 注文書 (省エネ only) / 請求: any number of lines (payment-items.js) -->
                     <template v-for="section in bdmSections" :key="'bdm-' + section.kind">
-                        <div v-if="section.kind === 'invoice'" class="bd-section bd-order-section">
+                        <div v-if="section.kind === 'invoice' && isBdEnergyDepartment" class="bd-section bd-order-section">
                             <div class="bd-section-title">
                                 <i class="fa fa-file-signature me-1"></i><span data-i18n="注文書">注文書</span>
                             </div>
