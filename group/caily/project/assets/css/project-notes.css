@@ -529,3 +529,62 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
     color: var(--bs-warning-text-emphasis, #997404);
     font-size: 0.8rem;
 }
+
+/* ===== Memo label chip (shared: 案件一覧, 案件詳細 board, memo dialog) =====
+   Solid pill with a colour dot; text is the label colour darkened (light theme) or
+   lightened (dark theme) so pale colours such as yellow / lime stay readable (>= 4.5:1). */
+.note-label-chip {
+    --note-label-color: #6c757d;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.1rem 0.5rem 0.1rem 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--note-label-color) 45%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--note-label-color) 14%, #fff);
+    color: color-mix(in srgb, var(--note-label-color) 62%, #000);
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.35;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.note-label-chip::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--note-label-color);
+}
+.note-label-chip .note-label-chip-icon { display: none; }
+.note-label-chip-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+[data-bs-theme="dark"] .note-label-chip {
+    background: color-mix(in srgb, var(--note-label-color) 22%, #1f2129);
+    border-color: color-mix(in srgb, var(--note-label-color) 55%, transparent);
+    color: color-mix(in srgb, var(--note-label-color) 55%, #fff);
+}
+
+/* 案件詳細 board: category badges (CAILYメモ / GUISメモ / 関連項目) in the same pill shape */
+.note-board .note-card-tags {
+    gap: 4px 6px;
+    margin-bottom: 8px;
+}
+.note-board .note-card-tags .badge {
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    line-height: 1.3;
+    letter-spacing: 0;
+}
+.note-board .note-card-content.ql-editor {
+    line-height: 1.55;
+}
+.note-board .note-card-content.ql-editor p + p {
+    margin-top: 0.3em;
+}

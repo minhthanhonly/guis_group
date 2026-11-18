@@ -611,39 +611,7 @@ $view->footing();
 
 /* メモ board styles: assets/css/project-notes.css */
 
-/* Memo label chip — distinct from Bootstrap .badge */
-.note-label-chip {
-    --note-label-color: #6c757d;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.28rem;
-    max-width: 12rem;
-    padding: 0.12rem 0.55rem 0.12rem 0.4rem;
-    border: 1px dashed color-mix(in srgb, var(--note-label-color) 70%, transparent);
-    border-left: 3px solid var(--note-label-color);
-    border-radius: 0.15rem 999px 999px 0.15rem;
-    background: color-mix(in srgb, var(--note-label-color) 12%, transparent);
-    color: var(--note-label-color);
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    line-height: 1.25;
-    vertical-align: middle;
-    white-space: nowrap;
-}
-.note-label-chip-icon {
-    font-size: 0.65rem;
-    opacity: 0.85;
-    flex-shrink: 0;
-}
-.note-label-chip-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-[data-bs-theme="dark"] .note-label-chip {
-    background: color-mix(in srgb, var(--note-label-color) 22%, transparent);
-    border-color: color-mix(in srgb, var(--note-label-color) 55%, transparent);
-}
+/* Memo label chip: assets/css/project-notes.css */
 
 /* Edit mode styles */
 .edit-mode .select2-selection,
