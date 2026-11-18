@@ -133,6 +133,12 @@ if($_SESSION['show_project'] == 0){
                     </select>
                     </div>
                     <div class="col-md-3 col-6">
+                    <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当者">担当者</label>
+                    <select class="form-select form-select-sm" id="filterAssignee" title="案件のメンバー・管理者">
+                        <option value="" data-i18n="すべて">すべて</option>
+                    </select>
+                    </div>
+                    <div class="col-md-3 col-6">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="会社">会社</label>
                     <select class="form-select form-select-sm" id="filterCompany" multiple>
                         <option value="daito">大東</option>

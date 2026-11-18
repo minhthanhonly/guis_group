@@ -2568,7 +2568,7 @@ var projectTable;
             'filterDeliveryStatus', 'filterYoteiMonth',
             'filterPriority', 'filterProgress', 'filterTimeLeft',
             'filterDateField', 'filterDateFrom', 'filterDateTo',
-            'filterProjectOrderType', 'filterTantou', 'filterProjectId'
+            'filterProjectOrderType', 'filterTantou', 'filterAssignee', 'filterProjectId'
         ];
         stringFields.forEach(function(key) {
             if (raw[key] !== undefined && raw[key] !== null) {
@@ -4925,6 +4925,61 @@ var projectTable;
         });
     }
 
+    /**
+     * 担当者 filter (member or manager of the project): options are the selected department's users,
+     * loaded after the first list request, so until then the saved / restored value is kept here.
+     */
+    var filterAssigneePending = null;
+    var lastRequestedFilterAssignee = '';
+    function getFilterAssigneeValue() {
+        var $el = $('#filterAssignee');
+        if (!$el.length) return '';
+        if (!$el.data('ready')) return String(filterAssigneePending || '');
+        return String($el.val() || '');
+    }
+    function setFilterAssigneeValue(value) {
+        var v = value == null ? '' : String(value);
+        var $el = $('#filterAssignee');
+        if (!$el.data('ready')) {
+            filterAssigneePending = v;
+            return;
+        }
+        $el.val($el.find('option').filter(function() { return this.value === v; }).length ? v : '');
+    }
+    function getFilterAssigneeLabel(value) {
+        var v = String(value || '');
+        if (!v) return '';
+        var users = (window.app && Array.isArray(window.app.users)) ? window.app.users : [];
+        var u = users.find(function(x) { return String(x.id) === v; });
+        return u ? String(u.user_name || u.user_id || v) : v;
+    }
+    /** Rebuild the options for the department's users; a saved user not in it is dropped. */
+    function refreshFilterAssigneeSelect(users) {
+        var $el = $('#filterAssignee');
+        if (!$el.length) return;
+        var want = getFilterAssigneeValue();
+        $el.find('option').not('[value=""]').remove();
+        var found = false;
+        (users || []).forEach(function(u) {
+            if (u == null || u.id == null) return;
+            var id = String(u.id);
+            if (id === want) found = true;
+            $el.append(new Option(String(u.user_name || u.user_id || id), id));
+        });
+        $el.data('ready', true);
+        filterAssigneePending = null;
+        $el.val(found ? want : '');
+        var now = String($el.val() || '');
+        if (now !== want) {
+            saveFiltersToLocalStorage();
+        }
+        renderActiveFilters();
+        // the list was requested with a user who is not in this department: request it again
+        if (projectTable && now !== lastRequestedFilterAssignee) {
+            reloadProjectTable(true);
+        }
+    }
+
     function refreshFilterTeamSelect(teams) {
         const $el = $('#filterTeam');
         if (!$el.length) {
@@ -5012,6 +5067,7 @@ var projectTable;
         { key: 'filterProjectId', labelKey: '案件ID', group: 'project', defaultValue: '' },
         { key: 'filterNoDates', labelKey: '開始日・期限日未設定', group: 'project', defaultValue: 0 },
         { key: 'filterTeam', labelKey: 'チーム', group: 'org', defaultValue: [] },
+        { key: 'filterAssignee', labelKey: '担当者', group: 'org', defaultValue: '' },
         { key: 'filterCompany', labelKey: '会社', group: 'org', defaultValue: [] },
         { key: 'statusKeys', labelKey: '案件状況', group: 'status', defaultValue: [], defaultKept: true },
         { key: 'showInactive', labelKey: '完了・中止案件等も表示', group: 'status', defaultValue: 0 },
@@ -5201,6 +5257,7 @@ var projectTable;
             $('#filterTeam').val(teamValues.length ? teamValues : null).trigger('change');
         }
         if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
+        if (filters.filterAssignee !== undefined) setFilterAssigneeValue(filters.filterAssignee);
         if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
         if (filters.filterKeyword !== undefined) $('#filterKeyword').val(normalizeFilterKeyword(filters.filterKeyword));
         if (filters.filterProjectId !== undefined) $('#filterProjectId').val(filters.filterProjectId);
@@ -5352,6 +5409,7 @@ var projectTable;
             filterTeam: getFilterTeamValue(),
             filterCompany: getFilterCompanyValue(),
             filterTantou: $('#filterTantou').val() || '',
+            filterAssignee: getFilterAssigneeValue(),
             filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
             filterKeyword: normalizeFilterKeyword($('#filterKeyword').val()),
             filterProjectId: $('#filterProjectId').val() || '',
@@ -5440,6 +5498,7 @@ var projectTable;
         if (params.has('filterTeam')) merged.filterTeam = parseFilterTeamValue(params.get('filterTeam') || '');
         if (params.has('filterCompany')) merged.filterCompany = parseFilterCompanyValue(params.get('filterCompany') || '');
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
+        if (params.has('filterAssignee')) merged.filterAssignee = params.get('filterAssignee') || '';
         if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
         if (params.has('filterKeyword')) merged.filterKeyword = normalizeFilterKeyword(params.get('filterKeyword') || '');
         if (params.has('filterProjectId')) merged.filterProjectId = params.get('filterProjectId') || '';
@@ -5538,6 +5597,7 @@ var projectTable;
             teamIds: energyTabFilterValue(parseFilterTeamValue(filters.filterTeam), []),
             companyKeys: parseFilterCompanyValue(filters.filterCompany),
             tantou: energyTabFilterValue(filters.filterTantou || '', ''),
+            assignee: String(filters.filterAssignee || ''),
             noDates: filters.filterNoDates == 1,
             keyword: normalizeFilterKeyword(filters.filterKeyword),
             showInactive: filters.showInactive == 1,
@@ -5566,6 +5626,7 @@ var projectTable;
             teamIds.length === 0 &&
             filters.companyKeys.length === 0 &&
             (!filters.tantou || filters.tantou.trim() === '') &&
+            !filters.assignee &&
             !filters.noDates &&
             !filters.myProjects &&
             !filters.showInactive &&
@@ -5648,6 +5709,9 @@ var projectTable;
                 let label = filters.tantou;
                 badges.push(`<span class="badge bg-label-info me-1" >担当: ${label}</span>`);
             }
+            if (filters.assignee) {
+                badges.push(`<span class="badge bg-label-info me-1">担当者: ${escapeHtmlForNote(getFilterAssigneeLabel(filters.assignee))}</span>`);
+            }
             if (filters.noDates) {
                 badges.push(`<span class="badge bg-label-info me-1" >開始日・期限日未設定</span>`);
             }
@@ -5718,6 +5782,7 @@ var projectTable;
         setOrDelete('filterTeam', formatFilterTeamForApi(filters.filterTeam));
         setOrDelete('filterCompany', formatFilterCompanyForApi(filters.filterCompany));
         setOrDelete('filterTantou', filters.filterTantou);
+        setOrDelete('filterAssignee', filters.filterAssignee);
         setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
         setOrDelete('filterKeyword', normalizeFilterKeyword(filters.filterKeyword));
         setOrDelete('filterProjectId', filters.filterProjectId);
@@ -7200,6 +7265,8 @@ var projectTable;
                     const filterTeam = energyTabFilterValue(formatFilterTeamForApi(getFilterTeamValue()), '');
                     const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
                     const filterTantou = energyTabFilterValue($('#filterTantou').val(), '');
+                    const filterAssignee = getFilterAssigneeValue();
+                    lastRequestedFilterAssignee = filterAssignee;
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const filterKeyword = normalizeFilterKeyword($('#filterKeyword').val());
                     const filterProjectId = $('#filterProjectId').val();
@@ -7235,6 +7302,7 @@ var projectTable;
                         filterTeam,
                         filterCompany,
                         filterTantou,
+                        filterAssignee,
                         filterNoDates,
                         my_projects: myProjects,
                         filterKeyword,
@@ -9113,7 +9181,7 @@ var projectTable;
         // Gọi khi filter thay đổi hoặc khi load trang
         renderActiveFilters();
         // Gọi lại renderActiveFilters mỗi khi filter thay đổi
-        $('#filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterDateField, #filterDateFrom, #filterDateTo, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterNoDates, #filterKeyword, #showInactiveSwitch, #keepFiltersWithKeywordSwitch').plInitOn('change input', function() {
+        $('#filterYoteiMonth, #filterDeliveryStatus, #filterBusinessDocumentStatus, #filterPriority, #filterProgress, #filterTimeLeft, #filterDateField, #filterDateFrom, #filterDateTo, #filterProjectOrderType, #filterTeam, #filterCompany, #filterTantou, #filterAssignee, #filterNoDates, #filterKeyword, #showInactiveSwitch, #keepFiltersWithKeywordSwitch').plInitOn('change input', function() {
            renderActiveFilters();
         });
         let timer = null;
@@ -10792,6 +10860,9 @@ var projectTable;
                             }));
                         }
                         refreshFilterTeamSelect(this.teams);
+                    });
+                    usersPromise.then(() => {
+                        refreshFilterAssigneeSelect(this.users);
                     });
                     usersPromise.then(() => {
                         if (this.membersTagifyInstance) {
