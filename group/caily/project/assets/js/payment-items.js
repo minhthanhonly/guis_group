@@ -432,16 +432,16 @@
             + '      </div>'
             + '      <div v-else class="pi-value text-end">{{ isEmptyAmount(item) ? "—" : yen(item.amount) }}</div>'
             + '      <div v-if="editable" class="dropdown pi-status">'
-            + '        <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle pi-status-toggle"'
+            + '        <button type="button" class="btn btn-sm dropdown-toggle pi-status-toggle" :class="\'btn-\' + statusColor(item.status)"'
             + '                data-bs-toggle="dropdown" aria-expanded="false">{{ t(normStatus(item.status)) }}</button>'
             + '        <ul class="dropdown-menu dropdown-menu-end">'
             + '          <li v-for="s in statusOptions" :key="s.value">'
-            + '            <a href="javascript:void(0);" class="dropdown-item"'
+            + '            <a href="javascript:void(0);" class="dropdown-item pi-status-option"'
             + '               :class="{ active: s.value === normStatus(item.status), disabled: s.value === \'発行済\' && !canIssue(item) }"'
-            + '               @click="selectStatus(item, s.value)">{{ t(s.label) }}</a></li>'
+            + '               @click="selectStatus(item, s.value)"><span class="pi-status-dot" :class="\'bg-\' + s.color"></span>{{ t(s.label) }}</a></li>'
             + '        </ul>'
             + '      </div>'
-            + '      <span v-else class="pi-status-text">{{ t(normStatus(item.status)) }}</span>'
+            + '      <span v-else class="badge pi-status-text" :class="\'bg-\' + statusColor(item.status)">{{ t(normStatus(item.status)) }}</span>'
             + '    </div>'
             + '    <div v-if="editable && normStatus(item.status) !== \'発行済\' && !isWaived(item.status) && !isComplete(item)" class="pi-hint">'
             + '      {{ t("発行済にするには{fields}が必要です").replace("{fields}", t(dateLabel) + "・" + t("金額")) }}</div>'
@@ -454,8 +454,8 @@
             + '  </div>'
             + '  <div class="pi-footer">'
             + '    <div class="pi-actions" v-if="editable">'
-            + '      <button type="button" class="btn btn-sm btn-link" @click="addItem()"><i class="fa fa-plus me-1"></i>{{ t("明細を追加") }}</button>'
-            + '      <button v-if="kind === \'invoice\' && canCopyFromEstimate" type="button" class="btn btn-sm btn-link text-secondary" :title="t(\'見積の明細を請求にコピー\')" @click="copyFromEstimate">{{ t("見積からコピー") }}</button>'
+            + '      <button type="button" class="btn btn-sm btn-outline-primary" @click="addItem()"><i class="fa fa-plus me-1"></i>{{ t("明細を追加") }}</button>'
+            + '      <button v-if="kind === \'invoice\' && canCopyFromEstimate" type="button" class="btn btn-sm btn-outline-secondary" :title="t(\'見積の明細を請求にコピー\')" @click="copyFromEstimate"><i class="fa fa-copy me-1"></i>{{ t("見積からコピー") }}</button>'
             + '    </div>'
             + '    <div class="pi-total" v-if="items.length">'
             + '      <span class="pi-total-label">{{ t("合計(税抜き)") }}</span> <strong>{{ yen(total || 0) }}</strong>'
@@ -470,6 +470,12 @@
             statusOptions: function () {
                 var list = STATUSES[this.kind] || STATUSES.estimate;
                 return this.energy ? list.concat([ENERGY_EXTRA]) : list;
+            },
+            /** status value → Bootstrap colour (both kinds + 対象外), for lines whose status is not offered here */
+            statusColors: function () {
+                var map = {};
+                STATUSES.estimate.concat(STATUSES.invoice, [ENERGY_EXTRA]).forEach(function (s) { map[s.value] = s.color; });
+                return map;
             },
             typeOptions: function () {
                 var seen = {};
@@ -539,6 +545,9 @@
                 return Number.isFinite(n) ? n.toLocaleString('ja-JP') : String(item.amount);
             },
             isPending: isPendingLine,
+            statusColor: function (status) {
+                return this.statusColors[normalizeStatus(status)] || 'secondary';
+            },
             canIssue: function (item) {
                 return canIssueLine(this.project, item, this.energy);
             },

@@ -284,7 +284,7 @@
     visibility: visible;
 }
 
-/* ---------- 決済明細 (payment-items.js) — plain list, no status colours ---------- */
+/* ---------- 決済明細 (payment-items.js) — status dropdown coloured by status ---------- */
 .bd-scope .pi-editor { display: flex; flex-direction: column; }
 .bd-scope .pi-empty { font-size: 0.8125rem; padding: 4px 0; }
 .bd-scope .pi-line { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
@@ -301,7 +301,10 @@
 .bd-scope .pi-value { flex: 1 1 50%; font-size: 0.875rem; }
 .bd-scope .pi-type-badge { flex: 1 1 auto; font-size: 0.875rem; }
 .bd-scope .pi-type-none { color: var(--bs-secondary-color, #8592a3); }
-.bd-scope .pi-status-text { flex: 0 0 auto; font-size: 0.8125rem; color: var(--bs-secondary-color, #8592a3); }
+.bd-scope .pi-status-text { flex: 0 0 auto; font-size: 0.75rem; font-weight: 500; }
+.bd-scope .pi-status-option { display: flex; align-items: center; gap: 8px; }
+.bd-scope .pi-status-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+.bd-scope .pi-status-option.disabled .pi-status-dot { opacity: 0.4; }
 .bd-scope .pi-hint,
 .bd-scope .pi-pending { font-size: 0.75rem; color: var(--bs-secondary-color, #8592a3); }
 .bd-scope .pi-pending { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
@@ -313,8 +316,7 @@
     display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px;
     padding-top: 6px; border-top: 1px solid var(--bs-border-color, #e4e6e8);
 }
-.bd-scope .pi-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-.bd-scope .pi-actions .btn { padding-left: 0; padding-right: 8px; }
+.bd-scope .pi-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .bd-scope .pi-total { margin-left: auto; font-size: 0.8125rem; text-align: right; }
 
 /* ---------- 注文書 (payment-items.js <payment-order-form>) ---------- */
