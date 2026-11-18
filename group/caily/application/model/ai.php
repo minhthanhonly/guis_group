@@ -970,6 +970,71 @@ class AI extends ApplicationModel{
     }
 
     /**
+     * Approved leave, outing and business trip applications that touch a period: one row per
+     * application. Read day by day through the method the members page uses for everybody
+     * (Request::get_forms_for_date_bulk), so nothing more is visible here than there. Of the form only
+     * the number of days and the kind of leave are taken, never the reason.
+     * @return array [['userid', 'name', 'type', 'start_date', 'end_date', 'days' => float, 'kind' => string], ...]
+     */
+    public function absencesInPeriodForAi(string $from, string $to): array {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $from) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $to) || $from > $to) {
+            return [];
+        }
+        if (!class_exists('Request')) {
+            require_once DIR_MODEL . 'request.php';
+        }
+        $request = new Request();
+        $request->connect();
+        $rows = [];
+        for ($day = $from, $n = 0; $day <= $to && $n < 62; $day = date('Y-m-d', strtotime($day . ' +1 day')), $n++) {
+            $bundle = $request->get_forms_for_date_bulk($day);
+            foreach (isset($bundle['by_user']) && is_array($bundle['by_user']) ? $bundle['by_user'] : [] as $userid => $byType) {
+                foreach (['leave', 'outing', 'trip'] as $type) {
+                    foreach (isset($byType[$type]) && is_array($byType[$type]) ? $byType[$type] : [] as $item) {
+                        $id = (int) $item['id'];
+                        if (isset($rows[$id])) {
+                            continue;
+                        }
+                        $data = isset($item['data']) && is_array($item['data']) ? $item['data'] : [];
+                        $kind = '';
+                        if ($type === 'leave') {
+                            $paid = isset($data['paid_type']) ? trim((string) $data['paid_type']) : '';
+                            $leaveType = isset($data['leave_type']) ? trim((string) $data['leave_type']) : '';
+                            // 全休 (a whole day) is the usual case and is left out.
+                            $kind = trim($leaveType . ($paid !== '' && $paid !== '全休' ? ' ' . $paid : ''));
+                        }
+                        $rows[$id] = [
+                            'userid' => (string) $userid, 'name' => (string) $userid, 'type' => $type,
+                            'start_date' => (string) $item['start_date'], 'end_date' => (string) $item['end_date'],
+                            'days' => isset($data['days']) && is_numeric($data['days']) ? (float) $data['days'] : 0.0,
+                            'kind' => mb_substr($kind, 0, 30),
+                        ];
+                    }
+                }
+            }
+        }
+        if (empty($rows)) {
+            return [];
+        }
+        $this->connect();
+        $in = [];
+        foreach ($rows as $row) {
+            $in["'" . $this->quote($row['userid']) . "'"] = true;
+        }
+        $names = [];
+        $users = $this->fetchAll("SELECT userid, realname FROM " . DB_PREFIX . "user WHERE userid IN (" . implode(',', array_keys($in)) . ")");
+        foreach (is_array($users) ? $users : [] as $user) {
+            $names[$user['userid']] = (string) $user['realname'];
+        }
+        foreach ($rows as $id => $row) {
+            if (isset($names[$row['userid']]) && $names[$row['userid']] !== '') {
+                $rows[$id]['name'] = $names[$row['userid']];
+            }
+        }
+        return array_values($rows);
+    }
+
+    /**
      * Hours logged on tasks in one week, through the weekly page's own method. Task::listWeeklyTasks
      * honours user_id only for project managers; everybody else gets their own week.
      * @return array|null ['person', 'from', 'to', 'tasks']
@@ -1180,7 +1245,7 @@ Changing data:
 - The current user's name, user id and login are given below. "My", "của tôi", "私の" mean that user: for their projects call show_projects with my_projects, and where a parameter takes a user id (assigned_to) use their user id.
 - To create a task call show_task_form. To open a page call open_page.
 - A building number (project_number) only identifies a building and is never changed.
-- A building is also called 親案件, 建物, tòa nhà or công trình. For the building of a project call search_buildings with project_id; do not guess it from the project's name. When the user wants to see, list or find buildings, call show_buildings: the building list page opens filtered and you give only the count. When they ask about one building or need its data in the answer, use search_buildings (keyword: owner name, customer, branch, contact or construction number). Buildings by what is recorded under 建物情報 (建物規模 scale, 市区町村 city, 種類1 type1, 住宅種類 house_type, 構造事務所 structural_office, 特徴 feature) are filters of both tools: show_buildings opens the list page with them in its search box (give only the count), search_buildings returns the buildings when the answer needs their data. The keyword of both tools searches these attributes too, and several words separated by spaces or commas must all be found. When a combination finds nothing, use search_buildings once: it reports how many buildings match each filter. The status of a building is not maintained: for how a building is going, look at its projects with get_building_projects. Counts of buildings come from get_building_statistics. Overdue projects and projects due soon open with show_projects deadline; tasks nobody is assigned to and people without tasks open with show_task_overview; active projects without a manager or a team come from get_unstaffed_projects. The user's own applications and their status, and applications waiting for the user's approval, come from get_requests (answer in the chat); show_requests opens the list page. The user's own attendance (check-in today, working time and overtime of the pay period) comes from get_my_attendance; who is on leave, out or on a business trip on a day from get_absences; hours logged on tasks in a week from get_work_hours; open tasks and hours per person of a department or team from get_team_workload. A user changes the status of a task assigned to them with propose_actions type task_status (task_update is for those who manage the project). When asked to write text about the project or building on screen (an email, a summary, a report), look up only what that text needs, in as few tool calls as possible (several tools in one turn), then write it. For the user's own day (what they have to do today or this week, what is late, their todo list, today's schedule, who is off) call get_my_day and answer in the chat. "This project" and "this building" mean the project_id or building id of the current page given below. A new project for a building passes that building id as parent_project_id; a note on a building is building_note_add with id = the building id.
+- A building is also called 親案件, 建物, tòa nhà or công trình. For the building of a project call search_buildings with project_id; do not guess it from the project's name. When the user wants to see, list or find buildings, call show_buildings: the building list page opens filtered and you give only the count. When they ask about one building or need its data in the answer, use search_buildings (keyword: owner name, customer, branch, contact or construction number). Buildings by what is recorded under 建物情報 (建物規模 scale, 市区町村 city, 種類1 type1, 住宅種類 house_type, 構造事務所 structural_office, 特徴 feature) are filters of both tools: show_buildings opens the list page with them in its search box (give only the count), search_buildings returns the buildings when the answer needs their data. The keyword of both tools searches these attributes too, and several words separated by spaces or commas must all be found. When a combination finds nothing, use search_buildings once: it reports how many buildings match each filter. The status of a building is not maintained: for how a building is going, look at its projects with get_building_projects. Counts of buildings come from get_building_statistics. Overdue projects and projects due soon open with show_projects deadline; tasks nobody is assigned to and people without tasks open with show_task_overview; active projects without a manager or a team come from get_unstaffed_projects. The user's own applications and their status, and applications waiting for the user's approval, come from get_requests (answer in the chat); show_requests opens the list page. The user's own attendance (check-in today, working time and overtime of the pay period) comes from get_my_attendance; who is on leave, out or on a business trip on a day from get_absences, and with month or a date range who took leave in that period and how many days each; hours logged on tasks in a week from get_work_hours; open tasks and hours per person of a department or team from get_team_workload. A user changes the status of a task assigned to them with propose_actions type task_status (task_update is for those who manage the project). When asked to write text about the project or building on screen (an email, a summary, a report), look up only what that text needs, in as few tool calls as possible (several tools in one turn), then write it. For the user's own day (what they have to do today or this week, what is late, their todo list, today's schedule, who is off) call get_my_day and answer in the chat. "This project" and "this building" mean the project_id or building id of the current page given below. A new project for a building passes that building id as parent_project_id; a note on a building is building_note_add with id = the building id.
 
 Default department: when a default department is given below, the system limits every list, count, statistic and workload of projects and tasks to that department, whatever department_id you pass. Say which department the numbers are for. If the user asks about another department or about all departments, tell them to change it with the department picker in the chat bar; do not try to work around it. A project named by its id is still found.
 

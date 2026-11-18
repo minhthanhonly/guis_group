@@ -148,3 +148,13 @@ Sửa: thêm nhật ký hiển thị riêng `$_SESSION['ai_chat_log']` (30 tin g
 - Prompt: Claude nói rõ số liệu của bộ phận nào và hướng dẫn đổi bộ phận bằng ô chọn khi được hỏi về bộ phận khác.
 
 Test: `tests/ai/department.test.php` (18 kiểm tra), thêm 5 kiểm tra trong `tests/ai/render.test.js`.
+
+## 15. Sửa lỗi "AIアシスタントが設定されていません" trên Apache (2026-11-18)
+
+Nguyên nhân: `config.php` nạp `.env` bằng `putenv()`. Giá trị `putenv()` thuộc về cả tiến trình máy chủ và PHP gỡ chúng ra khi một yêu cầu kết thúc. Apache trên Windows chạy nhiều luồng trong một tiến trình, nên khi một yêu cầu khác (các lệnh gọi nền của trang) kết thúc, `getenv()` của yêu cầu chat đang chạy trả về rỗng. Đã đo trên localhost: 75/75 lần đọc bị rỗng khi có 60 yêu cầu song song, 0 lần khi chạy một mình. Máy chủ xem thử (một luồng) và CLI không gặp.
+
+Sửa: `config.php` giữ thêm một bản sao các giá trị `.env` trong phạm vi yêu cầu và cung cấp `app_env($name, $default)`; `ClaudeClient` và giới hạn tần suất của AI đọc qua hàm này. Các chỗ khác của hệ thống vẫn dùng `getenv()` trực tiếp (`CAILY_FILE_PROTECT_KEY`, `CAILY_API_URL`, cấu hình mail trong `request.php`, `APP_ENV`) và có cùng rủi ro; chưa sửa. Test: `tests/ai/env.test.php` (9 kiểm tra).
+
+## 16. Ai nghỉ phép trong tháng, mỗi người mấy ngày (2026-11-18)
+
+`get_absences` nhận thêm `month` (YYYY-MM) hoặc `date_from` + `date_to` (tối đa 62 ngày): trả mỗi người một dòng gồm số ngày nghỉ, số đơn, các ngày nghỉ (kèm loại như 午後休), cùng tổng số người và tổng số ngày. Chỉ tính đơn đã duyệt, đọc qua đúng phương thức trang thành viên dùng cho mọi người; số ngày lấy từ trường `days` của đơn (0,5 = nửa ngày); lý do nghỉ không được trả về. Test: `tests/ai/leave-period.test.php` (14 kiểm tra).

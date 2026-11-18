@@ -250,8 +250,11 @@ class AiTools {
             $tool('get_my_attendance', "The current user's own time card for one pay period: check-in and check-out today, days recorded, working time, overtime, holiday work, days with no check-out, and how many leave applications were approved this year.", [
                 'month' => ['type' => 'string', 'description' => 'YYYY-MM, default the current pay period'],
             ]),
-            $tool('get_absences', 'Who is on leave, out of the office or on a business trip on a day (approved applications), with the time when given.', [
-                'date' => ['type' => 'string', 'description' => 'YYYY-MM-DD, default today'],
+            $tool('get_absences', 'Who is on leave, out of the office or on a business trip (approved applications only). For one day: the people and the time when given. For a month or a date range: one row per person with the number of leave days, the number of leave applications and the dates.', [
+                'date' => ['type' => 'string', 'description' => 'YYYY-MM-DD, one day, default today'],
+                'month' => ['type' => 'string', 'description' => 'YYYY-MM, a whole month'],
+                'date_from' => ['type' => 'string', 'description' => 'YYYY-MM-DD, with date_to: a range of at most 62 days'],
+                'date_to' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
             ]),
             $tool('get_work_hours', 'Hours logged on tasks in one week (Monday to Sunday): total and the tasks with the most hours. For the current user; project managers may name another person.', [
                 'week_start' => ['type' => 'string', 'description' => 'YYYY-MM-DD, any day of the week wanted, default this week'],
@@ -1139,6 +1142,9 @@ class AiTools {
     }
 
     private function tool_get_absences(array $in): array {
+        if (!empty($in['month']) || !empty($in['date_from']) || !empty($in['date_to'])) {
+            return $this->absencesOfPeriod($in);
+        }
         $date = !empty($in['date']) ? (string) $in['date'] : date('Y-m-d');
         $rows = $this->ai->absencesForAi($date);
         return [
@@ -1146,6 +1152,72 @@ class AiTools {
             'total' => count($rows),
             'people' => self::compact($rows, ['name' => 'name', 'type' => 'type', 'start_date' => 'start_date', 'end_date' => 'end_date', 'time' => 'time'], self::MAX_ROWS, 40),
             'more' => count($rows) > self::MAX_ROWS,
+        ];
+    }
+
+    /** get_absences for a month or a date range: per person, leave days as written on the applications. */
+    private function absencesOfPeriod(array $in): array {
+        if (!empty($in['month'])) {
+            $from = $in['month'] . '-01';
+            $to = date('Y-m-t', strtotime($from));
+        } else {
+            if (empty($in['date_from']) || empty($in['date_to'])) {
+                return ['error' => 'Give both date_from and date_to, or month.'];
+            }
+            $from = (string) $in['date_from'];
+            $to = (string) $in['date_to'];
+        }
+        $days = (int) round((strtotime($to) - strtotime($from)) / 86400) + 1;
+        if ($days < 1 || $days > 62) {
+            return ['error' => 'The period must run from date_from to date_to and cover at most 62 days.'];
+        }
+        $people = [];
+        $applications = 0;
+        $total = 0.0;
+        foreach ($this->ai->absencesInPeriodForAi($from, $to) as $row) {
+            $key = $row['userid'];
+            if (!isset($people[$key])) {
+                $people[$key] = ['name' => $row['name'], 'leave_days' => 0.0, 'leave_applications' => 0, 'leave_dates' => [], 'outings' => 0, 'trips' => 0];
+            }
+            if ($row['type'] === 'outing') {
+                $people[$key]['outings']++;
+            } elseif ($row['type'] === 'trip') {
+                $people[$key]['trips']++;
+            } else {
+                $people[$key]['leave_days'] += $row['days'];
+                $people[$key]['leave_applications']++;
+                $span = substr($row['start_date'], 5) . ($row['end_date'] !== $row['start_date'] ? '〜' . substr($row['end_date'], 5) : '');
+                $people[$key]['leave_dates'][] = $span . ($row['kind'] !== '' ? ' (' . $row['kind'] . ')' : '');
+                $applications++;
+                $total += $row['days'];
+            }
+        }
+        $onLeave = 0;
+        foreach ($people as $key => $person) {
+            if ($person['leave_applications'] > 0) {
+                $onLeave++;
+            }
+            sort($person['leave_dates']);
+            $people[$key]['leave_dates'] = implode(', ', array_slice($person['leave_dates'], 0, 8)) . (count($person['leave_dates']) > 8 ? ' …' : '');
+            $people[$key]['leave_days'] = round($person['leave_days'], 2);
+        }
+        // The list is of people who took leave; those who were only out or on a trip are counted.
+        $withoutLeave = count($people) - $onLeave;
+        $people = array_values(array_filter($people, function ($person) {
+            return $person['leave_applications'] > 0;
+        }));
+        usort($people, function ($a, $b) {
+            return [$b['leave_days'], $a['name']] <=> [$a['leave_days'], $b['name']];
+        });
+        return [
+            'period' => ['from' => $from, 'to' => $to],
+            'people_on_leave' => $onLeave,
+            'leave_applications' => $applications,
+            'leave_days_total' => round($total, 2),
+            'people_only_out_or_on_trip' => $withoutLeave,
+            'people' => self::compact($people, ['name' => 'name', 'leave_days' => 'leave_days', 'leave_applications' => 'leave_applications', 'leave_dates' => 'leave_dates', 'outings' => 'outings', 'trips' => 'trips'], self::MAX_ROWS, 160),
+            'more' => count($people) > self::MAX_ROWS,
+            'note' => 'Approved applications only; days are those written on each application (0.5 = half a day). An application that reaches into the period is counted whole.',
         ];
     }
 
