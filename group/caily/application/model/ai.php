@@ -1317,8 +1317,8 @@ PROMPT;
         $this->ensureUsageTable();
         $this->connect();
         $row = $this->fetchOne("SELECT COALESCE(SUM(created_at >= NOW() - INTERVAL 1 MINUTE), 0) AS m, COUNT(*) AS d FROM " . DB_PREFIX . "ai_usage WHERE userid = '" . $this->quote(isset($_SESSION['userid']) ? $_SESSION['userid'] : '') . "' AND created_at >= CURDATE()");
-        $perMinute = (int) getenv('AI_RATE_PER_MINUTE') ?: self::DEFAULT_RATE_PER_MINUTE;
-        $perDay = (int) getenv('AI_RATE_PER_DAY') ?: self::DEFAULT_RATE_PER_DAY;
+        $perMinute = (int) app_env('AI_RATE_PER_MINUTE') ?: self::DEFAULT_RATE_PER_MINUTE;
+        $perDay = (int) app_env('AI_RATE_PER_DAY') ?: self::DEFAULT_RATE_PER_DAY;
         if ($row && (int) $row['m'] >= $perMinute) {
             return 'rate_minute';
         }

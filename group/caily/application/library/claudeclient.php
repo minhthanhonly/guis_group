@@ -34,9 +34,11 @@ class ClaudeClient {
     private $effort;
 
     public function __construct(?string $apiKey = null, ?string $model = null, ?string $effort = null) {
-        $this->apiKey = $apiKey !== null ? $apiKey : (string) getenv('ANTHROPIC_API_KEY');
-        $this->model = $model !== null ? $model : (getenv('CLAUDE_MODEL') ?: self::DEFAULT_MODEL);
-        $this->effort = $effort !== null ? $effort : (getenv('CLAUDE_EFFORT') ?: self::DEFAULT_EFFORT);
+        // app_env() (application/config.php), not the process environment: under Apache that one can
+        // lose its values in the middle of a request.
+        $this->apiKey = $apiKey !== null ? $apiKey : (string) app_env('ANTHROPIC_API_KEY');
+        $this->model = $model !== null ? $model : (app_env('CLAUDE_MODEL') ?: self::DEFAULT_MODEL);
+        $this->effort = $effort !== null ? $effort : (app_env('CLAUDE_EFFORT') ?: self::DEFAULT_EFFORT);
     }
 
     public function isConfigured(): bool {
