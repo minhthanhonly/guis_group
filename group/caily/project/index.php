@@ -770,6 +770,11 @@ body.pl-col-resizing * {
     }
 }
 
+/* Measuring a header's one-line width (project-list.js measureProjectListHeaderNaturalWidth) */
+th.pl-measure-nowrap,
+th.pl-measure-nowrap * {
+    white-space: nowrap !important;
+}
 /* Cell text wraps instead of being cut off or forced onto one line (text-nowrap /
    text-truncate / inline nowrap set by the renderers in project-list.js). Badges and
    buttons stay on one line. Switched off while column widths are auto-measured
