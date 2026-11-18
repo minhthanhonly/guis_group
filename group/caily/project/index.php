@@ -1665,6 +1665,21 @@ body:not(.project-notes-one-line) #projectTable .note-more-lines-icon,
     border-color: gold;
 }
 
+/* 高度なフィルター: a field whose value is applied (project-list.js syncProjectFilterActiveHighlights) */
+#projectFilterForm .form-control.pl-filter-active,
+#projectFilterForm .form-select.pl-filter-active,
+#projectFilterForm .select2-container.pl-filter-active .select2-selection {
+    /* !important: demo.css forces "border: 1px solid #d1d0d4 !important" on every input */
+    border-color: var(--bs-primary) !important;
+    background-color: rgba(var(--bs-primary-rgb), 0.08) !important;
+    box-shadow: inset 0 0 0 1px var(--bs-primary) !important;
+}
+#projectFilterForm .pl-filter-col-active > .form-label,
+#projectFilterForm .form-check.pl-filter-col-active .form-check-label {
+    color: var(--bs-primary);
+    font-weight: 600;
+}
+
 /* Keep Select2 multiple filter boxes compact */
 #projectFilterForm .select2-container .select2-selection--multiple .select2-selection__rendered {
     max-height: 3.2rem;

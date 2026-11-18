@@ -5609,7 +5609,45 @@ var projectTable;
         };
     }
 
+    /** Switches of 高度なフィルター and their default (unhighlighted) state. */
+    var PROJECT_FILTER_SWITCH_DEFAULTS = {
+        filterMyProjects: false,
+        filterNoDates: false,
+        showInactiveSwitch: false,
+        keepFiltersWithKeywordSwitch: true
+    };
+    /**
+     * Highlight the 高度なフィルター fields that have a value (applied to the list), and the switches
+     * that are not in their default state. The 日付検索 button has its own active style.
+     */
+    function syncProjectFilterActiveHighlights() {
+        var $form = $('#projectFilterForm');
+        if (!$form.length) return;
+        var activeCols = [];
+        $form.find('select, input').not('[type=checkbox], [type=radio], [type=hidden]').each(function() {
+            var v = $(this).val();
+            var active = Array.isArray(v) ? v.length > 0 : String(v == null ? '' : v).trim() !== '';
+            $(this).toggleClass('pl-filter-active', active);
+            var $s2 = $(this).next('.select2-container');
+            if ($s2.length) $s2.toggleClass('pl-filter-active', active);
+            var col = $(this).closest('[class*="col-"]')[0];
+            if (active && col) activeCols.push(col);
+        });
+        $form.find('[class*="col-"]').each(function() {
+            $(this).toggleClass('pl-filter-col-active', activeCols.indexOf(this) !== -1);
+        });
+        Object.keys(PROJECT_FILTER_SWITCH_DEFAULTS).forEach(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            $(el).closest('.form-check').toggleClass('pl-filter-col-active', !!el.checked !== PROJECT_FILTER_SWITCH_DEFAULTS[id]);
+        });
+    }
+    $(document).on('change input', '#projectFilterForm', function() {
+        syncProjectFilterActiveHighlights();
+    });
+
     function renderActiveFilters() {
+        syncProjectFilterActiveHighlights();
         const filters = getFiltersFromLocalStorage();
         const teamIds = filters.teamIds || [];
         const badges = [];
