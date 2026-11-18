@@ -158,3 +158,19 @@ Sửa: `config.php` giữ thêm một bản sao các giá trị `.env` trong ph�
 ## 16. Ai nghỉ phép trong tháng, mỗi người mấy ngày (2026-11-18)
 
 `get_absences` nhận thêm `month` (YYYY-MM) hoặc `date_from` + `date_to` (tối đa 62 ngày): trả mỗi người một dòng gồm số ngày nghỉ, số đơn, các ngày nghỉ (kèm loại như 午後休), cùng tổng số người và tổng số ngày. Chỉ tính đơn đã duyệt, đọc qua đúng phương thức trang thành viên dùng cho mọi người; số ngày lấy từ trường `days` của đơn (0,5 = nửa ngày); lý do nghỉ không được trả về. Test: `tests/ai/leave-period.test.php` (14 kiểm tra).
+
+## 17. Mọi loại đơn, theo quyền của người đăng nhập (2026-11-18)
+
+`get_requests` có thêm `scope: all`: mọi đơn mà người đang đăng nhập được phép xem trên trang đơn từ, cho cả 13 loại form. Quyền do `Request::list` quyết định, AI không tự lọc:
+
+| Người dùng | Thấy |
+|---|---|
+| administrator, tổng vụ (soumu) | đơn của mọi người |
+| người duyệt đơn | đơn của mình và đơn được giao duyệt |
+| nhân viên khác | chỉ đơn của mình |
+
+- Bộ lọc mới: `month` hoặc `date_from` + `date_to` (tối đa 92 ngày, theo quy tắc kỳ của trang đơn từ), `applicant_name`. Nếu người dùng không được xem đơn của người được nêu tên, tool trả lỗi thay vì trả nhầm đơn của chính họ.
+- Kết quả: tổng số, danh sách (tối đa 20 dòng), số đơn theo loại và theo người (tính trên 200 đơn mới nhất; `summary_covers` cho biết đã tính bao nhiêu).
+- Mỗi dòng có thêm `detail`: số ngày (đơn nghỉ, công tác) hoặc khung giờ (tăng ca, làm ngày nghỉ, ra ngoài). Lý do, ghi chú, nơi đến, dòng mua hàng và số tiền không bao giờ được trả về.
+
+Test: `tests/ai/requests-all.test.php` (21 kiểm tra).

@@ -121,6 +121,9 @@ class AiTools {
     /** Actions that end in Project::update(), which refuses to save without the project's current version. */
     const VERSIONED_TYPES = ['project_update', 'update_project_status', 'update_project_order_type', 'project_set_teams', 'project_add_team', 'project_remove_team', 'project_clear_teams', 'project_clear_all'];
 
+    /** How many applications get_requests reads to count them per form type and per person (one page of the list). */
+    const REQUEST_SUMMARY_ROWS = 200;
+
     /** Tools that list or count projects and tasks by department: limited to the user's default department when one is chosen. */
     const DEPARTMENT_TOOLS = ['search_projects', 'get_statistics', 'get_availability', 'get_unstaffed_projects', 'get_team_workload', 'show_projects', 'show_task_overview'];
 
@@ -242,9 +245,13 @@ class AiTools {
             ]),
             $tool('get_building_statistics', 'Counts of buildings: total, by kind of work requested, by house type, top customers, created per month, and buildings without a project.', []),
             $tool('get_requests', "Applications (申請: leave, overtime, expenses …). scope mine = the current user's own applications with their status; scope to_approve = applications waiting for the current user's approval. Only type, status, applicant and dates are returned, not the form contents.", [
-                'scope' => ['type' => 'string', 'enum' => ['mine', 'to_approve']],
+                'scope' => ['type' => 'string', 'enum' => ['mine', 'to_approve', 'all'], 'description' => 'all = every application the current user is allowed to see (administrators and general affairs: everyone\'s; approvers: their own and those assigned to them; other staff: their own). Comes with counts per form type and per person.'],
                 'status' => ['type' => 'string', 'enum' => self::REQUEST_STATUSES],
                 'type' => ['type' => 'string', 'enum' => self::REQUEST_TYPES],
+                'month' => ['type' => 'string', 'description' => 'YYYY-MM, applications dated in that month'],
+                'date_from' => ['type' => 'string', 'description' => 'YYYY-MM-DD, with date_to: a range of at most 92 days'],
+                'date_to' => ['type' => 'string', 'description' => 'YYYY-MM-DD'],
+                'applicant_name' => ['type' => 'string', 'description' => 'Only the applications of this person.'],
                 'limit' => $int,
             ]),
             $tool('get_my_attendance', "The current user's own time card for one pay period: check-in and check-out today, days recorded, working time, overtime, holiday work, days with no check-out, and how many leave applications were approved this year.", [
@@ -1103,9 +1110,104 @@ class AiTools {
         if (!empty($in['type'])) {
             $query['type'] = (string) $in['type'];
         }
-        $found = $this->ai->requestsForAi($scope, $query, $limit);
-        $columns = ['id' => 'id', 'type' => 'type', 'status' => 'status', 'applicant' => 'user_realname', 'created' => 'created_at', 'start_date' => 'start_date', 'end_date' => 'end_date'];
-        return ['scope' => $scope, 'total' => $found['total'], 'requests' => self::compact($found['rows'], $columns, $limit, 60), 'more' => $found['total'] > $limit];
+        $period = null;
+        if (!empty($in['month'])) {
+            $period = ['from' => $in['month'] . '-01', 'to' => date('Y-m-t', strtotime($in['month'] . '-01'))];
+        } elseif (!empty($in['date_from']) || !empty($in['date_to'])) {
+            if (empty($in['date_from']) || empty($in['date_to'])) {
+                return ['error' => 'Give both date_from and date_to, or month.'];
+            }
+            $period = ['from' => (string) $in['date_from'], 'to' => (string) $in['date_to']];
+            $days = (int) round((strtotime($period['to']) - strtotime($period['from'])) / 86400) + 1;
+            if ($days < 1 || $days > 92) {
+                return ['error' => 'The period must run from date_from to date_to and cover at most 92 days.'];
+            }
+        }
+        if ($period !== null) {
+            $query['from_date'] = $period['from'];
+            $query['to_date'] = $period['to'];
+        }
+        $applicant = null;
+        if (isset($in['applicant_name']) && trim((string) $in['applicant_name']) !== '') {
+            $applicant = $this->ai->userLoginByName(trim((string) $in['applicant_name']));
+            if ($applicant === null) {
+                return ['error' => 'Person not found: ' . mb_substr((string) $in['applicant_name'], 0, 40)];
+            }
+            if ($scope === 'mine' && $applicant !== (isset($_SESSION['userid']) ? (string) $_SESSION['userid'] : '')) {
+                return ['error' => 'scope mine is the current user only. Use scope all with applicant_name.'];
+            }
+            $query['user_id'] = $applicant;
+        }
+        // A summary needs more rows than the answer lists.
+        $summarise = $scope === 'all' || $period !== null;
+        $found = $this->ai->requestsForAi($scope, $query, $summarise ? self::REQUEST_SUMMARY_ROWS : $limit);
+        $rows = [];
+        foreach ($found['rows'] as $row) {
+            if ($applicant !== null && (string) ($row['user_id'] ?? '') !== $applicant) {
+                // The page ignored the applicant filter: this user may only see their own applications.
+                return ['error' => 'The user is not allowed to see the applications of that person.'];
+            }
+            $row['detail'] = self::requestDetail($row);
+            $rows[] = $row;
+        }
+        $columns = ['id' => 'id', 'type' => 'type', 'status' => 'status', 'applicant' => 'user_realname', 'created' => 'created_at', 'start_date' => 'start_date', 'end_date' => 'end_date', 'detail' => 'detail'];
+        $out = ['scope' => $scope, 'total' => $found['total']];
+        if ($period !== null) {
+            $out['period'] = $period;
+        }
+        $out['requests'] = self::compact($rows, $columns, $limit, 60);
+        $out['more'] = $found['total'] > $limit;
+        if ($summarise) {
+            $byType = [];
+            $byPerson = [];
+            foreach ($rows as $row) {
+                $type = (string) ($row['type'] ?? '');
+                $byType[$type] = isset($byType[$type]) ? $byType[$type] + 1 : 1;
+                $key = (string) ($row['user_id'] ?? '');
+                if (!isset($byPerson[$key])) {
+                    $byPerson[$key] = ['name' => mb_substr((string) ($row['user_realname'] ?? $key), 0, 40), 'applications' => 0, 'by_type' => []];
+                }
+                $byPerson[$key]['applications']++;
+                $byPerson[$key]['by_type'][$type] = isset($byPerson[$key]['by_type'][$type]) ? $byPerson[$key]['by_type'][$type] + 1 : 1;
+            }
+            arsort($byType);
+            $byPerson = array_values($byPerson);
+            usort($byPerson, function ($a, $b) {
+                return [$b['applications'], $a['name']] <=> [$a['applications'], $b['name']];
+            });
+            $out['by_type'] = $byType;
+            $out['by_person'] = array_slice($byPerson, 0, self::MAX_ROWS);
+            // The counts above are made from this many of the newest applications.
+            $out['summary_covers'] = count($rows);
+        }
+        return $out;
+    }
+
+    /**
+     * The one harmless detail of an application: its number of days or its time. Never the reason,
+     * note, destination, purchase lines or any amount.
+     */
+    private static function requestDetail(array $row): string {
+        $data = isset($row['data']) && is_array($row['data']) ? $row['data'] : [];
+        if (isset($data['days']) && is_numeric($data['days'])) {
+            $kind = '';
+            if (($row['type'] ?? '') === 'leave') {
+                $kind = trim((isset($data['leave_type']) ? (string) $data['leave_type'] : '') . ' ' . (isset($data['paid_type']) ? (string) $data['paid_type'] : ''));
+            }
+            return rtrim(rtrim(number_format((float) $data['days'], 2, '.', ''), '0'), '.') . ' day(s)' . ($kind !== '' ? ' ' . mb_substr($kind, 0, 30) : '');
+        }
+        $start = isset($data['start_time']) ? substr(trim((string) $data['start_time']), 0, 5) : '';
+        $end = isset($data['end_time']) ? substr(trim((string) $data['end_time']), 0, 5) : '';
+        if (!preg_match('/^\d{1,2}:\d{2}$/', $start)) {
+            $start = '';
+        }
+        if (!preg_match('/^\d{1,2}:\d{2}$/', $end)) {
+            $end = '';
+        }
+        if ($start !== '' || $end !== '') {
+            return $start . ($end !== '' ? '〜' . $end : '');
+        }
+        return '';
     }
 
     private function tool_get_my_attendance(array $in): array {

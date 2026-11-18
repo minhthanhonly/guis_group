@@ -16,7 +16,7 @@ $getBefore = $_GET;
 $r = $t->runRead('get_requests', []);
 check('default: my own applications, counted like the database', ($r['scope'] ?? null) === 'mine' && $r['total'] === $mineTotal);
 check('request globals are left as they were', $_GET === $getBefore);
-check('rows are compact and capped at 10', count($r['requests']) === min(10, $mineTotal) && ($mineTotal === 0 || array_keys($r['requests'][0]) === ['id', 'type', 'status', 'applicant', 'created', 'start_date', 'end_date']));
+check('rows are compact and capped at 10', count($r['requests']) === min(10, $mineTotal) && ($mineTotal === 0 || array_keys($r['requests'][0]) === ['id', 'type', 'status', 'applicant', 'created', 'start_date', 'end_date', 'detail']));
 check('no form contents are returned', strpos(json_encode($r), '"data"') === false && strpos(json_encode($r), 'history') === false);
 check('more flag', $r['more'] === ($mineTotal > 10));
 check('newest first', $mineTotal < 2 || $r['requests'][0]['created'] >= $r['requests'][1]['created']);

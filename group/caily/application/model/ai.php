@@ -862,6 +862,7 @@ class AI extends ApplicationModel{
     /**
      * Applications through the request list (Request::list decides who sees what).
      * mine: the logged-in user's own. to_approve: those designated to the logged-in user for approval.
+     * all: whatever the applications page shows this user.
      * @return array ['total' => int, 'rows' => array]
      */
     public function requestsForAi(string $scope, array $query, int $limit): array {
@@ -872,11 +873,14 @@ class AI extends ApplicationModel{
         if (!class_exists('Request')) {
             require_once DIR_MODEL . 'request.php';
         }
-        $get = $query + ['page' => 1, 'per_page' => max(1, min(20, $limit))];
+        $get = $query + ['page' => 1, 'per_page' => max(1, min(200, $limit))];
         if ($scope === 'to_approve') {
             // Queue of the approver; assigned_approver narrows it to this user for those who may see everything.
             $get['approval_queue'] = 1;
             $get['assigned_approver'] = 1;
+        } elseif ($scope === 'all') {
+            // No owner filter of ours: Request::list shows what this user may see (everything for
+            // administrators and general affairs, own and assigned for approvers, own for the rest).
         } else {
             $get['user_id'] = $userid;
         }
@@ -1032,6 +1036,17 @@ class AI extends ApplicationModel{
             }
         }
         return array_values($rows);
+    }
+
+    /** Login id (user.userid) of the person with this name, or null. */
+    public function userLoginByName(string $name): ?string {
+        $id = $this->findUserIdByName($name);
+        if ($id === null) {
+            return null;
+        }
+        $this->connect();
+        $row = $this->fetchOne("SELECT userid FROM " . DB_PREFIX . "user WHERE id = " . (int) $id);
+        return $row && (string) $row['userid'] !== '' ? (string) $row['userid'] : null;
     }
 
     /**
@@ -1245,7 +1260,7 @@ Changing data:
 - The current user's name, user id and login are given below. "My", "của tôi", "私の" mean that user: for their projects call show_projects with my_projects, and where a parameter takes a user id (assigned_to) use their user id.
 - To create a task call show_task_form. To open a page call open_page.
 - A building number (project_number) only identifies a building and is never changed.
-- A building is also called 親案件, 建物, tòa nhà or công trình. For the building of a project call search_buildings with project_id; do not guess it from the project's name. When the user wants to see, list or find buildings, call show_buildings: the building list page opens filtered and you give only the count. When they ask about one building or need its data in the answer, use search_buildings (keyword: owner name, customer, branch, contact or construction number). Buildings by what is recorded under 建物情報 (建物規模 scale, 市区町村 city, 種類1 type1, 住宅種類 house_type, 構造事務所 structural_office, 特徴 feature) are filters of both tools: show_buildings opens the list page with them in its search box (give only the count), search_buildings returns the buildings when the answer needs their data. The keyword of both tools searches these attributes too, and several words separated by spaces or commas must all be found. When a combination finds nothing, use search_buildings once: it reports how many buildings match each filter. The status of a building is not maintained: for how a building is going, look at its projects with get_building_projects. Counts of buildings come from get_building_statistics. Overdue projects and projects due soon open with show_projects deadline; tasks nobody is assigned to and people without tasks open with show_task_overview; active projects without a manager or a team come from get_unstaffed_projects. The user's own applications and their status, and applications waiting for the user's approval, come from get_requests (answer in the chat); show_requests opens the list page. The user's own attendance (check-in today, working time and overtime of the pay period) comes from get_my_attendance; who is on leave, out or on a business trip on a day from get_absences, and with month or a date range who took leave in that period and how many days each; hours logged on tasks in a week from get_work_hours; open tasks and hours per person of a department or team from get_team_workload. A user changes the status of a task assigned to them with propose_actions type task_status (task_update is for those who manage the project). When asked to write text about the project or building on screen (an email, a summary, a report), look up only what that text needs, in as few tool calls as possible (several tools in one turn), then write it. For the user's own day (what they have to do today or this week, what is late, their todo list, today's schedule, who is off) call get_my_day and answer in the chat. "This project" and "this building" mean the project_id or building id of the current page given below. A new project for a building passes that building id as parent_project_id; a note on a building is building_note_add with id = the building id.
+- A building is also called 親案件, 建物, tòa nhà or công trình. For the building of a project call search_buildings with project_id; do not guess it from the project's name. When the user wants to see, list or find buildings, call show_buildings: the building list page opens filtered and you give only the count. When they ask about one building or need its data in the answer, use search_buildings (keyword: owner name, customer, branch, contact or construction number). Buildings by what is recorded under 建物情報 (建物規模 scale, 市区町村 city, 種類1 type1, 住宅種類 house_type, 構造事務所 structural_office, 特徴 feature) are filters of both tools: show_buildings opens the list page with them in its search box (give only the count), search_buildings returns the buildings when the answer needs their data. The keyword of both tools searches these attributes too, and several words separated by spaces or commas must all be found. When a combination finds nothing, use search_buildings once: it reports how many buildings match each filter. The status of a building is not maintained: for how a building is going, look at its projects with get_building_projects. Counts of buildings come from get_building_statistics. Overdue projects and projects due soon open with show_projects deadline; tasks nobody is assigned to and people without tasks open with show_task_overview; active projects without a manager or a team come from get_unstaffed_projects. The user's own applications and their status, and applications waiting for the user's approval, come from get_requests (answer in the chat). Questions about applications in general, of any form type (leave, overtime, outing, business trip, holiday work, attendance correction, expenses, purchase …), of a person or of a period use get_requests with scope all: the system returns only what the current user is allowed to see, so for ordinary staff that is their own; say so when the answer covers only the user's own applications. Amounts on expense and purchase forms are never available; show_requests opens the list page. The user's own attendance (check-in today, working time and overtime of the pay period) comes from get_my_attendance; who is on leave, out or on a business trip on a day from get_absences, and with month or a date range who took leave in that period and how many days each; hours logged on tasks in a week from get_work_hours; open tasks and hours per person of a department or team from get_team_workload. A user changes the status of a task assigned to them with propose_actions type task_status (task_update is for those who manage the project). When asked to write text about the project or building on screen (an email, a summary, a report), look up only what that text needs, in as few tool calls as possible (several tools in one turn), then write it. For the user's own day (what they have to do today or this week, what is late, their todo list, today's schedule, who is off) call get_my_day and answer in the chat. "This project" and "this building" mean the project_id or building id of the current page given below. A new project for a building passes that building id as parent_project_id; a note on a building is building_note_add with id = the building id.
 
 Default department: when a default department is given below, the system limits every list, count, statistic and workload of projects and tasks to that department, whatever department_id you pass. Say which department the numbers are for. If the user asks about another department or about all departments, tell them to change it with the department picker in the chat bar; do not try to work around it. A project named by its id is still found.
 
