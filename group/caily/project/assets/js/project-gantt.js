@@ -235,6 +235,8 @@ $(document).ready(function() {
 
     // LocalStorage filter state
     const FILTER_STORAGE_KEY = 'projectGanttFilters';
+    // filters of the departments other than the one in FILTER_STORAGE_KEY: { departmentId: filters }
+    const FILTER_BY_DEPARTMENT_STORAGE_KEY = 'projectGanttFiltersByDepartment';
     const FILTER_RESET_PREFS_KEY = 'projectGanttFilterResetPrefs';
     const KEEP_TEAM_ON_RESET_KEY = 'project_list_keep_team_on_reset';
     const KEEP_COMPANY_ON_RESET_KEY = 'project_list_keep_company_on_reset';
@@ -379,6 +381,49 @@ $(document).ready(function() {
             defaults[def.key] = cloneProjectGanttFilterValue(def.defaultValue);
         });
         return defaults;
+    }
+
+    /**
+     * Each department keeps its own filters (registry groups 案件 / 組織 / 状態); the 表示 options and
+     * the sort settings stay shared. FILTER_STORAGE_KEY always holds the set of the department it names
+     * in department_id; the other departments' sets wait in FILTER_BY_DEPARTMENT_STORAGE_KEY.
+     * Returns true when the active set was swapped (the UI must then be restored from storage).
+     */
+    function switchGanttFiltersToDepartment(departmentId) {
+        var newId = parseInt(departmentId, 10);
+        if (!newId || newId <= 0) return false;
+        var active = {};
+        var byDepartment = {};
+        try { active = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}') || {}; } catch (e) { active = {}; }
+        try { byDepartment = JSON.parse(localStorage.getItem(FILTER_BY_DEPARTMENT_STORAGE_KEY) || '{}') || {}; } catch (e) { byDepartment = {}; }
+        var activeId = parseInt(active.department_id, 10) || 0;
+        if (activeId === newId) return false;
+        if (!activeId) {
+            // legacy set saved before filters were per department: it belongs to this department
+            active.department_id = newId;
+            try { localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(active)); } catch (e) {}
+            return false;
+        }
+        var ownDefs = PROJECT_GANTT_FILTER_REGISTRY.filter(function(def) { return def.group !== 'display'; });
+        var outgoing = {};
+        var defaults = {};
+        ownDefs.forEach(function(def) {
+            if (active[def.key] !== undefined) outgoing[def.key] = cloneProjectGanttFilterValue(active[def.key]);
+            defaults[def.key] = cloneProjectGanttFilterValue(def.defaultValue);
+        });
+        byDepartment[activeId] = outgoing;
+        var saved = byDepartment[newId] && typeof byDepartment[newId] === 'object' ? byDepartment[newId] : {};
+        var next = Object.assign({}, active, defaults, saved, { department_id: newId });
+        next.statusKeys = normalizeProjectStatusKeys(next.statusKeys || '');
+        next.statusKey = next.statusKeys.length === 1 ? next.statusKeys[0] : '';
+        try {
+            localStorage.setItem(FILTER_BY_DEPARTMENT_STORAGE_KEY, JSON.stringify(byDepartment));
+            localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(next));
+        } catch (e) {
+            console.warn('Failed to switch Gantt filters to department', e);
+            return false;
+        }
+        return true;
     }
 
     function isProjectGanttFilterResetItemVisible(def) {
@@ -1325,6 +1370,10 @@ $(document).ready(function() {
         const params = new URLSearchParams(search);
         if (Array.from(params.keys()).length === 0) return;
 
+        // The URL's filters belong to the URL's department: take that department's set first
+        if (params.has('department_id')) {
+            switchGanttFiltersToDepartment(params.get('department_id'));
+        }
         let stored = {};
         try {
             stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
@@ -1680,14 +1729,21 @@ $(document).ready(function() {
             },
             
             async viewProjects(department) {
+                // Each department has its own filters: park the current ones, take this department's
+                var filtersSwitched = switchGanttFiltersToDepartment(department && department.id);
                 this.selectedDepartment = department;
-                
+                if (filtersSwitched) {
+                    restoreGanttFiltersFromStorage();
+                }
+
                 // Save selected department to localStorage
                 this.saveSelectedDepartmentToLocalStorage(department);
                 
                 // Load teams and users (担当者 filter) for the selected department
                 await Promise.all([this.loadTeams(), this.loadAssigneeUsers()]);
                 restoreGanttFiltersFromStorage();
+                // the URL follows the department and its filters
+                updateUrlFromFilters(Object.assign(collectProjectGanttFiltersFromUi(), { department_id: department.id }));
                 this.loadProjects();
             },
             

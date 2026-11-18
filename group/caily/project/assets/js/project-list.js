@@ -577,6 +577,8 @@ var projectTable;
     ];
     // --- LocalStorage filter state ---
     const FILTER_STORAGE_KEY = 'projectListFilters';
+    // filters of the departments other than the one in FILTER_STORAGE_KEY: { departmentId: filters }
+    const FILTER_BY_DEPARTMENT_STORAGE_KEY = 'projectListFiltersByDepartment';
     const FILTER_RESET_PREFS_KEY = 'projectListFilterResetPrefs';
     const NOTE_DISPLAY_ONE_LINE_KEY = 'projectListNoteDisplayOneLine';
 
@@ -2330,15 +2332,17 @@ var projectTable;
         var list = [
             { value: 'start_date', label: '開始日' },
             { value: 'end_date', label: '期限日' },
-            { value: 'caily_nouki', label: 'CAILY納期' },
-            { value: 'guis_nouki', label: 'GUIS納期', needsEndDatePerm: true },
+            { value: 'caily_nouki', label: 'CAILY納期', hiddenOnEnergyTab: true },
+            { value: 'guis_nouki', label: 'GUIS納期', needsEndDatePerm: true, hiddenOnEnergyTab: true },
             { value: 'estimate_date', label: '見積日', directorOnly: true },
             { value: 'invoice_date', label: '請求日', directorOnly: true }
         ];
-        if (isEnergyDepartmentSelectedForStatus()) {
+        var isEnergyTab = isEnergyDepartmentSelectedForStatus();
+        if (isEnergyTab) {
             list = list.concat(ENERGY_TASK_DUE_DATE_FILTER_FIELDS);
         }
         return list.filter(function(f) {
+            if (f.hiddenOnEnergyTab && isEnergyTab) return false;
             if (f.needsEndDatePerm && !canViewEnd) return false;
             if (f.directorOnly && !canViewDirector) return false;
             return true;
@@ -2354,6 +2358,18 @@ var projectTable;
     });
     function isEnergyTaskDueDateFilterField(field) {
         return String(field || '').indexOf('task_due:') === 0;
+    }
+    /** CAILY納期 / GUIS納期 are not offered on the 省エネ tab. */
+    var ENERGY_TAB_HIDDEN_DATE_FILTER_FIELDS = { caily_nouki: true, guis_nouki: true };
+    /**
+     * Whether a saved 日付検索 field applies on the current tab: task 期限 fields only on 省エネ,
+     * CAILY納期 / GUIS納期 everywhere else. Otherwise the value is kept but not applied.
+     */
+    function isDateFilterFieldAvailableOnTab(field) {
+        var isEnergyTab = isEnergyDepartmentSelectedForStatus();
+        if (isEnergyTaskDueDateFilterField(field)) return isEnergyTab;
+        if (ENERGY_TAB_HIDDEN_DATE_FILTER_FIELDS[String(field || '')]) return !isEnergyTab;
+        return true;
     }
 
     /** Convert legacy YYYY-MM month filter into inclusive date range. */
@@ -2441,7 +2457,7 @@ var projectTable;
         var t = function(s) {
             return (typeof translateText === 'function') ? translateText(s) : s;
         };
-        if (!cur.field || (!cur.from && !cur.to)) {
+        if (!cur.field || (!cur.from && !cur.to) || !isDateFilterFieldAvailableOnTab(cur.field)) {
             $label.text(t('日付を選択'));
             $btn.removeClass('btn-primary').addClass('btn-outline-secondary');
             return;
@@ -3979,6 +3995,8 @@ var projectTable;
                         altFormat: monthAltFormat,
                     })],
                     onChange: function() {
+                        // not while saved filters are being put into the form (other fields not set yet)
+                        if (suppressProjectListFilterReload) return;
                         saveFiltersToLocalStorage();
                         renderActiveFilters();
                     }
@@ -5122,6 +5140,46 @@ var projectTable;
         return defaults;
     }
 
+    /**
+     * Each department keeps its own filters (the keys of PROJECT_LIST_FILTER_REGISTRY).
+     * FILTER_STORAGE_KEY always holds the set of the department it names in department_id; the
+     * other departments' sets wait in FILTER_BY_DEPARTMENT_STORAGE_KEY. Sort settings stay shared.
+     * Returns true when the active set was swapped (the UI must then be reloaded from storage).
+     */
+    function switchProjectListFiltersToDepartment(departmentId) {
+        var newId = parseInt(departmentId, 10);
+        if (!newId || newId <= 0) return false;
+        var active = {};
+        var byDepartment = {};
+        try { active = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}') || {}; } catch (e) { active = {}; }
+        try { byDepartment = JSON.parse(localStorage.getItem(FILTER_BY_DEPARTMENT_STORAGE_KEY) || '{}') || {}; } catch (e) { byDepartment = {}; }
+        var activeId = parseInt(active.department_id, 10) || 0;
+        if (activeId === newId) return false;
+        if (!activeId) {
+            // legacy set saved before filters were per department: it belongs to this department
+            active.department_id = newId;
+            try { localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(active)); } catch (e) {}
+            return false;
+        }
+        var ownKeys = PROJECT_LIST_FILTER_REGISTRY.map(function(def) { return def.key; });
+        var outgoing = {};
+        ownKeys.forEach(function(key) {
+            if (active[key] !== undefined) outgoing[key] = cloneProjectListFilterValue(active[key]);
+        });
+        byDepartment[activeId] = outgoing;
+        var saved = byDepartment[newId] && typeof byDepartment[newId] === 'object' ? byDepartment[newId] : {};
+        var next = Object.assign({}, active, getDefaultProjectListFilterValues(), saved, { department_id: newId });
+        delete next.statusKey;
+        try {
+            localStorage.setItem(FILTER_BY_DEPARTMENT_STORAGE_KEY, JSON.stringify(byDepartment));
+            localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(next));
+        } catch (e) {
+            console.warn('Failed to switch project list filters to department', e);
+            return false;
+        }
+        return true;
+    }
+
     function isProjectListFilterResetItemVisible(def) {
         if (!def) return false;
         if (def.directorOnly && !canViewProjectDirectorColumns()) {
@@ -5616,7 +5674,7 @@ var projectTable;
             priority: filters.filterPriority || '',
             progress: energyTabFilterValue(filters.filterProgress || '', ''),
             timeLeft: filters.filterTimeLeft || '',
-            dateField: isEnergyTaskDueDateFilterField(dateField) && !isEnergyDepartmentSelectedForStatus() ? '' : dateField,
+            dateField: isDateFilterFieldAvailableOnTab(dateField) ? dateField : '',
             dateFrom: dateFrom,
             dateTo: dateTo,
             projectOrderType: filters.filterProjectOrderType || '',
@@ -7313,9 +7371,9 @@ var projectTable;
                     const filterPriority = $('#filterPriority').val();
                     const filterProgress = energyTabFilterValue($('#filterProgress').val(), '');
                     const filterTimeLeft = $('#filterTimeLeft').val();
-                    // a task 期限 field only exists on the 省エネ tab
+                    // task 期限 fields only on the 省エネ tab; CAILY納期 / GUIS納期 not there
                     let filterDateField = $('#filterDateField').val() || '';
-                    if (isEnergyTaskDueDateFilterField(filterDateField) && !isEnergyDepartmentSelectedForStatus()) {
+                    if (!isDateFilterFieldAvailableOnTab(filterDateField)) {
                         filterDateField = '';
                     }
                     const filterDateFrom = normalizeFilterYmd($('#filterDateFrom').val()) || '';
@@ -10854,7 +10912,13 @@ var projectTable;
                     }
                 
                     this.loading = true;
+                    // Each department has its own filters: park the current ones, take this department's
+                    var filtersSwitched = switchProjectListFiltersToDepartment(department.id);
                     this.selectedDepartment = department;
+                    if (filtersSwitched) {
+                        loadFiltersFromLocalStorage();
+                        renderActiveFilters();
+                    }
                     // Drop 省エネ-only status filters when leaving that department
                     if (!isEnergyDepartmentSelectedForStatus() && Array.isArray(this.selectedStatusKeys) && this.selectedStatusKeys.length) {
                         this.selectedStatusKeys = this.selectedStatusKeys.filter(function(k) {
