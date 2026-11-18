@@ -289,14 +289,16 @@
  * Each line is a soft panel instead of divider lines; at most one note per line.
  */
 .bd-scope {
-    --pi-panel-bg: rgba(67, 89, 113, 0.045);
-    --pi-panel-border: rgba(67, 89, 113, 0.10);
+    --pi-panel-bg: transparent;
+    --pi-panel-border: rgba(67, 89, 113, 0.18);
+    --pi-panel-shadow: 0 1px 2px rgba(67, 89, 113, 0.06);
     --pi-note-order-bg: rgba(255, 171, 0, 0.12);
     --pi-note-order-fg: #8a5a00;
 }
 [data-bs-theme="dark"] .bd-scope {
-    --pi-panel-bg: rgba(255, 255, 255, 0.045);
-    --pi-panel-border: rgba(255, 255, 255, 0.10);
+    --pi-panel-bg: transparent;
+    --pi-panel-border: rgba(255, 255, 255, 0.14);
+    --pi-panel-shadow: none;
     --pi-note-order-bg: rgba(255, 171, 0, 0.16);
     --pi-note-order-fg: #ffcf66;
 }
@@ -319,6 +321,12 @@
 }
 .bd-scope .pi-editor .form-control,
 .bd-scope .pi-order-form .form-control { min-height: 36px; }
+/* inputs keep the card's own background (white), never the panel's: a tinted field reads as disabled */
+.bd-scope .pi-editor .form-control:not(:disabled),
+.bd-scope .pi-editor .input-group-text,
+.bd-scope .pi-order-form .form-control:not(:disabled) {
+    background-color: var(--bs-paper-bg, #fff);
+}
 
 .bd-scope .pi-editor { display: flex; flex-direction: column; gap: 8px; }
 .bd-scope .pi-empty { font-size: 0.9375rem; padding: 4px 0; }
@@ -327,6 +335,7 @@
     padding: 10px;
     background: var(--pi-panel-bg);
     border: 1px solid var(--pi-panel-border);
+    box-shadow: var(--pi-panel-shadow);
     border-radius: 8px;
 }
 .bd-scope .pi-line-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
@@ -377,6 +386,7 @@
     padding: 4px 10px;
     background: var(--pi-panel-bg);
     border: 1px solid var(--pi-panel-border);
+    box-shadow: var(--pi-panel-shadow);
     border-radius: 8px;
 }
 .bd-scope .pi-order-row { display: flex; align-items: center; gap: 12px; min-height: 42px; min-width: 0; }
