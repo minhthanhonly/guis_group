@@ -4897,14 +4897,41 @@ var projectTable;
         if ($el.data('select2')) {
             $el.select2('destroy');
         }
+        // 大東 / 東建 / 他社, or any typed text (matched as part of the company name).
+        // A comma separates values (the API joins them with commas), so it cannot be part of one.
         $el.select2({
             placeholder: translateText('会社'),
             allowClear: true,
             width: '100%',
             dropdownAutoWidth: true,
             closeOnSelect: false,
-            minimumResultsForSearch: Infinity
+            tags: true,
+            tokenSeparators: [',', '、'],
+            createTag: function(params) {
+                var term = String(params.term || '').replace(/[,、]/g, '').trim().slice(0, 100);
+                if (!term) return null;
+                return { id: term, text: term, newTag: true };
+            }
         });
+    }
+
+    /** Select the given 会社 values, adding an option for each typed (non-preset) value. */
+    function setFilterCompanySelectValue(values) {
+        var $el = $('#filterCompany');
+        if (!$el.length) return;
+        var list = parseFilterCompanyValue(values);
+        list.forEach(function(v) {
+            var exists = $el.find('option').filter(function() { return this.value === v; }).length > 0;
+            if (!exists) $el.append(new Option(v, v, false, false));
+        });
+        $el.val(list.length ? list : null).trigger('change');
+    }
+
+    function getFilterCompanyLabel(key) {
+        if (key === 'daito') return '大東';
+        if (key === 'token') return '東建';
+        if (key === 'other') return '他社';
+        return key;
     }
 
     function syncFilterTeamSelect2Value($el, teamIds) {
@@ -5249,8 +5276,7 @@ var projectTable;
         }
         if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
         if (filters.filterCompany !== undefined) {
-            var companyValues = parseFilterCompanyValue(filters.filterCompany);
-            $('#filterCompany').val(companyValues.length ? companyValues : null).trigger('change');
+            setFilterCompanySelectValue(filters.filterCompany);
         }
         if (filters.filterTeam !== undefined) {
             var teamValues = parseFilterTeamValue(filters.filterTeam);
@@ -5735,13 +5761,8 @@ var projectTable;
                 badges.push(`<span class="badge bg-label-info me-1" >チーム: ${teamNames}</span>`);
             }
             if (filters.companyKeys.length > 0) {
-                const labels = filters.companyKeys.map(function(key) {
-                    if (key === 'daito') return '大東';
-                    if (key === 'token') return '東建';
-                    if (key === 'other') return '他社';
-                    return key;
-                }).join(', ');
-                badges.push(`<span class="badge bg-label-info me-1" >会社: ${labels}</span>`);
+                const labels = filters.companyKeys.map(getFilterCompanyLabel).join(', ');
+                badges.push(`<span class="badge bg-label-info me-1" >会社: ${escapeHtmlForNote(labels)}</span>`);
             }
             if (filters.tantou && filters.tantou.trim() !== '') {
                 let label = filters.tantou;

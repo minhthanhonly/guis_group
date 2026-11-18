@@ -323,6 +323,33 @@ class Project extends ApplicationModel {
             . " AND (pp_c.id IS NULL OR pc.id <> pp_c.id) THEN 1 ELSE 0 END";
     }
 
+    /**
+     * 会社 filter: comma-separated keys daito / token / other (company groups), or any text
+     * typed in the filter, matched as part of the company name. Several values are OR'ed.
+     */
+    private function appendCompanyFilterWhere(array &$whereArr, $filterCompanyRaw) {
+        $companyExpr = $this->sqlEffectiveCompanyName();
+        $companyFilters = array_values(array_unique(array_filter(array_map('trim', explode(',', (string) $filterCompanyRaw)), 'strlen')));
+        $companyConds = array();
+        foreach (array_slice($companyFilters, 0, 20) as $companyFilter) {
+            if ($companyFilter === 'daito') {
+                $companyConds[] = "{$companyExpr} LIKE '%大東建託%'";
+            } elseif ($companyFilter === 'token') {
+                $companyConds[] = "{$companyExpr} LIKE '%東建コーポレーション%'";
+            } elseif ($companyFilter === 'other') {
+                $companyConds[] = "({$companyExpr} IS NULL OR {$companyExpr} = '' OR ({$companyExpr} NOT LIKE '%大東建託%' AND {$companyExpr} NOT LIKE '%東建コーポレーション%'))";
+            } else {
+                // free text: % and _ are literal, not LIKE wildcards
+                $text = mb_substr($companyFilter, 0, 100);
+                $like = $this->escape(str_replace(array('\\', '%', '_'), array('\\\\', '\\%', '\\_'), $text));
+                $companyConds[] = "{$companyExpr} LIKE '%{$like}%'";
+            }
+        }
+        if (!empty($companyConds)) {
+            $whereArr[] = '(' . implode(' OR ', $companyConds) . ')';
+        }
+    }
+
     private function appendTeamFilterWhere(array &$whereArr, $filterTeamRaw) {
         if ($filterTeamRaw === '' || $filterTeamRaw === null) {
             return;
@@ -1540,25 +1567,9 @@ class Project extends ApplicationModel {
             if (isset($_GET['filterTeam']) && $_GET['filterTeam'] !== '') {
                 $this->appendTeamFilterWhere($whereArr, $_GET['filterTeam']);
             }
-            // Filter by company group (大東 / 東建 / 他社)
+            // Filter by company (大東 / 東建 / 他社, or any text typed in the filter)
             if (isset($_GET['filterCompany']) && $_GET['filterCompany'] !== '') {
-                $companyExpr = $this->sqlEffectiveCompanyName();
-                $companyFilters = array_values(array_unique(array_filter(array_map('trim', explode(',', (string) $_GET['filterCompany'])))));
-                if (!empty($companyFilters)) {
-                    $companyConds = array();
-                    foreach ($companyFilters as $companyFilter) {
-                        if ($companyFilter === 'daito') {
-                            $companyConds[] = "{$companyExpr} LIKE '%大東建託%'";
-                        } elseif ($companyFilter === 'token') {
-                            $companyConds[] = "{$companyExpr} LIKE '%東建コーポレーション%'";
-                        } elseif ($companyFilter === 'other') {
-                            $companyConds[] = "({$companyExpr} IS NULL OR {$companyExpr} = '' OR ({$companyExpr} NOT LIKE '%大東建託%' AND {$companyExpr} NOT LIKE '%東建コーポレーション%'))";
-                        }
-                    }
-                    if (!empty($companyConds)) {
-                        $whereArr[] = '(' . implode(' OR ', $companyConds) . ')';
-                    }
-                }
+                $this->appendCompanyFilterWhere($whereArr, $_GET['filterCompany']);
             }
             // Filter by tantou (担当: CAILY / GUIS)
             if (isset($_GET['filterTantou']) && $_GET['filterTantou'] !== '') {
@@ -1928,25 +1939,9 @@ class Project extends ApplicationModel {
             if (isset($_GET['filterTeam']) && $_GET['filterTeam'] !== '') {
                 $this->appendTeamFilterWhere($whereArr, $_GET['filterTeam']);
             }
-            // Filter by company group (大東 / 東建 / 他社)
+            // Filter by company (大東 / 東建 / 他社, or any text typed in the filter)
             if (isset($_GET['filterCompany']) && $_GET['filterCompany'] !== '') {
-                $companyExpr = $this->sqlEffectiveCompanyName();
-                $companyFilters = array_values(array_unique(array_filter(array_map('trim', explode(',', (string) $_GET['filterCompany'])))));
-                if (!empty($companyFilters)) {
-                    $companyConds = array();
-                    foreach ($companyFilters as $companyFilter) {
-                        if ($companyFilter === 'daito') {
-                            $companyConds[] = "{$companyExpr} LIKE '%大東建託%'";
-                        } elseif ($companyFilter === 'token') {
-                            $companyConds[] = "{$companyExpr} LIKE '%東建コーポレーション%'";
-                        } elseif ($companyFilter === 'other') {
-                            $companyConds[] = "({$companyExpr} IS NULL OR {$companyExpr} = '' OR ({$companyExpr} NOT LIKE '%大東建託%' AND {$companyExpr} NOT LIKE '%東建コーポレーション%'))";
-                        }
-                    }
-                    if (!empty($companyConds)) {
-                        $whereArr[] = '(' . implode(' OR ', $companyConds) . ')';
-                    }
-                }
+                $this->appendCompanyFilterWhere($whereArr, $_GET['filterCompany']);
             }
             // Filter by tantou (担当: CAILY / GUIS)
             if (isset($_GET['filterTantou']) && $_GET['filterTantou'] !== '') {
