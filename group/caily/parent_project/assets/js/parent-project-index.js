@@ -1150,7 +1150,15 @@ createApp({
                 const container = document.getElementById('parentProjectsTableScroll');
                 const origThead = container && container.querySelector('thead');
                 const origTh = origThead && origThead.querySelectorAll('th')[idx];
-                if (origTh) origTh.click();
+                if (!origTh) return;
+                // merged header: forward to the matching sub-label (each sorts its own field)
+                const sub = e.target.closest('.pp-sort');
+                if (sub) {
+                    const subIdx = Array.prototype.indexOf.call(th.querySelectorAll('.pp-sort'), sub);
+                    const origSub = origTh.querySelectorAll('.pp-sort')[subIdx];
+                    if (origSub) { origSub.click(); return; }
+                }
+                origTh.click();
             });
             this._stickyHeadWrap = wrap;
             this._stickyHeadTable = table;
