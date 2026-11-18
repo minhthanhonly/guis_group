@@ -350,6 +350,19 @@ class Project extends ApplicationModel {
         }
     }
 
+    /** 担当者 filter (list / Gantt): the user (user id) is a member or manager of the project. */
+    private function appendAssigneeFilterWhere(array &$whereArr, $filterAssigneeRaw) {
+        $assigneeId = intval($filterAssigneeRaw);
+        if ($assigneeId <= 0) {
+            return;
+        }
+        $whereArr[] = sprintf(
+            "EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_members pma
+                WHERE pma.project_id = p.id AND pma.user_id = '%d' AND pma.role IN ('member', 'manager'))",
+            $assigneeId
+        );
+    }
+
     private function appendTeamFilterWhere(array &$whereArr, $filterTeamRaw) {
         if ($filterTeamRaw === '' || $filterTeamRaw === null) {
             return;
@@ -1577,14 +1590,7 @@ class Project extends ApplicationModel {
                 $whereArr[] = "p.tantou = '".$tantou."'";
             }
             // Filter by 担当者: the user is a member or manager of the project (user id)
-            $assigneeId = isset($_GET['filterAssignee']) ? intval($_GET['filterAssignee']) : 0;
-            if ($assigneeId > 0) {
-                $whereArr[] = sprintf(
-                    "EXISTS (SELECT 1 FROM " . DB_PREFIX . "project_members pma
-                        WHERE pma.project_id = p.id AND pma.user_id = '%d' AND pma.role IN ('member', 'manager'))",
-                    $assigneeId
-                );
-            }
+            $this->appendAssigneeFilterWhere($whereArr, $_GET['filterAssignee'] ?? '');
             // Filter projects without start_date or end_date
             if (isset($_GET['filterNoDates']) && $_GET['filterNoDates'] === '1') {
                 $whereArr[] = "(p.start_date IS NULL OR p.end_date IS NULL)";
@@ -1948,6 +1954,8 @@ class Project extends ApplicationModel {
                 $tantou = $this->escape($_GET['filterTantou']);
                 $whereArr[] = "p.tantou = '".$tantou."'";
             }
+            // Filter by 担当者: the user is a member or manager of the project (user id)
+            $this->appendAssigneeFilterWhere($whereArr, $_GET['filterAssignee'] ?? '');
             // Filter projects without start_date or end_date
             if (isset($_GET['filterNoDates']) && $_GET['filterNoDates'] === '1') {
                 $whereArr[] = "(p.start_date IS NULL OR p.end_date IS NULL)";

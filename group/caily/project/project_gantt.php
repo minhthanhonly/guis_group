@@ -56,7 +56,7 @@ if($_SESSION['show_project'] == 0){
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="優先度">優先度</label>
               <select class="form-select form-select-sm" id="filterPriority"></select>
             </div>
-            <div class="col-md-3 col-6">
+            <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="進捗率">進捗率</label>
               <select class="form-select form-select-sm" id="filterProgress">
                 <option value="" data-i18n="すべて">すべて</option>
@@ -84,9 +84,15 @@ if($_SESSION['show_project'] == 0){
                 <option value="other">その他</option>
               </select>
             </div>
-            <div class="col-md-3 col-6">
+            <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="チーム">チーム</label>
               <select class="form-select form-select-sm" id="filterTeam" multiple>
+              </select>
+            </div>
+            <div class="col-md-3 col-6">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当者">担当者</label>
+              <select class="form-select form-select-sm" id="filterAssignee" title="案件のメンバー・管理者">
+                <option value="" data-i18n="すべて">すべて</option>
               </select>
             </div>
             <div class="col-md-3 col-6">
@@ -97,7 +103,7 @@ if($_SESSION['show_project'] == 0){
                 <option value="other">他社</option>
               </select>
             </div>
-            <div class="col-md-3 col-6">
+            <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当">担当</label>
               <select class="form-select form-select-sm" id="filterTantou">
                 <option value="">すべて</option>
@@ -105,7 +111,7 @@ if($_SESSION['show_project'] == 0){
                 <option value="GUIS">GUIS</option>
               </select>
             </div>
-            <div class="col-md-3 col-6">
+            <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="納品状況">納品状況</label>
               <select class="form-select form-select-sm" id="filterDeliveryStatus">
                 <option value="" data-i18n="すべて">すべて</option>
@@ -372,6 +378,20 @@ window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; 
 </script>
 <script src="assets/js/project-gantt.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <style>
+/* 高度なフィルター: a field whose value is applied (project-gantt.js syncGanttFilterActiveHighlights) */
+#projectFilterForm .form-control.pl-filter-active,
+#projectFilterForm .form-select.pl-filter-active,
+#projectFilterForm .select2-container.pl-filter-active .select2-selection {
+    /* !important: demo.css forces "border: 1px solid #d1d0d4 !important" on every input */
+    border-color: var(--bs-primary) !important;
+    background-color: rgba(var(--bs-primary-rgb), 0.08) !important;
+    box-shadow: inset 0 0 0 1px var(--bs-primary) !important;
+}
+#projectFilterForm .pl-filter-col-active > .form-label,
+#projectFilterForm .form-check.pl-filter-col-active .form-check-label {
+    color: var(--bs-primary);
+    font-weight: 600;
+}
 body > .select2-container--default,
 .select2-dropdown{
     width: 300px!important;

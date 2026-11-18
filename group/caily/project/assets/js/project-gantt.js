@@ -349,6 +349,7 @@ $(document).ready(function() {
         { key: 'filterProjectId', labelKey: '案件ID', group: 'project', defaultValue: '' },
         { key: 'filterTeam', labelKey: 'チーム', group: 'org', defaultValue: [] },
         { key: 'filterCompany', labelKey: '会社', group: 'org', defaultValue: [] },
+        { key: 'filterAssignee', labelKey: '担当者', group: 'org', defaultValue: '' },
         { key: 'statusKeys', labelKey: '案件状況', group: 'status', defaultValue: [] },
         { key: 'showInactive', labelKey: '完了・中止案件等も表示', group: 'status', defaultValue: 0 },
         { key: 'myProjects', labelKey: '私の案件', group: 'status', defaultValue: 0 },
@@ -501,6 +502,7 @@ $(document).ready(function() {
             filterTeam: getFilterTeamValue(),
             filterCompany: getFilterCompanyValue(),
             filterTantou: $('#filterTantou').val() || '',
+            filterAssignee: getFilterAssigneeValue(),
             filterNoDates: $('#filterNoDates').is(':checked') ? 1 : 0,
             showInactive: $('#showInactiveSwitch').is(':checked') ? 1 : 0,
             myProjects: $('#filterMyProjects').is(':checked') ? 1 : 0,
@@ -530,8 +532,7 @@ $(document).ready(function() {
         if (filters.filterDeliveryStatus !== undefined) $('#filterDeliveryStatus').val(filters.filterDeliveryStatus);
         if (filters.filterYoteiMonth !== undefined) applyGanttMonthFilterInputToUi('#filterYoteiMonth', filters.filterYoteiMonth);
         if (filters.filterCompany !== undefined) {
-            var companyValues = parseFilterCompanyValue(filters.filterCompany);
-            $('#filterCompany').val(companyValues.length ? companyValues : null);
+            setFilterCompanySelectValue(filters.filterCompany);
             if (!ganttFilterPersistSuspended) {
                 $('#filterCompany').trigger('change');
             }
@@ -544,6 +545,7 @@ $(document).ready(function() {
             }
         }
         if (filters.filterTantou !== undefined) $('#filterTantou').val(filters.filterTantou);
+        if (filters.filterAssignee !== undefined) setFilterAssigneeValue(filters.filterAssignee);
         if (filters.filterNoDates !== undefined) $('#filterNoDates').prop('checked', filters.filterNoDates == 1);
         if (filters.showInactive !== undefined) $('#showInactiveSwitch').prop('checked', filters.showInactive == 1);
         if (filters.myProjects !== undefined) $('#filterMyProjects').prop('checked', filters.myProjects == 1);
@@ -759,6 +761,101 @@ $(document).ready(function() {
         return keys.length ? keys.join(',') : '';
     }
 
+    function getFilterCompanyLabel(key) {
+        if (key === 'daito') return '大東';
+        if (key === 'token') return '東建';
+        if (key === 'other') return '他社';
+        return key;
+    }
+
+    /** Select the given 会社 values, adding an option for each typed (non-preset) value. */
+    function setFilterCompanySelectValue(values) {
+        var $el = $('#filterCompany');
+        if (!$el.length) return;
+        var list = parseFilterCompanyValue(values);
+        list.forEach(function(v) {
+            var exists = $el.find('option').filter(function() { return this.value === v; }).length > 0;
+            if (!exists) $el.append(new Option(v, v, false, false));
+        });
+        $el.val(list.length ? list : null);
+    }
+
+    /** 省エネ tab (same rule as the project list): some 高度なフィルター fields are hidden there. */
+    function isGanttEnergyDepartment() {
+        var dep = window.ganttApp && window.ganttApp.selectedDepartment;
+        return String(dep && dep.name || '').trim().indexOf('省エネ') !== -1;
+    }
+    /**
+     * 進捗率, 納品状況, チーム, 担当 are hidden on the 省エネ tab: their saved values are kept for the
+     * other departments but not applied, nor shown as badges, there.
+     */
+    function ganttEnergyTabFilterValue(value, emptyValue) {
+        return isGanttEnergyDepartment() ? emptyValue : value;
+    }
+
+    /** 担当者 filter (member or manager of the project): options = the department's users. */
+    function getFilterAssigneeValue() {
+        return String($('#filterAssignee').val() || '');
+    }
+    function hasFilterAssigneeOption(value) {
+        var v = String(value == null ? '' : value);
+        return v !== '' && $('#filterAssignee option').filter(function() { return this.value === v; }).length > 0;
+    }
+    function setFilterAssigneeValue(value) {
+        $('#filterAssignee').val(hasFilterAssigneeOption(value) ? String(value) : '');
+    }
+    function getFilterAssigneeLabel(value) {
+        var v = String(value || '');
+        var $opt = $('#filterAssignee option').filter(function() { return this.value === v; });
+        return $opt.length ? $opt.first().text() : v;
+    }
+    /** Rebuild the options for the department's users, keeping the selection when it is one of them. */
+    function refreshFilterAssigneeSelect(users) {
+        var $el = $('#filterAssignee');
+        if (!$el.length) return;
+        var want = getFilterAssigneeValue();
+        $el.find('option').not('[value=""]').remove();
+        (users || []).forEach(function(u) {
+            if (u == null || u.id == null) return;
+            var id = String(u.id);
+            $el.append(new Option(String(u.user_name || u.user_id || id), id));
+        });
+        setFilterAssigneeValue(want);
+    }
+
+    /** Switches of 高度なフィルター and their default (unhighlighted) state. */
+    var GANTT_FILTER_SWITCH_DEFAULTS = {
+        filterMyProjects: false,
+        filterNoDates: false,
+        showInactiveSwitch: false
+    };
+    /** Highlight the 高度なフィルター fields that have a value, and switches not in their default state. */
+    function syncGanttFilterActiveHighlights() {
+        var $form = $('#projectFilterForm');
+        if (!$form.length) return;
+        var activeCols = [];
+        $form.find('select, input').not('[type=checkbox], [type=radio], [type=hidden]').each(function() {
+            var v = $(this).val();
+            var active = Array.isArray(v) ? v.length > 0 : String(v == null ? '' : v).trim() !== '';
+            $(this).toggleClass('pl-filter-active', active);
+            var $s2 = $(this).next('.select2-container');
+            if ($s2.length) $s2.toggleClass('pl-filter-active', active);
+            var col = $(this).closest('[class*="col-"]')[0];
+            if (active && col) activeCols.push(col);
+        });
+        $form.find('[class*="col-"]').each(function() {
+            $(this).toggleClass('pl-filter-col-active', activeCols.indexOf(this) !== -1);
+        });
+        Object.keys(GANTT_FILTER_SWITCH_DEFAULTS).forEach(function(id) {
+            var el = document.getElementById(id);
+            if (!el) return;
+            $(el).closest('.form-check').toggleClass('pl-filter-col-active', !!el.checked !== GANTT_FILTER_SWITCH_DEFAULTS[id]);
+        });
+    }
+    $(document).on('change input', '#projectFilterForm', function() {
+        syncGanttFilterActiveHighlights();
+    });
+
     function bindFilterCompanySelect2Events($el) {
         $el.off('select2:open.filterCompany').on('select2:open.filterCompany', function() {
             setTimeout(function() {
@@ -783,31 +880,32 @@ $(document).ready(function() {
         } catch (e) {
             filters = {};
         }
-        const allowedCompanyKeys = { daito: true, token: true, other: true };
-        const rawSaved = parseFilterCompanyValue(filters.filterCompany);
-        const saved = rawSaved.filter(function(key) { return allowedCompanyKeys[key]; });
-        if (rawSaved.length !== saved.length) {
-            try {
-                const stored = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
-                stored.filterCompany = saved;
-                localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(stored));
-            } catch (e) {}
-        }
+        // 大東 / 東建 / 他社, or any typed text (matched as part of the company name)
+        const saved = parseFilterCompanyValue(filters.filterCompany);
         if ($el.data('select2')) {
             $el.select2('destroy');
         }
         $el.empty();
-        $el.append(new Option('大東', 'daito', false, saved.indexOf('daito') !== -1));
-        $el.append(new Option('東建', 'token', false, saved.indexOf('token') !== -1));
-        $el.append(new Option('他社', 'other', false, saved.indexOf('other') !== -1));
+        $el.append(new Option('大東', 'daito', false, false));
+        $el.append(new Option('東建', 'token', false, false));
+        $el.append(new Option('他社', 'other', false, false));
+        // A comma separates values (the API joins them with commas), so it cannot be part of one.
         $el.select2({
             placeholder: ganttTranslateText('会社'),
             allowClear: true,
             width: '100%',
             dropdownAutoWidth: true,
             closeOnSelect: false,
-            minimumResultsForSearch: 0
+            minimumResultsForSearch: 0,
+            tags: true,
+            tokenSeparators: [',', '、'],
+            createTag: function(params) {
+                var term = String(params.term || '').replace(/[,、]/g, '').trim().slice(0, 100);
+                if (!term) return null;
+                return { id: term, text: term, newTag: true };
+            }
         });
+        setFilterCompanySelectValue(saved);
         bindFilterCompanySelect2Events($el);
         bindGanttFilterSelect2PersistEvents($el);
         ganttFilterPersistSuspended = true;
@@ -957,13 +1055,15 @@ $(document).ready(function() {
         }
         return {
             priority: filters.filterPriority || '',
-            progress: filters.filterProgress || '',
+            progress: ganttEnergyTabFilterValue(filters.filterProgress || '', ''),
             timeLeft: filters.filterTimeLeft || '',
             projectOrderType: filters.filterProjectOrderType || '',
-            teamIds: parseFilterTeamValue(filters.filterTeam),
+            teamIds: ganttEnergyTabFilterValue(parseFilterTeamValue(filters.filterTeam), []),
             companyKeys: parseFilterCompanyValue(filters.filterCompany),
-            tantou: filters.filterTantou || '',
-            deliveryStatus: filters.filterDeliveryStatus || '',
+            tantou: ganttEnergyTabFilterValue(filters.filterTantou || '', ''),
+            // only while that user is one of the selected department's users
+            assignee: hasFilterAssigneeOption(filters.filterAssignee) ? String(filters.filterAssignee) : '',
+            deliveryStatus: ganttEnergyTabFilterValue(filters.filterDeliveryStatus || '', ''),
             yoteiMonth: filters.filterYoteiMonth || '',
             noDates: filters.filterNoDates == 1,
             keyword: filters.filterKeyword || '',
@@ -1002,6 +1102,7 @@ $(document).ready(function() {
         setOrDelete('filterTeam', formatFilterTeamForApi(filters.filterTeam));
         setOrDelete('filterCompany', formatFilterCompanyForApi(filters.filterCompany));
         setOrDelete('filterTantou', filters.filterTantou);
+        setOrDelete('filterAssignee', filters.filterAssignee);
         setOrDelete('filterNoDates', filters.filterNoDates ? 1 : '');
         setOrDelete('showInactive', filters.showInactive ? 1 : '');
         setOrDelete('my_projects', filters.myProjects ? 1 : '');
@@ -1036,6 +1137,7 @@ $(document).ready(function() {
     }
 
     function renderActiveFilters() {
+        syncGanttFilterActiveHighlights();
         const filters = getFiltersFromLocalStorage();
         const badges = [];
         // Lấy status hiện tại từ Vue (ganttApp) — multi-select
@@ -1056,6 +1158,7 @@ $(document).ready(function() {
             (!filters.teamIds || filters.teamIds.length === 0) &&
             (!filters.companyKeys || filters.companyKeys.length === 0) &&
             (!filters.tantou || filters.tantou.trim() === '') &&
+            !filters.assignee &&
             (!filters.deliveryStatus || filters.deliveryStatus.trim() === '') &&
             (!filters.yoteiMonth || filters.yoteiMonth.trim() === '') &&
             !filters.noDates &&
@@ -1107,16 +1210,14 @@ $(document).ready(function() {
                 badges.push(`<span class="badge bg-label-info me-1">チーム: ${teamNames}</span>`);
             }
             if (filters.companyKeys && filters.companyKeys.length > 0) {
-                const companyLabels = filters.companyKeys.map(function(key) {
-                    if (key === 'daito') return '大東';
-                    if (key === 'token') return '東建';
-                    if (key === 'other') return '他社';
-                    return key;
-                }).join(', ');
-                badges.push(`<span class="badge bg-label-info me-1">会社: ${companyLabels}</span>`);
+                const companyLabels = filters.companyKeys.map(getFilterCompanyLabel).join(', ');
+                badges.push(`<span class="badge bg-label-info me-1">会社: ${escapeHtmlForGanttFilter(companyLabels)}</span>`);
             }
             if (filters.tantou && filters.tantou.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1">担当: ${filters.tantou}</span>`);
+            }
+            if (filters.assignee) {
+                badges.push(`<span class="badge bg-label-info me-1">担当者: ${escapeHtmlForGanttFilter(getFilterAssigneeLabel(filters.assignee))}</span>`);
             }
             if (filters.deliveryStatus && filters.deliveryStatus.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1">納品状況: ${filters.deliveryStatus}</span>`);
@@ -1191,6 +1292,7 @@ $(document).ready(function() {
         if (params.has('filterTeam')) merged.filterTeam = parseFilterTeamValue(params.get('filterTeam') || '');
         if (params.has('filterCompany')) merged.filterCompany = parseFilterCompanyValue(params.get('filterCompany') || '');
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
+        if (params.has('filterAssignee')) merged.filterAssignee = params.get('filterAssignee') || '';
         if (params.has('filterNoDates')) merged.filterNoDates = getBool('filterNoDates');
         if (params.has('showInactive')) merged.showInactive = getBool('showInactive');
         if (params.has('my_projects')) merged.myProjects = getBool('my_projects');
@@ -1300,6 +1402,11 @@ $(document).ready(function() {
         computed: {
             createUrl() {
                 return this.selectedDepartment ? `create.php?department_id=${this.selectedDepartment.id}` : 'create.php';
+            },
+            /** 省エネ tab: 高度なフィルター hides the filters that department does not use. */
+            isEnergyDepartmentTab() {
+                const name = this.selectedDepartment && this.selectedDepartment.name ? String(this.selectedDepartment.name) : '';
+                return name.trim().indexOf('省エネ') !== -1;
             }
         },
         async mounted() {
@@ -1461,6 +1568,29 @@ $(document).ready(function() {
                 }
             },
             
+            /** Users of the selected department: the options of the 担当者 filter. */
+            async loadAssigneeUsers() {
+                if (!this.selectedDepartment) {
+                    refreshFilterAssigneeSelect([]);
+                    return;
+                }
+                try {
+                    const response = await $.ajax({
+                        url: '/api/index.php',
+                        type: 'GET',
+                        data: {
+                            model: 'department',
+                            method: 'get_users',
+                            department_id: this.selectedDepartment.id
+                        }
+                    });
+                    refreshFilterAssigneeSelect(Array.isArray(response) ? response : []);
+                } catch (error) {
+                    console.error('Error loading users:', error);
+                    refreshFilterAssigneeSelect([]);
+                }
+            },
+
             hasPermission(permission) {
                 return this.userPermissions[permission] == 1 || false;
             },
@@ -1494,8 +1624,8 @@ $(document).ready(function() {
                 // Save selected department to localStorage
                 this.saveSelectedDepartmentToLocalStorage(department);
                 
-                // Load teams for the selected department
-                await this.loadTeams();
+                // Load teams and users (担当者 filter) for the selected department
+                await Promise.all([this.loadTeams(), this.loadAssigneeUsers()]);
                 restoreGanttFiltersFromStorage();
                 this.loadProjects();
             },
@@ -1532,13 +1662,14 @@ $(document).ready(function() {
                 try {
                     // Lấy filter từ form (高度なフィルター)
                     const filterPriority = $('#filterPriority').val();
-                    const filterProgress = $('#filterProgress').val();
+                    const filterProgress = ganttEnergyTabFilterValue($('#filterProgress').val(), '');
                     const filterTimeLeft = $('#filterTimeLeft').val();
                     const filterProjectOrderType = $('#filterProjectOrderType').val();
-                    const filterTeam = formatFilterTeamForApi(getFilterTeamValue());
+                    const filterTeam = ganttEnergyTabFilterValue(formatFilterTeamForApi(getFilterTeamValue()), '');
                     const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
-                    const filterTantou = $('#filterTantou').val();
-                    const filterDeliveryStatus = $('#filterDeliveryStatus').val();
+                    const filterTantou = ganttEnergyTabFilterValue($('#filterTantou').val(), '');
+                    const filterAssignee = getFilterAssigneeValue();
+                    const filterDeliveryStatus = ganttEnergyTabFilterValue($('#filterDeliveryStatus').val(), '');
                     const filterYoteiMonth = $('#filterYoteiMonth').val();
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
@@ -1585,6 +1716,7 @@ $(document).ready(function() {
                         filterTeam,
                         filterCompany,
                         filterTantou,
+                        filterAssignee,
                         filterDeliveryStatus,
                         filterYoteiMonth,
                         filterNoDates,
