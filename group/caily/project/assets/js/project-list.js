@@ -440,6 +440,13 @@ var projectTable;
     function isProjectColumnUnavailable(columnKey) {
         return isColumnHiddenForCailyBranch(columnKey) || isColumnHiddenForEnergyDepartment(columnKey);
     }
+    /**
+     * 高度なフィルター fields the 省エネ tab hides (進捗率, 納品状況, チーム, 担当): their saved values are
+     * kept for the other departments but not applied, nor shown as badges, on that tab.
+     */
+    function energyTabFilterValue(value, emptyValue) {
+        return isEnergyDepartmentSelectedForStatus() ? emptyValue : value;
+    }
     function isEnergyDepartmentProjectRow(row) {
         var name = row && row.department_name != null ? String(row.department_name) : '';
         if (name.trim() === '') {
@@ -2332,11 +2339,25 @@ var projectTable;
             { value: 'estimate_date', label: '見積日', directorOnly: true },
             { value: 'invoice_date', label: '請求日', directorOnly: true }
         ];
+        if (isEnergyDepartmentSelectedForStatus()) {
+            list = list.concat(ENERGY_TASK_DUE_DATE_FILTER_FIELDS);
+        }
         return list.filter(function(f) {
             if (f.needsEndDatePerm && !canViewEnd) return false;
             if (f.directorOnly && !canViewDirector) return false;
             return true;
         });
+    }
+
+    /**
+     * 省エネ tab: 日付検索 by the 期限 of the department's default tasks
+     * (server whitelist: Project::ENERGY_TASK_DUE_DATE_FILTER_TITLES).
+     */
+    var ENERGY_TASK_DUE_DATE_FILTER_FIELDS = ['計算確認', '申請代行', '計算書作成'].map(function(title) {
+        return { value: 'task_due:' + title, label: '「' + title + '」の期限' };
+    });
+    function isEnergyTaskDueDateFilterField(field) {
+        return String(field || '').indexOf('task_due:') === 0;
     }
 
     /** Convert legacy YYYY-MM month filter into inclusive date range. */
@@ -2390,6 +2411,9 @@ var projectTable;
         }
         if (val.indexOf('cf:') === 0) {
             try { return decodeURIComponent(val.substring(3)); } catch (e) { return val.substring(3); }
+        }
+        if (isEnergyTaskDueDateFilterField(val)) {
+            return '「' + val.substring('task_due:'.length) + '」の期限';
         }
         return val;
     }
@@ -5505,19 +5529,19 @@ var projectTable;
             }
         }
         return {
-            deliveryStatus: filters.filterDeliveryStatus || '',
+            deliveryStatus: energyTabFilterValue(filters.filterDeliveryStatus || '', ''),
             yoteiMonth: filters.filterYoteiMonth || '',
             businessDocumentStatus: filters.filterBusinessDocumentStatus || '',
             priority: filters.filterPriority || '',
-            progress: filters.filterProgress || '',
+            progress: energyTabFilterValue(filters.filterProgress || '', ''),
             timeLeft: filters.filterTimeLeft || '',
-            dateField: dateField,
+            dateField: isEnergyTaskDueDateFilterField(dateField) && !isEnergyDepartmentSelectedForStatus() ? '' : dateField,
             dateFrom: dateFrom,
             dateTo: dateTo,
             projectOrderType: filters.filterProjectOrderType || '',
-            teamIds: parseFilterTeamValue(filters.filterTeam),
+            teamIds: energyTabFilterValue(parseFilterTeamValue(filters.filterTeam), []),
             companyKeys: parseFilterCompanyValue(filters.filterCompany),
-            tantou: filters.filterTantou || '',
+            tantou: energyTabFilterValue(filters.filterTantou || '', ''),
             noDates: filters.filterNoDates == 1,
             keyword: normalizeFilterKeyword(filters.filterKeyword),
             showInactive: filters.showInactive == 1,
@@ -7164,18 +7188,22 @@ var projectTable;
                     lastRequestedFilterSignature = getProjectFilterFormSignature();
                     // Thu thập filter từ form
                     const filterBusinessDocumentStatus = canViewProjectDirectorColumns() ? $('#filterBusinessDocumentStatus').val() : '';
-                    const filterDeliveryStatus = $('#filterDeliveryStatus').val();
+                    const filterDeliveryStatus = energyTabFilterValue($('#filterDeliveryStatus').val(), '');
                     const filterYoteiMonth = $('#filterYoteiMonth').val();
                     const filterPriority = $('#filterPriority').val();
-                    const filterProgress = $('#filterProgress').val();
+                    const filterProgress = energyTabFilterValue($('#filterProgress').val(), '');
                     const filterTimeLeft = $('#filterTimeLeft').val();
-                    const filterDateField = $('#filterDateField').val() || '';
+                    // a task 期限 field only exists on the 省エネ tab
+                    let filterDateField = $('#filterDateField').val() || '';
+                    if (isEnergyTaskDueDateFilterField(filterDateField) && !isEnergyDepartmentSelectedForStatus()) {
+                        filterDateField = '';
+                    }
                     const filterDateFrom = normalizeFilterYmd($('#filterDateFrom').val()) || '';
                     const filterDateTo = normalizeFilterYmd($('#filterDateTo').val()) || '';
                     const filterProjectOrderType = $('#filterProjectOrderType').val();
-                    const filterTeam = formatFilterTeamForApi(getFilterTeamValue());
+                    const filterTeam = energyTabFilterValue(formatFilterTeamForApi(getFilterTeamValue()), '');
                     const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
-                    const filterTantou = $('#filterTantou').val();
+                    const filterTantou = energyTabFilterValue($('#filterTantou').val(), '');
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const filterKeyword = normalizeFilterKeyword($('#filterKeyword').val());
                     const filterProjectId = $('#filterProjectId').val();
@@ -9631,6 +9659,11 @@ var projectTable;
                 },
                 isCailyBranchUser() {
                     return typeof window !== 'undefined' && window.IS_CAILY_BRANCH_USER === true;
+                },
+                /** 省エネ tab: 高度なフィルター hides the filters that department does not use. */
+                isEnergyDepartmentTab() {
+                    void this.selectedDepartment;
+                    return isEnergyDepartmentSelectedForStatus();
                 },
                 visibleStatuses() {
                     // Depend on selectedDepartment so filter buttons refresh when dept changes

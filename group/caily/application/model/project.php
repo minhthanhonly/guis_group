@@ -443,6 +443,21 @@ class Project extends ApplicationModel {
             return;
         }
 
+        // 省エネ: 期限 (due_date) of a default task, e.g. task_due:計算確認
+        if (strpos($field, 'task_due:') === 0) {
+            $title = substr($field, strlen('task_due:'));
+            if (!in_array($title, self::ENERGY_TASK_DUE_DATE_FILTER_TITLES, true)) {
+                return;
+            }
+            $titleEsc = $this->escape($title);
+            $fromEsc = $this->escape($from);
+            $toEsc = $this->escape($to);
+            $whereArr[] = "EXISTS (SELECT 1 FROM " . DB_PREFIX . "tasks tdf"
+                . " WHERE tdf.project_id = p.id AND tdf.title = '{$titleEsc}'"
+                . " AND DATE(tdf.due_date) BETWEEN '{$fromEsc}' AND '{$toEsc}')";
+            return;
+        }
+
         if (strpos($field, 'cf:') !== 0) {
             return;
         }
@@ -6751,6 +6766,8 @@ class Project extends ApplicationModel {
     /** 種別 of the single 見積 / 請求 value stored before 決済明細 (通常部署). */
     const PAYMENT_ITEM_DEFAULT_LEGACY_TYPE = '設計費';
     const PAYMENT_ITEM_MAX_LINES = 200;
+    /** 省エネ 日付検索: default tasks whose 期限 can be searched (filterDateField = task_due:<title>). */
+    const ENERGY_TASK_DUE_DATE_FILTER_TITLES = ['計算確認', '申請代行', '計算書作成'];
 
     private function paymentItemsTable() {
         return DB_PREFIX . 'project_payment_items';

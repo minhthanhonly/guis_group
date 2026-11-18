@@ -87,7 +87,7 @@ if($_SESSION['show_project'] == 0){
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="優先度">優先度</label>
                     <select class="form-select form-select-sm" id="filterPriority"></select>
                     </div>
-                    <div class="col-md-3 col-6">
+                    <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="進捗率">進捗率</label>
                     <select class="form-select form-select-sm" id="filterProgress">
                         <option value="" data-i18n="すべて">すべて</option>
@@ -119,7 +119,7 @@ if($_SESSION['show_project'] == 0){
                         <option value="other">その他</option>
                     </select>
                     </div>
-                    <div class="col-md-3 col-6">
+                    <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="納品状況">納品状況</label>
                     <select class="form-select form-select-sm" id="filterDeliveryStatus">
                         <option value="" data-i18n="すべて">すべて</option>
@@ -127,7 +127,7 @@ if($_SESSION['show_project'] == 0){
                         <option value="未納品" data-i18n="未納品">未納品</option>
                     </select>
                     </div>
-                    <div class="col-md-3 col-6">
+                    <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="チーム">チーム</label>
                     <select class="form-select form-select-sm" id="filterTeam" multiple>
                     </select>
@@ -140,7 +140,7 @@ if($_SESSION['show_project'] == 0){
                         <option value="other">他社</option>
                     </select>
                     </div>
-                    <div class="col-md-3 col-6">
+                    <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="担当">担当</label>
                     <select class="form-select form-select-sm" id="filterTantou">
                         <option value="">すべて</option>
