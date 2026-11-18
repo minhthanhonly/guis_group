@@ -1956,6 +1956,10 @@ class Project extends ApplicationModel {
             }
             // Filter by 担当者: the user is a member or manager of the project (user id)
             $this->appendAssigneeFilterWhere($whereArr, $_GET['filterAssignee'] ?? '');
+            // 省エネ 日付検索: the gantt only offers the 期限 of the default tasks (task_due:<title>)
+            if (strpos(trim((string)($_GET['filterDateField'] ?? '')), 'task_due:') === 0) {
+                $this->appendProjectDateFieldRangeFilter($whereArr, $_GET);
+            }
             // Filter projects without start_date or end_date
             if (isset($_GET['filterNoDates']) && $_GET['filterNoDates'] === '1') {
                 $whereArr[] = "(p.start_date IS NULL OR p.end_date IS NULL)";

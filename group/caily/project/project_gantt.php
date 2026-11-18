@@ -123,6 +123,20 @@ if($_SESSION['show_project'] == 0){
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="予定工程">予定工程</label>
               <input type="text" class="form-control form-control-sm" id="filterYoteiMonth" autocomplete="off">
             </div>
+            <div class="col-md-6 col-12" v-show="isEnergyDepartmentTab">
+              <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="日付検索">日付検索</label>
+              <div class="input-group input-group-sm">
+                <select class="form-select form-select-sm" id="filterDateField" style="max-width: 12rem;">
+                  <option value="" data-i18n="日付項目">日付項目</option>
+                  <option value="task_due:計算確認">「計算確認」の期限</option>
+                  <option value="task_due:申請代行">「申請代行」の期限</option>
+                  <option value="task_due:計算書作成">「計算書作成」の期限</option>
+                </select>
+                <input type="text" class="form-control form-control-sm" id="filterDateFrom" autocomplete="off" placeholder="YYYY-MM-DD">
+                <span class="input-group-text">～</span>
+                <input type="text" class="form-control form-control-sm" id="filterDateTo" autocomplete="off" placeholder="YYYY-MM-DD">
+              </div>
+            </div>
             <div class="col-md-4 col-12">
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="キーワード">キーワード</label>
               <input type="text" class="form-control form-control-sm" id="filterKeyword" placeholder="検索...">

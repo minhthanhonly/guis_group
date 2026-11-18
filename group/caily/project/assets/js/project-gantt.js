@@ -343,6 +343,9 @@ $(document).ready(function() {
         { key: 'filterProjectOrderType', labelKey: '受注形態', group: 'project', defaultValue: '' },
         { key: 'filterDeliveryStatus', labelKey: '納品状況', group: 'project', defaultValue: '' },
         { key: 'filterYoteiMonth', labelKey: '予定工程', group: 'project', defaultValue: '' },
+        { key: 'filterDateField', labelKey: '日付検索（項目）', group: 'project', defaultValue: '' },
+        { key: 'filterDateFrom', labelKey: '日付検索（開始）', group: 'project', defaultValue: '' },
+        { key: 'filterDateTo', labelKey: '日付検索（終了）', group: 'project', defaultValue: '' },
         { key: 'filterTantou', labelKey: '担当', group: 'project', defaultValue: '' },
         { key: 'filterNoDates', labelKey: '開始日・期限日未設定', group: 'project', defaultValue: 0 },
         { key: 'filterKeyword', labelKey: 'キーワード', group: 'project', defaultValue: '' },
@@ -499,6 +502,9 @@ $(document).ready(function() {
             filterProjectOrderType: $('#filterProjectOrderType').val() || '',
             filterDeliveryStatus: $('#filterDeliveryStatus').val() || '',
             filterYoteiMonth: $('#filterYoteiMonth').val() || '',
+            filterDateField: $('#filterDateField').val() || '',
+            filterDateFrom: normalizeGanttFilterYmd($('#filterDateFrom').val()),
+            filterDateTo: normalizeGanttFilterYmd($('#filterDateTo').val()),
             filterTeam: getFilterTeamValue(),
             filterCompany: getFilterCompanyValue(),
             filterTantou: $('#filterTantou').val() || '',
@@ -531,6 +537,13 @@ $(document).ready(function() {
         if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
         if (filters.filterDeliveryStatus !== undefined) $('#filterDeliveryStatus').val(filters.filterDeliveryStatus);
         if (filters.filterYoteiMonth !== undefined) applyGanttMonthFilterInputToUi('#filterYoteiMonth', filters.filterYoteiMonth);
+        if (filters.filterDateField !== undefined) {
+            var dateField = String(filters.filterDateField || '');
+            var hasDateFieldOption = $('#filterDateField option').filter(function() { return this.value === dateField; }).length > 0;
+            $('#filterDateField').val(hasDateFieldOption ? dateField : '');
+        }
+        if (filters.filterDateFrom !== undefined) applyGanttMonthFilterInputToUi('#filterDateFrom', normalizeGanttFilterYmd(filters.filterDateFrom));
+        if (filters.filterDateTo !== undefined) applyGanttMonthFilterInputToUi('#filterDateTo', normalizeGanttFilterYmd(filters.filterDateTo));
         if (filters.filterCompany !== undefined) {
             setFilterCompanySelectValue(filters.filterCompany);
             if (!ganttFilterPersistSuspended) {
@@ -791,6 +804,39 @@ $(document).ready(function() {
      */
     function ganttEnergyTabFilterValue(value, emptyValue) {
         return isGanttEnergyDepartment() ? emptyValue : value;
+    }
+
+    /**
+     * 省エネ tab only: 日付検索 by the 期限 of a default task (field = task_due:<title>, server whitelist
+     * Project::ENERGY_TASK_DUE_DATE_FILTER_TITLES). Kept but not applied on the other departments.
+     */
+    function normalizeGanttFilterYmd(value) {
+        var s = String(value || '').trim();
+        return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : '';
+    }
+    function getGanttDateRangeFilter(filters) {
+        var field = String(filters.filterDateField || '').trim();
+        var from = normalizeGanttFilterYmd(filters.filterDateFrom);
+        var to = normalizeGanttFilterYmd(filters.filterDateTo);
+        if (!isGanttEnergyDepartment() || field.indexOf('task_due:') !== 0 || (!from && !to)) {
+            return { field: '', from: '', to: '' };
+        }
+        return { field: field, from: from, to: to };
+    }
+    function getGanttDateRangeFilterLabel(range) {
+        var from = range.from || '…';
+        var to = range.to || '…';
+        return '「' + range.field.substring('task_due:'.length) + '」の期限: '
+            + (from === to ? from : from + ' ～ ' + to);
+    }
+    function initGanttFilterDateRangePickers() {
+        if (!window.flatpickr) return;
+        var locale = (typeof getProjectFlatpickrLocale === 'function') ? getProjectFlatpickrLocale() : 'ja';
+        ['#filterDateFrom', '#filterDateTo'].forEach(function(sel) {
+            var $el = $(sel);
+            if (!$el.length || $el[0]._flatpickr) return;
+            $el.flatpickr({ dateFormat: 'Y-m-d', allowInput: false, locale: locale });
+        });
     }
 
     /** 担当者 filter (member or manager of the project): options = the department's users. */
@@ -1065,6 +1111,7 @@ $(document).ready(function() {
             assignee: hasFilterAssigneeOption(filters.filterAssignee) ? String(filters.filterAssignee) : '',
             deliveryStatus: ganttEnergyTabFilterValue(filters.filterDeliveryStatus || '', ''),
             yoteiMonth: filters.filterYoteiMonth || '',
+            dateRange: getGanttDateRangeFilter(filters),
             noDates: filters.filterNoDates == 1,
             keyword: filters.filterKeyword || '',
             projectId: filters.filterProjectId || '',
@@ -1099,6 +1146,9 @@ $(document).ready(function() {
         setOrDelete('filterProjectOrderType', filters.filterProjectOrderType);
         setOrDelete('filterDeliveryStatus', filters.filterDeliveryStatus);
         setOrDelete('filterYoteiMonth', filters.filterYoteiMonth);
+        setOrDelete('filterDateField', filters.filterDateField);
+        setOrDelete('filterDateFrom', filters.filterDateFrom);
+        setOrDelete('filterDateTo', filters.filterDateTo);
         setOrDelete('filterTeam', formatFilterTeamForApi(filters.filterTeam));
         setOrDelete('filterCompany', formatFilterCompanyForApi(filters.filterCompany));
         setOrDelete('filterTantou', filters.filterTantou);
@@ -1161,6 +1211,7 @@ $(document).ready(function() {
             !filters.assignee &&
             (!filters.deliveryStatus || filters.deliveryStatus.trim() === '') &&
             (!filters.yoteiMonth || filters.yoteiMonth.trim() === '') &&
+            !filters.dateRange.field &&
             !filters.noDates &&
             !filters.showInactive &&
             !filters.myProjects &&
@@ -1224,6 +1275,9 @@ $(document).ready(function() {
             }
             if (filters.yoteiMonth && filters.yoteiMonth.trim() !== '') {
                 badges.push(`<span class="badge bg-label-info me-1">予定工程: ${filters.yoteiMonth}</span>`);
+            }
+            if (filters.dateRange.field) {
+                badges.push(`<span class="badge bg-label-info me-1">日付検索: ${escapeHtmlForGanttFilter(getGanttDateRangeFilterLabel(filters.dateRange))}</span>`);
             }
             if (filters.progress && filters.progress.trim() !== '') {
                 let label = '';
@@ -1289,6 +1343,9 @@ $(document).ready(function() {
         if (params.has('filterProjectOrderType')) merged.filterProjectOrderType = params.get('filterProjectOrderType') || '';
         if (params.has('filterDeliveryStatus')) merged.filterDeliveryStatus = params.get('filterDeliveryStatus') || '';
         if (params.has('filterYoteiMonth')) merged.filterYoteiMonth = params.get('filterYoteiMonth') || '';
+        if (params.has('filterDateField')) merged.filterDateField = params.get('filterDateField') || '';
+        if (params.has('filterDateFrom')) merged.filterDateFrom = normalizeGanttFilterYmd(params.get('filterDateFrom'));
+        if (params.has('filterDateTo')) merged.filterDateTo = normalizeGanttFilterYmd(params.get('filterDateTo'));
         if (params.has('filterTeam')) merged.filterTeam = parseFilterTeamValue(params.get('filterTeam') || '');
         if (params.has('filterCompany')) merged.filterCompany = parseFilterCompanyValue(params.get('filterCompany') || '');
         if (params.has('filterTantou')) merged.filterTantou = params.get('filterTantou') || '';
@@ -1410,6 +1467,10 @@ $(document).ready(function() {
             }
         },
         async mounted() {
+            // The filter form is part of the Vue template: mounting replaced its inputs, so the
+            // date pickers are attached here (filter values are restored by viewProjects).
+            initGanttFilterYoteiMonthPicker();
+            initGanttFilterDateRangePickers();
             await this.loadDepartments();
             // Initialize Gantt after Vue has rendered
             this.$nextTick(() => {
@@ -1671,6 +1732,11 @@ $(document).ready(function() {
                     const filterAssignee = getFilterAssigneeValue();
                     const filterDeliveryStatus = ganttEnergyTabFilterValue($('#filterDeliveryStatus').val(), '');
                     const filterYoteiMonth = $('#filterYoteiMonth').val();
+                    const dateRange = getGanttDateRangeFilter({
+                        filterDateField: $('#filterDateField').val(),
+                        filterDateFrom: $('#filterDateFrom').val(),
+                        filterDateTo: $('#filterDateTo').val()
+                    });
                     const filterNoDates = $('#filterNoDates').is(':checked') ? 1 : 0;
                     const showInactive = $('#showInactiveSwitch').is(':checked') ? 1 : 0;
                     const myProjects = $('#filterMyProjects').is(':checked') ? 1 : 0;
@@ -1719,6 +1785,9 @@ $(document).ready(function() {
                         filterAssignee,
                         filterDeliveryStatus,
                         filterYoteiMonth,
+                        filterDateField: dateRange.field,
+                        filterDateFrom: dateRange.from,
+                        filterDateTo: dateRange.to,
                         filterNoDates,
                         showInactive,
                         my_projects: myProjects,
