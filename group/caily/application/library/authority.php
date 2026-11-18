@@ -85,10 +85,72 @@ class Authority
 			return;
 		}
 		if (basename($_SERVER['SCRIPT_NAME']) != 'login.php') {
-			$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
+			// Only a page the user opened is worth returning to after login. Background requests
+			// (notification polling, API calls) are redirected too, but must not replace it.
+			if (self::isPageNavigation($_SERVER)) {
+				$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
+			}
 			header('Location:' . ROOT . 'login.php');
 			exit();
 		}
+	}
+
+	/** Paths that answer scripts, never the page a user wants to come back to. */
+	private static function isBackgroundPath($uri)
+	{
+		$path = (string) parse_url((string) $uri, PHP_URL_PATH);
+		$root = defined('ROOT') ? ROOT : '/';
+		foreach (array('api/', 'ai/') as $dir) {
+			if (stripos($path, $root . $dir) === 0) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * True when the request is the user opening a page (address bar, link, form), false for
+	 * fetch/XHR and sub-resources. Browsers that send no fetch metadata are judged by the path alone.
+	 *
+	 * @param array $server $_SERVER
+	 */
+	public static function isPageNavigation(array $server)
+	{
+		if (self::isBackgroundPath(isset($server['REQUEST_URI']) ? $server['REQUEST_URI'] : '')) {
+			return false;
+		}
+		if (isset($server['HTTP_X_REQUESTED_WITH']) && strtolower($server['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') {
+			return false;
+		}
+		if (isset($server['HTTP_SEC_FETCH_MODE']) && $server['HTTP_SEC_FETCH_MODE'] !== 'navigate') {
+			return false;
+		}
+		if (isset($server['HTTP_SEC_FETCH_DEST']) && $server['HTTP_SEC_FETCH_DEST'] !== 'document') {
+			return false;
+		}
+		return true;
+	}
+
+	/**
+	 * The address to go to after login, or null when the remembered one must not be used:
+	 * not a path on this site, a background endpoint, or the login page itself.
+	 * Also covers sessions that stored a bad address before isPageNavigation() existed.
+	 */
+	public static function safeReferer($referer)
+	{
+		if (!is_string($referer) || $referer === '' || $referer[0] !== '/') {
+			return null;
+		}
+		if (strpos($referer, '//') === 0 || strpbrk($referer, "\\\r\n") !== false) {
+			return null;
+		}
+		if (self::isBackgroundPath($referer)) {
+			return null;
+		}
+		if (basename((string) parse_url($referer, PHP_URL_PATH)) === 'login.php') {
+			return null;
+		}
+		return $referer;
 	}
 
 	function authorize()
@@ -195,12 +257,9 @@ class Authority
 				exit();
 			}
 
-			if (isset($_SESSION['referer'])) {
-				header('Location: ' . $_SESSION['referer']);
-				unset($_SESSION['referer']);
-			} else {
-				header('Location: index.php');
-			}
+			$target = isset($_SESSION['referer']) ? self::safeReferer($_SESSION['referer']) : null;
+			unset($_SESSION['referer']);
+			header('Location: ' . ($target !== null ? $target : 'index.php'));
 			exit();
 		} else {
 			return $error;

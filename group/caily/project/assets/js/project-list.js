@@ -5674,6 +5674,37 @@ var projectTable;
         localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(merged));
     }
 
+    /**
+     * The AI assistant opens this page with ?ai=1 and a complete set of filters in the address
+     * (AiTools::page_show_projects). They are applied once, as if the user had set them by hand:
+     * the department's own remembered filters are swapped in first, so the other departments keep
+     * theirs, then the address values are laid over them. Without the marker nothing changes.
+     */
+    function applyAssistantFiltersFromUrl() {
+        var params;
+        try {
+            params = new URLSearchParams(window.location.search || '');
+        } catch (e) {
+            return;
+        }
+        if (params.get('ai') !== '1') return;
+        try {
+            var depId = parseInt(params.get('department_id'), 10);
+            if (depId > 0) {
+                switchProjectListFiltersToDepartment(depId);
+            }
+            applyFiltersFromUrlIfAny();
+        } catch (e) {
+            console.warn('Failed to apply assistant filters from URL', e);
+        }
+        params.delete('ai');
+        if (window.history && window.history.replaceState) {
+            var rest = params.toString();
+            window.history.replaceState(window.history.state, '', window.location.pathname + (rest ? '?' + rest : ''));
+        }
+    }
+    applyAssistantFiltersFromUrl();
+
     function loadFiltersFromLocalStorage() {
         let filters = {};
         try {

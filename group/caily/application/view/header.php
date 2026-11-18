@@ -60,7 +60,7 @@ app_print_stylesheet(
     ['blocking' => !$deferTaskTimerCss]
 );
 app_print_stylesheet(
-    $root . 'assets/css/app-chat.css?v=' . CACHE_VERSION,
+    $root . 'assets/css/ai-chat-bar.css?v=' . CACHE_VERSION,
     ['skip' => $skipChatCss]
 );
 ?>

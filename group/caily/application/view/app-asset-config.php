@@ -36,8 +36,9 @@ if (!function_exists('app_resolve_asset_context')) {
             'needs_flatpickr' => !$isLogin && in_array($directory, $tableDirs, true) && !$isProjectList,
             'needs_quill' => !$isLogin && !$deferQuill,
             'needs_sortable' => in_array($directory, ['project', 'parent_project'], true) && !$deferSortable,
-            'needs_chat' => !$isLogin && !$isProjectList,
-            'needs_chat_css' => !$isLogin && !$isProjectList,
+            // AI assistant bar (ai-chat-bar.js / .css): every signed-in page
+            'needs_chat' => !$isLogin,
+            'needs_chat_css' => !$isLogin,
             'needs_customer_modal' => !$isLogin && !empty($_SESSION['show_project']) && !$isProjectList,
             'needs_form_validation' => true,
             'needs_algolia' => !$isLogin,

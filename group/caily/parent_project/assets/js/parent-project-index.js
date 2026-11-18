@@ -29,7 +29,10 @@ createApp({
                 { value: '省エネ', label: '省エネ', color: 'lime' },
                 { value: 'その他', label: 'その他', color: 'dark' }
             ],
+            // Tooltip of the search box: what it searches (ParentProject::list).
+            searchBoxHint: 'お施主様名・会社名・支店名・担当様・工事番号・管理番号・建物規模・市区町村・種類1・住宅種類・構造事務所・特徴で検索できます。スペース、「,」または「、」で区切ると、すべての語を含む建物を表示します。',
             statusFilter: 'all',
+
             favoritesOnly: false,
             currentPage: 1,
             pageSize: 50,
@@ -261,6 +264,40 @@ createApp({
                 }
             } catch (e) {
                 console.error('Error loading parent project filters:', e);
+            }
+        },
+        /**
+         * The AI assistant opens this page with ?ai=1 and a complete set of filters in the address
+         * (AiTools::page_show_buildings). They replace the remembered filters once, as if the user had
+         * set them by hand, and the marker is then removed. Without ai=1 nothing changes.
+         */
+        applyAssistantFiltersFromUrl() {
+            let params;
+            try {
+                params = new URLSearchParams(window.location.search || '');
+            } catch (e) {
+                return;
+            }
+            if (params.get('ai') !== '1') return;
+            try {
+                this.searchKeyword = this.normalizeSearchKeyword(params.get('search') || '');
+                const request = params.get('request_filter') || '';
+                this.requestFilter = this.requestFilterOptions.some((o) => o.value === request) ? request : '';
+                this.favoritesOnly = false;
+                const defaultDir = { created_at: 'DESC', nearest_nouki: 'ASC', child_project_count: 'DESC' };
+                const column = params.get('order_column') || '';
+                if (Object.prototype.hasOwnProperty.call(defaultDir, column)) {
+                    const dir = (params.get('order_dir') || '').toUpperCase();
+                    this.sortColumn = column;
+                    this.sortDirection = dir === 'ASC' || dir === 'DESC' ? dir : defaultDir[column];
+                }
+                this.currentPage = 1;
+                this.saveFiltersToStorage();
+            } catch (e) {
+                console.warn('Failed to apply assistant filters from URL', e);
+            }
+            if (window.history && window.history.replaceState) {
+                window.history.replaceState(window.history.state, '', window.location.pathname);
             }
         },
         saveFiltersToStorage() {
@@ -1240,6 +1277,7 @@ createApp({
     mounted() {
         this.loadColumnVisibilityFromStorage();
         this.loadFiltersFromStorage();
+        this.applyAssistantFiltersFromUrl();
         this.loadPermission();
         this.loadParentProjects();
         this.setupSpaceDragScroll();

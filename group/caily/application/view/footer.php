@@ -110,7 +110,7 @@ $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 <script src="<?=$root?>assets/js/main.js?v=<?=$cv?>"></script>
 <script src="<?=$root?>assets/js/task-timer.js?v=<?=$cv?>"></script>
 <?php if (!empty($appAssets['needs_chat'])): ?>
-<script src="<?=$root?>assets/js/app-chat.js?v=<?=$cv?>"></script>
+<script src="<?=$root?>assets/js/ai-chat-bar.js?v=<?=$cv?>"></script>
 <?php endif; ?>
 <script src="<?=$root?>assets/js/command-palette.js?v=<?=$cv?>"></script>
 <?php if (!empty($appAssets['needs_customer_modal'])): ?>

@@ -14,7 +14,11 @@ class Controller {
 				if (MaintenanceMode::isEnabled() && $script !== 'logout.php') {
 					MaintenanceMode::deny(false);
 				}
-				$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
+				// Only a page the user opened is worth returning to after login. Background requests
+				// (notification polling, API calls) are redirected too, but must not replace it.
+				if (Authority::isPageNavigation($_SERVER)) {
+					$_SESSION['referer'] = $_SERVER['REQUEST_URI'];
+				}
 				$loginUrl = ROOT . 'login.php';
 				if ($fromGuisPlus || $script === 'login-wait.php') {
 					$loginUrl .= '?from=guis_plus';
@@ -28,7 +32,8 @@ class Controller {
 				header('Location: ' . ROOT . 'login-wait.php');
 				exit();
 			}
-			$redirect = isset($_SESSION['referer']) ? $_SESSION['referer'] : 'index.php';
+			$target = isset($_SESSION['referer']) ? Authority::safeReferer($_SESSION['referer']) : null;
+			$redirect = $target !== null ? $target : 'index.php';
 			unset($_SESSION['referer']);
 			header('Location: ' . $redirect);
 			exit();
@@ -129,6 +134,11 @@ class Controller {
 		if (!is_string($model) || !preg_match('/^[A-Za-z][A-Za-z0-9_]*$/', $model)) {
 			http_response_code(400);
 			return json_encode(array('error' => 'Invalid model'));
+		}
+		// The AI assistant has its own endpoint (/ai/index.php) with its own checks; its classes are not API models.
+		if (in_array(strtolower($model), array('ai', 'aitools'), true)) {
+			http_response_code(404);
+			return json_encode(array('error' => 'Not found'));
 		}
 		$modelfile = DIR_MODEL.$model.'.php';
 		$class = ucfirst($model);
