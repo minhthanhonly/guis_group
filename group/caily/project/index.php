@@ -980,39 +980,7 @@ th.pl-measure-nowrap * {
     margin-right: 0;
 }
 
-/* Memo label chip — distinct from Bootstrap .badge */
-.note-label-chip {
-    --note-label-color: #6c757d;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.28rem;
-    max-width: 12rem;
-    padding: 0.12rem 0.55rem 0.12rem 0.4rem;
-    border: 1px dashed color-mix(in srgb, var(--note-label-color) 70%, transparent);
-    border-left: 3px solid var(--note-label-color);
-    border-radius: 0.15rem 999px 999px 0.15rem;
-    background: color-mix(in srgb, var(--note-label-color) 12%, transparent);
-    color: var(--note-label-color);
-    font-size: 0.72rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    line-height: 1.25;
-    vertical-align: middle;
-    white-space: nowrap;
-}
-.note-label-chip-icon {
-    font-size: 0.65rem;
-    opacity: 0.85;
-    flex-shrink: 0;
-}
-.note-label-chip-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-[data-bs-theme="dark"] .note-label-chip {
-    background: color-mix(in srgb, var(--note-label-color) 22%, transparent);
-    border-color: color-mix(in srgb, var(--note-label-color) 55%, transparent);
-}
+/* Memo label chip: assets/css/project-notes.css */
 
 /* Confirmation notes column */
 #projectTable td.confirmation-notes-column {
@@ -1741,37 +1709,8 @@ body > .select2-container--default,
     gap: 4px;
     margin-bottom: 3px !important;
 }
-.note-label-chip {
-    gap: 0.35rem;
-    max-width: 100%;
-    padding: 0.1rem 0.5rem 0.1rem 0.45rem;
-    border: 1px solid color-mix(in srgb, var(--note-label-color) 45%, transparent);
-    border-radius: 999px;
-    background: color-mix(in srgb, var(--note-label-color) 14%, #fff);
-    color: color-mix(in srgb, var(--note-label-color) 62%, #000);
-    font-size: 0.75rem;
-    font-weight: 600;
-    letter-spacing: 0;
-    line-height: 1.35;
-}
-.note-label-chip.me-1 { margin-right: 0 !important; }
-/* colour dot instead of the tag glyph: reads as a label without visual noise */
-.note-label-chip .note-label-chip-icon { display: none; }
-.note-label-chip::before {
-    content: '';
-    flex: 0 0 auto;
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 50%;
-    background: var(--note-label-color);
-}
 [data-bs-theme="dark"] #projectTable .confirmation-note-item {
     border-color: rgba(255, 255, 255, 0.08);
-}
-[data-bs-theme="dark"] .note-label-chip {
-    background: color-mix(in srgb, var(--note-label-color) 22%, #1f2129);
-    border-color: color-mix(in srgb, var(--note-label-color) 55%, transparent);
-    color: color-mix(in srgb, var(--note-label-color) 55%, #fff);
 }
 </style>
 
