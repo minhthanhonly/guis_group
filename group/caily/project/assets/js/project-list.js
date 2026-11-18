@@ -801,6 +801,8 @@ var projectTable;
     }
     const PROJECT_LIST_COL_MIN_WIDTH = 40;
     const PROJECT_LIST_COL_MAX_WIDTH = 1200;
+    /** Width for a visible column that has neither a saved nor a configured width */
+    const PROJECT_LIST_COL_DEFAULT_FALLBACK_WIDTH = 80;
 
     var pendingScrollRestore = null;
     var projectListColumnResizeDrag = null;
@@ -1379,6 +1381,48 @@ var projectTable;
         } catch (e) { /* ignore */ }
     }
 
+    /** Width the header needs with its label on one line (sort icon / padding included). */
+    function measureProjectListHeaderNaturalWidth(header) {
+        if (!header) return 0;
+        try {
+            header.classList.add('pl-measure-nowrap');
+            var w = Math.ceil(header.scrollWidth);
+            header.classList.remove('pl-measure-nowrap');
+            return w || 0;
+        } catch (e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Fixed table layout gives a column without an explicit width only the space left over,
+     * which is often none (the column collapses to a sliver). Give every visible column
+     * without a width its header's one-line width.
+     */
+    function ensureProjectListVisibleColumnWidths(table) {
+        if (!table) return;
+        try {
+            var settings = table.settings()[0];
+            if (!settings || !settings.aoColumns) return;
+            var missing = [];
+            settings.aoColumns.forEach(function(ao, i) {
+                if (!ao.bVisible) return;
+                var w = parseInt(String(ao.sWidth || ''), 10);
+                if (!isNaN(w) && w >= PROJECT_LIST_COL_MIN_WIDTH) return;
+                missing.push(i);
+            });
+            if (!missing.length) return;
+            // Measure all first, then write (avoids one forced layout per column)
+            var measured = missing.map(function(i) {
+                var natural = measureProjectListHeaderNaturalWidth(table.column(i).header());
+                return [i, Math.max(PROJECT_LIST_COL_DEFAULT_FALLBACK_WIDTH, natural)];
+            });
+            measured.forEach(function(entry) {
+                setProjectTableColumnWidthPx(table, entry[0], entry[1], { skipTableWidthSync: true });
+            });
+        } catch (e) { /* ignore */ }
+    }
+
     function applySavedProjectColumnWidths(table, departmentId) {
         if (!table) return;
         var saved = loadProjectColumnWidths(departmentId);
@@ -1388,6 +1432,7 @@ var projectTable;
                 setProjectTableColumnWidthPx(table, idx, saved[colName], { skipTableWidthSync: true });
             }
         });
+        ensureProjectListVisibleColumnWidths(table);
         syncProjectListScrollTableWidth(table);
     }
 
@@ -1975,7 +2020,10 @@ var projectTable;
             var header = col.header();
             var maxWidth = 0;
             if (header) {
-                maxWidth = Math.max(maxWidth, header.getBoundingClientRect().width);
+                // Header label unwrapped: a squeezed auto-layout table wraps Japanese labels
+                // to one character per line, which would make the column ~1 char wide.
+                maxWidth = Math.max(maxWidth, header.getBoundingClientRect().width,
+                    measureProjectListHeaderNaturalWidth(header));
             }
             col.nodes().each(function() {
                 var w = this.getBoundingClientRect().width;
@@ -2033,6 +2081,7 @@ var projectTable;
         Object.keys(naturalWidths).forEach(function(idx) {
             setProjectTableColumnWidthPx(table, parseInt(idx, 10), naturalWidths[idx], { skipTableWidthSync: true });
         });
+        ensureProjectListVisibleColumnWidths(table);
         syncProjectListScrollTableWidth(table);
         injectProjectListColumnResizeHandles(table);
     }
