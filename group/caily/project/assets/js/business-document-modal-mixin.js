@@ -72,7 +72,9 @@
         'payment_amount_updated',
         'receipt_number_updated',
         'payment_note_updated',
-        'payment_items_updated'
+        'payment_items_updated',
+        'order_form_application_date_updated',
+        'order_form_design_date_updated'
     ]);
 
     var BUSINESS_DOCUMENT_FIELDS = [
@@ -102,7 +104,9 @@
         'receipt_number',
         'payment_note',
         // 決済明細: the list row then judges 完了 from the lines, as the modal does
-        'payment_items'
+        'payment_items',
+        'order_form_application_at',
+        'order_form_design_at'
     ];
 
     var BUSINESS_DOCUMENT_DATE_FIELDS = [

@@ -12,6 +12,10 @@
  *
  * <payment-items-editor> is registered through BusinessDocumentUiMixin, so it is available on
  * 案件詳細, 案件一覧 (決済情報 modal) and 建物詳細.
+ *
+ * 注文書 (<payment-order-form>, between 見積 and 請求): one check per 種別 申請費 / 設計費, stored as
+ * project.order_form_application_at / order_form_design_at ('YYYY-MM-DD HH:mm:ss' = checked at, '' = not
+ * checked). A 請求 line of that 種別 can be set to 発行済 only while it is checked (the server checks too).
  */
 (function (window) {
     'use strict';
@@ -35,6 +39,9 @@
     // default blank lines per 見積/請求 when there is none (the old fixed fields)
     var DEFAULT_TYPES = ['設計費'];
     var DEFAULT_TYPES_ENERGY = ['申請費', '設計費'];
+    // 注文書 per 種別 (Project::ORDER_FORM_FIELDS)
+    var ORDER_FORM_TYPES = ['申請費', '設計費'];
+    var ORDER_FORM_FIELDS = { '申請費': 'order_form_application_at', '設計費': 'order_form_design_at' };
 
     var DERIVED_DATE_KEYS = [
         'estimate_date', 'invoice_date',
@@ -87,6 +94,26 @@
         }
     }
 
+    /** Now in the server's time zone (JST), 'YYYY-MM-DD HH:mm:00' — when a 注文書 is checked. */
+    function nowServer() {
+        try {
+            if (window.moment && typeof window.moment.tz === 'function') {
+                return window.moment.tz('Asia/Tokyo').format('YYYY-MM-DD HH:mm') + ':00';
+            }
+            var parts = {};
+            new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
+            }).formatToParts(new Date()).forEach(function (p) { parts[p.type] = p.value; });
+            return parts.year + '-' + parts.month + '-' + parts.day + ' ' + parts.hour + ':' + parts.minute + ':00';
+        } catch (e) {
+            var d = new Date();
+            var pad = function (n) { return (n < 10 ? '0' : '') + n; };
+            return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+                + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':00';
+        }
+    }
+
     function normalizeStatus(s) {
         if (s === '発行済み') return '発行済';
         return isEmpty(s) ? '未発行' : String(s);
@@ -119,6 +146,32 @@
 
     function uses(project) {
         return !!project && Array.isArray(project.payment_items);
+    }
+
+    /** 注文書 種別 a 請求 line needs before it can be 発行済, or '' (見積 lines, other 種別). */
+    function orderFormTypeOf(item) {
+        if (!item || item.kind !== 'invoice') return '';
+        var t = decodeText(item.item_type).trim();
+        return ORDER_FORM_FIELDS[t] ? t : '';
+    }
+
+    function hasOrderForm(project, type) {
+        var field = ORDER_FORM_FIELDS[type];
+        return !!field && !!project && !isEmpty(project[field]);
+    }
+
+    /** The line may be set to 発行済: date + amount, and its 注文書 checked when it needs one. */
+    function canIssueLine(project, item) {
+        if (!isLineComplete(item)) return false;
+        var type = orderFormTypeOf(item);
+        return !type || hasOrderForm(project, type);
+    }
+
+    /** 請求 lines of a 種別 that are 発行済 (a 注文書 cannot be unchecked while there is one). */
+    function issuedInvoiceCount(project, type) {
+        return itemsOf(project, 'invoice').filter(function (it) {
+            return orderFormTypeOf(it) === type && normalizeStatus(it.status) === '発行済';
+        }).length;
     }
 
     function itemsOf(project, kind) {
@@ -214,6 +267,11 @@
     function appendToFormData(formData, project) {
         if (!formData || !uses(project)) return;
         formData.append('payment_items', serializeItems(project));
+        // 注文書: only when the project object has the fields (never clear them by omission)
+        ORDER_FORM_TYPES.forEach(function (type) {
+            var field = ORDER_FORM_FIELDS[type];
+            if (field in project) formData.append(field, isEmpty(project[field]) ? '' : String(project[field]));
+        });
     }
 
     /**
@@ -238,47 +296,60 @@
 
     // ------------------------------------------------------------------ components
 
-    /** Date input of one line: flatpickr (Y/m/d) when the page has it, native date otherwise. */
+    /**
+     * Date input of one line: flatpickr (Y/m/d) when the page has it, native date otherwise.
+     * with-time (注文書): 'YYYY-MM-DD HH:mm:ss' in, 'YYYY-MM-DD HH:mm:00' out, shown as Y/m/d H:i.
+     */
     var PaymentItemDateInput = {
-        props: { modelValue: { type: String, default: '' }, disabled: Boolean, placeholder: { type: String, default: '' } },
+        props: {
+            modelValue: { type: String, default: '' },
+            disabled: Boolean,
+            placeholder: { type: String, default: '' },
+            withTime: Boolean
+        },
         emits: ['update:modelValue'],
-        template: '<input type="text" class="form-control form-control-sm pi-date" ref="el" :disabled="disabled"'
+        template: '<input type="text" class="form-control form-control-sm pi-date" :class="{ \'pi-datetime\': withTime }" ref="el" :disabled="disabled"'
             + ' :placeholder="placeholder" autocomplete="off" :value="display" @change="onNativeChange">',
         computed: {
             display: function () {
-                return this.modelValue ? String(this.modelValue).replace(/-/g, '/') : '';
+                return this.toDisplay(this.modelValue);
+            },
+            fpFormat: function () {
+                return this.withTime ? 'Y/m/d H:i' : 'Y/m/d';
             }
         },
         mounted: function () {
             var self = this;
             if (typeof window.flatpickr !== 'function') {
-                this.$refs.el.type = 'date';
-                this.$refs.el.value = this.modelValue || '';
+                this.$refs.el.type = this.withTime ? 'datetime-local' : 'date';
+                this.$refs.el.value = this.toNative(this.modelValue);
                 return;
             }
             var opts = {
-                dateFormat: 'Y/m/d',
+                dateFormat: this.fpFormat,
+                enableTime: this.withTime,
+                time_24hr: true,
                 allowInput: true,
                 disableMobile: true,
                 onChange: function (dates, str) {
-                    self.$emit('update:modelValue', str ? str.replace(/\//g, '-') : '');
+                    self.$emit('update:modelValue', self.fromDisplay(str));
                 }
             };
             if (window.flatpickr.l10ns && window.flatpickr.l10ns.ja) opts.locale = window.flatpickr.l10ns.ja;
             this._fp = window.flatpickr(this.$refs.el, opts);
-            if (this.modelValue) this._fp.setDate(this.display, false, 'Y/m/d');
+            if (this.modelValue) this._fp.setDate(this.display, false, this.fpFormat);
         },
         watch: {
             modelValue: function (v) {
                 if (this._fp) {
                     var cur = this._fp.input.value;
-                    var next = v ? String(v).replace(/-/g, '/') : '';
+                    var next = this.toDisplay(v);
                     if (cur !== next) {
-                        if (next) this._fp.setDate(next, false, 'Y/m/d');
+                        if (next) this._fp.setDate(next, false, this.fpFormat);
                         else this._fp.clear(false);
                     }
-                } else if (this.$refs.el && this.$refs.el.type === 'date') {
-                    this.$refs.el.value = v || '';
+                } else if (this.$refs.el && this.$refs.el.type !== 'text') {
+                    this.$refs.el.value = this.toNative(v);
                 }
             }
         },
@@ -289,6 +360,22 @@
             }
         },
         methods: {
+            /** 'YYYY-MM-DD[ HH:mm[:ss]]' → 'YYYY/MM/DD[ HH:mm]' */
+            toDisplay: function (v) {
+                if (!v) return '';
+                var s = String(v);
+                return (this.withTime ? s.slice(0, 16) : s.slice(0, 10)).replace(/-/g, '/');
+            },
+            /** flatpickr / native value → 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:00' */
+            fromDisplay: function (str) {
+                if (!str) return '';
+                var s = String(str).replace(/\//g, '-').replace('T', ' ');
+                return this.withTime ? s.slice(0, 16) + ':00' : s.slice(0, 10);
+            },
+            toNative: function (v) {
+                if (!v) return '';
+                return this.withTime ? String(v).slice(0, 16).replace(' ', 'T') : String(v).slice(0, 10);
+            },
             onNativeChange: function (e) {
                 if (this._fp) {
                     // typed value (allowInput): flatpickr parses it on blur and fires onChange
@@ -296,7 +383,7 @@
                     if (v === '') this.$emit('update:modelValue', '');
                     return;
                 }
-                this.$emit('update:modelValue', e.target.value || '');
+                this.$emit('update:modelValue', this.fromDisplay(e.target.value || ''));
             }
         }
     };
@@ -349,7 +436,7 @@
             + '        <ul class="dropdown-menu dropdown-menu-end">'
             + '          <li v-for="s in statusOptions" :key="s.value">'
             + '            <a href="javascript:void(0);" class="dropdown-item"'
-            + '               :class="{ active: s.value === normStatus(item.status), disabled: s.value === \'発行済\' && !isComplete(item) }"'
+            + '               :class="{ active: s.value === normStatus(item.status), disabled: s.value === \'発行済\' && !canIssue(item) }"'
             + '               @click="selectStatus(item, s.value)">{{ t(s.label) }}</a></li>'
             + '        </ul>'
             + '      </div>'
@@ -357,9 +444,11 @@
             + '    </div>'
             + '    <div v-if="editable && normStatus(item.status) !== \'発行済\' && !isWaived(item.status) && !isComplete(item)" class="pi-hint">'
             + '      {{ t("発行済にするには{fields}が必要です").replace("{fields}", t(dateLabel) + "・" + t("金額")) }}</div>'
+            + '    <div v-else-if="editable && normStatus(item.status) !== \'発行済\' && !isWaived(item.status) && needsOrderForm(item)" class="pi-hint pi-hint-order">'
+            + '      {{ t("発行済にするには注文書（{type}）のチェックが必要です").replace("{type}", t(orderFormType(item))) }}</div>'
             + '    <div v-if="isPending(item)" class="pi-pending">'
             + '      <span><i class="fa fa-exclamation-circle me-1"></i>{{ t("状態が「{status}」のままです").replace("{status}", t(normStatus(item.status))) }}</span>'
-            + '      <button v-if="editable" type="button" class="btn btn-link btn-sm pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
+            + '      <button v-if="editable && canIssue(item)" type="button" class="btn btn-link btn-sm pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
             + '    </div>'
             + '  </div>'
             + '  <div class="pi-footer">'
@@ -449,8 +538,17 @@
                 return Number.isFinite(n) ? n.toLocaleString('ja-JP') : String(item.amount);
             },
             isPending: isPendingLine,
+            canIssue: function (item) {
+                return canIssueLine(this.project, item);
+            },
+            orderFormType: orderFormTypeOf,
+            /** Date + amount entered, but the line's 注文書 is not checked yet. */
+            needsOrderForm: function (item) {
+                var type = orderFormTypeOf(item);
+                return !!type && isLineComplete(item) && !hasOrderForm(this.project, type);
+            },
             markIssued: function (item) {
-                if (!isLineComplete(item)) return;
+                if (!canIssueLine(this.project, item)) return;
                 item.status = '発行済';
                 this.emitChange();
             },
@@ -460,7 +558,7 @@
              * Lines that were already complete are only flagged (isPending), never asked.
              */
             askIssuedIfJustCompleted: function (item, wasComplete) {
-                if (!this.editable || wasComplete || !isPendingLine(item)) return;
+                if (!this.editable || wasComplete || !isPendingLine(item) || !canIssueLine(this.project, item)) return;
                 var self = this;
                 var title = this.t('発行済にしますか？');
                 var text = this.t('{label}の日付・金額が入力されました。').replace('{label}',
@@ -513,7 +611,7 @@
             },
             selectStatus: function (item, value) {
                 if (value === normalizeStatus(item.status)) return;
-                if (value === '発行済' && !isLineComplete(item)) return;
+                if (value === '発行済' && !canIssueLine(this.project, item)) return;
                 item.status = value;
                 if (isWaived(value)) item.amount = 0;
                 this.emitChange();
@@ -635,6 +733,101 @@
         }
     };
 
+    /**
+     * 注文書: a check per 種別 (申請費 / 設計費). Checking fills in now (JST); the date/time stays editable.
+     * Unchecking is refused while a 請求 line of that 種別 is 発行済. Clearing the time unchecks.
+     */
+    var PaymentOrderForm = {
+        name: 'PaymentOrderForm',
+        components: { 'payment-item-date-input': PaymentItemDateInput },
+        props: {
+            project: { type: Object, required: true },
+            editable: { type: Boolean, default: true },
+            translate: { type: Function, default: null }
+        },
+        emits: ['change'],
+        data: function () {
+            return { uid: 'pof-' + (++keySeq), redraw: 0 };
+        },
+        template: ''
+            + '<div class="pi-order-form">'
+            + '  <div v-for="type in types" :key="type" class="pi-order-row" :class="{ \'pi-order-checked\': isChecked(type) }">'
+            + '    <div class="form-check pi-order-check">'
+            + '      <input class="form-check-input" type="checkbox" :id="uid + \'-\' + type" :checked="isChecked(type)"'
+            + '             :disabled="!editable" @change="onToggle(type, $event)">'
+            + '      <label class="form-check-label" :for="uid + \'-\' + type">{{ t(type) }}</label>'
+            + '    </div>'
+            + '    <template v-if="isChecked(type)">'
+            + '      <payment-item-date-input v-if="editable" :key="type + redraw" with-time :model-value="valueOf(type)"'
+            + '                               :placeholder="t(\'日時\')" @update:model-value="setValue(type, $event)"></payment-item-date-input>'
+            + '      <span v-else class="pi-value">{{ displayOf(type) }}</span>'
+            + '    </template>'
+            + '    <span v-else class="pi-order-none text-muted">{{ t("未受領") }}</span>'
+            + '  </div>'
+            + '</div>',
+        computed: {
+            types: function () {
+                return ORDER_FORM_TYPES;
+            }
+        },
+        methods: {
+            t: function (k) {
+                return this.translate ? this.translate(k) : k;
+            },
+            isChecked: function (type) {
+                return hasOrderForm(this.project, type);
+            },
+            valueOf: function (type) {
+                var v = this.project[ORDER_FORM_FIELDS[type]];
+                return isEmpty(v) ? '' : String(v);
+            },
+            displayOf: function (type) {
+                return this.valueOf(type).slice(0, 16).replace(/-/g, '/');
+            },
+            /** Refuse unchecking while a 請求 of this 種別 is 発行済; true when it was refused. */
+            refuseUncheck: function (type) {
+                if (!issuedInvoiceCount(this.project, type)) return false;
+                var msg = this.t('発行済の請求（{type}）があるため、注文書（{type}）のチェックを外せません。').replace(/\{type\}/g, this.t(type));
+                if (typeof window.Swal !== 'undefined' && window.Swal.fire) {
+                    window.Swal.fire({
+                        icon: 'warning', text: msg,
+                        customClass: { confirmButton: 'btn btn-primary' }, buttonsStyling: false
+                    });
+                } else {
+                    window.alert(msg);
+                }
+                return true;
+            },
+            onToggle: function (type, e) {
+                var field = ORDER_FORM_FIELDS[type];
+                if (e.target.checked) {
+                    this.project[field] = nowServer();
+                } else {
+                    if (this.refuseUncheck(type)) {
+                        e.target.checked = true;
+                        return;
+                    }
+                    this.project[field] = '';
+                }
+                this.$emit('change');
+            },
+            setValue: function (type, v) {
+                var field = ORDER_FORM_FIELDS[type];
+                if (!v) {
+                    // cleared time = unchecked; when that is refused, show the stored time again
+                    if (this.refuseUncheck(type)) {
+                        this.redraw++;
+                        return;
+                    }
+                } else if (v === this.valueOf(type) || v.slice(0, 16) === this.valueOf(type).slice(0, 16)) {
+                    return;
+                }
+                this.project[field] = v || '';
+                this.$emit('change');
+            }
+        }
+    };
+
     window.PaymentItems = {
         STATUSES: STATUSES,
         uses: uses,
@@ -647,14 +840,17 @@
         validationError: validationError,
         appendToFormData: appendToFormData,
         applySaveResponse: applySaveResponse,
-        decodeText: decodeText
+        decodeText: decodeText,
+        ORDER_FORM_FIELDS: ORDER_FORM_FIELDS
     };
     window.PaymentItemsEditor = PaymentItemsEditor;
+    window.PaymentOrderForm = PaymentOrderForm;
 
     // Available in every host that uses the shared 決済情報 UI mixin
     if (window.BusinessDocumentUiMixin) {
         window.BusinessDocumentUiMixin.components = Object.assign({}, window.BusinessDocumentUiMixin.components, {
-            'payment-items-editor': PaymentItemsEditor
+            'payment-items-editor': PaymentItemsEditor,
+            'payment-order-form': PaymentOrderForm
         });
     }
 })(window);

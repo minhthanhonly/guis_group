@@ -246,6 +246,8 @@ const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
     'receipt_number_updated',
     'payment_note_updated',
     'payment_items_updated',
+    'order_form_application_date_updated',
+    'order_form_design_date_updated',
 ]);
 
 const BUSINESS_DOCUMENT_FIELDS = [
@@ -276,6 +278,8 @@ const BUSINESS_DOCUMENT_FIELDS = [
     'payment_note',
     // 決済明細: kept across a reload while a save is pending, like the fields above
     'payment_items',
+    'order_form_application_at',
+    'order_form_design_at',
 ];
 
 const BUSINESS_DOCUMENT_DATE_FIELDS = [

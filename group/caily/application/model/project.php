@@ -84,10 +84,47 @@ class Project extends ApplicationModel {
             'energy_materials_memo' => array(), //省エネ向け資料・その他メモ
             'application_review_agency' => array(), //申請提出先の審査機関 (comma-separated)
             'bels_zeh_grade' => array(), //BELSのZEH等級 ('' or 0-9)
+            // 注文書 (決済情報): checked when set; the value is when it was checked (editable)
+            'order_form_application_at' => array(), //注文書 申請費
+            'order_form_design_at' => array(), //注文書 設計費
         );
         $this->connect();
         $this->ensureProgressStartedAtColumn();
         $this->ensureEnergyFieldColumns();
+        $this->ensureOrderFormColumns();
+    }
+
+    /**
+     * 注文書 (決済情報) columns — sql/add_order_form_to_projects.sql.
+     */
+    private function ensureOrderFormColumns() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+        if ($table === '') {
+            $table = DB_PREFIX . 'projects';
+        }
+        $columns = array(
+            'order_form_application_at' => "DATETIME NULL DEFAULT NULL COMMENT '注文書 申請費 (チェック日時)'",
+            'order_form_design_at' => "DATETIME NULL DEFAULT NULL COMMENT '注文書 設計費 (チェック日時)'",
+        );
+        try {
+            foreach ($columns as $name => $definition) {
+                $row = $this->fetchOne(
+                    "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                    . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+                    . "AND COLUMN_NAME = '" . $this->quote($name) . "'"
+                );
+                if (empty($row['cnt'])) {
+                    $this->query("ALTER TABLE `{$table}` ADD COLUMN `{$name}` {$definition}");
+                }
+            }
+        } catch (Exception $e) {
+            error_log('ensureOrderFormColumns failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -6778,6 +6815,8 @@ class Project extends ApplicationModel {
     /** 種別 of the single 見積 / 請求 value stored before 決済明細 (通常部署). */
     const PAYMENT_ITEM_DEFAULT_LEGACY_TYPE = '設計費';
     const PAYMENT_ITEM_MAX_LINES = 200;
+    /** 注文書 column per 請求 種別: a 請求 line of that 種別 becomes 発行済 only once it is checked */
+    const ORDER_FORM_FIELDS = ['申請費' => 'order_form_application_at', '設計費' => 'order_form_design_at'];
 
     private function paymentItemsTable() {
         return DB_PREFIX . 'project_payment_items';
@@ -7209,6 +7248,75 @@ class Project extends ApplicationModel {
         }
     }
 
+    /** Count of 請求 lines of a 種別 that are 発行済. */
+    private function countIssuedInvoiceItems(array $items, $type) {
+        $n = 0;
+        foreach ($items as $it) {
+            if (($it['kind'] ?? '') === 'invoice' && ($it['item_type'] ?? '') === $type
+                && $this->normalizePaymentItemStatus($it['status'] ?? '') === '発行済') {
+                $n++;
+            }
+        }
+        return $n;
+    }
+
+    /**
+     * 注文書 fields posted with updateProjectStatus, and the rule that a 請求 line of 申請費 / 設計費
+     * becomes 発行済 only while that 注文書 is checked. Only a change is refused (a new 発行済 line,
+     * or unchecking while one is 発行済): projects issued before 注文書 existed still save.
+     *
+     * @param array      $old         project before the save (getById)
+     * @param array|null $postedItems parsed 決済明細, null when the lines were not posted
+     * @return array ['ok' => true, 'values' => [field => datetime], 'null_fields' => [...]] | ['ok' => false, 'error' => '...']
+     */
+    private function checkPostedOrderForms(array $old, $postedItems) {
+        $values = [];
+        $nullFields = [];
+        $final = [];
+        foreach (self::ORDER_FORM_FIELDS as $type => $field) {
+            $final[$type] = trim((string)($old[$field] ?? ''));
+            if (!array_key_exists($field, $_POST)) {
+                continue;
+            }
+            $raw = trim(str_replace('/', '-', str_replace('T', ' ', (string)$_POST[$field])));
+            if ($raw === '') {
+                $nullFields[] = $field;
+                $final[$type] = '';
+                continue;
+            }
+            $ts = strtotime($raw);
+            if ($ts === false || !preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})/', $raw, $dm)
+                || !checkdate((int)$dm[2], (int)$dm[3], (int)$dm[1])) {
+                return ['ok' => false, 'error' => '注文書（' . $type . '）の日時が正しくありません。'];
+            }
+            $values[$field] = preg_match('/^\d{4}-\d{1,2}-\d{1,2}$/', $raw)
+                ? date('Y-m-d', $ts) . ' 18:00:00'
+                : date('Y-m-d H:i:s', $ts);
+            $final[$type] = $values[$field];
+        }
+
+        $oldItems = null;
+        foreach (self::ORDER_FORM_FIELDS as $type => $field) {
+            if ($final[$type] !== '') {
+                continue;
+            }
+            if ($oldItems === null) {
+                $oldItems = $this->getPaymentItemsForProject($old);
+            }
+            $newIssued = $this->countIssuedInvoiceItems($postedItems !== null ? $postedItems : $oldItems, $type);
+            if ($newIssued === 0) {
+                continue;
+            }
+            if (trim((string)($old[$field] ?? '')) !== '') {
+                return ['ok' => false, 'error' => '発行済の請求（' . $type . '）があるため、注文書（' . $type . '）のチェックを外せません。'];
+            }
+            if ($newIssued > $this->countIssuedInvoiceItems($oldItems, $type)) {
+                return ['ok' => false, 'error' => '請求（' . $type . '）を発行済にするには、注文書（' . $type . '）にチェックしてください。'];
+            }
+        }
+        return ['ok' => true, 'values' => $values, 'null_fields' => $nullFields];
+    }
+
     function updateProjectStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
@@ -7244,10 +7352,19 @@ class Project extends ApplicationModel {
             }
         }
 
+        // 注文書: '' = unchecked (NULL), otherwise when it was checked
+        $orderFormCheck = $this->checkPostedOrderForms($old, $postedPaymentItems);
+        if (!$orderFormCheck['ok']) {
+            return ['status' => 'error', 'error' => $orderFormCheck['error'], 'message' => $orderFormCheck['error']];
+        }
+
         $data = array(
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['userid']
         );
+        foreach ($orderFormCheck['values'] as $field => $value) {
+            $data[$field] = $value;
+        }
 
         // Add fields if they exist in POST
         $nullAmountFields = [];
@@ -7357,7 +7474,7 @@ class Project extends ApplicationModel {
             $data['payment_note'] = $_POST['payment_note'];
         }
 
-        $nullDatetimeFields = [];
+        $nullDatetimeFields = $orderFormCheck['null_fields'];
         $businessDatetimeFields = [
             'estimate_date' => '18:00',
             'invoice_date' => '18:00',
@@ -7474,12 +7591,15 @@ class Project extends ApplicationModel {
             'payment_amount' => ['action' => 'payment_amount_updated', 'note' => '入金額を変更', 'numeric' => true],
             'receipt_number' => ['action' => 'receipt_number_updated', 'note' => '領収書番号を変更'],
             'payment_note' => ['action' => 'payment_note_updated', 'note' => '決済備考を変更'],
+            'order_form_application_at' => ['action' => 'order_form_application_date_updated', 'note' => '注文書（申請費）を変更'],
+            'order_form_design_at' => ['action' => 'order_form_design_date_updated', 'note' => '注文書（設計費）を変更'],
         ];
 
         $datetimeFields = [
             'estimate_date', 'invoice_date', 'payment_date',
             'estimate_application_date', 'estimate_design_date',
             'invoice_application_date', 'invoice_design_date',
+            'order_form_application_at', 'order_form_design_at',
         ];
 
         foreach ($fields as $field => $meta) {

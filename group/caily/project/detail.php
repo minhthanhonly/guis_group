@@ -194,14 +194,23 @@ if($_SESSION['show_project'] == 0){
                     <div class="card-body" v-if="project">
                         <input type="hidden" v-model.number="project.payment_version">
 
-                        <!-- 見積 / 請求: any number of lines (payment-items.js) -->
-                        <div v-for="section in businessDocumentSections" :key="'bd-' + section.kind" class="bd-section">
-                            <div class="bd-section-title">
-                                <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ translateLabel(section.heading) }}</span>
+                        <!-- 見積 / 注文書 / 請求: any number of lines (payment-items.js) -->
+                        <template v-for="section in businessDocumentSections" :key="'bd-' + section.kind">
+                            <div v-if="section.kind === 'invoice'" class="bd-section bd-order-section">
+                                <div class="bd-section-title">
+                                    <i class="fa fa-file-signature me-1"></i><span data-i18n="注文書">{{ translateLabel('注文書') }}</span>
+                                </div>
+                                <payment-order-form :project="project" :editable="!!canEditBusinessDocuments"
+                                                    :translate="translateLabel" @change="onPaymentItemsChange"></payment-order-form>
                             </div>
-                            <payment-items-editor :project="project" :kind="section.kind" :editable="!!canEditBusinessDocuments"
-                                                  :energy="!!isEnergyDepartmentProject" :translate="translateLabel" @change="onPaymentItemsChange"></payment-items-editor>
-                        </div>
+                            <div class="bd-section">
+                                <div class="bd-section-title">
+                                    <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ translateLabel(section.heading) }}</span>
+                                </div>
+                                <payment-items-editor :project="project" :kind="section.kind" :editable="!!canEditBusinessDocuments"
+                                                      :energy="!!isEnergyDepartmentProject" :translate="translateLabel" @change="onPaymentItemsChange"></payment-items-editor>
+                            </div>
+                        </template>
 
                         <div class="mb-0 bd-note">
                             <label class="bd-label" data-i18n="決済備考">決済備考</label>
