@@ -52,9 +52,12 @@ if (!$canAccessRevenueStats) {
                             <i class="fa fa-chevron-right"></i><span class="visually-hidden" data-i18n="次月">次月</span>
                         </button>
                     </div>
-                    <select class="form-select form-select-sm revenue-month-select" v-model="selectedMonth" @change="onMonthChange">
-                        <option v-for="m in availableMonths" :key="m.month" :value="m.month">{{ m.month_label || m.month }}</option>
+                    <select class="form-select form-select-sm revenue-month-select" v-model="selectedMonth" @change="onMonthChange" title="● = 決済データあり">
+                        <optgroup v-for="g in monthGroups" :key="g.year" :label="g.label">
+                            <option v-for="m in g.months" :key="m.month" :value="m.month">{{ m.text }}</option>
+                        </optgroup>
                     </select>
+                    <span v-if="isFutureMonth" class="badge bg-warning text-dark revenue-future-badge" data-i18n="先の月を表示中">先の月を表示中</span>
                     <button class="btn btn-sm revenue-nav-btn" type="button" @click="loadStats" :disabled="loading || !selectedDepartment">
                         <i class="fa fa-refresh me-1"></i><span data-i18n="更新">更新</span>
                     </button>
@@ -95,6 +98,30 @@ if (!$canAccessRevenueStats) {
                 </button>
             </li>
         </ul>
+
+        <!-- 月次締め: while a month is closed, its 発行済 請求 cannot be changed and no other 請求 can be dated in it (見積 are not affected) -->
+        <div v-if="!loading && !errorMessage && (monthClosing || canCloseMonth)" class="revenue-closing-bar mb-3" :class="monthClosing ? 'is-closed' : 'is-open'">
+            <i class="fa" :class="monthClosing ? 'fa-lock' : 'fa-unlock-alt'" aria-hidden="true"></i>
+            <div class="revenue-closing-text">
+                <template v-if="monthClosing">
+                    <strong>{{ monthLabel }}<span data-i18n="は締め済みです">は締め済みです</span></strong>
+                    <span class="revenue-closing-meta">（{{ formatClosingAt(monthClosing.closed_at) }}<template v-if="monthClosing.closed_by_name"> ・ {{ monthClosing.closed_by_name }}</template>）</span>
+                    <div class="small" data-i18n="この月の発行済の請求は変更できず、この月の日付で請求を入力することもできません（見積は変更できます）。">この月の発行済の請求は変更できず、この月の日付で請求を入力することもできません（見積は変更できます）。</div>
+                </template>
+                <template v-else>
+                    <strong>{{ monthLabel }}<span data-i18n="は未締めです">は未締めです</span></strong>
+                    <div class="small" data-i18n="締めると、この月の発行済の請求は変更できなくなり、この月の日付で請求を入力することもできなくなります。">締めると、この月の発行済の請求は変更できなくなり、この月の日付で請求を入力することもできなくなります。</div>
+                </template>
+            </div>
+            <template v-if="canCloseMonth">
+                <button v-if="monthClosing" type="button" class="btn btn-sm btn-outline-secondary" :disabled="closingBusy" @click="reopenMonth">
+                    <i class="fa fa-unlock me-1"></i><span data-i18n="締めを解除">締めを解除</span>
+                </button>
+                <button v-else type="button" class="btn btn-sm btn-primary" :disabled="closingBusy" @click="closeMonth">
+                    <i class="fa fa-lock me-1"></i><span data-i18n="この月を締める">この月を締める</span>
+                </button>
+            </template>
+        </div>
 
         <div v-if="loading" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
@@ -739,7 +766,7 @@ $view->footing();
     font-weight: 600;
 }
 .revenue-dept-nav-month .revenue-month-select {
-    width: 10rem;
+    width: 12.5rem;
     background-color: #fff;
     color: #2f2b3d;
     border: 1px solid rgba(255, 255, 255, 0.45);
@@ -750,6 +777,24 @@ $view->footing();
     color: #2f2b3d;
     border-color: #fff;
     box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
+}
+.revenue-closing-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.625rem 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(67, 89, 113, 0.18);
+}
+.revenue-closing-bar > .fa { font-size: 1.125rem; }
+.revenue-closing-bar .revenue-closing-text { flex: 1 1 16rem; min-width: 0; }
+.revenue-closing-bar .revenue-closing-meta { color: var(--bs-secondary-color, #8592a3); font-size: 0.8125rem; }
+.revenue-closing-bar.is-closed { background: rgba(105, 108, 255, 0.08); border-color: rgba(105, 108, 255, 0.35); }
+.revenue-closing-bar.is-closed > .fa { color: var(--bs-primary, #696cff); }
+.revenue-closing-bar.is-open > .fa { color: var(--bs-secondary-color, #8592a3); }
+.revenue-dept-nav-month .revenue-future-badge {
+    font-weight: 600;
 }
 .revenue-dept-nav-month .revenue-nav-btn {
     background-color: #fff;

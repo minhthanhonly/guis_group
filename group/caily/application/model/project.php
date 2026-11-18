@@ -84,10 +84,47 @@ class Project extends ApplicationModel {
             'energy_materials_memo' => array(), //省エネ向け資料・その他メモ
             'application_review_agency' => array(), //申請提出先の審査機関 (comma-separated)
             'bels_zeh_grade' => array(), //BELSのZEH等級 ('' or 0-9)
+            // 注文書 (決済情報): checked when set; the value is when it was checked (editable)
+            'order_form_application_at' => array(), //注文書 申請費
+            'order_form_design_at' => array(), //注文書 設計費
         );
         $this->connect();
         $this->ensureProgressStartedAtColumn();
         $this->ensureEnergyFieldColumns();
+        $this->ensureOrderFormColumns();
+    }
+
+    /**
+     * 注文書 (決済情報) columns — sql/add_order_form_to_projects.sql.
+     */
+    private function ensureOrderFormColumns() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+        if ($table === '') {
+            $table = DB_PREFIX . 'projects';
+        }
+        $columns = array(
+            'order_form_application_at' => "DATETIME NULL DEFAULT NULL COMMENT '注文書 申請費 (チェック日時)'",
+            'order_form_design_at' => "DATETIME NULL DEFAULT NULL COMMENT '注文書 設計費 (チェック日時)'",
+        );
+        try {
+            foreach ($columns as $name => $definition) {
+                $row = $this->fetchOne(
+                    "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                    . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+                    . "AND COLUMN_NAME = '" . $this->quote($name) . "'"
+                );
+                if (empty($row['cnt'])) {
+                    $this->query("ALTER TABLE `{$table}` ADD COLUMN `{$name}` {$definition}");
+                }
+            }
+        } catch (Exception $e) {
+            error_log('ensureOrderFormColumns failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -3338,7 +3375,7 @@ class Project extends ApplicationModel {
                 'response' => [
                     'status' => 'error',
                     'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に更新しました。ページを再読み込みしてください。',
+                    'message' => '他のユーザーが先に更新しました。最新の内容を読み込んでから、もう一度編集してください。',
                     'current_version' => $dbVersion,
                 ],
             ];
@@ -3368,7 +3405,7 @@ class Project extends ApplicationModel {
                 'response' => [
                     'status' => 'error',
                     'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に決済情報を更新しました。ページを再読み込みしてください。',
+                    'message' => '他のユーザーが先に決済情報を更新しました。最新の内容を読み込んでから、もう一度編集してください。',
                     'current_payment_version' => $dbVersion,
                 ],
             ];
@@ -3392,7 +3429,7 @@ class Project extends ApplicationModel {
                 'response' => [
                     'status' => 'error',
                     'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に決済情報を更新しました。ページを再読み込みしてください。',
+                    'message' => '他のユーザーが先に決済情報を更新しました。最新の内容を読み込んでから、もう一度編集してください。',
                     'current_payment_version' => $newVersion,
                 ],
             ];
@@ -3459,7 +3496,7 @@ class Project extends ApplicationModel {
                 'response' => [
                     'status' => 'error',
                     'error' => 'version_conflict',
-                    'message' => '他のユーザーが先に更新しました。ページを再読み込みしてください。',
+                    'message' => '他のユーザーが先に更新しました。最新の内容を読み込んでから、もう一度編集してください。',
                     'current_version' => $newVersion,
                 ],
             ];
@@ -4154,7 +4191,8 @@ class Project extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
         }
         $old = $this->getById($id);
-        $result = $this->query_update(['status' => 'cancelled'], ['id' => $id]);
+        // version + 1: an edit form opened before this must not save the old status back
+        $result = $this->query_update_versioned(['status' => 'cancelled'], ['id' => $id]);
         if ($result) {
             $this->logProjectAction($id, 'deleted', '案件を削除', $old['status'], 'cancelled');
             return ['status' => 'success'];
@@ -4359,17 +4397,18 @@ class Project extends ApplicationModel {
             }
             $result = $this->updateMemberRole($project_id, $user_id, $newRole);
             return $result
-                ? ['status' => 'success', 'message' => 'Role updated to ' . $newRole]
+                ? ['status' => 'success', 'message' => 'Role updated to ' . $newRole, 'version' => $this->bumpProjectVersion($project_id)]
                 : ['status' => 'error', 'message' => 'Failed to update role'];
         }
 
         // Call the original addMember method
         $result = $this->addMember($project_id, $user_id, $username, $role);
-        
+
         if ($result) {
             return [
                 'status' => 'success',
-                'message' => 'Member added successfully'
+                'message' => 'Member added successfully',
+                'version' => $this->bumpProjectVersion($project_id)
             ];
         }
         
@@ -4518,6 +4557,7 @@ class Project extends ApplicationModel {
             $project['has_energy_sibling'] = $this->hasEnergySavingSiblingProject($project) ? 1 : 0;
             $project['payment_items'] = $this->getPaymentItemsForProject($project);
             $project['payment_item_types'] = $this->getPaymentItemTypeSuggestions();
+            $project['closed_months'] = $this->getClosedMonthsForDepartment($project['department_id'] ?? 0);
         }
         
         return $project;
@@ -4621,7 +4661,7 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
         $this->applyProgressStartedAt(is_array($old) ? $old : [], $data);
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update_versioned($data, ['id' => $id]);
 
         // Ghi project log nếu tiến độ thay đổi
         if ($result && $oldProgress !== null && (int)$oldProgress !== (int)$progress) {
@@ -4634,7 +4674,32 @@ class Project extends ApplicationModel {
             );
         }
 
-        return $result;
+        return $this->quickEditResponse($id, $result);
+    }
+
+    /**
+     * Response of the single-field quick edits (status, priority, progress, tags, teams, dates).
+     * They are saved without a version check (the user picked that one value) but add 1 to
+     * `version`, so an edit form opened before them fails its check instead of overwriting
+     * them; `version` lets the page that made the change keep its own copy current.
+     */
+    /**
+     * The edit form posts the whole member / manager list and update() removes whoever is
+     * missing from it: a member change made outside the form (addMemberApi) adds 1 to the
+     * project version, so a form opened before it cannot drop that member again.
+     * @return int the new version
+     */
+    private function bumpProjectVersion($projectId) {
+        $this->table = DB_PREFIX . 'projects';
+        $this->query(sprintf("UPDATE %s SET `version` = `version` + 1 WHERE id = %d", $this->table, intval($projectId)));
+        return $this->fetchRowVersion($projectId);
+    }
+
+    private function quickEditResponse($id, $affectedRows, array $extra = []) {
+        if (!$affectedRows) {
+            return array_merge(['status' => 'error', 'error' => 'Update failed', 'message' => 'Update failed'], $extra);
+        }
+        return array_merge(['status' => 'success', 'version' => $this->fetchRowVersion($id)], $extra);
     }
 
     function updatePojectTags($params = null) {
@@ -4649,7 +4714,7 @@ class Project extends ApplicationModel {
             'tags' => $tags,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        return $this->query_update($data, ['id' => $id]);
+        return $this->quickEditResponse($id, $this->query_update_versioned($data, ['id' => $id]));
     }
 
     /**
@@ -4698,7 +4763,7 @@ class Project extends ApplicationModel {
             return ['status' => 'error', 'error' => 'Project not found'];
         }
         $this->table = DB_PREFIX . 'projects';
-        $ok = $this->query_update(
+        $ok = $this->query_update_versioned(
             [
                 'project_order_type' => $project_order_type,
                 'updated_at' => date('Y-m-d H:i:s'),
@@ -4854,8 +4919,8 @@ class Project extends ApplicationModel {
 
         $this->applyEnergyDrawingShareFromPost($data, $old);
         $this->applyProgressStartedAt($old, $data);
-        
-        $result = $this->query_update($data, ['id' => $id]);
+
+        $result = $this->query_update_versioned($data, ['id' => $id]);
         if ($result) {
             if($old['status'] != $status) {
                 $statusRecipients = $this->getProjectInteractionNotifyUserids($id);
@@ -4879,7 +4944,7 @@ class Project extends ApplicationModel {
         }
         
         if ($result) {
-            return ['status' => 'success', 'message' => 'Status updated successfully'];
+            return ['status' => 'success', 'message' => 'Status updated successfully', 'version' => $this->fetchRowVersion($id)];
         } else {
             return ['status' => 'error', 'message' => 'Failed to update status'];
         }
@@ -4902,10 +4967,10 @@ class Project extends ApplicationModel {
             'end_date' => $end_date,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update_versioned($data, ['id' => $id]);
         if ($result) {
             $this->logProjectAction($id, 'date_updated', '日程変更', $old['start_date'].'~'.$old['end_date'], $start_date.'~'.$end_date);
-            return ['status' => 'success'];
+            return ['status' => 'success', 'version' => $this->fetchRowVersion($id)];
         } else {
             return ['status' => 'error', 'error' => 'Update failed'];
         }
@@ -4929,13 +4994,13 @@ class Project extends ApplicationModel {
             'updated_at' => date('Y-m-d H:i:s')
         );
 
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update_versioned($data, ['id' => $id]);
         if ($result) {
             if($old['priority'] != $priority) {
                 $this->logProjectAction($id, 'priority_updated', '優先度変更', $old['priority'], $priority);
             }
         }
-        return $result;
+        return $this->quickEditResponse($id, $result);
     }
 
     function getComments() {
@@ -6258,6 +6323,9 @@ class Project extends ApplicationModel {
                 'department_id' => $deptId,
                 'is_energy_department' => $energySplit ? 1 : 0,
                 'available_months' => $availableMonths,
+                'closing' => $this->getRevenueMonthClosing($deptId, $month),
+                'closed_months' => $this->getClosedMonthsForDepartment($deptId),
+                'can_close_month' => (($_SESSION['authority'] ?? '') === 'administrator') ? 1 : 0,
                 'target_summary' => [
                     'fiscal_year' => $fiscalYear,
                     'fiscal_start_month' => $fiscalStartMonth,
@@ -6768,6 +6836,8 @@ class Project extends ApplicationModel {
     const PAYMENT_ITEM_MAX_LINES = 200;
     /** 省エネ 日付検索: default tasks whose 期限 can be searched (filterDateField = task_due:<title>). */
     const ENERGY_TASK_DUE_DATE_FILTER_TITLES = ['計算確認', '申請代行', '計算書作成'];
+    /** 注文書 column per 請求 種別: a 請求 line of that 種別 becomes 発行済 only once it is checked */
+    const ORDER_FORM_FIELDS = ['申請費' => 'order_form_application_at', '設計費' => 'order_form_design_at'];
 
     private function paymentItemsTable() {
         return DB_PREFIX . 'project_payment_items';
@@ -6977,6 +7047,10 @@ class Project extends ApplicationModel {
                 ? mb_strpos((string)$p['department_name'], '省エネ') !== false
                 : $this->isEnergyDepartmentById($p['department_id'] ?? 0);
             $p['payment_items'] = $this->buildPaymentItemsFromLegacy($p, $isEnergy);
+        }
+        unset($p);
+        foreach ($projects as &$p) {
+            $p['closed_months'] = $this->getClosedMonthsForDepartment($p['department_id'] ?? 0);
         }
         unset($p);
     }
@@ -7199,6 +7273,290 @@ class Project extends ApplicationModel {
         }
     }
 
+    /** Count of 請求 lines of a 種別 that are 発行済. */
+    private function countIssuedInvoiceItems(array $items, $type) {
+        $n = 0;
+        foreach ($items as $it) {
+            if (($it['kind'] ?? '') === 'invoice' && ($it['item_type'] ?? '') === $type
+                && $this->normalizePaymentItemStatus($it['status'] ?? '') === '発行済') {
+                $n++;
+            }
+        }
+        return $n;
+    }
+
+    /**
+     * 注文書 fields posted with updateProjectStatus, and the rule that a 請求 line of 申請費 / 設計費
+     * becomes 発行済 only while that 注文書 is checked. Only a change is refused (a new 発行済 line,
+     * or unchecking while one is 発行済): projects issued before 注文書 existed still save.
+     * 省エネ departments only: other projects have no 注文書, so the fields are ignored and
+     * their 請求 lines are not restricted.
+     *
+     * @param array      $old         project before the save (getById)
+     * @param array|null $postedItems parsed 決済明細, null when the lines were not posted
+     * @return array ['ok' => true, 'values' => [field => datetime], 'null_fields' => [...]] | ['ok' => false, 'error' => '...']
+     */
+    private function checkPostedOrderForms(array $old, $postedItems) {
+        $values = [];
+        $nullFields = [];
+        if (!$this->isEnergyDepartmentById($old['department_id'] ?? 0)) {
+            return ['ok' => true, 'values' => $values, 'null_fields' => $nullFields];
+        }
+        $final = [];
+        foreach (self::ORDER_FORM_FIELDS as $type => $field) {
+            $final[$type] = trim((string)($old[$field] ?? ''));
+            if (!array_key_exists($field, $_POST)) {
+                continue;
+            }
+            $raw = trim(str_replace('/', '-', str_replace('T', ' ', (string)$_POST[$field])));
+            if ($raw === '') {
+                $nullFields[] = $field;
+                $final[$type] = '';
+                continue;
+            }
+            $ts = strtotime($raw);
+            if ($ts === false || !preg_match('/^(\d{4})-(\d{1,2})-(\d{1,2})/', $raw, $dm)
+                || !checkdate((int)$dm[2], (int)$dm[3], (int)$dm[1])) {
+                return ['ok' => false, 'error' => '注文書（' . $type . '）の日時が正しくありません。'];
+            }
+            $values[$field] = preg_match('/^\d{4}-\d{1,2}-\d{1,2}$/', $raw)
+                ? date('Y-m-d', $ts) . ' 18:00:00'
+                : date('Y-m-d H:i:s', $ts);
+            $final[$type] = $values[$field];
+        }
+
+        $oldItems = null;
+        foreach (self::ORDER_FORM_FIELDS as $type => $field) {
+            if ($final[$type] !== '') {
+                continue;
+            }
+            if ($oldItems === null) {
+                $oldItems = $this->getPaymentItemsForProject($old);
+            }
+            $newIssued = $this->countIssuedInvoiceItems($postedItems !== null ? $postedItems : $oldItems, $type);
+            if ($newIssued === 0) {
+                continue;
+            }
+            if (trim((string)($old[$field] ?? '')) !== '') {
+                return ['ok' => false, 'error' => '発行済の請求（' . $type . '）があるため、注文書（' . $type . '）のチェックを外せません。'];
+            }
+            if ($newIssued > $this->countIssuedInvoiceItems($oldItems, $type)) {
+                return ['ok' => false, 'error' => '請求（' . $type . '）を発行済にするには、注文書（' . $type . '）にチェックしてください。'];
+            }
+        }
+        return ['ok' => true, 'values' => $values, 'null_fields' => $nullFields];
+    }
+
+    // ------------------------------------------------------------------ 月次締め
+    // A department closes a month in 月次売上統計: from then on the 発行済 請求 dated in that month
+    // cannot be changed or deleted, and no other 請求 can be saved with a date in that month.
+    // 見積 are not affected.
+
+    /** department_id => closed months, for this request (reset when a month is closed / reopened) */
+    private static $closedMonthsCache = [];
+
+    private function revenueClosingsTable() {
+        return DB_PREFIX . 'revenue_month_closings';
+    }
+
+    /** sql/add_revenue_month_closings.sql */
+    private function ensureRevenueClosingsTable() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        try {
+            $this->query("CREATE TABLE IF NOT EXISTS `" . $this->revenueClosingsTable() . "` (
+                `department_id` INT NOT NULL,
+                `month` CHAR(7) NOT NULL COMMENT 'YYYY-MM',
+                `closed_at` DATETIME NOT NULL,
+                `closed_by` VARCHAR(100) NOT NULL DEFAULT '',
+                PRIMARY KEY (`department_id`, `month`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='月次締め (請求)'");
+        } catch (Exception $e) {
+            error_log('ensureRevenueClosingsTable failed: ' . $e->getMessage());
+        }
+    }
+
+    /** Closed months of a department, ['YYYY-MM', ...] newest first. */
+    public function getClosedMonthsForDepartment($departmentId) {
+        $departmentId = intval($departmentId);
+        if ($departmentId <= 0) {
+            return [];
+        }
+        if (isset(self::$closedMonthsCache[$departmentId])) {
+            return self::$closedMonthsCache[$departmentId];
+        }
+        $this->ensureRevenueClosingsTable();
+        $rows = $this->fetchAll(sprintf(
+            "SELECT `month` FROM `%s` WHERE department_id = %d ORDER BY `month` DESC",
+            $this->revenueClosingsTable(),
+            $departmentId
+        ));
+        self::$closedMonthsCache[$departmentId] = array_values(array_map(function ($r) { return (string)$r['month']; }, is_array($rows) ? $rows : []));
+        return self::$closedMonthsCache[$departmentId];
+    }
+
+    private function getRevenueMonthClosing($departmentId, $month) {
+        $this->ensureRevenueClosingsTable();
+        $row = $this->fetchOne(sprintf(
+            "SELECT c.month, c.closed_at, c.closed_by, u.realname AS closed_by_name
+             FROM `%s` c LEFT JOIN %suser u ON u.userid = c.closed_by
+             WHERE c.department_id = %d AND c.month = '%s'",
+            $this->revenueClosingsTable(),
+            DB_PREFIX,
+            intval($departmentId),
+            $this->escape($month)
+        ));
+        return $row ?: null;
+    }
+
+    private function monthLabelJa($month) {
+        return preg_match('/^(\d{4})-(\d{2})$/', (string)$month, $m) ? $m[1] . '年' . intval($m[2]) . '月' : (string)$month;
+    }
+
+    /** What makes a line the same line for the 締め check (the id is not kept across saves). */
+    private function closedLineSignature(array $item) {
+        $amount = $item['amount'] ?? null;
+        return implode('|', [
+            (string)($item['kind'] ?? ''),
+            substr((string)($item['item_date'] ?? ''), 0, 16),
+            trim((string)($item['item_type'] ?? '')),
+            ($amount === null || $amount === '') ? '' : number_format((float)$amount, 2, '.', ''),
+            $this->normalizePaymentItemStatus($item['status'] ?? ''),
+        ]);
+    }
+
+    /**
+     * 月次締め applies to 請求 only (見積 stay editable):
+     * - a 発行済 請求 dated in a closed month must come back unchanged (not edited, deleted or moved);
+     * - any other 請求 dated in a closed month is refused, so its date has to be moved out of that
+     *   month (this also refuses adding a 請求 to the month or making one 発行済 there).
+     *
+     * @param array $old      project before the save
+     * @param array $oldItems its lines (stored, or built from the legacy columns)
+     * @param array $newItems the lines after the save
+     * @return array ['ok' => true] | ['ok' => false, 'error' => '...']
+     */
+    private function checkClosedMonthLines(array $old, array $oldItems, array $newItems) {
+        $closed = $this->getClosedMonthsForDepartment($old['department_id'] ?? 0);
+        if (empty($closed)) {
+            return ['ok' => true];
+        }
+        $closedSet = array_flip($closed);
+        $closedInvoices = function (array $items) use ($closedSet) {
+            $out = [];
+            foreach ($items as $it) {
+                if (($it['kind'] ?? '') !== 'invoice') {
+                    continue;
+                }
+                $month = substr((string)($it['item_date'] ?? ''), 0, 7);
+                if ($month !== '' && isset($closedSet[$month])) {
+                    $out[] = [
+                        'month' => $month,
+                        'issued' => $this->normalizePaymentItemStatus($it['status'] ?? '') === '発行済',
+                        'sig' => $this->closedLineSignature($it),
+                    ];
+                }
+            }
+            return $out;
+        };
+        $locked = array_values(array_filter($closedInvoices($oldItems), function ($l) { return $l['issued']; }));
+        $remaining = array_count_values(array_column($locked, 'sig'));
+        $unmatched = [];
+        foreach ($closedInvoices($newItems) as $line) {
+            if ($line['issued'] && !empty($remaining[$line['sig']])) {
+                $remaining[$line['sig']]--;
+                continue;
+            }
+            $unmatched[] = $line;
+        }
+        foreach ($locked as $line) {
+            if (!empty($remaining[$line['sig']])) {
+                return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の発行済の請求は変更・削除できません。'];
+            }
+        }
+        foreach ($unmatched as $line) {
+            if ($line['issued']) {
+                return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の日付で請求を発行済にできません。請求日を変更してください。'];
+            }
+            return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の日付の請求は保存できません。請求日を変更してください。'];
+        }
+        return ['ok' => true];
+    }
+
+    /**
+     * Lines after a save that posts the legacy 見積/請求 columns instead of `payment_items`
+     * (older forms, updateAmount). Projects with stored lines keep them (the legacy columns are
+     * only derived from them), so only projects without stored lines change.
+     */
+    private function linesAfterLegacyPost(array $old, array $oldItems, array $posted) {
+        if (!empty($this->fetchPaymentItemRows($old['id']))) {
+            return $oldItems;
+        }
+        $merged = $old;
+        foreach ($posted as $key => $value) {
+            if (preg_match('/^(amount|estimate_|invoice_)/', (string)$key)) {
+                $merged[$key] = $value;
+            }
+        }
+        return $this->buildPaymentItemsFromLegacy($merged, $this->isEnergyDepartmentById($old['department_id'] ?? 0));
+    }
+
+    private function closingRequestParams() {
+        $departmentId = isset($_POST['department_id']) ? intval($_POST['department_id']) : 0;
+        $month = isset($_POST['month']) ? trim((string)$_POST['month']) : '';
+        if ($departmentId <= 0 || !preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
+            return null;
+        }
+        return [$departmentId, $month];
+    }
+
+    /** 月次売上統計: close a department's month (administrator only). */
+    function closeRevenueMonth($params = null) {
+        if (($_SESSION['authority'] ?? '') !== 'administrator') {
+            return $this->forbiddenResponse();
+        }
+        $p = $this->closingRequestParams();
+        if (!$p) {
+            return ['status' => 'error', 'error' => 'Invalid department or month'];
+        }
+        list($departmentId, $month) = $p;
+        $this->ensureRevenueClosingsTable();
+        self::$closedMonthsCache = [];
+        $this->query(sprintf(
+            "INSERT IGNORE INTO `%s` (department_id, `month`, closed_at, closed_by) VALUES (%d, '%s', '%s', '%s')",
+            $this->revenueClosingsTable(),
+            $departmentId,
+            $this->escape($month),
+            date('Y-m-d H:i:s'),
+            $this->escape((string)($_SESSION['userid'] ?? ''))
+        ));
+        return ['status' => 'success', 'closing' => $this->getRevenueMonthClosing($departmentId, $month)];
+    }
+
+    /** 月次売上統計: reopen a closed month (administrator only). */
+    function reopenRevenueMonth($params = null) {
+        if (($_SESSION['authority'] ?? '') !== 'administrator') {
+            return $this->forbiddenResponse();
+        }
+        $p = $this->closingRequestParams();
+        if (!$p) {
+            return ['status' => 'error', 'error' => 'Invalid department or month'];
+        }
+        list($departmentId, $month) = $p;
+        $this->ensureRevenueClosingsTable();
+        self::$closedMonthsCache = [];
+        $this->query(sprintf(
+            "DELETE FROM `%s` WHERE department_id = %d AND `month` = '%s'",
+            $this->revenueClosingsTable(),
+            $departmentId,
+            $this->escape($month)
+        ));
+        return ['status' => 'success', 'closing' => null];
+    }
+
     function updateProjectStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
@@ -7234,10 +7592,30 @@ class Project extends ApplicationModel {
             }
         }
 
+        // 注文書: '' = unchecked (NULL), otherwise when it was checked
+        $orderFormCheck = $this->checkPostedOrderForms($old, $postedPaymentItems);
+        if (!$orderFormCheck['ok']) {
+            return ['status' => 'error', 'error' => $orderFormCheck['error'], 'message' => $orderFormCheck['error']];
+        }
+
+        // 月次締め: lines dated in a closed month stay as they are
+        $oldPaymentItems = $this->getPaymentItemsForProject($old);
+        $closedCheck = $this->checkClosedMonthLines(
+            $old,
+            $oldPaymentItems,
+            $postedPaymentItems !== null ? $postedPaymentItems : $this->linesAfterLegacyPost($old, $oldPaymentItems, $_POST)
+        );
+        if (!$closedCheck['ok']) {
+            return ['status' => 'error', 'error' => $closedCheck['error'], 'message' => $closedCheck['error']];
+        }
+
         $data = array(
             'updated_at' => date('Y-m-d H:i:s'),
             'updated_by' => $_SESSION['userid']
         );
+        foreach ($orderFormCheck['values'] as $field => $value) {
+            $data[$field] = $value;
+        }
 
         // Add fields if they exist in POST
         $nullAmountFields = [];
@@ -7347,7 +7725,7 @@ class Project extends ApplicationModel {
             $data['payment_note'] = $_POST['payment_note'];
         }
 
-        $nullDatetimeFields = [];
+        $nullDatetimeFields = $orderFormCheck['null_fields'];
         $businessDatetimeFields = [
             'estimate_date' => '18:00',
             'invoice_date' => '18:00',
@@ -7464,12 +7842,15 @@ class Project extends ApplicationModel {
             'payment_amount' => ['action' => 'payment_amount_updated', 'note' => '入金額を変更', 'numeric' => true],
             'receipt_number' => ['action' => 'receipt_number_updated', 'note' => '領収書番号を変更'],
             'payment_note' => ['action' => 'payment_note_updated', 'note' => '決済備考を変更'],
+            'order_form_application_at' => ['action' => 'order_form_application_date_updated', 'note' => '注文書（申請費）を変更'],
+            'order_form_design_at' => ['action' => 'order_form_design_date_updated', 'note' => '注文書（設計費）を変更'],
         ];
 
         $datetimeFields = [
             'estimate_date', 'invoice_date', 'payment_date',
             'estimate_application_date', 'estimate_design_date',
             'invoice_application_date', 'invoice_design_date',
+            'order_form_application_at', 'order_form_design_at',
         ];
 
         foreach ($fields as $field => $meta) {
@@ -7510,9 +7891,9 @@ class Project extends ApplicationModel {
             'teams' => $teams,
             'updated_at' => date('Y-m-d H:i:s')
         );
-        $result = $this->query_update($data, ['id' => $id]);
+        $result = $this->query_update_versioned($data, ['id' => $id]);
         if ($result) {
-            return ['success' => true];
+            return ['success' => true, 'version' => $this->fetchRowVersion($id)];
         } else {
             return ['success' => false, 'error' => 'Update failed'];
         }
@@ -10184,6 +10565,15 @@ class Project extends ApplicationModel {
             if (!$existingProject) {
                 return ['status' => 'error', 'message' => 'Project not found'];
             }
+            $existingItems = $this->getPaymentItemsForProject($existingProject);
+            $closedCheck = $this->checkClosedMonthLines(
+                $existingProject,
+                $existingItems,
+                $this->linesAfterLegacyPost($existingProject, $existingItems, ['amount' => $amount])
+            );
+            if (!$closedCheck['ok']) {
+                return ['status' => 'error', 'error' => $closedCheck['error'], 'message' => $closedCheck['error']];
+            }
             
             // Prepare update data
             $data = array(
@@ -10192,13 +10582,15 @@ class Project extends ApplicationModel {
                 'updated_by' => $_SESSION['userid']
             );
             
-            // Perform update
-            $result = $this->query_update($data, ['id' => $id]);
-            
+            // Perform update. amount belongs to the 決済情報 form: bump payment_version so a
+            // payment form opened earlier cannot overwrite it.
+            $result = $this->query_update_versioned($data, ['id' => $id], null, 'payment_version');
+
             if ($result) {
                 return [
-                    'status' => 'success', 
+                    'status' => 'success',
                     'message' => 'Project amount updated successfully',
+                    'payment_version' => $this->fetchRowVersion($id, 'payment_version'),
                     'data' => [
                         'id' => $id,
                         'amount' => $amount,

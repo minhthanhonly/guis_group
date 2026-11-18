@@ -30,6 +30,7 @@
     var LOG_CATEGORIES = [
         { value: '', label: 'すべて' },
         { value: 'estimate', label: '見積' },
+        { value: 'order', label: '注文書' },
         { value: 'invoice', label: '請求' },
         { value: 'payment', label: '入金' },
         { value: 'note', label: '備考' }
@@ -42,8 +43,10 @@
     }
 
     window.BusinessDocumentUiMixin = {
-        // payment-items.js (loaded before this file) registers <payment-items-editor>
-        components: window.PaymentItemsEditor ? { 'payment-items-editor': window.PaymentItemsEditor } : {},
+        // payment-items.js (loaded before this file) registers <payment-items-editor> / <payment-order-form>
+        components: window.PaymentItemsEditor
+            ? { 'payment-items-editor': window.PaymentItemsEditor, 'payment-order-form': window.PaymentOrderForm }
+            : {},
         data: function () {
             return {
                 bdAmountFocusKey: '',
@@ -218,6 +221,7 @@
             getBdLogCategory: function (log) {
                 var a = String((log && log.action) || '');
                 if (a === 'payment_note_updated') return 'note';
+                if (a.indexOf('order_form_') === 0) return 'order';
                 if (a === 'payment_items_updated') {
                     var v = String((log && (log.value2 || log.value1)) || '');
                     return /^請求/.test(v) && !/見積/.test(v) ? 'invoice' : 'estimate';

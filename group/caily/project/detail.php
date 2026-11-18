@@ -61,12 +61,12 @@ if($_SESSION['show_project'] == 0){
         <?php $statusBannerVar = 'project'; require __DIR__ . '/partials/project-status-banner.php'; ?>
         <div class="row">
             <!-- Back button -->
-            <div class="col-12 mb-3 d-flex flex-wrap align-items-center gap-2">
+            <div class="col-12 mb-3">
                 <a href="index.php" class="btn btn-outline-primary">
                     <i class="fa fa-arrow-left me-2"></i><span data-i18n="案件一覧へ戻る">案件一覧へ戻る</span>
                 </a>
                 <?php
-                // 建物一覧 › 建物 › 案件: replaces the 建物詳細 button and the お施主様名 / 工事番号 box
+                // 建物詳細 button + お施主様名 / 工事番号 box (same as gantt.php)
                 $breadcrumbVar = 'project';
                 $breadcrumbLeaf = '';
                 require __DIR__ . '/partials/project-breadcrumb.php';
@@ -194,14 +194,23 @@ if($_SESSION['show_project'] == 0){
                     <div class="card-body" v-if="project">
                         <input type="hidden" v-model.number="project.payment_version">
 
-                        <!-- 見積 / 請求: any number of lines (payment-items.js) -->
-                        <div v-for="section in businessDocumentSections" :key="'bd-' + section.kind" class="bd-section">
-                            <div class="bd-section-title">
-                                <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ translateLabel(section.heading) }}</span>
+                        <!-- 見積 / 注文書 (省エネ only) / 請求: any number of lines (payment-items.js) -->
+                        <template v-for="section in businessDocumentSections" :key="'bd-' + section.kind">
+                            <div v-if="section.kind === 'invoice' && isEnergyDepartmentProject" class="bd-section bd-order-section">
+                                <div class="bd-section-title">
+                                    <i class="fa fa-file-signature me-1"></i><span data-i18n="注文書">{{ translateLabel('注文書') }}</span>
+                                </div>
+                                <payment-order-form :project="project" :editable="!!canEditBusinessDocuments"
+                                                    :translate="translateLabel" @change="onPaymentItemsChange"></payment-order-form>
                             </div>
-                            <payment-items-editor :project="project" :kind="section.kind" :editable="!!canEditBusinessDocuments"
-                                                  :energy="!!isEnergyDepartmentProject" :translate="translateLabel" @change="onPaymentItemsChange"></payment-items-editor>
-                        </div>
+                            <div class="bd-section">
+                                <div class="bd-section-title">
+                                    <i :class="section.icon" class="me-1"></i><span :data-i18n="section.heading">{{ translateLabel(section.heading) }}</span>
+                                </div>
+                                <payment-items-editor :project="project" :kind="section.kind" :editable="!!canEditBusinessDocuments"
+                                                      :energy="!!isEnergyDepartmentProject" :translate="translateLabel" @change="onPaymentItemsChange"></payment-items-editor>
+                            </div>
+                        </template>
 
                         <div class="mb-0 bd-note">
                             <label class="bd-label" data-i18n="決済備考">決済備考</label>

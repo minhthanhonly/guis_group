@@ -289,6 +289,10 @@
                     }
                     await this.openForm(this.formOptions);
                 },
+                /** 最新の内容を読み込む after a version conflict: reopen the form with the latest data (not the whole page). */
+                reloadAfterVersionConflict: function () {
+                    return this.openForm(this.formOptions);
+                },
                 // Page-only features the form does not have
                 addZoomToDescriptionImages: function () {},
                 initVietnamTimeTooltips: function () {},

@@ -346,38 +346,44 @@
         }
     }
 
+    /**
+     * Quick edits (status / priority / progress / tags) save one value without a version
+     * check but add 1 to the project version. Take the new version only when this page's
+     * own write is the only one since the page loaded (exactly +1): a bigger jump means
+     * someone else saved too, and the next full save must report that conflict instead of
+     * overwriting their change with this page's older data.
+     */
+    function applyQuickEditVersionFromResponse(project, responseData) {
+        if (!project || !responseData || typeof responseData !== 'object' || responseData.version == null) {
+            return;
+        }
+        const next = normalizeProjectVersion(responseData.version);
+        if (next === normalizeProjectVersion(project.version) + 1) {
+            project.version = next;
+        }
+    }
+
     function applyPaymentVersionFromResponse(project, responseData) {
         if (project && responseData && responseData.payment_version != null) {
             project.payment_version = normalizeProjectVersion(responseData.payment_version);
         }
     }
 
+    /**
+     * Someone else saved the project first; nothing was written. The shared dialog
+     * (assets/js/version-conflict.js) keeps the form and its input unless the user chooses to
+     * load the latest data, which runs onReload (a page reload when none is given).
+     */
     function handleProjectVersionConflict(responseData, onReload) {
+        if (typeof window.resolveVersionConflict === 'function') {
+            return window.resolveVersionConflict(responseData, onReload);
+        }
         if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
             return false;
         }
-        const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-        if (typeof hideHourglass === 'function') {
-            hideHourglass();
-        }
-        if (typeof Swal !== 'undefined' && Swal.fire) {
-            Swal.fire({
-                title: 'Error!',
-                text: msg,
-                icon: 'error',
-                customClass: {
-                    confirmButton: 'btn btn-primary'
-                },
-                buttonsStyling: false
-            }).then(() => {
-                window.location.reload();
-            });
-        } else if (typeof showMessage === 'function') {
-            showMessage(msg, true);
-            window.location.reload();
-        } else {
-            alert(msg);
-            window.location.reload();
+        const msg = responseData.message || '他のユーザーが先に更新しました。';
+        if (window.confirm(msg + '\n\n最新の内容を読み込みますか？（入力中の内容は破棄されます）')) {
+            if (typeof onReload === 'function') onReload(); else window.location.reload();
         }
         return true;
     }
@@ -1542,6 +1548,7 @@
                     formData.append('priority', this.project.priority);
                     const response = await axios.post('/api/index.php?model=project&method=updatePriority', formData);
                     if (this.isQuickEditSaved(response.data)) {
+                        applyQuickEditVersionFromResponse(this.project, response.data);
                         this.markInlineSave('basic', 'saved');
                     } else {
                         showMessage('優先度の更新に失敗しました。', true);
@@ -1605,6 +1612,7 @@
                     formData.append('progress', this.project.progress);
                     const response = await axios.post('/api/index.php?model=project&method=updateProgress', formData);
                     if (this.isQuickEditSaved(response.data)) {
+                        applyQuickEditVersionFromResponse(this.project, response.data);
                         this.markInlineSave('basic', 'saved');
                     } else {
                         showMessage('進捗率の更新に失敗しました。', true);
@@ -1687,7 +1695,8 @@
                     const formData = new FormData();
                     formData.append('id', this.projectId);
                     formData.append('tags', this.project.tags || '');
-                    await axios.post('/api/index.php?model=project&method=updatePojectTags', formData);
+                    const response = await axios.post('/api/index.php?model=project&method=updatePojectTags', formData);
+                    applyQuickEditVersionFromResponse(this.project, response && response.data);
                 } catch (error) {
                     console.error('Error saving project tags:', error);
                 }
@@ -2420,7 +2429,7 @@
                     appendProjectVersionToFormData(formData, this.project);
                     const response = await axios.post('/api/index.php?model=project&method=update', formData);
                     if (!response.data || response.data.status !== 'success') {
-                        if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                        if (handleProjectVersionConflict(response.data, () => this.reloadAfterVersionConflict())) {
                             return;
                         }
                         this.project[field] = oldVal;
@@ -2519,7 +2528,13 @@
                     // formData.append('building_type', this.project.building_type);
                     // formData.append('building_number', this.project.building_number);
                     formData.append('project_number', isCreate ? '' : this.project.project_number);
-                    formData.append('progress', this.project.progress);
+                    // 進捗率 is also recalculated from the tasks while the form is open (without a
+                    // version change): send it only when it was changed here, so the form does not
+                    // put back the value it was opened with.
+                    if (isCreate || !this.originalProject
+                        || String(this.originalProject.progress) !== String(this.project.progress)) {
+                        formData.append('progress', this.project.progress);
+                    }
                     formData.append('priority', this.project.priority || (isCreate ? 'medium' : ''));
                     formData.append('status', this.project.status);
                     // Use Tagify current value (kể cả khi rỗng) hoặc project khi chưa có tagify
@@ -2606,7 +2621,7 @@
                         // Hoãn loadProject để trình duyệt kịp vẽ thông báo trước khi xử lý nặng
                         setTimeout(() => { this.loadProject(); }, 0);
                     } else {
-                        if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                        if (handleProjectVersionConflict(response.data, () => this.reloadAfterVersionConflict())) {
                             return;
                         }
                         showMessage('プロジェクトの更新に失敗しました。', true);
@@ -3149,6 +3164,14 @@
                 return this.selectedEnergyMaterialLabels.filter(opt => composite.indexOf(opt) === -1);
             },
             /**
+             * The user chose 最新の内容を読み込む after a version conflict. On the detail page a
+             * whole reload is the only clean way out of edit mode (form widgets, original values);
+             * the project form dialog overrides this to reopen the form with the latest data.
+             */
+            reloadAfterVersionConflict() {
+                window.location.reload();
+            },
+            /**
              * Feedback of an inline save in the title of its section table (the way 決済情報 does
              * it): 'loading', 'saved' (clears itself) or null. No dialog on success.
              */
@@ -3191,7 +3214,7 @@
                         this.markInlineSave('custom', 'saved');
                     } else {
                         revert();
-                        if (handleProjectVersionConflict(res.data, () => this.loadProject())) return;
+                        if (handleProjectVersionConflict(res.data, () => this.reloadAfterVersionConflict())) return;
                         showMessage((res.data && (res.data.message || res.data.error)) || '更新に失敗しました。', true);
                     }
                 } catch (err) {
@@ -3225,7 +3248,7 @@
                         this.markInlineSave('custom', 'saved');
                     } else {
                         revert();
-                        if (handleProjectVersionConflict(res.data, () => this.loadProject())) return;
+                        if (handleProjectVersionConflict(res.data, () => this.reloadAfterVersionConflict())) return;
                         showMessage((res.data && (res.data.message || res.data.error)) || '更新に失敗しました。', true);
                     }
                 } catch (err) {
@@ -3301,7 +3324,7 @@
                         this.project.custom_fields = JSON.stringify(updated);
                         this.markInlineSave('custom', 'saved');
                     } else {
-                        if (handleProjectVersionConflict(res.data, () => this.loadProject())) {
+                        if (handleProjectVersionConflict(res.data, () => this.reloadAfterVersionConflict())) {
                             return;
                         }
                         showMessage(res.data?.message || res.data?.error || '更新に失敗しました。', true);

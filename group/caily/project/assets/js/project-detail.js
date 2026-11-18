@@ -246,6 +246,8 @@ const BUSINESS_DOCUMENT_LOG_ACTIONS = new Set([
     'receipt_number_updated',
     'payment_note_updated',
     'payment_items_updated',
+    'order_form_application_date_updated',
+    'order_form_design_date_updated',
 ]);
 
 const BUSINESS_DOCUMENT_FIELDS = [
@@ -276,6 +278,8 @@ const BUSINESS_DOCUMENT_FIELDS = [
     'payment_note',
     // 決済明細: kept across a reload while a save is pending, like the fields above
     'payment_items',
+    'order_form_application_at',
+    'order_form_design_at',
 ];
 
 const BUSINESS_DOCUMENT_DATE_FIELDS = [
@@ -330,32 +334,22 @@ function applyPaymentVersionFromResponse(project, responseData) {
     }
 }
 
+/**
+ * Someone else saved the project first; nothing was written. The shared dialog
+ * (assets/js/version-conflict.js) keeps what the user typed unless they choose to load the
+ * latest data, which runs onReload (a page reload when none is given). Also used by the
+ * 決済情報 dialog of this page through window.handleProjectVersionConflict.
+ */
 function handleProjectVersionConflict(responseData, onReload) {
+    if (typeof window.resolveVersionConflict === 'function') {
+        return window.resolveVersionConflict(responseData, onReload);
+    }
     if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
         return false;
     }
-    const msg = responseData.message || '他のユーザーが先に更新しました。ページを再読み込みしてください。';
-    if (typeof hideHourglass === 'function') {
-        hideHourglass();
-    }
-    if (typeof Swal !== 'undefined' && Swal.fire) {
-        Swal.fire({
-            title: 'Error!',
-            text: msg,
-            icon: 'error',
-            customClass: {
-                confirmButton: 'btn btn-primary'
-            },
-            buttonsStyling: false
-        }).then(() => {
-            window.location.reload();
-        });
-    } else if (typeof showMessage === 'function') {
-        showMessage(msg, true);
-        window.location.reload();
-    } else {
-        alert(msg);
-        window.location.reload();
+    const msg = responseData.message || '他のユーザーが先に更新しました。';
+    if (window.confirm(msg + '\n\n最新の内容を読み込みますか？（入力中の内容は破棄されます）')) {
+        if (typeof onReload === 'function') onReload(); else window.location.reload();
     }
     return true;
 }
@@ -1940,7 +1934,8 @@ const vueApp = createApp({
                 appendProjectVersionToFormData(formData, this.project);
                 const response = await axios.post('/api/index.php?model=project&method=update', formData);
                 if (!response.data || response.data.status !== 'success') {
-                    if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                    // 最新の内容を読み込む reloads the page
+                    if (handleProjectVersionConflict(response.data)) {
                         return;
                     }
                     if (typeof showMessage === 'function') {
@@ -2171,7 +2166,10 @@ const vueApp = createApp({
                         this.businessDocumentSaveHideTimer = null;
                     }, 5000);
                 } else {
-                    if (handleProjectVersionConflict(response.data, () => this.loadProject())) {
+                    // 最新の内容を読み込む reloads the page: loadProject() would keep the pending
+                    // 決済情報 edits on top of the newer data and auto-save them over it.
+                    if (handleProjectVersionConflict(response.data)) {
+                        this.businessDocumentSaveStatus = null;
                         return;
                     }
                     this.businessDocumentSaveStatus = null;

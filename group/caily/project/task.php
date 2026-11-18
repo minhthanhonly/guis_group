@@ -46,12 +46,12 @@ if($_SESSION['show_project'] == 0){
 
     <div class="row">
         <!-- Back button -->
-        <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+        <div class="col-12 mb-3">
             <a href="detail.php?id=<?php echo $project_id; ?>" class="btn btn-outline-primary">
                 <i class="fa fa-arrow-left me-2"></i><span data-i18n="案件概要へ戻る">案件概要へ戻る</span>
             </a>
             <?php
-            // 建物一覧 › 建物 › 案件 › タスク: replaces the 建物詳細 button and the お施主様名 / 工事番号 box
+            // 建物詳細 button + お施主様名 / 工事番号 box (same as gantt.php)
             $breadcrumbVar = 'projectInfo';
             $breadcrumbLeaf = 'タスク';
             require __DIR__ . '/partials/project-breadcrumb.php';

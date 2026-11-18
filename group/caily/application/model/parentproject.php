@@ -37,13 +37,53 @@ class ParentProject extends ApplicationModel {
             'created_by' => array(),
             'updated_by' => array(),
             'created_at' => array('except' => array('search')),
-            'updated_at' => array('except' => array('search'))
+            'updated_at' => array('except' => array('search')),
+            'version' => array()
         );
         $this->connect();
         $this->ensureParentProjectsUtf8mb4();
         $this->ensureParentProjectFeatureColumns();
         $this->ensureParentProjectCityColumn();
+        $this->ensureParentProjectVersionColumn();
         $this->ensureParentProjectCustomersTable();
+    }
+
+    /**
+     * Optimistic lock: every write to a building row adds 1 to `version`, and the edit form
+     * saves only while the row still has the version it loaded (see update()).
+     * Same statement as sql/add_version_to_parent_projects.sql.
+     */
+    private function ensureParentProjectVersionColumn() {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+        $done = true;
+        try {
+            $row = $this->fetchOne(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($this->table) . "' "
+                . "AND COLUMN_NAME = 'version'"
+            );
+            if (!empty($row['cnt'])) {
+                return;
+            }
+            $this->query(
+                "ALTER TABLE `{$this->table}` ADD COLUMN `version` INT UNSIGNED NOT NULL DEFAULT 1 "
+                . "COMMENT '楽観ロック用バージョン (更新ごとに+1)'"
+            );
+        } catch (Exception $e) {
+            error_log('ensureParentProjectVersionColumn failed: ' . $e->getMessage());
+        }
+    }
+
+    private function parentProjectVersionConflict($id) {
+        return array(
+            'status' => 'error',
+            'error' => 'version_conflict',
+            'message' => '他のユーザーが先にこの建物を更新しました。最新の内容を読み込んでから、もう一度編集してください。',
+            'current_version' => $this->fetchRowVersion($id),
+        );
     }
 
     /**
@@ -875,7 +915,7 @@ class ParentProject extends ApplicationModel {
         $oldRequests = isset($parent['requests']) ? (string)$parent['requests'] : '';
         $current[] = $type;
         $newRequests = implode(',', $current);
-        $ok = $this->query_update(array(
+        $ok = $this->query_update_versioned(array(
             'requests' => $newRequests,
             'updated_at' => date('Y-m-d H:i:s'),
         ), array('id' => $parentProjectId));
@@ -1024,6 +1064,17 @@ class ParentProject extends ApplicationModel {
         $old = $this->getById($id);
         if (!$old) return ['status' => 'error', 'error' => '建物が見つかりません'];
 
+        // Optimistic lock. The edit form posts every field, so a save based on stale data would
+        // silently undo what another user saved in the meantime: it must send the version it
+        // loaded. Callers that post only the fields they change (AI actions) may omit it.
+        $expectedVersion = null;
+        if (array_key_exists('version', $_POST)) {
+            $expectedVersion = intval($_POST['version']);
+            if ($expectedVersion !== intval(isset($old['version']) ? $old['version'] : 1)) {
+                return $this->parentProjectVersionConflict($id);
+            }
+        }
+
         // Partial update: use existing values when field not in $_POST or empty (avoid '' for datetime)
         $company_name = isset($_POST['company_name']) ? $this->validateUTF8MB4($_POST['company_name']) : (isset($old['company_name']) ? $old['company_name'] : '');
         $project_name = isset($_POST['project_name']) ? $this->validateUTF8MB4($_POST['project_name']) : (isset($old['project_name']) ? $old['project_name'] : '');
@@ -1112,13 +1163,16 @@ class ParentProject extends ApplicationModel {
         $customerIdToSync = isset($_POST['customer_id']) ? $data['customer_id'] : null;
 
         try {
-            $result = $this->query_update($data, ['id' => $id]);
+            $result = $this->query_update_versioned($data, ['id' => $id], $expectedVersion);
 
             if ($result) {
                 $this->saveParentProjectCustomerLinks($id, $customerSave, $customerIdToSync);
                 // Log the update action
                 $this->logParentProjectAction($id, 'updated', '建物情報を変更');
-                return ['status' => 'success', 'message' => '建物を更新しました'];
+                return ['status' => 'success', 'message' => '建物を更新しました', 'version' => $this->fetchRowVersion($id)];
+            } elseif ($expectedVersion !== null) {
+                // Another save landed between the check above and this UPDATE
+                return $this->parentProjectVersionConflict($id);
             } else {
                 return ['status' => 'error', 'error' => '更新に失敗しました'];
             }
@@ -1130,11 +1184,14 @@ class ParentProject extends ApplicationModel {
                     $this->query(
                         "ALTER TABLE `{$this->table}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
                     );
-                    $result = $this->query_update($data, ['id' => $id]);
+                    $result = $this->query_update_versioned($data, ['id' => $id], $expectedVersion);
                     if ($result) {
                         $this->saveParentProjectCustomerLinks($id, $customerSave, $customerIdToSync);
                         $this->logParentProjectAction($id, 'updated', '建物情報を変更');
-                        return ['status' => 'success', 'message' => '建物を更新しました'];
+                        return ['status' => 'success', 'message' => '建物を更新しました', 'version' => $this->fetchRowVersion($id)];
+                    }
+                    if ($expectedVersion !== null) {
+                        return $this->parentProjectVersionConflict($id);
                     }
                 } catch (Exception $e2) {
                     error_log('Parent project update retry after utf8mb4 failed: ' . $e2->getMessage());
@@ -1208,7 +1265,7 @@ class ParentProject extends ApplicationModel {
             'updated_by' => isset($_SESSION['userid']) ? $_SESSION['userid'] : '',
             'updated_at' => date('Y-m-d H:i:s')
         ];
-        $result = $this->query_update($updateData, ['id' => $parent_project_id]);
+        $result = $this->query_update_versioned($updateData, ['id' => $parent_project_id]);
         if (!$result) {
             return ['status' => 'error', 'message' => '工事番号の更新に失敗しました'];
         }
@@ -1368,7 +1425,7 @@ class ParentProject extends ApplicationModel {
             if ($request_date !== null) {
                 $data['request_date'] = $request_date;
             }
-            $result = $this->query_update($data, array('id' => $existing['id']));
+            $result = $this->query_update_versioned($data, array('id' => $existing['id']));
             if ($result) {
                 $this->syncPrimaryCustomerLink($existing['id'], $customer_id);
                 $hash['status'] = 'success';
@@ -1543,12 +1600,12 @@ class ParentProject extends ApplicationModel {
         );
 
         try {
-            $result = $this->query_update($data, ['id' => $id]);
-            
+            $result = $this->query_update_versioned($data, ['id' => $id]);
+
             if ($result) {
                 // Log the status change
                 $this->logParentProjectAction($id, 'status_changed', 'ステータス変更', $oldStatus, $status);
-                return ['status' => 'success', 'message' => 'ステータスを更新しました'];
+                return ['status' => 'success', 'message' => 'ステータスを更新しました', 'version' => $this->fetchRowVersion($id)];
             } else {
                 return ['status' => 'error', 'error' => 'ステータスの更新に失敗しました'];
             }

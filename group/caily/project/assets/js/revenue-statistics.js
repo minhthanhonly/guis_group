@@ -645,6 +645,12 @@
                 pendingUrlDepartmentId: null,
                 selectedMonth: currentYearMonth(),
                 availableMonths: [],
+                dataMonths: [],
+                // 月次締め
+                monthClosing: null,
+                closedMonths: [],
+                canCloseMonth: false,
+                closingBusy: false,
                 activeSubTab: 'summary',
                 loading: false,
                 loadingDepartments: false,
@@ -680,6 +686,34 @@
             },
             currentYearMonthValue() {
                 return currentYearMonth();
+            },
+            // Month options grouped by year (newest first), with 今月 marked and
+            // months that have 決済 data flagged, so the year is never ambiguous.
+            monthGroups() {
+                const current = currentYearMonth();
+                const withData = {};
+                (this.dataMonths || []).forEach(function(m) { withData[m] = true; });
+                const closed = {};
+                (this.closedMonths || []).forEach(function(m) { closed[m] = true; });
+                const groups = [];
+                const byYear = {};
+                (this.availableMonths || []).forEach(function(m) {
+                    const year = String(m.month).slice(0, 4);
+                    if (!byYear[year]) {
+                        byYear[year] = { year: year, label: year + '年', months: [] };
+                        groups.push(byYear[year]);
+                    }
+                    let text = m.month_label || buildMonthLabel(m.month);
+                    if (m.month === current) text += '（' + translateLabel('今月') + '）';
+                    else if (m.month > current) text += '（' + translateLabel('先の月') + '）';
+                    if (withData[m.month]) text = '● ' + text;
+                    if (closed[m.month]) text += ' 🔒';
+                    byYear[year].months.push({ month: m.month, text: text });
+                });
+                return groups;
+            },
+            isFutureMonth() {
+                return !!this.selectedMonth && this.selectedMonth > currentYearMonth();
             },
             // 種類 column: always for 省エネ; elsewhere once a 決済明細 line carries a 種別
             // other than the default 設計費 (old data is all 設計費, so the column stays hidden).
@@ -891,9 +925,14 @@
             },
             refreshAvailableMonths(extraMonths) {
                 const map = {};
-                buildMonthOptions(18, 12).forEach(function(m) {
+                // Only a few months ahead: a long run of future months at the top of the
+                // list made it easy to pick next year's month by mistake.
+                buildMonthOptions(18, 3).forEach(function(m) {
                     if (m && m.month) map[m.month] = m;
                 });
+                if (Array.isArray(extraMonths)) {
+                    this.dataMonths = extraMonths.map(function(m) { return m && m.month; }).filter(Boolean);
+                }
                 (Array.isArray(extraMonths) ? extraMonths : []).forEach(function(m) {
                     if (!m || !m.month) return;
                     map[m.month] = {
@@ -1130,6 +1169,42 @@
                     boldRows: exportData.companyRowNumbers.concat(exportData.headerRowNumbers)
                 });
             },
+            formatClosingAt(value) {
+                const s = String(value || '');
+                return s ? s.slice(0, 16).replace(/-/g, '/') : '';
+            },
+            /** 月次締め: close / reopen the selected month of the department (administrators). */
+            async postClosing(method) {
+                if (!this.selectedDepartment || !this.selectedMonth || this.closingBusy) return;
+                this.closingBusy = true;
+                try {
+                    const formData = new FormData();
+                    formData.append('department_id', this.selectedDepartment.id);
+                    formData.append('month', this.selectedMonth);
+                    const response = await axios.post('/api/index.php?model=project&method=' + method, formData);
+                    const data = response.data || {};
+                    if (data.status !== 'success') {
+                        window.alert(data.message || data.error || translateLabel('保存に失敗しました。'));
+                        return;
+                    }
+                    await this.loadStats();
+                } catch (err) {
+                    console.error(method + ':', err);
+                    window.alert(translateLabel('保存に失敗しました。'));
+                } finally {
+                    this.closingBusy = false;
+                }
+            },
+            closeMonth() {
+                const msg = translateLabel('{month}を締めますか？\nこの月の発行済の請求は変更できなくなり、この月の日付で請求を入力することもできなくなります。').replace('{month}', this.monthLabel);
+                if (!window.confirm(msg)) return;
+                this.postClosing('closeRevenueMonth');
+            },
+            reopenMonth() {
+                const msg = translateLabel('{month}の締めを解除しますか？\nこの月の請求を再び変更できるようになります。').replace('{month}', this.monthLabel);
+                if (!window.confirm(msg)) return;
+                this.postClosing('reopenRevenueMonth');
+            },
             async loadStats() {
                 if (!this.selectedDepartment || !this.selectedMonth) return;
                 this.loading = true;
@@ -1166,6 +1241,7 @@
                         this.completedUninvoiced = [];
                         this.cancelledProjects = [];
                         this.isEnergyDepartment = false;
+                        this.monthClosing = null;
                         return;
                     }
                     this.summaryByCompany = data.summary_by_company || [];
@@ -1181,6 +1257,9 @@
                         cumulative_actual_sales: 0
                     }, data.meta && data.meta.target_summary ? data.meta.target_summary : {});
                     this.isEnergyDepartment = !!(data.meta && Number(data.meta.is_energy_department) === 1);
+                    this.monthClosing = data.meta && data.meta.closing ? data.meta.closing : null;
+                    this.closedMonths = data.meta && Array.isArray(data.meta.closed_months) ? data.meta.closed_months : [];
+                    this.canCloseMonth = !!(data.meta && Number(data.meta.can_close_month) === 1);
                     ['estimated_projects', 'invoiced_projects', 'completed_uninvoiced', 'cancelled_projects'].forEach(function(key) {
                         (data[key] || []).forEach(function(p) { if (p.fee_type) p.fee_type = decodeTypeText(p.fee_type); });
                     });

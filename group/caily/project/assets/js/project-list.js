@@ -533,26 +533,22 @@ var projectTable;
     window.appendPaymentVersionToFormData = appendPaymentVersionToFormData;
     window.applyPaymentVersionFromResponse = applyPaymentVersionFromResponse;
 
+    /**
+     * Someone else saved the project first; nothing was written. The shared dialog
+     * (assets/js/version-conflict.js) keeps what the user typed unless they choose to load the
+     * latest data, which runs onReload (the 決済情報 dialog reopens itself; a page reload when
+     * none is given).
+     */
     function handleProjectVersionConflict(responseData, onReload) {
+        if (typeof window.resolveVersionConflict === 'function') {
+            return window.resolveVersionConflict(responseData, onReload);
+        }
         if (!responseData || (responseData.error !== 'version_conflict' && responseData.error !== 'version_required')) {
             return false;
         }
-        var msg = responseData.message || translateText('他のユーザーが先に更新しました。ページを再読み込みしてください。');
-        if (typeof hideHourglass === 'function') {
-            hideHourglass();
-        }
-        if (typeof Swal !== 'undefined' && Swal.fire) {
-            showProjectListError(msg, responseData, {
-                onClose: function() {
-                    window.location.reload();
-                }
-            });
-        } else if (typeof showMessage === 'function') {
-            showMessage(msg, true);
-            window.location.reload();
-        } else if (typeof alert === 'function') {
-            alert(msg);
-            window.location.reload();
+        var msg = responseData.message || translateText('他のユーザーが先に更新しました。');
+        if (window.confirm(msg + '\n\n最新の内容を読み込みますか？（入力中の内容は破棄されます）')) {
+            if (typeof onReload === 'function') onReload(); else window.location.reload();
         }
         return true;
     }

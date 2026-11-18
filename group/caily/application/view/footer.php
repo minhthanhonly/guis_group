@@ -4,6 +4,7 @@ $appAssets = app_resolve_asset_context($directory ?? '', $page ?? '');
 $cv = defined('CACHE_VERSION') ? CACHE_VERSION : '';
 ?>
 <script src="<?=$root?>assets/js/app-loader.js?v=<?=$cv?>"></script>
+<script src="<?=$root?>assets/js/version-conflict.js?v=<?=$cv?>"></script>
 <script>
 (function (window) {
   'use strict';

@@ -284,35 +284,115 @@
     visibility: visible;
 }
 
-/* ---------- 決済明細 (payment-items.js) — plain list, no status colours ---------- */
-.bd-scope .pi-editor { display: flex; flex-direction: column; }
-.bd-scope .pi-empty { font-size: 0.8125rem; padding: 4px 0; }
-.bd-scope .pi-line { display: flex; flex-direction: column; gap: 4px; padding: 6px 0; }
-.bd-scope .pi-line + .pi-line { border-top: 1px solid var(--bs-border-color, #e4e6e8); }
-.bd-scope .pi-line-row { display: flex; gap: 6px; align-items: center; min-width: 0; }
+/* ---------- 決済明細 (payment-items.js) ----------
+ * Readability (root font 15px): 13px text in inputs / buttons / totals, 12px notes, 14px titles.
+ * Each line is a soft panel instead of divider lines; at most one note per line.
+ */
+.bd-scope {
+    --pi-panel-bg: transparent;
+    --pi-panel-border: rgba(67, 89, 113, 0.18);
+    --pi-panel-shadow: 0 1px 2px rgba(67, 89, 113, 0.06);
+}
+[data-bs-theme="dark"] .bd-scope {
+    --pi-panel-bg: transparent;
+    --pi-panel-border: rgba(255, 255, 255, 0.14);
+    --pi-panel-shadow: none;
+}
+
+.bd-scope .bd-section + .bd-section { margin-top: 20px; }
+.bd-scope .bd-section-title {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.9375rem; font-weight: 600;
+    color: var(--bs-heading-color, var(--bs-body-color));
+    margin-bottom: 8px;
+}
+.bd-scope .bd-section-title .fa { color: var(--bd-muted); font-size: 0.875rem; }
+
+/* larger controls inside the editor (the theme's *-sm sizes are 12-13px) */
+.bd-scope .pi-editor .form-control,
+.bd-scope .pi-editor .input-group-text,
+.bd-scope .pi-editor .btn-sm,
+.bd-scope .pi-order-form .form-control {
+    font-size: 0.875rem;
+}
+.bd-scope .pi-editor .form-control,
+.bd-scope .pi-order-form .form-control { min-height: 34px; }
+/* inputs keep the card's own background (white), never the panel's: a tinted field reads as disabled */
+.bd-scope .pi-editor .form-control:not(:disabled),
+.bd-scope .pi-editor .input-group-text,
+.bd-scope .pi-order-form .form-control:not(:disabled) {
+    background-color: var(--bs-paper-bg, #fff);
+}
+
+.bd-scope .pi-editor { display: flex; flex-direction: column; gap: 8px; }
+.bd-scope .pi-empty { font-size: 0.875rem; padding: 4px 0; }
+.bd-scope .pi-line {
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 10px;
+    background: var(--pi-panel-bg);
+    border: 1px solid var(--pi-panel-border);
+    box-shadow: var(--pi-panel-shadow);
+    border-radius: 8px;
+}
+.bd-scope .pi-line-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .bd-scope .pi-type { flex: 1 1 auto; min-width: 0; }
-.bd-scope .pi-status { flex: 0 0 auto; align-self: stretch; display: flex; }
-.bd-scope .pi-status-toggle { display: inline-flex; align-items: center; gap: 4px; min-width: 6.5rem; }
-.bd-scope .pi-status-toggle::after { margin-left: auto; }
-.bd-scope .pi-status .dropdown-menu { min-width: 8rem; }
-.bd-scope .pi-remove { flex: 0 0 auto; }
-.bd-scope .pi-date-group { flex: 0 1 11.5rem; min-width: 0; }
+.bd-scope .pi-date-group { flex: 0 1 12rem; min-width: 0; }
 .bd-scope .pi-amount-group { flex: 1 1 auto; min-width: 0; }
+.bd-scope .pi-remove { flex: 0 0 auto; }
+
+.bd-scope .pi-status { flex: 0 0 auto; align-self: stretch; display: flex; }
+.bd-scope .pi-status-toggle { display: inline-flex; align-items: center; gap: 6px; min-width: 7rem; font-weight: 600; }
+.bd-scope .pi-status-toggle::after { margin-left: auto; }
+.bd-scope .pi-status .dropdown-menu { min-width: 9rem; }
+.bd-scope .pi-status-option { display: flex; align-items: center; gap: 8px; font-size: 0.875rem; }
+.bd-scope .pi-status-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; }
+.bd-scope .pi-status-option.disabled .pi-status-dot { opacity: 0.4; }
+
+/* read-only */
 .bd-scope .pi-value { flex: 1 1 50%; font-size: 0.875rem; }
 .bd-scope .pi-type-badge { flex: 1 1 auto; font-size: 0.875rem; }
 .bd-scope .pi-type-none { color: var(--bs-secondary-color, #8592a3); }
-.bd-scope .pi-status-text { flex: 0 0 auto; font-size: 0.8125rem; color: var(--bs-secondary-color, #8592a3); }
-.bd-scope .pi-hint,
-.bd-scope .pi-pending { font-size: 0.75rem; color: var(--bs-secondary-color, #8592a3); }
-.bd-scope .pi-pending { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.bd-scope .pi-pending .fa,
-.bd-scope .pi-pending-summary .fa { color: var(--bs-warning, #ffab00); }
-.bd-scope .pi-pending .pi-issue-btn { padding: 0; font-size: 0.75rem; vertical-align: baseline; }
-.bd-scope .pi-pending-summary { font-size: 0.75rem; color: var(--bs-secondary-color, #8592a3); padding-bottom: 2px; }
-.bd-scope .pi-footer {
-    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px;
-    padding-top: 6px; border-top: 1px solid var(--bs-border-color, #e4e6e8);
+.bd-scope .pi-status-text { flex: 0 0 auto; font-size: 0.8125rem; font-weight: 600; }
+
+/* one note per line */
+.bd-scope .pi-note {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: 0.8125rem; line-height: 1.4;
+    color: var(--bs-body-color);
 }
-.bd-scope .pi-actions { display: flex; gap: 4px; flex-wrap: wrap; }
-.bd-scope .pi-actions .btn { padding-left: 0; padding-right: 8px; }
-.bd-scope .pi-total { margin-left: auto; font-size: 0.8125rem; text-align: right; }
+.bd-scope .pi-note .fa { flex: 0 0 auto; }
+.bd-scope .pi-note-pending .fa { color: var(--bs-warning, #ffab00); }
+.bd-scope .pi-note .pi-issue-btn { margin-left: auto; padding: 2px 10px; font-size: 0.8125rem; }
+
+/* 月次締め: a 発行済 請求 saved in a closed month is read-only; another 請求 dated there shows an error */
+.bd-scope .pi-line-locked { background: var(--bs-gray-50, rgba(67, 89, 113, 0.04)); border-style: dashed; }
+.bd-scope .pi-note-locked { color: var(--bs-secondary-color, #8592a3); }
+.bd-scope .pi-note-locked .fa { color: var(--bs-secondary-color, #8592a3); }
+.bd-scope .pi-note-closed { color: var(--bs-danger, #ff3e1d); }
+/* flatpickr is appended to <body>, outside .bd-scope */
+.flatpickr-day.pi-day-closed { color: rgba(67, 89, 113, 0.3); text-decoration: line-through; }
+
+.bd-scope .pi-footer {
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px;
+    padding-top: 2px;
+}
+.bd-scope .pi-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.bd-scope .pi-total { margin-left: auto; font-size: 0.875rem; text-align: right; }
+.bd-scope .pi-total strong { font-size: 1rem; }
+
+/* ---------- 注文書 (payment-items.js <payment-order-form>) ---------- */
+.bd-scope .pi-order-form {
+    display: flex; flex-direction: column;
+    padding: 4px 10px;
+    background: var(--pi-panel-bg);
+    border: 1px solid var(--pi-panel-border);
+    box-shadow: var(--pi-panel-shadow);
+    border-radius: 8px;
+}
+.bd-scope .pi-order-row { display: flex; align-items: center; gap: 12px; min-height: 42px; min-width: 0; }
+.bd-scope .pi-order-row + .pi-order-row { border-top: 1px solid var(--pi-panel-border); }
+.bd-scope .pi-order-check { flex: 0 0 auto; min-width: 6rem; margin: 0; padding-left: 0; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.bd-scope .pi-order-check .form-check-input { margin: 0; width: 1.125rem; height: 1.125rem; }
+.bd-scope .pi-order-check .form-check-label { font-size: 0.875rem; font-weight: 500; }
+.bd-scope .pi-order-row .pi-datetime { flex: 0 1 12rem; min-width: 0; }
+.bd-scope .pi-order-none { font-size: 0.8125rem; color: var(--bs-secondary-color, #8592a3); }
