@@ -406,8 +406,6 @@
         template: ''
             + '<div class="pi-editor" :class="\'pi-editor-\' + kind">'
             + '  <datalist :id="listId"><option v-for="t in typeOptions" :key="t" :value="t"></option></datalist>'
-            + '  <div v-if="pendingCount" class="pi-pending-summary" role="status">'
-            + '    <i class="fa fa-exclamation-circle me-1"></i>{{ t("状態が未更新の明細") }}: {{ pendingCount }}{{ t("件") }}</div>'
             + '  <div v-if="!items.length" class="pi-empty text-muted">{{ t("明細なし") }}</div>'
             + '  <div v-for="(item, idx) in items" :key="keyOf(item)" class="pi-line" :class="{ \'pi-line-pending\': isPending(item) }">'
             // input order: 日付 → 種別 (row 1), 金額 → 状態 (row 2, status last)
@@ -438,18 +436,21 @@
             + '          <li v-for="s in statusOptions" :key="s.value">'
             + '            <a href="javascript:void(0);" class="dropdown-item pi-status-option"'
             + '               :class="{ active: s.value === normStatus(item.status), disabled: s.value === \'発行済\' && !canIssue(item) }"'
+            + '               :title="s.value === \'発行済\' && !canIssue(item) ? issueBlockReason(item) : null"'
             + '               @click="selectStatus(item, s.value)"><span class="pi-status-dot" :class="\'bg-\' + s.color"></span>{{ t(s.label) }}</a></li>'
             + '        </ul>'
             + '      </div>'
             + '      <span v-else class="badge pi-status-text" :class="\'bg-\' + statusColor(item.status)">{{ t(normStatus(item.status)) }}</span>'
             + '    </div>'
-            + '    <div v-if="editable && normStatus(item.status) !== \'発行済\' && !isWaived(item.status) && !isComplete(item)" class="pi-hint">'
-            + '      {{ t("発行済にするには{fields}が必要です").replace("{fields}", t(dateLabel) + "・" + t("金額")) }}</div>'
-            + '    <div v-else-if="editable && normStatus(item.status) !== \'発行済\' && !isWaived(item.status) && needsOrderForm(item)" class="pi-hint pi-hint-order">'
-            + '      {{ t("発行済にするには注文書（{type}）のチェックが必要です").replace("{type}", t(orderFormType(item))) }}</div>'
-            + '    <div v-if="isPending(item)" class="pi-pending">'
-            + '      <span><i class="fa fa-exclamation-circle me-1"></i>{{ t("状態が「{status}」のままです").replace("{status}", t(normStatus(item.status))) }}</span>'
-            + '      <button v-if="editable && canIssue(item)" type="button" class="btn btn-link btn-sm pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
+            // one note per line at most: 注文書 missing (省エネ) > status not moved on.
+            // The 日付・金額 requirement is the tooltip of the disabled 発行済 option.
+            + '    <div v-if="editable && needsOrderForm(item) && normStatus(item.status) !== \'発行済\' && !isWaived(item.status)" class="pi-note pi-note-order">'
+            + '      <i class="fa fa-file-signature" aria-hidden="true"></i>'
+            + '      <span>{{ t("発行済にするには注文書（{type}）にチェックしてください").replace("{type}", t(orderFormType(item))) }}</span></div>'
+            + '    <div v-else-if="isPending(item)" class="pi-note pi-note-pending">'
+            + '      <i class="fa fa-exclamation-circle" aria-hidden="true"></i>'
+            + '      <span>{{ t("状態が「{status}」のままです").replace("{status}", t(normStatus(item.status))) }}</span>'
+            + '      <button v-if="editable && canIssue(item)" type="button" class="btn btn-sm btn-outline-success pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
             + '    </div>'
             + '  </div>'
             + '  <div class="pi-footer">'
@@ -500,9 +501,6 @@
             },
             canCopyFromEstimate: function () {
                 return itemsOf(this.project, 'estimate').length > 0;
-            },
-            pendingCount: function () {
-                return this.items.filter(isPendingLine).length;
             }
         },
         watch: {
@@ -553,6 +551,13 @@
             },
             orderFormType: orderFormTypeOf,
             /** Date + amount entered, but the line's 注文書 is not checked yet. */
+            /** Why 発行済 is disabled for this line (tooltip of the option). */
+            issueBlockReason: function (item) {
+                if (!isLineComplete(item)) {
+                    return this.t('発行済にするには{fields}が必要です').replace('{fields}', this.t(this.dateLabel) + '・' + this.t('金額'));
+                }
+                return this.t('発行済にするには注文書（{type}）にチェックしてください').replace('{type}', this.t(orderFormTypeOf(item)));
+            },
             needsOrderForm: function (item) {
                 var type = orderFormTypeOf(item);
                 return this.energy && !!type && isLineComplete(item) && !hasOrderForm(this.project, type);
