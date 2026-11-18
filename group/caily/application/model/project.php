@@ -4542,6 +4542,7 @@ class Project extends ApplicationModel {
             $project['has_energy_sibling'] = $this->hasEnergySavingSiblingProject($project) ? 1 : 0;
             $project['payment_items'] = $this->getPaymentItemsForProject($project);
             $project['payment_item_types'] = $this->getPaymentItemTypeSuggestions();
+            $project['closed_months'] = $this->getClosedMonthsForDepartment($project['department_id'] ?? 0);
         }
         
         return $project;
@@ -6307,6 +6308,9 @@ class Project extends ApplicationModel {
                 'department_id' => $deptId,
                 'is_energy_department' => $energySplit ? 1 : 0,
                 'available_months' => $availableMonths,
+                'closing' => $this->getRevenueMonthClosing($deptId, $month),
+                'closed_months' => $this->getClosedMonthsForDepartment($deptId),
+                'can_close_month' => (($_SESSION['authority'] ?? '') === 'administrator') ? 1 : 0,
                 'target_summary' => [
                     'fiscal_year' => $fiscalYear,
                     'fiscal_start_month' => $fiscalStartMonth,
@@ -7028,6 +7032,10 @@ class Project extends ApplicationModel {
             $p['payment_items'] = $this->buildPaymentItemsFromLegacy($p, $isEnergy);
         }
         unset($p);
+        foreach ($projects as &$p) {
+            $p['closed_months'] = $this->getClosedMonthsForDepartment($p['department_id'] ?? 0);
+        }
+        unset($p);
     }
 
     /** Whitelist for the 種別 tag input: types saved so far (most used first) + the legacy fee types. */
@@ -7322,6 +7330,199 @@ class Project extends ApplicationModel {
         return ['ok' => true, 'values' => $values, 'null_fields' => $nullFields];
     }
 
+    // ------------------------------------------------------------------ 月次締め
+    // A department closes a month in 月次売上統計: from then on the 見積 / 請求 lines dated in
+    // that month cannot be changed or deleted, and no line can be given a date in that month.
+
+    /** department_id => closed months, for this request (reset when a month is closed / reopened) */
+    private static $closedMonthsCache = [];
+
+    private function revenueClosingsTable() {
+        return DB_PREFIX . 'revenue_month_closings';
+    }
+
+    /** sql/add_revenue_month_closings.sql */
+    private function ensureRevenueClosingsTable() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        try {
+            $this->query("CREATE TABLE IF NOT EXISTS `" . $this->revenueClosingsTable() . "` (
+                `department_id` INT NOT NULL,
+                `month` CHAR(7) NOT NULL COMMENT 'YYYY-MM',
+                `closed_at` DATETIME NOT NULL,
+                `closed_by` VARCHAR(100) NOT NULL DEFAULT '',
+                PRIMARY KEY (`department_id`, `month`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='月次締め (見積・請求)'");
+        } catch (Exception $e) {
+            error_log('ensureRevenueClosingsTable failed: ' . $e->getMessage());
+        }
+    }
+
+    /** Closed months of a department, ['YYYY-MM', ...] newest first. */
+    public function getClosedMonthsForDepartment($departmentId) {
+        $departmentId = intval($departmentId);
+        if ($departmentId <= 0) {
+            return [];
+        }
+        if (isset(self::$closedMonthsCache[$departmentId])) {
+            return self::$closedMonthsCache[$departmentId];
+        }
+        $this->ensureRevenueClosingsTable();
+        $rows = $this->fetchAll(sprintf(
+            "SELECT `month` FROM `%s` WHERE department_id = %d ORDER BY `month` DESC",
+            $this->revenueClosingsTable(),
+            $departmentId
+        ));
+        self::$closedMonthsCache[$departmentId] = array_values(array_map(function ($r) { return (string)$r['month']; }, is_array($rows) ? $rows : []));
+        return self::$closedMonthsCache[$departmentId];
+    }
+
+    private function getRevenueMonthClosing($departmentId, $month) {
+        $this->ensureRevenueClosingsTable();
+        $row = $this->fetchOne(sprintf(
+            "SELECT c.month, c.closed_at, c.closed_by, u.realname AS closed_by_name
+             FROM `%s` c LEFT JOIN %suser u ON u.userid = c.closed_by
+             WHERE c.department_id = %d AND c.month = '%s'",
+            $this->revenueClosingsTable(),
+            DB_PREFIX,
+            intval($departmentId),
+            $this->escape($month)
+        ));
+        return $row ?: null;
+    }
+
+    private function monthLabelJa($month) {
+        return preg_match('/^(\d{4})-(\d{2})$/', (string)$month, $m) ? $m[1] . '年' . intval($m[2]) . '月' : (string)$month;
+    }
+
+    /** What makes a line the same line for the 締め check (the id is not kept across saves). */
+    private function closedLineSignature(array $item) {
+        $amount = $item['amount'] ?? null;
+        return implode('|', [
+            (string)($item['kind'] ?? ''),
+            substr((string)($item['item_date'] ?? ''), 0, 16),
+            trim((string)($item['item_type'] ?? '')),
+            ($amount === null || $amount === '') ? '' : number_format((float)$amount, 2, '.', ''),
+            $this->normalizePaymentItemStatus($item['status'] ?? ''),
+        ]);
+    }
+
+    /**
+     * The lines dated in a closed month must come back unchanged: none edited, deleted,
+     * added, or moved into / out of a closed month.
+     *
+     * @param array $old      project before the save
+     * @param array $oldItems its lines (stored, or built from the legacy columns)
+     * @param array $newItems the lines after the save
+     * @return array ['ok' => true] | ['ok' => false, 'error' => '...']
+     */
+    private function checkClosedMonthLines(array $old, array $oldItems, array $newItems) {
+        $closed = $this->getClosedMonthsForDepartment($old['department_id'] ?? 0);
+        if (empty($closed)) {
+            return ['ok' => true];
+        }
+        $closedSet = array_flip($closed);
+        $collect = function (array $items) use ($closedSet) {
+            $out = [];
+            foreach ($items as $it) {
+                $month = substr((string)($it['item_date'] ?? ''), 0, 7);
+                if ($month !== '' && isset($closedSet[$month])) {
+                    $out[] = ['month' => $month, 'sig' => $this->closedLineSignature($it)];
+                }
+            }
+            return $out;
+        };
+        $before = $collect($oldItems);
+        $after = $collect($newItems);
+        $remaining = array_count_values(array_column($before, 'sig'));
+        foreach ($after as $line) {
+            if (empty($remaining[$line['sig']])) {
+                return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の見積・請求は入力・変更できません。'];
+            }
+            $remaining[$line['sig']]--;
+        }
+        foreach ($before as $line) {
+            if (!empty($remaining[$line['sig']])) {
+                return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の見積・請求は変更・削除できません。'];
+            }
+        }
+        return ['ok' => true];
+    }
+
+    /**
+     * Lines after a save that posts the legacy 見積/請求 columns instead of `payment_items`
+     * (older forms, updateAmount). Projects with stored lines keep them (the legacy columns are
+     * only derived from them), so only projects without stored lines change.
+     */
+    private function linesAfterLegacyPost(array $old, array $oldItems, array $posted) {
+        if (!empty($this->fetchPaymentItemRows($old['id']))) {
+            return $oldItems;
+        }
+        $merged = $old;
+        foreach ($posted as $key => $value) {
+            if (preg_match('/^(amount|estimate_|invoice_)/', (string)$key)) {
+                $merged[$key] = $value;
+            }
+        }
+        return $this->buildPaymentItemsFromLegacy($merged, $this->isEnergyDepartmentById($old['department_id'] ?? 0));
+    }
+
+    private function closingRequestParams() {
+        $departmentId = isset($_POST['department_id']) ? intval($_POST['department_id']) : 0;
+        $month = isset($_POST['month']) ? trim((string)$_POST['month']) : '';
+        if ($departmentId <= 0 || !preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $month)) {
+            return null;
+        }
+        return [$departmentId, $month];
+    }
+
+    /** 月次売上統計: close a department's month (administrator only). */
+    function closeRevenueMonth($params = null) {
+        if (($_SESSION['authority'] ?? '') !== 'administrator') {
+            return $this->forbiddenResponse();
+        }
+        $p = $this->closingRequestParams();
+        if (!$p) {
+            return ['status' => 'error', 'error' => 'Invalid department or month'];
+        }
+        list($departmentId, $month) = $p;
+        $this->ensureRevenueClosingsTable();
+        self::$closedMonthsCache = [];
+        $this->query(sprintf(
+            "INSERT IGNORE INTO `%s` (department_id, `month`, closed_at, closed_by) VALUES (%d, '%s', '%s', '%s')",
+            $this->revenueClosingsTable(),
+            $departmentId,
+            $this->escape($month),
+            date('Y-m-d H:i:s'),
+            $this->escape((string)($_SESSION['userid'] ?? ''))
+        ));
+        return ['status' => 'success', 'closing' => $this->getRevenueMonthClosing($departmentId, $month)];
+    }
+
+    /** 月次売上統計: reopen a closed month (administrator only). */
+    function reopenRevenueMonth($params = null) {
+        if (($_SESSION['authority'] ?? '') !== 'administrator') {
+            return $this->forbiddenResponse();
+        }
+        $p = $this->closingRequestParams();
+        if (!$p) {
+            return ['status' => 'error', 'error' => 'Invalid department or month'];
+        }
+        list($departmentId, $month) = $p;
+        $this->ensureRevenueClosingsTable();
+        self::$closedMonthsCache = [];
+        $this->query(sprintf(
+            "DELETE FROM `%s` WHERE department_id = %d AND `month` = '%s'",
+            $this->revenueClosingsTable(),
+            $departmentId,
+            $this->escape($month)
+        ));
+        return ['status' => 'success', 'closing' => null];
+    }
+
     function updateProjectStatus($params = null) {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
@@ -7361,6 +7562,17 @@ class Project extends ApplicationModel {
         $orderFormCheck = $this->checkPostedOrderForms($old, $postedPaymentItems);
         if (!$orderFormCheck['ok']) {
             return ['status' => 'error', 'error' => $orderFormCheck['error'], 'message' => $orderFormCheck['error']];
+        }
+
+        // 月次締め: lines dated in a closed month stay as they are
+        $oldPaymentItems = $this->getPaymentItemsForProject($old);
+        $closedCheck = $this->checkClosedMonthLines(
+            $old,
+            $oldPaymentItems,
+            $postedPaymentItems !== null ? $postedPaymentItems : $this->linesAfterLegacyPost($old, $oldPaymentItems, $_POST)
+        );
+        if (!$closedCheck['ok']) {
+            return ['status' => 'error', 'error' => $closedCheck['error'], 'message' => $closedCheck['error']];
         }
 
         $data = array(
@@ -10318,6 +10530,15 @@ class Project extends ApplicationModel {
             $existingProject = $this->getById($id);
             if (!$existingProject) {
                 return ['status' => 'error', 'message' => 'Project not found'];
+            }
+            $existingItems = $this->getPaymentItemsForProject($existingProject);
+            $closedCheck = $this->checkClosedMonthLines(
+                $existingProject,
+                $existingItems,
+                $this->linesAfterLegacyPost($existingProject, $existingItems, ['amount' => $amount])
+            );
+            if (!$closedCheck['ok']) {
+                return ['status' => 'error', 'error' => $closedCheck['error'], 'message' => $closedCheck['error']];
             }
             
             // Prepare update data

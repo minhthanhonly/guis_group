@@ -99,6 +99,30 @@ if (!$canAccessRevenueStats) {
             </li>
         </ul>
 
+        <!-- 月次締め: while a month is closed, its 見積 / 請求 lines cannot be changed -->
+        <div v-if="!loading && !errorMessage && (monthClosing || canCloseMonth)" class="revenue-closing-bar mb-3" :class="monthClosing ? 'is-closed' : 'is-open'">
+            <i class="fa" :class="monthClosing ? 'fa-lock' : 'fa-unlock-alt'" aria-hidden="true"></i>
+            <div class="revenue-closing-text">
+                <template v-if="monthClosing">
+                    <strong>{{ monthLabel }}<span data-i18n="は締め済みです">は締め済みです</span></strong>
+                    <span class="revenue-closing-meta">（{{ formatClosingAt(monthClosing.closed_at) }}<template v-if="monthClosing.closed_by_name"> ・ {{ monthClosing.closed_by_name }}</template>）</span>
+                    <div class="small" data-i18n="この月の見積・請求は変更・追加できません。">この月の見積・請求は変更・追加できません。</div>
+                </template>
+                <template v-else>
+                    <strong>{{ monthLabel }}<span data-i18n="は未締めです">は未締めです</span></strong>
+                    <div class="small" data-i18n="締めると、この月の見積・請求は変更・追加できなくなります。">締めると、この月の見積・請求は変更・追加できなくなります。</div>
+                </template>
+            </div>
+            <template v-if="canCloseMonth">
+                <button v-if="monthClosing" type="button" class="btn btn-sm btn-outline-secondary" :disabled="closingBusy" @click="reopenMonth">
+                    <i class="fa fa-unlock me-1"></i><span data-i18n="締めを解除">締めを解除</span>
+                </button>
+                <button v-else type="button" class="btn btn-sm btn-primary" :disabled="closingBusy" @click="closeMonth">
+                    <i class="fa fa-lock me-1"></i><span data-i18n="この月を締める">この月を締める</span>
+                </button>
+            </template>
+        </div>
+
         <div v-if="loading" class="text-center py-5">
             <div class="spinner-border text-primary" role="status">
                 <span class="visually-hidden">Loading...</span>
@@ -754,6 +778,21 @@ $view->footing();
     border-color: #fff;
     box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
 }
+.revenue-closing-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.625rem 0.875rem;
+    border-radius: 0.5rem;
+    border: 1px solid rgba(67, 89, 113, 0.18);
+}
+.revenue-closing-bar > .fa { font-size: 1.125rem; }
+.revenue-closing-bar .revenue-closing-text { flex: 1 1 16rem; min-width: 0; }
+.revenue-closing-bar .revenue-closing-meta { color: var(--bs-secondary-color, #8592a3); font-size: 0.8125rem; }
+.revenue-closing-bar.is-closed { background: rgba(105, 108, 255, 0.08); border-color: rgba(105, 108, 255, 0.35); }
+.revenue-closing-bar.is-closed > .fa { color: var(--bs-primary, #696cff); }
+.revenue-closing-bar.is-open > .fa { color: var(--bs-secondary-color, #8592a3); }
 .revenue-dept-nav-month .revenue-future-badge {
     font-weight: 600;
 }

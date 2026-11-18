@@ -646,6 +646,11 @@
                 selectedMonth: currentYearMonth(),
                 availableMonths: [],
                 dataMonths: [],
+                // 月次締め
+                monthClosing: null,
+                closedMonths: [],
+                canCloseMonth: false,
+                closingBusy: false,
                 activeSubTab: 'summary',
                 loading: false,
                 loadingDepartments: false,
@@ -688,6 +693,8 @@
                 const current = currentYearMonth();
                 const withData = {};
                 (this.dataMonths || []).forEach(function(m) { withData[m] = true; });
+                const closed = {};
+                (this.closedMonths || []).forEach(function(m) { closed[m] = true; });
                 const groups = [];
                 const byYear = {};
                 (this.availableMonths || []).forEach(function(m) {
@@ -700,6 +707,7 @@
                     if (m.month === current) text += '（' + translateLabel('今月') + '）';
                     else if (m.month > current) text += '（' + translateLabel('先の月') + '）';
                     if (withData[m.month]) text = '● ' + text;
+                    if (closed[m.month]) text += ' 🔒';
                     byYear[year].months.push({ month: m.month, text: text });
                 });
                 return groups;
@@ -1161,6 +1169,42 @@
                     boldRows: exportData.companyRowNumbers.concat(exportData.headerRowNumbers)
                 });
             },
+            formatClosingAt(value) {
+                const s = String(value || '');
+                return s ? s.slice(0, 16).replace(/-/g, '/') : '';
+            },
+            /** 月次締め: close / reopen the selected month of the department (administrators). */
+            async postClosing(method) {
+                if (!this.selectedDepartment || !this.selectedMonth || this.closingBusy) return;
+                this.closingBusy = true;
+                try {
+                    const formData = new FormData();
+                    formData.append('department_id', this.selectedDepartment.id);
+                    formData.append('month', this.selectedMonth);
+                    const response = await axios.post('/api/index.php?model=project&method=' + method, formData);
+                    const data = response.data || {};
+                    if (data.status !== 'success') {
+                        window.alert(data.message || data.error || translateLabel('保存に失敗しました。'));
+                        return;
+                    }
+                    await this.loadStats();
+                } catch (err) {
+                    console.error(method + ':', err);
+                    window.alert(translateLabel('保存に失敗しました。'));
+                } finally {
+                    this.closingBusy = false;
+                }
+            },
+            closeMonth() {
+                const msg = translateLabel('{month}を締めますか？\nこの月の見積・請求は変更・追加できなくなります。').replace('{month}', this.monthLabel);
+                if (!window.confirm(msg)) return;
+                this.postClosing('closeRevenueMonth');
+            },
+            reopenMonth() {
+                const msg = translateLabel('{month}の締めを解除しますか？\nこの月の見積・請求を再び変更できるようになります。').replace('{month}', this.monthLabel);
+                if (!window.confirm(msg)) return;
+                this.postClosing('reopenRevenueMonth');
+            },
             async loadStats() {
                 if (!this.selectedDepartment || !this.selectedMonth) return;
                 this.loading = true;
@@ -1197,6 +1241,7 @@
                         this.completedUninvoiced = [];
                         this.cancelledProjects = [];
                         this.isEnergyDepartment = false;
+                        this.monthClosing = null;
                         return;
                     }
                     this.summaryByCompany = data.summary_by_company || [];
@@ -1212,6 +1257,9 @@
                         cumulative_actual_sales: 0
                     }, data.meta && data.meta.target_summary ? data.meta.target_summary : {});
                     this.isEnergyDepartment = !!(data.meta && Number(data.meta.is_energy_department) === 1);
+                    this.monthClosing = data.meta && data.meta.closing ? data.meta.closing : null;
+                    this.closedMonths = data.meta && Array.isArray(data.meta.closed_months) ? data.meta.closed_months : [];
+                    this.canCloseMonth = !!(data.meta && Number(data.meta.can_close_month) === 1);
                     ['estimated_projects', 'invoiced_projects', 'completed_uninvoiced', 'cancelled_projects'].forEach(function(key) {
                         (data[key] || []).forEach(function(p) { if (p.fee_type) p.fee_type = decodeTypeText(p.fee_type); });
                     });

@@ -68,11 +68,15 @@
             .replace(/&#0?39;/g, "'").replace(/&amp;/g, '&');
     }
 
-    /** Decode the 種別 of lines that came from the API (once per line object). */
+    /**
+     * Decode the 種別 of lines that came from the API (once per line object), and remember the
+     * month each line was saved with: a line saved in a closed month (月次締め) is locked.
+     */
     function decodeItems(list) {
         (Array.isArray(list) ? list : []).forEach(function (it) {
             if (!it || it._decoded) return;
             Object.defineProperty(it, '_decoded', { value: true, enumerable: false });
+            Object.defineProperty(it, '_savedMonth', { value: monthOf(it.item_date), enumerable: false });
             if (typeof it.item_type === 'string' && it.item_type.indexOf('&') !== -1) {
                 it.item_type = decodeText(it.item_type);
             }
@@ -147,6 +151,27 @@
 
     function uses(project) {
         return !!project && Array.isArray(project.payment_items);
+    }
+
+    // ---- 月次締め: months the project's department closed in 月次売上統計 ('YYYY-MM')
+
+    function monthOf(date) {
+        var m = /^(\d{4})-(\d{2})/.exec(String(date || ''));
+        return m ? m[1] + '-' + m[2] : '';
+    }
+
+    function monthLabel(month) {
+        var m = /^(\d{4})-(\d{2})$/.exec(String(month || ''));
+        return m ? m[1] + '年' + Number(m[2]) + '月' : String(month || '');
+    }
+
+    function isClosedMonth(project, month) {
+        return !!month && !!project && Array.isArray(project.closed_months) && project.closed_months.indexOf(month) !== -1;
+    }
+
+    /** A line saved with a date in a closed month: shown read-only (the server refuses changes). */
+    function isLockedLine(project, item) {
+        return !!item && isClosedMonth(project, item._savedMonth);
     }
 
     /** 注文書 種別 a 請求 line needs before it can be 発行済, or '' (見積 lines, other 種別). */
@@ -306,9 +331,10 @@
             modelValue: { type: String, default: '' },
             disabled: Boolean,
             placeholder: { type: String, default: '' },
-            withTime: Boolean
+            withTime: Boolean,
+            closedMonths: { type: Array, default: function () { return []; } }
         },
-        emits: ['update:modelValue'],
+        emits: ['update:modelValue', 'closed-date'],
         template: '<input type="text" class="form-control form-control-sm pi-date" :class="{ \'pi-datetime\': withTime }" ref="el" :disabled="disabled"'
             + ' :placeholder="placeholder" autocomplete="off" :value="display" @change="onNativeChange">',
         computed: {
@@ -332,8 +358,15 @@
                 time_24hr: true,
                 allowInput: true,
                 disableMobile: true,
+                // 月次締め: days of closed months are greyed out; picking one is refused in emitValue
+                // (flatpickr's own `disable` would clear the date instead when one is typed)
+                onDayCreate: function (dObj, dStr, fp, dayElem) {
+                    var d = dayElem.dateObj;
+                    var m = d ? d.getFullYear() + '-' + (d.getMonth() < 9 ? '0' : '') + (d.getMonth() + 1) : '';
+                    if (m && (self.closedMonths || []).indexOf(m) !== -1) dayElem.classList.add('pi-day-closed');
+                },
                 onChange: function (dates, str) {
-                    self.$emit('update:modelValue', self.fromDisplay(str));
+                    self.emitValue(self.fromDisplay(str));
                 }
             };
             if (window.flatpickr.l10ns && window.flatpickr.l10ns.ja) opts.locale = window.flatpickr.l10ns.ja;
@@ -384,7 +417,22 @@
                     if (v === '') this.$emit('update:modelValue', '');
                     return;
                 }
-                this.$emit('update:modelValue', this.fromDisplay(e.target.value || ''));
+                this.emitValue(this.fromDisplay(e.target.value || ''));
+            },
+            /** Emit a picked value, unless it is in a closed month: then put the shown date back. */
+            emitValue: function (v) {
+                var m = /^(\d{4})-(\d{2})/.exec(v || '');
+                if (m && (this.closedMonths || []).indexOf(m[1] + '-' + m[2]) !== -1) {
+                    if (this._fp) {
+                        if (this.modelValue) this._fp.setDate(this.display, false, this.fpFormat);
+                        else this._fp.clear(false);
+                    } else if (this.$refs.el) {
+                        this.$refs.el.value = this.toNative(this.modelValue);
+                    }
+                    this.$emit('closed-date', v);
+                    return;
+                }
+                this.$emit('update:modelValue', v);
             }
         }
     };
@@ -407,29 +455,29 @@
             + '<div class="pi-editor" :class="\'pi-editor-\' + kind">'
             + '  <datalist :id="listId"><option v-for="t in typeOptions" :key="t" :value="t"></option></datalist>'
             + '  <div v-if="!items.length" class="pi-empty text-muted">{{ t("明細なし") }}</div>'
-            + '  <div v-for="(item, idx) in items" :key="keyOf(item)" class="pi-line" :class="{ \'pi-line-pending\': isPending(item) }">'
+            + '  <div v-for="(item, idx) in items" :key="keyOf(item)" class="pi-line" :class="{ \'pi-line-pending\': isPending(item) && lineEditable(item), \'pi-line-locked\': isLocked(item) }">'
             // input order: 日付 → 種別 (row 1), 金額 → 状態 (row 2, status last)
             + '    <div class="pi-line-row">'
-            + '      <div v-if="editable" class="input-group input-group-sm pi-date-group">'
-            + '        <payment-item-date-input :model-value="datePart(item)" :placeholder="t(dateLabel)" @update:model-value="setDate(item, $event)"></payment-item-date-input>'
-            + '        <button v-if="!item.item_date" type="button" class="btn btn-outline-primary" :title="t(\'今日の日付を入力\')" @click="setToday(item)">{{ t("今日") }}</button>'
+            + '      <div v-if="lineEditable(item)" class="input-group input-group-sm pi-date-group">'
+            + '        <payment-item-date-input :model-value="datePart(item)" :placeholder="t(dateLabel)" :closed-months="closedMonths" @update:model-value="setDate(item, $event)" @closed-date="refuseClosedDate($event)"></payment-item-date-input>'
+            + '        <button v-if="!item.item_date && !todayClosed" type="button" class="btn btn-outline-primary" :title="t(\'今日の日付を入力\')" @click="setToday(item)">{{ t("今日") }}</button>'
             + '      </div>'
             + '      <div v-else class="pi-value">{{ item.item_date ? datePart(item).replace(/-/g, "/") : "—" }}</div>'
-            + '      <input v-if="editable" type="text" class="form-control form-control-sm pi-type" :list="listId" maxlength="100"'
+            + '      <input v-if="lineEditable(item)" type="text" class="form-control form-control-sm pi-type" :list="listId" maxlength="100"'
             + '             v-model="item.item_type" :placeholder="t(\'種別\')" @change="emitChange">'
             + '      <span v-else class="pi-type-badge" :class="{ \'pi-type-none\': !item.item_type }">{{ item.item_type || t("種別なし") }}</span>'
-            + '      <button v-if="editable" type="button" class="btn btn-sm btn-icon btn-text-secondary pi-remove" :title="t(\'削除\')" @click="removeItem(item)">'
+            + '      <button v-if="lineEditable(item)" type="button" class="btn btn-sm btn-icon btn-text-secondary pi-remove" :title="t(\'削除\')" @click="removeItem(item)">'
             + '        <i class="fa fa-times"></i></button>'
             + '    </div>'
             + '    <div class="pi-line-row">'
-            + '      <div v-if="editable" class="input-group input-group-sm pi-amount-group">'
+            + '      <div v-if="lineEditable(item)" class="input-group input-group-sm pi-amount-group">'
             + '        <span class="input-group-text">¥</span>'
             + '        <input type="text" inputmode="decimal" autocomplete="off" class="form-control text-end"'
             + '               :value="amountDisplay(item)" :placeholder="t(\'未入力\')" :disabled="isWaived(item.status)"'
             + '               @focus="onAmountFocus(item, $event)" @blur="onAmountBlur(item)" @input="onAmountInput(item, $event)">'
             + '      </div>'
             + '      <div v-else class="pi-value text-end">{{ isEmptyAmount(item) ? "—" : yen(item.amount) }}</div>'
-            + '      <div v-if="editable" class="dropdown pi-status">'
+            + '      <div v-if="lineEditable(item)" class="dropdown pi-status">'
             + '        <button type="button" class="btn btn-sm dropdown-toggle pi-status-toggle" :class="\'btn-\' + statusColor(item.status)"'
             + '                data-bs-toggle="dropdown" aria-expanded="false">{{ t(normStatus(item.status)) }}</button>'
             + '        <ul class="dropdown-menu dropdown-menu-end">'
@@ -444,10 +492,14 @@
             + '    </div>'
             // at most one note per line (status not moved on). Why 発行済 is disabled (日付・金額,
             // or the 注文書 on 省エネ) is the tooltip of the disabled 発行済 option.
-            + '    <div v-if="isPending(item)" class="pi-note pi-note-pending">'
+            + '    <div v-if="isLocked(item)" class="pi-note pi-note-locked">'
+            + '      <i class="fa fa-lock" aria-hidden="true"></i>'
+            + '      <span>{{ t("{month}は締め済みのため変更できません").replace("{month}", monthLabel(item._savedMonth)) }}</span>'
+            + '    </div>'
+            + '    <div v-else-if="isPending(item)" class="pi-note pi-note-pending">'
             + '      <i class="fa fa-exclamation-circle" aria-hidden="true"></i>'
             + '      <span>{{ t("状態が「{status}」のままです").replace("{status}", t(normStatus(item.status))) }}</span>'
-            + '      <button v-if="editable && canIssue(item)" type="button" class="btn btn-sm btn-outline-success pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
+            + '      <button v-if="lineEditable(item) && canIssue(item)" type="button" class="btn btn-sm btn-outline-success pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
             + '    </div>'
             + '  </div>'
             + '  <div class="pi-footer">'
@@ -489,6 +541,12 @@
             },
             dateLabel: function () {
                 return this.kind === 'invoice' ? '請求日' : '見積日';
+            },
+            closedMonths: function () {
+                return Array.isArray(this.project.closed_months) ? this.project.closed_months : [];
+            },
+            todayClosed: function () {
+                return isClosedMonth(this.project, monthOf(todayServer()));
             },
             total: function () {
                 return sumAmount(this.items);
@@ -540,6 +598,25 @@
                 return Number.isFinite(n) ? n.toLocaleString('ja-JP') : String(item.amount);
             },
             isPending: isPendingLine,
+            monthLabel: monthLabel,
+            isLocked: function (item) {
+                return isLockedLine(this.project, item);
+            },
+            lineEditable: function (item) {
+                return this.editable && !isLockedLine(this.project, item);
+            },
+            /** A date in a closed month (typed, or without flatpickr): refused with a message. */
+            refuseClosedDate: function (ymd) {
+                var month = monthOf(ymd);
+                if (!isClosedMonth(this.project, month)) return false;
+                var msg = this.t('{month}は締め済みのため、この月の日付は入力できません。').replace('{month}', monthLabel(month));
+                if (typeof window.Swal !== 'undefined' && window.Swal.fire) {
+                    window.Swal.fire({ icon: 'warning', text: msg, customClass: { confirmButton: 'btn btn-primary' }, buttonsStyling: false });
+                } else {
+                    window.alert(msg);
+                }
+                return true;
+            },
             statusColor: function (status) {
                 return this.statusColors[normalizeStatus(status)] || 'secondary';
             },
@@ -643,6 +720,8 @@
             setDate: function (item, ymd) {
                 var current = String(item.item_date || '');
                 var was = isLineComplete(item);
+                // the date input already refuses closed months (and shows why); this guards other callers
+                if (ymd && ymd !== current.slice(0, 10) && isClosedMonth(this.project, monthOf(ymd))) return;
                 if (!ymd) {
                     if (current === '') return;
                     item.item_date = '';
@@ -657,6 +736,7 @@
             },
             setToday: function (item) {
                 var was = isLineComplete(item);
+                if (this.refuseClosedDate(todayServer())) return;
                 item.item_date = todayServer();
                 this.emitChange();
                 this.askIssuedIfJustCompleted(item, was);
@@ -682,7 +762,7 @@
                 return est.length ? est[est.length - 1] : '';
             },
             newItem: function (src) {
-                return ensureKey({
+                var item = ensureKey({
                     id: null,
                     kind: this.kind,
                     item_date: '',
@@ -690,6 +770,10 @@
                     amount: src && !isEmpty(src.amount) ? Number(src.amount) : null,
                     status: src && isWaived(src.status) ? normalizeStatus(src.status) : '未発行'
                 });
+                // a new line was never saved: not locked whatever date it gets
+                Object.defineProperty(item, '_decoded', { value: true, enumerable: false });
+                Object.defineProperty(item, '_savedMonth', { value: '', enumerable: false });
+                return item;
             },
             /**
              * No line of this kind yet: show the default blank lines, like the old fixed fields
@@ -861,6 +945,7 @@
         appendToFormData: appendToFormData,
         applySaveResponse: applySaveResponse,
         decodeText: decodeText,
+        isLockedLine: isLockedLine,
         ORDER_FORM_FIELDS: ORDER_FORM_FIELDS
     };
     window.PaymentItemsEditor = PaymentItemsEditor;
