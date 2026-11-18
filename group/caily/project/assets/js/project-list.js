@@ -20,6 +20,14 @@ var projectTable;
     /** If init was requested while another init was running, retry after it finishes. */
     var projectTableInitPending = false;
     var autoRefreshTimer = null;
+    /** 案件一覧 reloads itself this long after the last successful load. */
+    var PROJECT_LIST_AUTO_REFRESH_MS = 5 * 60 * 1000;
+    var projectListLastLoadAt = Date.now();
+    var projectListAutoRefreshInFlight = false;
+    /** Last valid list response — an auto refresh that gets an error keeps showing it. */
+    var projectListLastGoodJson = null;
+    /** Bumped by each reloadProjectTable(); only the latest one restores scroll / unlocks height. */
+    var projectTableReloadToken = 0;
     var projectTableSilentDraw = false;
     var businessDocumentModalOpen = false;
     /** Skip filter→reload while restoring filters from localStorage (avoids extra list ajax). */
@@ -363,17 +371,79 @@ var projectTable;
         }
         var preserveScroll = options.preserveScroll !== false && !pendingScrollRestore;
         var silent = options.silent === true;
-        var scrollY = preserveScroll ? window.scrollY : 0;
+        var autoRefresh = options.autoRefresh === true;
         if (silent) {
             projectTableSilentDraw = true;
         }
-        projectTable.ajax.reload(function() {
-            if (preserveScroll) {
-                requestAnimationFrame(function() {
-                    window.scrollTo(0, scrollY);
-                });
+        if (autoRefresh) {
+            projectListAutoRefreshInFlight = true;
+        }
+        var token = ++projectTableReloadToken;
+        var $table = $('#projectTable');
+        var lock = preserveScroll ? lockProjectListScrollDuringReload() : null;
+        var finished = false;
+        function finish() {
+            if (finished) return;
+            finished = true;
+            $table.off('processing.dt.plReload' + token);
+            clearTimeout(safetyTimer);
+            // setTimeout, not requestAnimationFrame: rAF does not run in a background tab,
+            // which would leave the height locked until the tab is shown again.
+            setTimeout(function() {
+                var isLatest = token === projectTableReloadToken;
+                if (lock) lock.release(isLatest);
+                if (isLatest) {
+                    unlockProjectListTableHeight();
+                    projectTableSilentDraw = false;
+                    projectListAutoRefreshInFlight = false;
+                }
+            }, 0);
+        }
+        // Not every reload ends in a draw (ajax error / aborted), so also finish when processing stops.
+        $table.on('processing.dt.plReload' + token, function(e, settings, processing) {
+            if (!processing) setTimeout(finish, 0);
+        });
+        var safetyTimer = setTimeout(finish, 60000);
+        projectTable.ajax.reload(finish, !!resetPaging);
+    }
+
+    /**
+     * Keeps the page where it is while the table reloads: the table card keeps its height
+     * (an empty / shorter tbody mid-reload would otherwise clamp window.scrollY, often to the top)
+     * and the scroll position is put back instantly (html has scroll-behavior: smooth).
+     * A scroll the user makes during the reload is left alone.
+     */
+    function lockProjectListScrollDuringReload() {
+        var startX = window.scrollX;
+        var startY = window.scrollY;
+        var card = document.getElementById('projectTableCard');
+        // An overlapping reload keeps the lock of the first one (offsetHeight already includes it)
+        if (card) card.style.minHeight = card.offsetHeight + 'px';
+        var userScrolled = false;
+        var SCROLL_KEYS = ['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' '];
+        function onUserScroll(e) {
+            if (e.type === 'keydown' && SCROLL_KEYS.indexOf(e.key) === -1) return;
+            userScrolled = true;
+        }
+        var opts = { passive: true, capture: true };
+        var events = ['wheel', 'touchmove', 'keydown', 'mousedown'];
+        events.forEach(function(name) { window.addEventListener(name, onUserScroll, opts); });
+        return {
+            /** isLatest=false: a newer reload took over — it restores and unlocks. */
+            release: function(isLatest) {
+                events.forEach(function(name) { window.removeEventListener(name, onUserScroll, opts); });
+                if (!isLatest) return;
+                if (!userScrolled && Math.abs(window.scrollY - startY) > 1) {
+                    window.scrollTo({ top: startY, left: startX, behavior: 'instant' });
+                }
+                // The caller unlocks the height next; a real shrink (fewer rows) still clamps then.
             }
-        }, !!resetPaging);
+        };
+    }
+
+    function unlockProjectListTableHeight() {
+        var card = document.getElementById('projectTableCard');
+        if (card && card.style.minHeight) card.style.minHeight = '';
     }
     var statuses = [
         { key: 'draft', name: '受付', color: 'secondary' },
@@ -1004,6 +1074,93 @@ var projectTable;
         } else {
             doScroll();
         }
+    }
+
+    function safeParseJson(raw) {
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function isValidProjectListResponse(json) {
+        return !!json && Array.isArray(json.data) && !json.error && !json.sError;
+    }
+
+    /**
+     * Auto refresh is skipped while the user is in the middle of something the redraw
+     * would destroy or interrupt; it runs on a later tick once they are done.
+     */
+    function isProjectListBusyForAutoRefresh() {
+        if (document.hidden) return true;
+        if (businessDocumentModalOpen || isInitializingTable) return true;
+        if (window.app && app.loading) return true;
+        if (document.querySelector('.modal.show, .offcanvas.show, .offcanvas.showing, .swal2-container, .dropdown-menu.show, .flatpickr-calendar.open')) {
+            return true;
+        }
+        if ($('#projectRowContextMenu:visible, #confirmationNoteContextMenu:visible').length) return true;
+        var active = document.activeElement;
+        if (active && active !== document.body) {
+            if (active.isContentEditable || active.tagName === 'TEXTAREA') return true;
+            if (active.tagName === 'INPUT' && /^(text|search|number|date|month|email|tel|url|password)$/i.test(active.type || 'text')) {
+                return true;
+            }
+        }
+        // Text being selected (e.g. to copy from a cell)
+        var selection = window.getSelection ? window.getSelection() : null;
+        if (selection && !selection.isCollapsed && String(selection).trim() !== '') return true;
+        var settings = projectTable && projectTable.settings ? projectTable.settings()[0] : null;
+        if (settings && settings.jqXHR && settings.jqXHR.readyState !== 4) return true;
+        return false;
+    }
+
+    function runProjectListAutoRefreshIfDue() {
+        if (!projectTable || !$.fn.DataTable.isDataTable('#projectTable')) return;
+        if (projectListAutoRefreshInFlight) return;
+        if (Date.now() - projectListLastLoadAt < PROJECT_LIST_AUTO_REFRESH_MS) return;
+        if (isProjectListBusyForAutoRefresh()) return;
+        reloadProjectTable(false, { silent: true, autoRefresh: true });
+    }
+
+    function startProjectListAutoRefresh() {
+        if (autoRefreshTimer) return;
+        // Check often, reload only when due — so a skipped (busy / hidden tab) refresh
+        // runs soon after instead of waiting another full 5 minutes.
+        autoRefreshTimer = setInterval(runProjectListAutoRefreshIfDue, 15000);
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) runProjectListAutoRefreshIfDue();
+        });
+    }
+
+    function bindProjectListLoadTracking() {
+        $('#projectTable').off('xhr.dt.plLoadTrack').on('xhr.dt.plLoadTrack', function(e, settings, json) {
+            if (isValidProjectListResponse(json)) {
+                projectListLastGoodJson = json;
+                projectListLastLoadAt = Date.now();
+                return;
+            }
+            if (json === null) {
+                // Ajax error: DataTables 2 leaves bDrawing set, so it never hides the processing
+                // indicator — now a full-screen overlay, that would block the page.
+                setTimeout(function() {
+                    if (settings.jqXHR && settings.jqXHR.readyState !== 4) return; // a newer request runs
+                    settings.bDrawing = false;
+                    try {
+                        new $.fn.dataTable.Api(settings).processing(false);
+                    } catch (err) {
+                        $('#projectTable_processing').hide();
+                    }
+                }, 0);
+            }
+            if (json === null && projectListAutoRefreshInFlight) {
+                // Network error on an auto refresh: DataTables keeps the old rows; true = no alert.
+                // Retry in about a minute rather than on every 15s tick while offline.
+                projectListLastLoadAt = Date.now() - PROJECT_LIST_AUTO_REFRESH_MS + 60000;
+                console.warn('[project-list] auto refresh: request failed, keeping current rows');
+                return true;
+            }
+        });
     }
 
     function bindProjectListScrollRestoreOnTableLoad() {
@@ -6043,6 +6200,11 @@ var projectTable;
         // Invalidate any in-flight initializeProjectTable() awaits
         projectTableInitId++;
         projectTableInitPending = false;
+        // ...and any in-flight reloadProjectTable() (its events go with .off('.dt') below)
+        projectTableReloadToken++;
+        unlockProjectListTableHeight();
+        projectListAutoRefreshInFlight = false;
+        projectListLastGoodJson = null;
         // Reset drag state and clear _plResizeBound so handles are re-attached on re-init
         unbindProjectListColumnResize();
         projectListResizeDepartmentId = null;
@@ -6129,21 +6291,27 @@ var projectTable;
         var initId = projectTableInitId;
         isInitializingTable = true;
         try {
-        // Ensure DataTables processing indicator is centered in the window (not only inside table)
+        // DataTables 2 processing indicator (#projectTable_processing.dt-processing) as a
+        // full-screen fixed overlay: the default sits at 50% of a very tall table, off screen.
         if (!document.getElementById('project-table-processing-style')) {
             var processingStyleEl = document.createElement('style');
             processingStyleEl.id = 'project-table-processing-style';
             processingStyleEl.textContent =
-                '#projectTable_wrapper .dataTables_processing {' +
+                '#projectTable_processing.dt-processing {' +
                 'position: fixed !important;' +
-                'top: 50% !important;' +
-                'left: 50% !important;' +
-                'transform: translate(-50%, -50%) !important;' +
-                'margin: 0 !important;' +
+                'top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;' +
+                'width: auto !important; height: auto !important;' +
+                'margin: 0 !important; padding: 0 !important; transform: none !important;' +
+                'border: 0 !important; border-radius: 0 !important; box-shadow: none !important;' +
+                'background: rgba(255,255,255,.6) !important;' +
                 'z-index: 2000 !important;' +
+                'cursor: progress;' +
                 '}' +
-                '#projectTable_wrapper .dataTables_processing .dt-processing {' +
-                'box-shadow: 0 0.5rem 1rem rgba(0,0,0,.15);' +
+                '#projectTable_processing.dt-processing > div:last-child:not(.pl-processing-box) { display: none !important; }' +
+                '#projectTable_processing .pl-processing-box {' +
+                'position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);' +
+                'padding: 1.25rem 2rem; border-radius: .5rem; background: #fff;' +
+                'box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,.18); text-align: center;' +
                 '}';
             document.head.appendChild(processingStyleEl);
         }
@@ -7507,6 +7675,20 @@ var projectTable;
                 },
                 dataSrc: function(response) {
                     return response.data || [];
+                },
+                // An auto refresh that gets an error / non-JSON (e.g. expired session) would empty
+                // the table (page jumps to the top) and alert — keep the rows on screen instead.
+                dataFilter: function(raw) {
+                    if (!projectListAutoRefreshInFlight || !projectListLastGoodJson) {
+                        return raw;
+                    }
+                    if (isValidProjectListResponse(safeParseJson(raw))) {
+                        return raw;
+                    }
+                    console.warn('[project-list] auto refresh: invalid list response, keeping current rows');
+                    var keep = Object.assign({}, projectListLastGoodJson);
+                    delete keep.draw;
+                    return JSON.stringify(keep);
                 }
             },
             paging: true,
@@ -7529,6 +7711,10 @@ var projectTable;
                 search: '<span data-i18n="検索">検索</span>:',
                 lengthMenu: '<span data-i18n="表示">表示</span>: _MENU_',
                 info: '<span data-i18n="合計">合計</span>: _TOTAL_ <span data-i18n="件中">件中</span> _START_ <span data-i18n="から">から</span> _END_ <span data-i18n="まで">まで</span>',
+                processing: '<div class="pl-processing-box">' +
+                    '<div class="spinner-border text-primary mb-2" style="width: 3rem; height: 3rem;"></div>' +
+                    '<div class="text-muted" data-i18n="データを読み込み中...">データを読み込み中...</div>' +
+                    '</div>',
                 paginate: {
                     first: '<span data-i18n="先頭">先頭</span>',
                     previous: '<span data-i18n="前">前</span>',
@@ -7593,6 +7779,7 @@ var projectTable;
         });
 
         bindProjectListScrollRestoreOnTableLoad();
+        bindProjectListLoadTracking();
         
         // Sau mỗi lần vẽ bảng: thêm note snippet vào ô cột có display_column trùng (dưới cùng ô, >40 ký tự thì cắt + tooltip)
         projectTable.on('draw.dt', function() {
@@ -9504,15 +9691,9 @@ var projectTable;
         }
         window.addEventListener('pagehide', saveProjectListScroll);
 
-        // Setup auto-refresh timer for project list
-        if (!autoRefreshTimer) {
-            // autoRefreshTimer = setInterval(function() {
-            //     if (projectTable && $.fn.DataTable.isDataTable('#projectTable')) {
-            //         reloadProjectTable(false, { silent: true }); // false để giữ nguyên trang hiện tại
-            //     }
-            // }, 60000); // Cập nhật mỗi 10 giây
-        }
-        
+        // Auto refresh: every 5 minutes after the last load, keeping page and scroll position
+        startProjectListAutoRefresh();
+
         // Wait a bit for Vue app to mount
         setTimeout(function() {
             if (projectListBackNavigationHandled) {
@@ -11710,7 +11891,6 @@ var projectTable;
         if (window.__projectListFloatActionsBound) return;
         var floatActions = document.getElementById('projectFloatActions');
         var floatBtn = document.getElementById('projectFilterFloatBtn');
-        var reloadFloatBtn = document.getElementById('projectReloadFloatBtn');
         var projectTableCard = document.getElementById('projectTableCard');
         var projectFilterBox = document.getElementById('projectFilterBox');
         var offcanvasBody = document.getElementById('projectFilterOffcanvasBody');
@@ -11731,12 +11911,6 @@ var projectTable;
             } else {
                 floatActions.classList.add('d-none');
             }
-        }
-
-        if (reloadFloatBtn) {
-            reloadFloatBtn.addEventListener('click', function() {
-                reloadProjectTable(false, { preserveScroll: true });
-            });
         }
 
         window.addEventListener('scroll', function() { updateFloatButtonVisibility(); }, { passive: true });

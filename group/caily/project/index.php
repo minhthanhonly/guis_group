@@ -240,8 +240,8 @@ if($_SESSION['show_project'] == 0){
     <div class="card" id="projectTableCard">
         <div class="card-body position-relative">
             <!-- Loading overlay -->
-            <div v-if="loading" class="position-absolute top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center bg-white bg-opacity-90 rounded" style="z-index: 100;">
-                <div class="text-center">
+            <div v-if="loading" class="position-fixed top-0 start-0 end-0 bottom-0 d-flex align-items-center justify-content-center" style="z-index: 2000; background: rgba(255,255,255,.6); cursor: progress;">
+                <div class="text-center bg-white rounded shadow" style="padding: 1.25rem 2rem;">
                     <div class="spinner-border text-primary mb-2" role="status" style="width: 3rem; height: 3rem;">
                         <span class="visually-hidden">Loading...</span>
                     </div>
@@ -341,9 +341,6 @@ if($_SESSION['show_project'] == 0){
     <div class="position-fixed d-none d-flex gap-2" id="projectFloatActions" style="bottom: 10px; left: 6rem; z-index: 1050;">
         <button type="button" class="btn btn-sm btn-primary rounded-pill shadow-lg" id="projectFilterFloatBtn" data-bs-toggle="offcanvas" data-bs-target="#offcanvasProjectFilter" aria-controls="offcanvasProjectFilter" title="高度なフィルター">
             <i class="fa fa-filter me-1"></i> <span data-i18n="高度なフィルター">高度なフィルター</span>
-        </button>
-        <button type="button" class="btn btn-sm btn-info rounded-pill shadow-lg" id="projectReloadFloatBtn" title="更新">
-            <i class="fa fa-refresh me-1"></i> <span data-i18n="更新">更新</span>
         </button>
     </div>
 
