@@ -1716,6 +1716,63 @@ body > .select2-container--default,
 .shepherd-element {
     z-index: 10050 !important;
 }
+
+/* ===== Memo readability (案件一覧 note cells) =====
+   Larger body text with line-height 1.5, a quiet card frame, and solid label pills whose
+   text is darkened from the label colour so light colours (yellow, lime) stay readable. */
+#projectTable .confirmation-note-item {
+    padding: 5px 8px 5px 4px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 6px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+}
+#projectTable .confirmation-note-item .note-text,
+#projectTable .confirmation-note-item .note-text.ql-editor {
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: #212529;
+}
+#projectTable .confirmation-note-item p + p {
+    margin-top: 0.35em !important;
+}
+#projectTable .confirmation-note-item .note-label-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 3px !important;
+}
+.note-label-chip {
+    gap: 0.35rem;
+    max-width: 100%;
+    padding: 0.1rem 0.5rem 0.1rem 0.45rem;
+    border: 1px solid color-mix(in srgb, var(--note-label-color) 45%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--note-label-color) 14%, #fff);
+    color: color-mix(in srgb, var(--note-label-color) 62%, #000);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0;
+    line-height: 1.35;
+}
+.note-label-chip.me-1 { margin-right: 0 !important; }
+/* colour dot instead of the tag glyph: reads as a label without visual noise */
+.note-label-chip .note-label-chip-icon { display: none; }
+.note-label-chip::before {
+    content: '';
+    flex: 0 0 auto;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 50%;
+    background: var(--note-label-color);
+}
+[data-bs-theme="dark"] #projectTable .confirmation-note-item {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+[data-bs-theme="dark"] .note-label-chip {
+    background: color-mix(in srgb, var(--note-label-color) 22%, #1f2129);
+    border-color: color-mix(in srgb, var(--note-label-color) 55%, transparent);
+    color: color-mix(in srgb, var(--note-label-color) 55%, #fff);
+}
 </style>
 
 <link rel="stylesheet" href="<?=ROOT?>assets/vendor/libs/datatables-colreorder/colReorder.bootstrap5.min.css" />
