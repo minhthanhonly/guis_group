@@ -7331,8 +7331,9 @@ class Project extends ApplicationModel {
     }
 
     // ------------------------------------------------------------------ 月次締め
-    // A department closes a month in 月次売上統計: from then on the 見積 / 請求 lines dated in
-    // that month cannot be changed or deleted, and no line can be given a date in that month.
+    // A department closes a month in 月次売上統計: from then on the 発行済 請求 dated in that month
+    // cannot be changed or deleted, and no other 請求 can be saved with a date in that month.
+    // 見積 are not affected.
 
     /** department_id => closed months, for this request (reset when a month is closed / reopened) */
     private static $closedMonthsCache = [];
@@ -7355,7 +7356,7 @@ class Project extends ApplicationModel {
                 `closed_at` DATETIME NOT NULL,
                 `closed_by` VARCHAR(100) NOT NULL DEFAULT '',
                 PRIMARY KEY (`department_id`, `month`)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='月次締め (見積・請求)'");
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='月次締め (請求)'");
         } catch (Exception $e) {
             error_log('ensureRevenueClosingsTable failed: ' . $e->getMessage());
         }
@@ -7411,8 +7412,10 @@ class Project extends ApplicationModel {
     }
 
     /**
-     * The lines dated in a closed month must come back unchanged: none edited, deleted,
-     * added, or moved into / out of a closed month.
+     * 月次締め applies to 請求 only (見積 stay editable):
+     * - a 発行済 請求 dated in a closed month must come back unchanged (not edited, deleted or moved);
+     * - any other 請求 dated in a closed month is refused, so its date has to be moved out of that
+     *   month (this also refuses adding a 請求 to the month or making one 発行済 there).
      *
      * @param array $old      project before the save
      * @param array $oldItems its lines (stored, or built from the legacy columns)
@@ -7425,29 +7428,43 @@ class Project extends ApplicationModel {
             return ['ok' => true];
         }
         $closedSet = array_flip($closed);
-        $collect = function (array $items) use ($closedSet) {
+        $closedInvoices = function (array $items) use ($closedSet) {
             $out = [];
             foreach ($items as $it) {
+                if (($it['kind'] ?? '') !== 'invoice') {
+                    continue;
+                }
                 $month = substr((string)($it['item_date'] ?? ''), 0, 7);
                 if ($month !== '' && isset($closedSet[$month])) {
-                    $out[] = ['month' => $month, 'sig' => $this->closedLineSignature($it)];
+                    $out[] = [
+                        'month' => $month,
+                        'issued' => $this->normalizePaymentItemStatus($it['status'] ?? '') === '発行済',
+                        'sig' => $this->closedLineSignature($it),
+                    ];
                 }
             }
             return $out;
         };
-        $before = $collect($oldItems);
-        $after = $collect($newItems);
-        $remaining = array_count_values(array_column($before, 'sig'));
-        foreach ($after as $line) {
-            if (empty($remaining[$line['sig']])) {
-                return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の見積・請求は入力・変更できません。'];
+        $locked = array_values(array_filter($closedInvoices($oldItems), function ($l) { return $l['issued']; }));
+        $remaining = array_count_values(array_column($locked, 'sig'));
+        $unmatched = [];
+        foreach ($closedInvoices($newItems) as $line) {
+            if ($line['issued'] && !empty($remaining[$line['sig']])) {
+                $remaining[$line['sig']]--;
+                continue;
             }
-            $remaining[$line['sig']]--;
+            $unmatched[] = $line;
         }
-        foreach ($before as $line) {
+        foreach ($locked as $line) {
             if (!empty($remaining[$line['sig']])) {
-                return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の見積・請求は変更・削除できません。'];
+                return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の発行済の請求は変更・削除できません。'];
             }
+        }
+        foreach ($unmatched as $line) {
+            if ($line['issued']) {
+                return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の日付で請求を発行済にできません。請求日を変更してください。'];
+            }
+            return ['ok' => false, 'error' => $this->monthLabelJa($line['month']) . 'は締め済みのため、この月の日付の請求は保存できません。請求日を変更してください。'];
         }
         return ['ok' => true];
     }

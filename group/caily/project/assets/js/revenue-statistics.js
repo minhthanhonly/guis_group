@@ -1196,12 +1196,12 @@
                 }
             },
             closeMonth() {
-                const msg = translateLabel('{month}を締めますか？\nこの月の見積・請求は変更・追加できなくなります。').replace('{month}', this.monthLabel);
+                const msg = translateLabel('{month}を締めますか？\nこの月の発行済の請求は変更できなくなり、この月の日付で請求を入力することもできなくなります。').replace('{month}', this.monthLabel);
                 if (!window.confirm(msg)) return;
                 this.postClosing('closeRevenueMonth');
             },
             reopenMonth() {
-                const msg = translateLabel('{month}の締めを解除しますか？\nこの月の見積・請求を再び変更できるようになります。').replace('{month}', this.monthLabel);
+                const msg = translateLabel('{month}の締めを解除しますか？\nこの月の請求を再び変更できるようになります。').replace('{month}', this.monthLabel);
                 if (!window.confirm(msg)) return;
                 this.postClosing('reopenRevenueMonth');
             },

@@ -99,18 +99,18 @@ if (!$canAccessRevenueStats) {
             </li>
         </ul>
 
-        <!-- 月次締め: while a month is closed, its 見積 / 請求 lines cannot be changed -->
+        <!-- 月次締め: while a month is closed, its 発行済 請求 cannot be changed and no other 請求 can be dated in it (見積 are not affected) -->
         <div v-if="!loading && !errorMessage && (monthClosing || canCloseMonth)" class="revenue-closing-bar mb-3" :class="monthClosing ? 'is-closed' : 'is-open'">
             <i class="fa" :class="monthClosing ? 'fa-lock' : 'fa-unlock-alt'" aria-hidden="true"></i>
             <div class="revenue-closing-text">
                 <template v-if="monthClosing">
                     <strong>{{ monthLabel }}<span data-i18n="は締め済みです">は締め済みです</span></strong>
                     <span class="revenue-closing-meta">（{{ formatClosingAt(monthClosing.closed_at) }}<template v-if="monthClosing.closed_by_name"> ・ {{ monthClosing.closed_by_name }}</template>）</span>
-                    <div class="small" data-i18n="この月の見積・請求は変更・追加できません。">この月の見積・請求は変更・追加できません。</div>
+                    <div class="small" data-i18n="この月の発行済の請求は変更できず、この月の日付で請求を入力することもできません（見積は変更できます）。">この月の発行済の請求は変更できず、この月の日付で請求を入力することもできません（見積は変更できます）。</div>
                 </template>
                 <template v-else>
                     <strong>{{ monthLabel }}<span data-i18n="は未締めです">は未締めです</span></strong>
-                    <div class="small" data-i18n="締めると、この月の見積・請求は変更・追加できなくなります。">締めると、この月の見積・請求は変更・追加できなくなります。</div>
+                    <div class="small" data-i18n="締めると、この月の発行済の請求は変更できなくなり、この月の日付で請求を入力することもできなくなります。">締めると、この月の発行済の請求は変更できなくなり、この月の日付で請求を入力することもできなくなります。</div>
                 </template>
             </div>
             <template v-if="canCloseMonth">

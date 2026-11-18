@@ -70,13 +70,15 @@
 
     /**
      * Decode the 種別 of lines that came from the API (once per line object), and remember the
-     * month each line was saved with: a line saved in a closed month (月次締め) is locked.
+     * month and status each line was saved with: a 請求 saved as 発行済 in a closed month
+     * (月次締め) is locked.
      */
     function decodeItems(list) {
         (Array.isArray(list) ? list : []).forEach(function (it) {
             if (!it || it._decoded) return;
             Object.defineProperty(it, '_decoded', { value: true, enumerable: false });
             Object.defineProperty(it, '_savedMonth', { value: monthOf(it.item_date), enumerable: false });
+            Object.defineProperty(it, '_savedIssued', { value: normalizeStatus(it.status) === '発行済', enumerable: false });
             if (typeof it.item_type === 'string' && it.item_type.indexOf('&') !== -1) {
                 it.item_type = decodeText(it.item_type);
             }
@@ -169,9 +171,19 @@
         return !!month && !!project && Array.isArray(project.closed_months) && project.closed_months.indexOf(month) !== -1;
     }
 
-    /** A line saved with a date in a closed month: shown read-only (the server refuses changes). */
+    /**
+     * 月次締め covers 請求 only. A 請求 saved as 発行済 with a date in a closed month is shown
+     * read-only (the server refuses changes); 見積 are never locked.
+     */
     function isLockedLine(project, item) {
-        return !!item && isClosedMonth(project, item._savedMonth);
+        return !!item && item.kind === 'invoice' && !!item._savedIssued && isClosedMonth(project, item._savedMonth);
+    }
+
+    /** Any other 請求 dated in a closed month cannot be saved: its date has to move (message, or ''). */
+    function closedDateError(project, item) {
+        if (!item || item.kind !== 'invoice' || isLockedLine(project, item)) return '';
+        var month = monthOf(item.item_date);
+        return isClosedMonth(project, month) ? monthLabel(month) + 'は締め済みのため、この月の日付の請求は保存できません。請求日を変更してください。' : '';
     }
 
     /** 注文書 種別 a 請求 line needs before it can be 発行済, or '' (見積 lines, other 種別). */
@@ -274,6 +286,8 @@
             if (normalizeStatus(it.status) === '発行済' && !isLineComplete(it)) {
                 return (it.kind === 'invoice' ? '請求' : '見積') + 'を発行済にするには日付・金額が必要です。';
             }
+            var closedError = closedDateError(project, it);
+            if (closedError) return closedError;
         }
         return '';
     }
@@ -494,7 +508,11 @@
             // or the 注文書 on 省エネ) is the tooltip of the disabled 発行済 option.
             + '    <div v-if="isLocked(item)" class="pi-note pi-note-locked">'
             + '      <i class="fa fa-lock" aria-hidden="true"></i>'
-            + '      <span>{{ t("{month}は締め済みのため変更できません").replace("{month}", monthLabel(item._savedMonth)) }}</span>'
+            + '      <span>{{ t("{month}は締め済みのため、発行済の請求は変更できません").replace("{month}", monthLabel(item._savedMonth)) }}</span>'
+            + '    </div>'
+            + '    <div v-else-if="closedError(item)" class="pi-note pi-note-closed">'
+            + '      <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>'
+            + '      <span>{{ t(closedError(item)) }}</span>'
             + '    </div>'
             + '    <div v-else-if="isPending(item)" class="pi-note pi-note-pending">'
             + '      <i class="fa fa-exclamation-circle" aria-hidden="true"></i>'
@@ -542,11 +560,12 @@
             dateLabel: function () {
                 return this.kind === 'invoice' ? '請求日' : '見積日';
             },
+            /** 月次締め applies to 請求 only */
             closedMonths: function () {
-                return Array.isArray(this.project.closed_months) ? this.project.closed_months : [];
+                return this.kind === 'invoice' && Array.isArray(this.project.closed_months) ? this.project.closed_months : [];
             },
             todayClosed: function () {
-                return isClosedMonth(this.project, monthOf(todayServer()));
+                return this.closedMonths.indexOf(monthOf(todayServer())) !== -1;
             },
             total: function () {
                 return sumAmount(this.items);
@@ -602,13 +621,16 @@
             isLocked: function (item) {
                 return isLockedLine(this.project, item);
             },
+            closedError: function (item) {
+                return closedDateError(this.project, item);
+            },
             lineEditable: function (item) {
                 return this.editable && !isLockedLine(this.project, item);
             },
             /** A date in a closed month (typed, or without flatpickr): refused with a message. */
             refuseClosedDate: function (ymd) {
                 var month = monthOf(ymd);
-                if (!isClosedMonth(this.project, month)) return false;
+                if (this.closedMonths.indexOf(month) === -1) return false;
                 var msg = this.t('{month}は締め済みのため、この月の日付は入力できません。').replace('{month}', monthLabel(month));
                 if (typeof window.Swal !== 'undefined' && window.Swal.fire) {
                     window.Swal.fire({ icon: 'warning', text: msg, customClass: { confirmButton: 'btn btn-primary' }, buttonsStyling: false });
@@ -721,7 +743,7 @@
                 var current = String(item.item_date || '');
                 var was = isLineComplete(item);
                 // the date input already refuses closed months (and shows why); this guards other callers
-                if (ymd && ymd !== current.slice(0, 10) && isClosedMonth(this.project, monthOf(ymd))) return;
+                if (ymd && ymd !== current.slice(0, 10) && this.closedMonths.indexOf(monthOf(ymd)) !== -1) return;
                 if (!ymd) {
                     if (current === '') return;
                     item.item_date = '';
@@ -773,6 +795,7 @@
                 // a new line was never saved: not locked whatever date it gets
                 Object.defineProperty(item, '_decoded', { value: true, enumerable: false });
                 Object.defineProperty(item, '_savedMonth', { value: '', enumerable: false });
+                Object.defineProperty(item, '_savedIssued', { value: false, enumerable: false });
                 return item;
             },
             /**
@@ -946,6 +969,7 @@
         applySaveResponse: applySaveResponse,
         decodeText: decodeText,
         isLockedLine: isLockedLine,
+        closedDateError: closedDateError,
         ORDER_FORM_FIELDS: ORDER_FORM_FIELDS
     };
     window.PaymentItemsEditor = PaymentItemsEditor;
