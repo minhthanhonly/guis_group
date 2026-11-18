@@ -78,10 +78,11 @@ if($_SESSION['show_project'] == 0){
               <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="受注形態">受注形態</label>
               <select class="form-select form-select-sm" id="filterProjectOrderType">
                 <option value="">すべて</option>
-                <option value="contract">契約図</option>
-                <option value="new">新規・実施図</option>
+                <!-- 省エネ: すべて / 新規 / 修正 only (options hidden, not removed, so other departments' values survive the re-render) -->
+                <option value="contract" v-show="!isEnergyDepartmentTab">契約図</option>
+                <option value="new">{{ isEnergyDepartmentTab ? '新規' : '新規・実施図' }}</option>
                 <option value="edit">修正</option>
-                <option value="other">その他</option>
+                <option value="other" v-show="!isEnergyDepartmentTab">その他</option>
               </select>
             </div>
             <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">

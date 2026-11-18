@@ -113,10 +113,11 @@ if($_SESSION['show_project'] == 0){
                     <label class="form-label form-label-sm mb-0 text-nowrap" data-i18n="受注形態">受注形態</label>
                     <select class="form-select form-select-sm" id="filterProjectOrderType">
                         <option value="">すべて</option>
-                        <option value="contract">契約図</option>
-                        <option value="new">新規・実施図</option>
+                        <!-- 省エネ: すべて / 新規 / 修正 only (options hidden, not removed, so other departments' values survive the re-render) -->
+                        <option value="contract" v-show="!isEnergyDepartmentTab">契約図</option>
+                        <option value="new">{{ isEnergyDepartmentTab ? '新規' : '新規・実施図' }}</option>
                         <option value="edit">修正</option>
-                        <option value="other">その他</option>
+                        <option value="other" v-show="!isEnergyDepartmentTab">その他</option>
                     </select>
                     </div>
                     <div class="col-md-3 col-6" v-show="!isEnergyDepartmentTab">
@@ -1651,6 +1652,23 @@ body:not(.project-notes-one-line) #projectTable .note-more-lines-icon,
 #projectFilterForm .form-check.pl-filter-col-active .form-check-label {
     color: var(--bs-primary);
     font-weight: 600;
+}
+
+/* メンバー column: every member's icon, wrapping onto more lines instead of "+N" */
+#projectTable .pl-member-avatars {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.2rem;
+}
+/* avatar-sm size so two icons fit per line in the 80px column (4 members = 2 lines) */
+#projectTable .pl-member-avatars .avatar {
+    width: 2rem;
+    height: 2rem;
+    margin: 0 !important;
+}
+#projectTable .pl-member-avatars .avatar .avatar-initial {
+    font-size: 0.75rem;
 }
 
 /* Keep Select2 multiple filter boxes compact */

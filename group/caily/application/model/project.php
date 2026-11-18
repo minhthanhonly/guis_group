@@ -10268,6 +10268,15 @@ class Project extends ApplicationModel {
     }
 
     /**
+     * 受注形態 (comma-separated tags) is a 新規 order: has 新規 and no 修正 tag
+     * (same rule as the list filter 新規・実施図, without 実施図 which 省エネ does not use).
+     */
+    private static function isNewProjectOrderType($orderType) {
+        $tags = array_filter(array_map('trim', explode(',', (string) $orderType)), 'strlen');
+        return in_array('新規', $tags, true) && !in_array('修正', $tags, true);
+    }
+
+    /**
      * Tạo 2 task mặc định (+ bản vẽ đồng bộ) khi tạo dự án con.
      */
     private function createChildProjectDefaultTasks($project_id, $data) {
@@ -10280,6 +10289,13 @@ class Project extends ApplicationModel {
 
         if ($createdBy > 0) {
             $this->addMember($project_id, $createdBy, null, 'member', false);
+        }
+
+        // 省エネ: default tasks only for a 新規 order (受注形態); 修正 etc. add them by hand when needed
+        $departmentId = isset($data['department_id']) ? intval($data['department_id']) : 0;
+        if ($this->isEnergyDepartmentById($departmentId)
+            && !self::isNewProjectOrderType(isset($data['project_order_type']) ? $data['project_order_type'] : '')) {
+            return;
         }
 
         if (!class_exists('Task')) {

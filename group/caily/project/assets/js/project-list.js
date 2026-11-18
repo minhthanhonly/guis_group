@@ -447,6 +447,12 @@ var projectTable;
     function energyTabFilterValue(value, emptyValue) {
         return isEnergyDepartmentSelectedForStatus() ? emptyValue : value;
     }
+    /** 受注形態 filter: the 省エネ tab offers only すべて / 新規 / 修正 (契約図 / その他 are not applied there). */
+    var ENERGY_PROJECT_ORDER_TYPE_FILTER_VALUES = { '': true, 'new': true, 'edit': true };
+    function projectOrderTypeFilterValueForTab(value) {
+        var v = String(value || '');
+        return (isEnergyDepartmentSelectedForStatus() && !ENERGY_PROJECT_ORDER_TYPE_FILTER_VALUES[v]) ? '' : v;
+    }
     function isEnergyDepartmentProjectRow(row) {
         var name = row && row.department_name != null ? String(row.department_name) : '';
         if (name.trim() === '') {
@@ -5381,7 +5387,9 @@ var projectTable;
             }
             setDateRangeFilterToUi(df || '', dFrom || '', dTo || '');
         }
-        if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
+        if (filters.filterProjectOrderType !== undefined) {
+            $('#filterProjectOrderType').val(projectOrderTypeFilterValueForTab(filters.filterProjectOrderType));
+        }
         if (filters.filterCompany !== undefined) {
             setFilterCompanySelectValue(filters.filterCompany);
         }
@@ -5726,7 +5734,7 @@ var projectTable;
             dateField: isDateFilterFieldAvailableOnTab(dateField) ? dateField : '',
             dateFrom: dateFrom,
             dateTo: dateTo,
-            projectOrderType: filters.filterProjectOrderType || '',
+            projectOrderType: projectOrderTypeFilterValueForTab(filters.filterProjectOrderType),
             teamIds: energyTabFilterValue(parseFilterTeamValue(filters.filterTeam), []),
             companyKeys: parseFilterCompanyValue(filters.filterCompany),
             tantou: energyTabFilterValue(filters.filterTantou || '', ''),
@@ -6647,27 +6655,14 @@ var projectTable;
                         const members = data.split('|').filter(member => member.trim() !== '');
                         if (members.length === 0) return '-';
 
-                        let html = '<div class="d-flex align-items-center">';
-                        const maxAvatars = 1;
-                        members.slice(0, maxAvatars).forEach(member => {
+                        // every member's icon (no "+N"): they wrap onto more lines in the narrow column
+                        let html = '<div class="pl-member-avatars">';
+                        members.forEach(member => {
                             const parsed = parseListMemberToken(member);
                             html += renderListAvatarHtml(parsed.realname, parsed.userid || parsed.authId, parsed.userImage, {
                                 user_ruby: parsed.user_ruby
                             });
                         });
-
-                        if (members.length > maxAvatars) {
-                            const remaining = members.slice(maxAvatars).map(member => {
-                                return formatListMemberDisplayName(member);
-                            }).join(', ');
-                            html += `
-                                <span class="avatar-initial rounded-circle pull-up" 
-                                    data-bs-toggle="tooltip" title="${remaining}" 
-                                    style="display:inline-flex;">
-                                    +${members.length - maxAvatars}
-                                </span>
-                            `;
-                        }
                         html += '</div>';
                         return html;
                     },
@@ -7427,7 +7422,7 @@ var projectTable;
                     }
                     const filterDateFrom = normalizeFilterYmd($('#filterDateFrom').val()) || '';
                     const filterDateTo = normalizeFilterYmd($('#filterDateTo').val()) || '';
-                    const filterProjectOrderType = $('#filterProjectOrderType').val();
+                    const filterProjectOrderType = projectOrderTypeFilterValueForTab($('#filterProjectOrderType').val());
                     const filterTeam = energyTabFilterValue(formatFilterTeamForApi(getFilterTeamValue()), '');
                     const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
                     const filterTantou = energyTabFilterValue($('#filterTantou').val(), '');

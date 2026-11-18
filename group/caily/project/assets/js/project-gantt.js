@@ -579,7 +579,9 @@ $(document).ready(function() {
         if (filters.filterPriority !== undefined) $('#filterPriority').val(filters.filterPriority);
         if (filters.filterProgress !== undefined) $('#filterProgress').val(filters.filterProgress);
         if (filters.filterTimeLeft !== undefined) $('#filterTimeLeft').val(filters.filterTimeLeft);
-        if (filters.filterProjectOrderType !== undefined) $('#filterProjectOrderType').val(filters.filterProjectOrderType);
+        if (filters.filterProjectOrderType !== undefined) {
+            $('#filterProjectOrderType').val(ganttProjectOrderTypeFilterValueForTab(filters.filterProjectOrderType));
+        }
         if (filters.filterDeliveryStatus !== undefined) $('#filterDeliveryStatus').val(filters.filterDeliveryStatus);
         if (filters.filterYoteiMonth !== undefined) applyGanttMonthFilterInputToUi('#filterYoteiMonth', filters.filterYoteiMonth);
         if (filters.filterDateField !== undefined) {
@@ -849,6 +851,12 @@ $(document).ready(function() {
      */
     function ganttEnergyTabFilterValue(value, emptyValue) {
         return isGanttEnergyDepartment() ? emptyValue : value;
+    }
+    /** 受注形態 filter: the 省エネ tab offers only すべて / 新規 / 修正 (契約図 / その他 are not applied there). */
+    var GANTT_ENERGY_PROJECT_ORDER_TYPE_FILTER_VALUES = { '': true, 'new': true, 'edit': true };
+    function ganttProjectOrderTypeFilterValueForTab(value) {
+        var v = String(value || '');
+        return (isGanttEnergyDepartment() && !GANTT_ENERGY_PROJECT_ORDER_TYPE_FILTER_VALUES[v]) ? '' : v;
     }
 
     /**
@@ -1148,7 +1156,7 @@ $(document).ready(function() {
             priority: filters.filterPriority || '',
             progress: ganttEnergyTabFilterValue(filters.filterProgress || '', ''),
             timeLeft: filters.filterTimeLeft || '',
-            projectOrderType: filters.filterProjectOrderType || '',
+            projectOrderType: ganttProjectOrderTypeFilterValueForTab(filters.filterProjectOrderType),
             teamIds: ganttEnergyTabFilterValue(parseFilterTeamValue(filters.filterTeam), []),
             companyKeys: parseFilterCompanyValue(filters.filterCompany),
             tantou: ganttEnergyTabFilterValue(filters.filterTantou || '', ''),
@@ -1781,7 +1789,7 @@ $(document).ready(function() {
                     const filterPriority = $('#filterPriority').val();
                     const filterProgress = ganttEnergyTabFilterValue($('#filterProgress').val(), '');
                     const filterTimeLeft = $('#filterTimeLeft').val();
-                    const filterProjectOrderType = $('#filterProjectOrderType').val();
+                    const filterProjectOrderType = ganttProjectOrderTypeFilterValueForTab($('#filterProjectOrderType').val());
                     const filterTeam = ganttEnergyTabFilterValue(formatFilterTeamForApi(getFilterTeamValue()), '');
                     const filterCompany = formatFilterCompanyForApi(getFilterCompanyValue());
                     const filterTantou = ganttEnergyTabFilterValue($('#filterTantou').val(), '');
