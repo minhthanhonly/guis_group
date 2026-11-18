@@ -437,17 +437,14 @@
             + '            <a href="javascript:void(0);" class="dropdown-item pi-status-option"'
             + '               :class="{ active: s.value === normStatus(item.status), disabled: s.value === \'発行済\' && !canIssue(item) }"'
             + '               :title="s.value === \'発行済\' && !canIssue(item) ? issueBlockReason(item) : null"'
-            + '               @click="selectStatus(item, s.value)"><span class="pi-status-dot" :class="\'bg-\' + s.color"></span>{{ t(s.label) }}</a></li>'
+            + '               @click="onStatusOption(item, s.value, $event)"><span class="pi-status-dot" :class="\'bg-\' + s.color"></span>{{ t(s.label) }}</a></li>'
             + '        </ul>'
             + '      </div>'
             + '      <span v-else class="badge pi-status-text" :class="\'bg-\' + statusColor(item.status)">{{ t(normStatus(item.status)) }}</span>'
             + '    </div>'
-            // one note per line at most: 注文書 missing (省エネ) > status not moved on.
-            // The 日付・金額 requirement is the tooltip of the disabled 発行済 option.
-            + '    <div v-if="editable && needsOrderForm(item) && normStatus(item.status) !== \'発行済\' && !isWaived(item.status)" class="pi-note pi-note-order">'
-            + '      <i class="fa fa-file-signature" aria-hidden="true"></i>'
-            + '      <span>{{ t("発行済にするには注文書（{type}）にチェックしてください").replace("{type}", t(orderFormType(item))) }}</span></div>'
-            + '    <div v-else-if="isPending(item)" class="pi-note pi-note-pending">'
+            // at most one note per line (status not moved on). Why 発行済 is disabled (日付・金額,
+            // or the 注文書 on 省エネ) is the tooltip of the disabled 発行済 option.
+            + '    <div v-if="isPending(item)" class="pi-note pi-note-pending">'
             + '      <i class="fa fa-exclamation-circle" aria-hidden="true"></i>'
             + '      <span>{{ t("状態が「{status}」のままです").replace("{status}", t(normStatus(item.status))) }}</span>'
             + '      <button v-if="editable && canIssue(item)" type="button" class="btn btn-sm btn-outline-success pi-issue-btn" @click="markIssued(item)">{{ t("発行済にする") }}</button>'
@@ -549,18 +546,12 @@
             canIssue: function (item) {
                 return canIssueLine(this.project, item, this.energy);
             },
-            orderFormType: orderFormTypeOf,
-            /** Date + amount entered, but the line's 注文書 is not checked yet. */
             /** Why 発行済 is disabled for this line (tooltip of the option). */
             issueBlockReason: function (item) {
                 if (!isLineComplete(item)) {
                     return this.t('発行済にするには{fields}が必要です').replace('{fields}', this.t(this.dateLabel) + '・' + this.t('金額'));
                 }
                 return this.t('発行済にするには注文書（{type}）にチェックしてください').replace('{type}', this.t(orderFormTypeOf(item)));
-            },
-            needsOrderForm: function (item) {
-                var type = orderFormTypeOf(item);
-                return this.energy && !!type && isLineComplete(item) && !hasOrderForm(this.project, type);
             },
             markIssued: function (item) {
                 if (!canIssueLine(this.project, item, this.energy)) return;
@@ -623,6 +614,20 @@
                 else if (!isLineComplete(item)) delete this._completedByTyping[item._key];
                 if (normalizeStatus(item.status) === '発行済' && !isLineComplete(item)) item.status = '未発行';
                 this.emitChange();
+            },
+            /**
+             * Option clicked: close the menu, then apply. Bootstrap closes a menu by finding its
+             * toggle with the .show class, but the toggle's :class (status colour) is re-rendered
+             * by Vue when the status changes, which drops .show — so the menu would stay open.
+             */
+            onStatusOption: function (item, value, e) {
+                var dropdown = e && e.currentTarget && e.currentTarget.closest('.dropdown');
+                var toggle = dropdown && dropdown.querySelector('[data-bs-toggle="dropdown"]');
+                if (toggle && window.bootstrap && window.bootstrap.Dropdown) {
+                    var dd = window.bootstrap.Dropdown.getInstance(toggle);
+                    if (dd) dd.hide();
+                }
+                this.selectStatus(item, value);
             },
             selectStatus: function (item, value) {
                 if (value === normalizeStatus(item.status)) return;
