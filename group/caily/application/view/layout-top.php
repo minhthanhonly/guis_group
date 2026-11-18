@@ -13,9 +13,8 @@
             <a href="/" class="app-brand-link">
               <span class="app-brand-logo demo">
                 <span class="text-primary">
-                  <img src="<?=ROOT?>assets/img/<?=APP_LOGO_DARK?>" alt="" width="30"
-                  data-app-light-img="<?=APP_LOGO?>"
-                  data-app-dark-img="<?=APP_LOGO_DARK?>" />
+                  <!-- semi-dark menu: always the white logo (no light/dark swap) -->
+                  <img src="<?=ROOT?>assets/img/<?=APP_LOGO_DARK?>" alt="" width="30" />
                 </span>
               </span>
               <span class="app-brand-text demo menu-text fw-bold ms-3" data-i18n="<?=APP_NAME?>"><?=APP_NAME?> </span>

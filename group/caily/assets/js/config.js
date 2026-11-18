@@ -79,7 +79,7 @@ if (typeof TemplateCustomizer !== 'undefined') {
     //defaultPrimaryColor: '#EB3D63',
     // defaultSkin: 1,
     defaultTheme: 'light',
-    // defaultSemiDark: true,
+    defaultSemiDark: true,
     // defaultContentLayout: 'wide',
     // defaultHeaderType: 'static',
     defaultMenuCollapsed: true,
