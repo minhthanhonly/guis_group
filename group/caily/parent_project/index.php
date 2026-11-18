@@ -102,7 +102,7 @@ $view->heading('建物一覧');
                         <table class="table table-hover parent-projects-table">
                             <thead>
                                 <tr>
-                                    <th class="text-center"><span data-i18n="お気に入り">お気に入り</span></th>
+                                    <th class="text-center" title="お気に入り"><i class="fa fa-star text-muted" aria-label="お気に入り"></i></th>
                                     <th v-if="isColumnVisible('project_number')" @click="sortBy('project_number')" style="cursor: pointer;" class="user-select-none">
                                         <span data-i18n="管理番号">管理番号</span>
                                         <i class="fa fa-fw" :class="getSortIcon('project_number')"></i>
@@ -186,7 +186,7 @@ $view->heading('建物一覧');
                                                       data-i18n="NEW">NEW</span>
                                             </div>
                                         </td>
-                                        <td v-if="isColumnVisible('project_number')">
+                                        <td v-if="isColumnVisible('project_number')" class="pp-nowrap">
                                             <span class="badge bg-label-info">{{ project.project_number || '-' }}</span>
                                         </td>
                                         <td v-if="isColumnVisible('project_name')" class="parent-project-name-column">
@@ -237,7 +237,7 @@ $view->heading('建物一覧');
                                             </span>
                                             <span v-else>-</span>
                                         </td>
-                                        <td v-if="isColumnVisible('child_project_count')" style="white-space: nowrap;">
+                                        <td v-if="isColumnVisible('child_project_count')" class="pp-nowrap">
                                             <span v-if="project.child_project_count > 0">
                                                 <span class="badge bg-info me-2"
                                                       :title="project.child_project_count + ' 個の案件があります'">
@@ -251,12 +251,11 @@ $view->heading('建物一覧');
                                             </span>
                                             <span v-else class="text-muted">0</span>
                                         </td>
-                                        <td v-if="isColumnVisible('nearest_nouki')">
+                                        <td v-if="isColumnVisible('nearest_nouki')" class="pp-date">
                                             <template v-if="project.nearest_nouki_list && project.nearest_nouki_list.length">
                                                 <div v-for="(item, nIdx) in project.nearest_nouki_list"
                                                      :key="(item.department_name || '') + '-' + (item.project_order_type || '') + '-' + (item.deadline || '') + '-' + nIdx"
-                                                     class="d-flex align-items-center gap-1 mb-1"
-                                                     style="white-space: nowrap;">
+                                                     class="d-flex flex-wrap align-items-center column-gap-1 mb-1">
                                                     <span class="badge"
                                                           :class="getDepartmentNoukiBadgeClass(item.department_name)"
                                                           :title="item.department_name || ''">{{ getNearestNoukiCombinedLabel(item) }}</span>
@@ -284,8 +283,8 @@ $view->heading('建物一覧');
                                                 <span v-else class="text-muted">-</span>
                                             </div>
                                         </td>
-                                        <td v-if="isColumnVisible('created_at')">{{ formatDate(project.created_at) }}</td>
-                                        <td v-if="isColumnVisible('request_date')">{{ formatDate(project.request_date) }}</td>
+                                        <td v-if="isColumnVisible('created_at')" class="pp-date">{{ formatDate(project.created_at) }}</td>
+                                        <td v-if="isColumnVisible('request_date')" class="pp-date">{{ formatDate(project.request_date) }}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
                                                 <a :href="'detail.php?id=' + project.id" class="btn btn-outline-primary" 
@@ -659,51 +658,75 @@ $view->footing();
     background-color: #333 !important;
     color: #eee !important;
 }
+/* Fit-to-screen layout: the table never exceeds the container width; long text wraps */
 .parent-projects-table-scroll .parent-projects-table {
-    width: max-content;
-    min-width: 100%;
+    width: 100%;
     margin-bottom: 0;
+    font-size: 0.8125rem;
+    line-height: 1.35;
 }
-.parent-projects-table-scroll .parent-projects-table th,
+.parent-projects-table-scroll .parent-projects-table > :not(caption) > * > * {
+    padding: 0.35rem 0.4rem !important;
+}
+.parent-projects-table-scroll .parent-projects-table thead th {
+    white-space: normal;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    position: relative;
+}
 .parent-projects-table-scroll .parent-projects-table td {
+    white-space: normal;
+    overflow-wrap: break-word;
+    min-width: 3rem;
+}
+.parent-projects-table-scroll .parent-projects-table td:first-child {
+    min-width: 0;
+}
+.parent-projects-table-scroll .parent-projects-table td .badge {
+    white-space: normal;
+    text-align: left;
+}
+.parent-projects-table-scroll .parent-projects-table td.pp-date {
+    min-width: 5rem;
+    max-width: 6.5rem;
+}
+.parent-projects-table-scroll .parent-projects-table .badge {
+    font-size: 0.6875rem;
+    padding: 0.2rem 0.4rem;
     white-space: nowrap;
 }
-/* Allow memo column to wrap / scroll internally */
-.parent-projects-table-scroll .parent-projects-table td.confirmation-notes-column {
-    white-space: normal;
-    min-width: 12rem;
-    max-width: 18rem;
+/* Short columns stay on one line */
+.parent-projects-table-scroll .parent-projects-table td.pp-nowrap,
+.parent-projects-table-scroll .parent-projects-table td:first-child,
+.parent-projects-table-scroll .parent-projects-table td:last-child {
+    white-space: nowrap;
+    width: 1%;
 }
-/* お施主様名: wrap when long */
-.parent-projects-table-scroll .parent-projects-table th.parent-project-name-column,
+.parent-projects-table-scroll .parent-projects-table td.confirmation-notes-column {
+    min-width: 7rem;
+    width: auto;
+    max-width: 14rem;
+}
+.parent-projects-table-scroll .parent-projects-table .confirmation-notes-wrapper {
+    max-width: 100% !important;
+    max-height: 9rem !important;
+}
 .parent-projects-table-scroll .parent-projects-table td.parent-project-name-column {
-    white-space: normal;
-    min-width: 8rem;
-    max-width: 12rem;
-    vertical-align: top;
+    min-width: 7rem;
 }
 .parent-projects-table-scroll .parent-projects-table .parent-project-name-link {
-    display: inline-block;
-    max-width: 100%;
+    font-weight: 600;
     overflow-wrap: anywhere;
-    word-break: break-word;
-    white-space: normal;
 }
-/* 支店名: narrower */
-.parent-projects-table-scroll .parent-projects-table th.parent-branch-name-column,
-.parent-projects-table-scroll .parent-projects-table td.parent-branch-name-column {
-    white-space: normal;
-    max-width: 5.5rem;
-    min-width: 3.5rem;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+.parent-projects-table-scroll .parent-projects-table td.parent-requests-column .badge {
+    margin-bottom: 0.15rem;
 }
-/* 依頼: narrower, badges can wrap */
-.parent-projects-table-scroll .parent-projects-table th.parent-requests-column,
-.parent-projects-table-scroll .parent-projects-table td.parent-requests-column {
-    white-space: normal;
-    max-width: 6.5rem;
-    min-width: 4rem;
+.parent-projects-table-scroll .parent-projects-table .btn-group-sm .btn {
+    padding: 0.2rem 0.4rem;
+    font-size: 0.75rem;
+}
+.parent-projects-table tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.015);
 }
 
 .parent-projects-table.table-hover tbody tr:hover {
