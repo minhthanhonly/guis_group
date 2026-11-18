@@ -103,10 +103,11 @@ $view->heading('建物一覧');
                             <thead>
                                 <tr>
                                     <th class="text-center" title="お気に入り"><i class="fa fa-star text-muted" aria-label="お気に入り"></i></th>
-                                    <th v-if="isColumnVisible('project_number') || isColumnVisible('construction_number')" class="user-select-none pp-multi"><span v-if="isColumnVisible('project_number')" class="pp-sort" @click.stop="sortBy('project_number')"><span data-i18n="管理番号">管理番号</span><i class="fa fa-fw" :class="getSortIcon('project_number')"></i></span><span v-if="isColumnVisible('construction_number')" class="pp-sort" @click.stop="sortBy('construction_number')"><span data-i18n="工事番号">工事番号</span><i class="fa fa-fw" :class="getSortIcon('construction_number')"></i></span></th>
+                                    <th v-if="isColumnVisible('project_number') || isColumnVisible('construction_number')" class="user-select-none pp-multi pp-num-column"><span v-if="isColumnVisible('project_number')" class="pp-sort" @click.stop="sortBy('project_number')"><span data-i18n="管理番号">管理番号</span><i class="fa fa-fw" :class="getSortIcon('project_number')"></i></span><span v-if="isColumnVisible('construction_number')" class="pp-sort" @click.stop="sortBy('construction_number')"><span data-i18n="工事番号">工事番号</span><i class="fa fa-fw" :class="getSortIcon('construction_number')"></i></span></th>
                                     <th v-if="isColumnVisible('project_name')" @click="sortBy('project_name')" class="user-select-none pp-sortable parent-project-name-column"><span data-i18n="お施主様名">お施主様名</span><i class="fa fa-fw" :class="getSortIcon('project_name')"></i></th>
-                                    <th v-if="isColumnVisible('company_name') || isColumnVisible('branch_name') || isColumnVisible('contact_name')" class="user-select-none pp-multi"><span v-if="isColumnVisible('company_name')" class="pp-sort" @click.stop="sortBy('company_name')"><span data-i18n="会社名">会社名</span><i class="fa fa-fw" :class="getSortIcon('company_name')"></i></span><span v-if="isColumnVisible('branch_name')" class="pp-sort" @click.stop="sortBy('branch_name')"><span data-i18n="支店名">支店名</span><i class="fa fa-fw" :class="getSortIcon('branch_name')"></i></span><span v-if="isColumnVisible('contact_name')" class="pp-sort" @click.stop="sortBy('contact_name')"><span data-i18n="担当様">担当様</span><i class="fa fa-fw" :class="getSortIcon('contact_name')"></i></span></th>
-                                    <th v-if="isColumnVisible('scale') || isColumnVisible('type1') || isColumnVisible('type2')" class="user-select-none pp-multi"><span v-if="isColumnVisible('scale')" class="pp-sort" @click.stop="sortBy('scale')"><span data-i18n="規模">規模</span><i class="fa fa-fw" :class="getSortIcon('scale')"></i></span><span v-if="isColumnVisible('type1')" class="pp-sort" @click.stop="sortBy('type1')"><span data-i18n="種類1">種類1</span><i class="fa fa-fw" :class="getSortIcon('type1')"></i></span><span v-if="isColumnVisible('type2')" class="pp-sort" @click.stop="sortBy('type2')"><span data-i18n="住宅種類">住宅種類</span><i class="fa fa-fw" :class="getSortIcon('type2')"></i></span></th>
+                                    <th v-if="isColumnVisible('company_name') || isColumnVisible('contact_name')" class="user-select-none pp-multi"><span v-if="isColumnVisible('company_name')" class="pp-sort" @click.stop="sortBy('company_name')"><span data-i18n="会社名">会社名</span><i class="fa fa-fw" :class="getSortIcon('company_name')"></i></span><span v-if="isColumnVisible('contact_name')" class="pp-sort" @click.stop="sortBy('contact_name')"><span data-i18n="担当様">担当様</span><i class="fa fa-fw" :class="getSortIcon('contact_name')"></i></span></th>
+                                    <th v-if="isColumnVisible('branch_name')" @click="sortBy('branch_name')" class="user-select-none pp-sortable parent-branch-name-column"><span data-i18n="支店名">支店名</span><i class="fa fa-fw" :class="getSortIcon('branch_name')"></i></th>
+                                    <th v-if="isColumnVisible('scale') || isColumnVisible('type1') || isColumnVisible('type2')" class="user-select-none pp-multi pp-type-column"><span v-if="isColumnVisible('scale')" class="pp-sort" @click.stop="sortBy('scale')"><span data-i18n="規模">規模</span><i class="fa fa-fw" :class="getSortIcon('scale')"></i></span><span v-if="isColumnVisible('type1')" class="pp-sort" @click.stop="sortBy('type1')"><span data-i18n="種類1">種類1</span><i class="fa fa-fw" :class="getSortIcon('type1')"></i></span><span v-if="isColumnVisible('type2')" class="pp-sort" @click.stop="sortBy('type2')"><span data-i18n="住宅種類">住宅種類</span><i class="fa fa-fw" :class="getSortIcon('type2')"></i></span></th>
                                     <th v-if="isColumnVisible('requests')" @click="sortBy('requests')" class="user-select-none pp-sortable parent-requests-column"><span data-i18n="依頼">依頼</span><i class="fa fa-fw" :class="getSortIcon('requests')"></i></th>
                                     <th v-if="isColumnVisible('child_project_count')" @click="sortBy('child_project_count')" class="user-select-none pp-sortable "><span data-i18n="件数">件数</span><i class="fa fa-fw" :class="getSortIcon('child_project_count')"></i></th>
                                     <th v-if="isColumnVisible('nearest_nouki')" @click="sortBy('nearest_nouki')" class="user-select-none pp-sortable "><span data-i18n="納期">納期</span><i class="fa fa-fw" :class="getSortIcon('nearest_nouki')"></i></th>
@@ -132,7 +133,7 @@ $view->heading('建物一覧');
                                                       data-i18n="NEW">NEW</span>
                                             </div>
                                         </td>
-                                        <td v-if="isColumnVisible('project_number') || isColumnVisible('construction_number')" class="pp-stack">
+                                        <td v-if="isColumnVisible('project_number') || isColumnVisible('construction_number')" class="pp-stack pp-num-column">
                                             <div v-if="isColumnVisible('project_number')"><span class="badge bg-label-info">{{ project.project_number || '-' }}</span></div>
                                             <div v-if="isColumnVisible('construction_number') && project.construction_number" class="pp-sub" title="工事番号">{{ project.construction_number }}</div>
                                         </td>
@@ -142,17 +143,15 @@ $view->heading('建物一覧');
                                                 {{ project.project_name }}
                                             </a>
                                         </td>
-                                        <td v-if="isColumnVisible('company_name') || isColumnVisible('branch_name') || isColumnVisible('contact_name')" class="pp-stack">
+                                        <td v-if="isColumnVisible('company_name') || isColumnVisible('contact_name')" class="pp-stack">
                                             <div v-if="isColumnVisible('company_name')" class="pp-main">{{ project.company_name || '-' }}
                                                 <span v-if="Number(project.customer_count) > 1" class="badge bg-label-primary ms-1"
                                                     :title="'他の顧客: ' + (Number(project.customer_count) - 1) + '件'">+{{ Number(project.customer_count) - 1 }}</span>
                                             </div>
-                                            <div v-if="(isColumnVisible('branch_name') && project.branch_name) || (isColumnVisible('contact_name') && project.contact_name)" class="pp-sub">
-                                                <span v-if="isColumnVisible('branch_name') && project.branch_name" title="支店名"><i class="fa fa-code-branch me-1"></i>{{ project.branch_name }}</span>
-                                                <span v-if="isColumnVisible('contact_name') && project.contact_name" class="ms-2" title="担当様"><i class="fa fa-user me-1"></i>{{ project.contact_name }}</span>
-                                            </div>
+                                            <div v-if="isColumnVisible('contact_name') && project.contact_name" class="pp-sub" title="担当様"><i class="fa fa-user me-1"></i>{{ project.contact_name }}</div>
                                         </td>
-                                        <td v-if="isColumnVisible('scale') || isColumnVisible('type1') || isColumnVisible('type2')" class="pp-stack">
+                                        <td v-if="isColumnVisible('branch_name')" class="parent-branch-name-column">{{ project.branch_name || '-' }}</td>
+                                        <td v-if="isColumnVisible('scale') || isColumnVisible('type1') || isColumnVisible('type2')" class="pp-stack pp-type-column">
                                             <div v-if="isColumnVisible('scale') && project.scale" class="pp-main" title="規模">{{ project.scale }}</div>
                                             <div v-if="isColumnVisible('type1') && project.type1" title="種類1"><span v-if="project.type1">
                                                 <span v-for="item in project.type1.split(',').map(v => v.trim()).filter(v => v)" 
@@ -230,9 +229,9 @@ $view->heading('建物一覧');
                                             </div>
                                         </td>
                                         <td v-if="isColumnVisible('created_at') || isColumnVisible('request_date') || isColumnVisible('created_by_name')" class="pp-stack pp-date">
-                                            <div v-if="isColumnVisible('created_at')" title="作成日"><span class="pp-label">作成</span>{{ formatDate(project.created_at) }}</div>
-                                            <div v-if="isColumnVisible('request_date') && project.request_date" title="依頼日"><span class="pp-label">依頼</span>{{ formatDate(project.request_date) }}</div>
-                                            <div v-if="isColumnVisible('created_by_name') && project.created_by_name" class="pp-sub" title="作成者"><i class="fa fa-user-edit me-1"></i>{{ project.created_by_name }}</div>
+                                            <div v-if="isColumnVisible('created_at')" title="作成日">{{ formatDate(project.created_at) }}</div>
+                                            <div v-if="isColumnVisible('request_date') && project.request_date" title="依頼日">{{ formatDate(project.request_date) }}</div>
+                                            <div v-if="isColumnVisible('created_by_name') && project.created_by_name" class="pp-sub" title="作成者">{{ project.created_by_name }}</div>
                                         </td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
@@ -260,7 +259,7 @@ $view->heading('建物一覧');
                                         </td>
                                 </tr>
                                 <tr v-if="filteredParentProjects.length === 0">
-                                    <td colspan="12" class="text-center py-4">
+                                    <td colspan="13" class="text-center py-4">
                                         <div class="text-muted">
                                             <i class="fa fa-inbox fa-2x mb-2"></i>
                                             <p>建物が見つかりません</p>
@@ -683,9 +682,9 @@ $view->footing();
     width: 1%;
 }
 .parent-projects-table-scroll .parent-projects-table td.confirmation-notes-column {
-    min-width: 7rem;
-    width: auto;
-    max-width: 14rem;
+    min-width: 12rem;
+    width: 18rem;
+    max-width: 20rem;
 }
 .parent-projects-table-scroll .parent-projects-table .confirmation-notes-wrapper {
     max-width: 100% !important;
@@ -697,6 +696,34 @@ $view->footing();
 .parent-projects-table-scroll .parent-projects-table .parent-project-name-link {
     font-weight: 600;
     overflow-wrap: anywhere;
+}
+/* 管理番号 / 工事番号: labels stacked so the column stays narrow */
+.parent-projects-table-scroll .parent-projects-table th.pp-num-column,
+.parent-projects-table-scroll .parent-projects-table td.pp-num-column {
+    width: 1%;
+    min-width: 0;
+    max-width: 6rem;
+}
+.parent-projects-table th.pp-num-column .pp-sort { display: block; }
+.parent-projects-table th.pp-num-column .pp-sort + .pp-sort::before { content: none; }
+/* Narrow columns: 規模/種類, 依頼, 支店名 — badges wrap inside */
+.parent-projects-table-scroll .parent-projects-table th.pp-type-column,
+.parent-projects-table-scroll .parent-projects-table td.pp-type-column {
+    width: 1%;
+    max-width: 5.5rem;
+    min-width: 0;
+}
+.parent-projects-table th.pp-type-column .pp-sort { display: block; }
+.parent-projects-table th.pp-type-column .pp-sort + .pp-sort::before { content: none; }
+.parent-projects-table-scroll .parent-projects-table th.parent-requests-column,
+.parent-projects-table-scroll .parent-projects-table td.parent-requests-column {
+    max-width: 4.5rem !important;
+    min-width: 3rem !important;
+}
+.parent-projects-table-scroll .parent-projects-table th.parent-branch-name-column,
+.parent-projects-table-scroll .parent-projects-table td.parent-branch-name-column {
+    max-width: 6rem;
+    min-width: 3.5rem;
 }
 .parent-projects-table-scroll .parent-projects-table td.parent-requests-column .badge {
     margin-bottom: 0.15rem;
