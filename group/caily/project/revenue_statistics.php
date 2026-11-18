@@ -52,9 +52,12 @@ if (!$canAccessRevenueStats) {
                             <i class="fa fa-chevron-right"></i><span class="visually-hidden" data-i18n="次月">次月</span>
                         </button>
                     </div>
-                    <select class="form-select form-select-sm revenue-month-select" v-model="selectedMonth" @change="onMonthChange">
-                        <option v-for="m in availableMonths" :key="m.month" :value="m.month">{{ m.month_label || m.month }}</option>
+                    <select class="form-select form-select-sm revenue-month-select" v-model="selectedMonth" @change="onMonthChange" title="● = 決済データあり">
+                        <optgroup v-for="g in monthGroups" :key="g.year" :label="g.label">
+                            <option v-for="m in g.months" :key="m.month" :value="m.month">{{ m.text }}</option>
+                        </optgroup>
                     </select>
+                    <span v-if="isFutureMonth" class="badge bg-warning text-dark revenue-future-badge" data-i18n="先の月を表示中">先の月を表示中</span>
                     <button class="btn btn-sm revenue-nav-btn" type="button" @click="loadStats" :disabled="loading || !selectedDepartment">
                         <i class="fa fa-refresh me-1"></i><span data-i18n="更新">更新</span>
                     </button>
@@ -739,7 +742,7 @@ $view->footing();
     font-weight: 600;
 }
 .revenue-dept-nav-month .revenue-month-select {
-    width: 10rem;
+    width: 12.5rem;
     background-color: #fff;
     color: #2f2b3d;
     border: 1px solid rgba(255, 255, 255, 0.45);
@@ -750,6 +753,9 @@ $view->footing();
     color: #2f2b3d;
     border-color: #fff;
     box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
+}
+.revenue-dept-nav-month .revenue-future-badge {
+    font-weight: 600;
 }
 .revenue-dept-nav-month .revenue-nav-btn {
     background-color: #fff;

@@ -645,6 +645,7 @@
                 pendingUrlDepartmentId: null,
                 selectedMonth: currentYearMonth(),
                 availableMonths: [],
+                dataMonths: [],
                 activeSubTab: 'summary',
                 loading: false,
                 loadingDepartments: false,
@@ -680,6 +681,31 @@
             },
             currentYearMonthValue() {
                 return currentYearMonth();
+            },
+            // Month options grouped by year (newest first), with 今月 marked and
+            // months that have 決済 data flagged, so the year is never ambiguous.
+            monthGroups() {
+                const current = currentYearMonth();
+                const withData = {};
+                (this.dataMonths || []).forEach(function(m) { withData[m] = true; });
+                const groups = [];
+                const byYear = {};
+                (this.availableMonths || []).forEach(function(m) {
+                    const year = String(m.month).slice(0, 4);
+                    if (!byYear[year]) {
+                        byYear[year] = { year: year, label: year + '年', months: [] };
+                        groups.push(byYear[year]);
+                    }
+                    let text = m.month_label || buildMonthLabel(m.month);
+                    if (m.month === current) text += '（' + translateLabel('今月') + '）';
+                    else if (m.month > current) text += '（' + translateLabel('先の月') + '）';
+                    if (withData[m.month]) text = '● ' + text;
+                    byYear[year].months.push({ month: m.month, text: text });
+                });
+                return groups;
+            },
+            isFutureMonth() {
+                return !!this.selectedMonth && this.selectedMonth > currentYearMonth();
             },
             // 種類 column: always for 省エネ; elsewhere once a 決済明細 line carries a 種別
             // other than the default 設計費 (old data is all 設計費, so the column stays hidden).
@@ -891,9 +917,14 @@
             },
             refreshAvailableMonths(extraMonths) {
                 const map = {};
-                buildMonthOptions(18, 12).forEach(function(m) {
+                // Only a few months ahead: a long run of future months at the top of the
+                // list made it easy to pick next year's month by mistake.
+                buildMonthOptions(18, 3).forEach(function(m) {
                     if (m && m.month) map[m.month] = m;
                 });
+                if (Array.isArray(extraMonths)) {
+                    this.dataMonths = extraMonths.map(function(m) { return m && m.month; }).filter(Boolean);
+                }
                 (Array.isArray(extraMonths) ? extraMonths : []).forEach(function(m) {
                     if (!m || !m.month) return;
                     map[m.month] = {
