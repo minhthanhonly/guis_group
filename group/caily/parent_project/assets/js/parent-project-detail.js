@@ -1779,8 +1779,20 @@ createApp({
             }
             try {
                 const payload = this.buildCopyParentProjectPayload(this.parentProject);
-                sessionStorage.setItem('copyParentProjectData', JSON.stringify(payload));
-                window.location.href = 'create.php';
+                if (typeof window.openParentProjectCreateModal === 'function') {
+                    // 建物登録 modal, prefilled with this building; open the new one once saved
+                    window.openParentProjectCreateModal({
+                        copyFrom: payload,
+                        onSaved: (savedId) => {
+                            if (savedId) {
+                                window.location.href = 'detail.php?id=' + encodeURIComponent(savedId);
+                            }
+                        }
+                    });
+                } else {
+                    sessionStorage.setItem('copyParentProjectData', JSON.stringify(payload));
+                    window.location.href = 'create.php';
+                }
             } catch (error) {
                 console.error('Error copying parent project:', error);
                 showMessage(this.tText('建物のコピーに失敗しました。'), true);
