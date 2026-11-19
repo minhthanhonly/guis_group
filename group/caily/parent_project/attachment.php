@@ -22,7 +22,7 @@ if (!$parent_project_id) {
             <nav class="navbar navbar-expand-lg navbar-light bg-light">
                 <div class="container-fluid">
                     <a class="navbar-brand fw-bold" href="#" v-if="parentProject">
-                        <span class="badge badge-sm bg-label-info">#{{ parentProject.project_number || 'N/A' }}</span>
+                        <span v-if="parentProject.project_number" class="badge badge-sm bg-label-info">#{{ parentProject.project_number }}</span>
                     </a>
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#parentProjectNavbar" aria-controls="parentProjectNavbar" aria-expanded="false" aria-label="Toggle navigation">
                         <span class="navbar-toggler-icon"></span>

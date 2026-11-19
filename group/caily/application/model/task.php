@@ -1,6 +1,16 @@
 <?php
 
 class Task extends ApplicationModel {
+    /** Note of the task log written when an assignee acknowledges (受領) a task. */
+    const ACKNOWLEDGED_LOG_NOTE = '受領';
+
+    /** Status values the task UI knows (task-manager.js taskStatuses). */
+    const VALID_STATUSES = array('todo', 'in-progress', 'confirming', 'paused', 'completed', 'cancelled');
+
+    private static function isValidStatus($status) {
+        return in_array((string) $status, self::VALID_STATUSES, true);
+    }
+
     function __construct() {
         $this->table = DB_PREFIX . 'tasks';
         $this->schema = array(
@@ -1172,12 +1182,15 @@ class Task extends ApplicationModel {
             $drawingCount = 0;
         }
         $estimatedHours = $this->normalize_estimated_hours(isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0);
+        if (isset($_POST['status']) && $_POST['status'] !== '' && !self::isValidStatus($_POST['status'])) {
+            return ['status' => 'error', 'message' => '無効なステータスです'];
+        }
         $data = array(
             'project_id' => $_POST['project_id'],
             'parent_id' => isset($_POST['parent_id']) && $_POST['parent_id'] ? $_POST['parent_id'] : null,
             'title' => $_POST['title'],
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'todo',
+            'status' => isset($_POST['status']) && $_POST['status'] !== '' ? $_POST['status'] : 'todo',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'task_kind' => $taskKind,
             'drawing_count' => $drawingCount,
@@ -1294,7 +1307,10 @@ class Task extends ApplicationModel {
         }
         $title = (isset($_POST['title']) && trim((string)$_POST['title']) !== '') ? trim($_POST['title']) : (isset($old['title']) ? $old['title'] : '');
         $description = isset($_POST['description']) ? $_POST['description'] : (isset($old['description']) ? $old['description'] : '');
-        $status = isset($_POST['status']) ? $_POST['status'] : (isset($old['status']) ? $old['status'] : 'new');
+        $status = isset($_POST['status']) && $_POST['status'] !== '' ? $_POST['status'] : (isset($old['status']) ? $old['status'] : 'todo');
+        if (isset($_POST['status']) && $_POST['status'] !== '' && !self::isValidStatus($_POST['status'])) {
+            return ['status' => 'error', 'message' => '無効なステータスです'];
+        }
         $priority = isset($_POST['priority']) ? $_POST['priority'] : (isset($old['priority']) ? $old['priority'] : 'medium');
         $assignedTo = isset($_POST['assigned_to']) ? $_POST['assigned_to'] : (isset($old['assigned_to']) ? $old['assigned_to'] : null);
         $dueDate = (isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '') ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
@@ -1594,11 +1610,14 @@ class Task extends ApplicationModel {
         if (!$id || !$status) {
             return ['status' => 'error', 'message' => 'Missing required parameters'];
         }
-        
+        if (!self::isValidStatus($status)) {
+            return ['status' => 'error', 'message' => '無効なステータスです'];
+        }
+
         if (!$this->checkPermission($project_id, $id)) {
             return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
         }
-        
+
         $old = $this->getById($id);
         $data = array(
             'status' => $status,
@@ -1870,7 +1889,7 @@ class Task extends ApplicationModel {
         }
         
         if (!$isAssigned) {
-            return ['status' => 'error', 'message' => 'Bạn không được giao việc này'];
+            return ['status' => 'error', 'message' => 'このタスクの担当者ではありません'];
         }
         
         // Update or insert acknowledgement
@@ -1888,8 +1907,8 @@ class Task extends ApplicationModel {
         $result = $this->query($query);
         
         if ($result) {
-            $this->logTaskAction($task_id, 'acknowledged', 'Đã nhận việc', null, $user_id);
-            return ['status' => 'success', 'message' => 'Đã đánh dấu nhận việc thành công'];
+            $this->logTaskAction($task_id, 'acknowledged', self::ACKNOWLEDGED_LOG_NOTE, null, $user_id);
+            return ['status' => 'success', 'message' => '受領しました'];
         } else {
             return ['status' => 'error', 'message' => 'Failed to acknowledge task'];
         }
@@ -3197,7 +3216,7 @@ class Task extends ApplicationModel {
         $source = intval($_POST['source_task_id']);
         $target = intval($_POST['target_task_id']);
         $type = isset($_POST['link_type']) ? $_POST['link_type'] : '0';
-        if (!$source || !$target) return ['success' => false, 'message' => 'Thiếu thông tin'];
+        if (!$source || !$target) return ['success' => false, 'message' => 'タスクの指定が不足しています'];
         // Both ends must be tasks of one project the user may modify; the link is stored under that project.
         $sourceProjectId = $this->getTaskProjectId($source);
         if (!$sourceProjectId || $sourceProjectId !== $this->getTaskProjectId($target)
@@ -3268,6 +3287,13 @@ class Task extends ApplicationModel {
             $task_id
         );
         $logs = $this->fetchAll($query);
+        // Older 受領 logs were written in Vietnamese; show them like the new ones
+        foreach ($logs as &$log) {
+            if (isset($log['action'], $log['note']) && $log['action'] === 'acknowledged' && $log['note'] === 'Đã nhận việc') {
+                $log['note'] = self::ACKNOWLEDGED_LOG_NOTE;
+            }
+        }
+        unset($log);
         return $logs;
     }
     
