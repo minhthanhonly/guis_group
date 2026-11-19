@@ -591,7 +591,8 @@ class ParentProject extends ApplicationModel {
 
         // Search functionality (flexible: trim, full/half-width, spaces)
         if ($search !== '') {
-            $searchWhere = $this->buildPaletteSearchWhere($search, [
+            // The one search box covers the names and numbers and the building's attributes (建物情報).
+            $searchFields = [
                 'p.company_name',
                 'p.branch_name',
                 'p.contact_name',
@@ -599,13 +600,41 @@ class ParentProject extends ApplicationModel {
                 'p.project_name',
                 'p.project_number',
                 'CAST(p.id AS CHAR)',
-            ], 'p.id');
-            if ($searchWhere !== '') {
-                // Also match the non-primary customers of the parent project's customer list
-                $linkedCustomerWhere = $this->buildLinkedCustomerSearchExists($search);
-                if ($linkedCustomerWhere !== '') {
-                    $searchWhere = '(' . $searchWhere . ' OR ' . $linkedCustomerWhere . ')';
+                'p.scale',
+                'p.city',
+                'p.type1',
+                'p.type2',
+                'p.structural_office',
+                'p.features',
+            ];
+            // One term (a word, or the whole text): found in any field, or in a linked customer.
+            $termWhere = function ($term) use ($searchFields) {
+                $where = $this->buildPaletteSearchWhere($term, $searchFields, 'p.id');
+                if ($where === '') {
+                    return '';
                 }
+                // Also match the non-primary customers of the parent project's customer list
+                $linkedCustomerWhere = $this->buildLinkedCustomerSearchExists($term);
+                return $linkedCustomerWhere !== '' ? '(' . $where . ' OR ' . $linkedCustomerWhere . ')' : $where;
+            };
+            $searchWhere = $termWhere($search);
+            // Several words, separated by a space (half- or full-width) or by "," "、" "，": every word
+            // must be found, each in any field. The whole text is still tried as one phrase, as before.
+            $words = array_slice(preg_split('/[\s\x{3000},\x{3001}\x{FF0C}]+/u', $search, -1, PREG_SPLIT_NO_EMPTY), 0, 8);
+            if (count($words) === 0) {
+                // Only separators: nothing to search for.
+                $searchWhere = '';
+            }
+            if (count($words) > 1) {
+                $wordWheres = array_filter(array_map($termWhere, $words), function ($w) {
+                    return $w !== '';
+                });
+                if (count($wordWheres) === count($words)) {
+                    $allWords = '(' . implode(' AND ', $wordWheres) . ')';
+                    $searchWhere = $searchWhere !== '' ? '(' . $searchWhere . ' OR ' . $allWords . ')' : $allWords;
+                }
+            }
+            if ($searchWhere !== '') {
                 $whereArr[] = $searchWhere;
             }
         }
@@ -619,8 +648,23 @@ class ParentProject extends ApplicationModel {
             );
         }
 
+        // Optional filters on the building's own attributes (建物情報): partial match, all must hold.
+        $attributeColumns = [
+            'scale' => 'p.scale', 'city' => 'p.city', 'type1' => 'p.type1', 'type2' => 'p.type2',
+            'structural_office' => 'p.structural_office', 'features' => 'p.features',
+        ];
+        foreach ($attributeColumns as $param => $column) {
+            if (!isset($_GET[$param]) || !is_scalar($_GET[$param]) || trim((string)$_GET[$param]) === '') {
+                continue;
+            }
+            // LIKE wildcards are taken out, so "%" cannot stand for "anything".
+            $value = mb_substr(str_replace(['%', '_', '\\'], '', trim((string)$_GET[$param])), 0, 100);
+            $like = $value !== '' ? $this->buildFlexibleLikeWhere($value, [$column]) : '';
+            $whereArr[] = $like !== '' ? $like : '0 = 1';
+        }
+
         $where = !empty($whereArr) ? "WHERE " . implode(" AND ", $whereArr) : "";
-        
+
         // Get total count
         $countQuery = sprintf("SELECT COUNT(*) as total FROM %s p %s", $this->table, $where);
         $totalRecords = $this->fetchOne($countQuery)['total'];

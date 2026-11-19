@@ -47,7 +47,7 @@ $view->heading('建物一覧');
                     <div class="row mb-3">
                         <div class="col-md-3">
                             <div class="input-group">
-                                <input type="text" class="form-control" v-model="searchKeyword" :placeholder="translatePlaceholder('検索...')" @input="onSearch" @blur="onSearchBlur">
+                                <input type="text" class="form-control" v-model="searchKeyword" :placeholder="translatePlaceholder('検索...')" :title="translatePlaceholder(searchBoxHint)" @input="onSearch" @blur="onSearchBlur">
                                 <button class="btn btn-outline-secondary" type="button" @click="clearSearch">
                                     <i class="fa fa-times"></i>
                                 </button>

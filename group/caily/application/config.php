@@ -13,7 +13,35 @@ if (!defined('APP_ENV_LOADED')) {
 				continue;
 			}
 			putenv($line);
+			// A copy that belongs to this request: see app_env() below.
+			if (strpos($line, '=') !== false) {
+				list($envName, $envValue) = explode('=', $line, 2);
+				$GLOBALS['APP_ENV_VALUES'][trim($envName)] = $envValue;
+			}
 		}
+	}
+}
+if (!isset($GLOBALS['APP_ENV_VALUES']) || !is_array($GLOBALS['APP_ENV_VALUES'])) {
+	$GLOBALS['APP_ENV_VALUES'] = array();
+}
+
+if (!function_exists('app_env')) {
+	/**
+	 * A setting from the environment or from .env.
+	 * putenv() changes the environment of the whole server process, and PHP takes the values back out
+	 * when a request ends. Under Apache on Windows (many threads, one process) another request ending
+	 * therefore empties getenv() in the middle of this one. The copy read from .env at the start of the
+	 * request is not affected, so it is used whenever the environment has no value.
+	 */
+	function app_env($name, $default = '') {
+		$value = getenv($name);
+		if ($value !== false && $value !== '') {
+			return $value;
+		}
+		if (isset($GLOBALS['APP_ENV_VALUES'][$name]) && $GLOBALS['APP_ENV_VALUES'][$name] !== '') {
+			return $GLOBALS['APP_ENV_VALUES'][$name];
+		}
+		return $default;
 	}
 }
 
