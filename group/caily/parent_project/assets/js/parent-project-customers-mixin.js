@@ -29,7 +29,11 @@
                 customerSearchModalId: 'customerSearchModal',
                 customerListModalId: 'customerListModal',
                 customerSearchKeyword: '',
+                // 会社 / 支店 selects narrowing the 顧客検索 results ('' = all)
+                customerSearchCompany: '',
+                customerSearchBranch: '',
                 customerSearchResults: [],
+                customerSearchMatchCount: 0, // matches before the 100-row display limit
                 customerSearchLoading: false,
                 allCustomersForSearch: [],
                 customerSearchLoaded: false,
@@ -48,6 +52,23 @@
             hasUnlinkedCustomerRow() {
                 const list = this.customerList || [];
                 return list.some((c) => !c.customer_id) && list.some((c) => !!c.customer_id);
+            },
+            // 顧客検索: company names of the customer master, with their customer count
+            customerSearchCompanyOptions() {
+                return this.countCustomerSearchOptions(this.allCustomersForSearch, 'company_name');
+            },
+            // 顧客検索: branches of the selected company
+            customerSearchBranchOptions() {
+                if (!this.customerSearchCompany) {
+                    return [];
+                }
+                const company = this.customerSearchCompany;
+                const rows = (this.allCustomersForSearch || [])
+                    .filter((customer) => String(customer.company_name || '').trim() === company);
+                return this.countCustomerSearchOptions(rows, 'branch');
+            },
+            hasCustomerSearchCriteria() {
+                return !!(this.customerSearchCompany || (this.customerSearchKeyword || '').trim());
             }
         },
         methods: {
@@ -300,8 +321,27 @@
                     }
                 }, { once: true });
             },
+            // [{ value, count }] of the distinct non-empty values of `key`, sorted by name
+            countCustomerSearchOptions(customers, key) {
+                const counts = {};
+                (customers || []).forEach((customer) => {
+                    const value = String((customer && customer[key]) || '').trim();
+                    if (value) {
+                        counts[value] = (counts[value] || 0) + 1;
+                    }
+                });
+                return Object.keys(counts)
+                    .sort((a, b) => a.localeCompare(b, 'ja'))
+                    .map((value) => ({ value, count: counts[value] }));
+            },
+            onCustomerSearchCompanyChange() {
+                this.customerSearchBranch = '';
+                this.searchCustomersByKeyword();
+            },
             async openCustomerSearchModal() {
                 this.customerSearchKeyword = '';
+                this.customerSearchCompany = '';
+                this.customerSearchBranch = '';
                 this.customerSearchResults = [];
                 this.keepModalOpenStateAfterHide(this.customerSearchModalId);
                 $('#' + this.customerSearchModalId).modal('show');
@@ -331,8 +371,11 @@
             },
             searchCustomersByKeyword() {
                 const keyword = (this.customerSearchKeyword || '').trim().toLowerCase();
-                if (!keyword) {
+                const company = this.customerSearchCompany || '';
+                const branch = this.customerSearchBranch || '';
+                if (!keyword && !company) {
                     this.customerSearchResults = [];
+                    this.customerSearchMatchCount = 0;
                     return;
                 }
                 const fieldsForSearch = (customer) => [
@@ -346,9 +389,13 @@
                     customer.email,
                     this.customerSearchDepartmentLabel(customer)
                 ];
-                this.customerSearchResults = (this.allCustomersForSearch || [])
-                    .filter((customer) => fieldsForSearch(customer).some((value) => String(value || '').toLowerCase().includes(keyword)))
-                    .slice(0, 100);
+                const matches = (this.allCustomersForSearch || [])
+                    .filter((customer) => !company || String(customer.company_name || '').trim() === company)
+                    .filter((customer) => !branch || String(customer.branch || '').trim() === branch)
+                    .filter((customer) => !keyword
+                        || fieldsForSearch(customer).some((value) => String(value || '').toLowerCase().includes(keyword)));
+                this.customerSearchMatchCount = matches.length;
+                this.customerSearchResults = matches.slice(0, 100);
             },
             // Clicking a search result adds it to the list; the modal stays open to add more
             selectCustomerFromSearch(customer) {

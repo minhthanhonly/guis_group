@@ -14,16 +14,33 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
-                <div class="mb-3">
-                    <label class="form-label"><span data-i18n="キーワード">キーワード</span></label>
-                    <input
-                        type="text"
-                        class="form-control"
-                        v-model="customerSearchKeyword"
-                        @input="searchCustomersByKeyword"
-                        placeholder="会社名・支店名・担当者名・電話・メール..."
-                        autocomplete="off">
-                    <div class="form-text text-muted">
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <label class="form-label"><span data-i18n="会社名">会社名</span></label>
+                        <select class="form-select" v-model="customerSearchCompany" @change="onCustomerSearchCompanyChange">
+                            <option value="" data-i18n="すべて">すべて</option>
+                            <option v-for="option in customerSearchCompanyOptions" :key="option.value" :value="option.value">{{ option.value }} ({{ option.count }})</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label"><span data-i18n="支店名">支店名</span></label>
+                        <select class="form-select" v-model="customerSearchBranch" @change="searchCustomersByKeyword"
+                                :disabled="!customerSearchCompany || customerSearchBranchOptions.length === 0">
+                            <option value="" data-i18n="すべて">すべて</option>
+                            <option v-for="option in customerSearchBranchOptions" :key="option.value" :value="option.value">{{ option.value }} ({{ option.count }})</option>
+                        </select>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label"><span data-i18n="キーワード">キーワード</span></label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            v-model="customerSearchKeyword"
+                            @input="searchCustomersByKeyword"
+                            placeholder="会社名・支店名・担当者名・電話・メール..."
+                            autocomplete="off">
+                    </div>
+                    <div class="col-12 form-text text-muted mt-1">
                         <span data-i18n="行をクリックすると顧客リストに追加されます。">行をクリックすると顧客リストに追加されます。</span>
                     </div>
                 </div>
@@ -32,8 +49,8 @@
                         <span class="visually-hidden">読み込み中...</span>
                     </div>
                 </div>
-                <div v-else-if="!customerSearchKeyword.trim()" class="text-muted text-center py-3">
-                    <span data-i18n="キーワードを入力してください">キーワードを入力してください</span>
+                <div v-else-if="!hasCustomerSearchCriteria" class="text-muted text-center py-3">
+                    <span data-i18n="会社を選択するか、キーワードを入力してください">会社を選択するか、キーワードを入力してください</span>
                 </div>
                 <div v-else-if="customerSearchResults.length === 0" class="text-muted text-center py-3">
                     <span data-i18n="該当する顧客が見つかりません">該当する顧客が見つかりません</span>
@@ -71,6 +88,9 @@
                             </tr>
                         </tbody>
                     </table>
+                </div>
+                <div v-if="!customerSearchLoading && customerSearchMatchCount > customerSearchResults.length" class="small text-warning mt-2">
+                    {{ customerSearchMatchCount }}<span data-i18n="件中、先頭100件を表示しています。支店名・キーワードで絞り込んでください。">件中、先頭100件を表示しています。支店名・キーワードで絞り込んでください。</span>
                 </div>
             </div>
             <div class="modal-footer">

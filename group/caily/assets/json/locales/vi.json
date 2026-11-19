@@ -1111,6 +1111,8 @@
     "「主」に選択した顧客が連絡先（主顧客）になります。": "Khách hàng được chọn「Chính」sẽ là đầu mối liên hệ (khách hàng chính).",
     "行をクリックすると顧客リストに追加されます。": "Nhấp vào một dòng để thêm vào danh sách khách hàng.",
     "キーワードを入力してください": "Vui lòng nhập từ khóa",
+    "会社を選択するか、キーワードを入力してください": "Vui lòng chọn công ty hoặc nhập từ khóa",
+    "件中、先頭100件を表示しています。支店名・キーワードで絞り込んでください。": " kết quả, chỉ hiển thị 100 kết quả đầu. Hãy lọc thêm theo chi nhánh hoặc từ khóa.",
     "該当する顧客が見つかりません": "Không tìm thấy khách hàng phù hợp",
     "電話": "Điện thoại",
     "メール": "Email",
