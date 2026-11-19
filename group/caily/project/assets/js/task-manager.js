@@ -27,27 +27,19 @@ const FALLBACK_DEFAULT_TASK_KIND_BY_TITLE = {
     '全図面のチェック・確認作業': 'チェック'
 };
 
-const FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
-    'お客様との連絡・調整・納品対応': 15,
-    '全図面のチェック・確認作業': 20
-};
-
 // Legacy aliases (mutated after department config load)
 let DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
 let DEFAULT_TASK_KIND_BY_TITLE = Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
-let DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
 
 function applyDepartmentDefaultTaskConfig(tasks) {
     const list = Array.isArray(tasks) ? tasks : [];
     if (!list.length) {
         DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
         DEFAULT_TASK_KIND_BY_TITLE = Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
-        DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
         return;
     }
     const titles = [];
     const kinds = {};
-    const percents = {};
     list.forEach((t) => {
         const title = String(t && t.title ? t.title : '').trim();
         if (!title) return;
@@ -58,10 +50,6 @@ function applyDepartmentDefaultTaskConfig(tasks) {
         if (t.task_kind) {
             kinds[title] = String(t.task_kind).trim();
         }
-        const pct = Number(t.price_pct);
-        if (Number.isFinite(pct)) {
-            percents[title] = pct;
-        }
     });
     DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = titles.length
         ? titles
@@ -69,9 +57,6 @@ function applyDepartmentDefaultTaskConfig(tasks) {
     DEFAULT_TASK_KIND_BY_TITLE = Object.keys(kinds).length
         ? kinds
         : Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
-    DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.keys(percents).length
-        ? percents
-        : Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
 }
 
 const TaskApp = createApp({
@@ -235,7 +220,6 @@ const TaskApp = createApp({
             quillTaskNoteContent: '',
             quillTaskNoteInitTimer: null,
             creatingDefaultTasks: false,
-            pricePctSavingTaskIds: {},
             departmentDefaultTasks: []
         }
     },
@@ -1030,112 +1014,9 @@ const TaskApp = createApp({
             const title = (task.title || '').trim();
             return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(title) !== -1;
         },
-        /** Task's own 比率 when set on this project (tasks.price_pct), else null. */
-        getTaskPricePctOverride(task) {
-            if (!task || task.price_pct === null || task.price_pct === undefined || task.price_pct === '') {
-                return null;
-            }
-            const n = Number(task.price_pct);
-            return Number.isFinite(n) ? n : null;
-        },
-        getDepartmentDefaultTaskPercent(task) {
-            const title = (task && task.title ? task.title : '').trim();
-            const pct = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
-            return pct != null ? pct : null;
-        },
-        /** 比率 of a default task on this project: own override, else department config. */
-        getDefaultTaskEffectivePercent(task) {
-            const override = this.getTaskPricePctOverride(task);
-            return override != null ? override : this.getDepartmentDefaultTaskPercent(task);
-        },
-        getExistingDefaultTaskPercentTotal(excludeTaskId) {
-            const seen = new Set();
-            let total = 0;
-            (this.tasks || []).forEach((task) => {
-                if (!task || !this.isDefaultTaskWithAutoDrawingLink(task)) return;
-                if (excludeTaskId && task.id === excludeTaskId) return;
-                const title = (task.title || '').trim();
-                if (seen.has(title)) return;
-                seen.add(title);
-                const pct = this.getDefaultTaskEffectivePercent(task);
-                if (pct != null) total += pct;
-            });
-            return total;
-        },
-        canEditTaskPricePct(task) {
-            return !!(task && task.id && this.isDefaultTaskWithAutoDrawingLink(task)
-                && this.permission && this.permission.can_manage_project);
-        },
-        isPricePctSaving(taskId) {
-            return !!(taskId && this.pricePctSavingTaskIds[taskId]);
-        },
-        async saveTaskPricePct(task, value, inputEl) {
-            if (!this.canEditTaskPricePct(task) || this.isPricePctSaving(task.id)) {
-                return;
-            }
-            const canonical = this.tasks.find(t => t.id === task.id) || task;
-            const resetInput = () => {
-                if (inputEl) inputEl.value = this.formatTaskDrawingPricePercent(canonical);
-            };
-            const raw = String(value == null ? '' : value).trim();
-            let pct = null;
-            if (raw !== '') {
-                const n = Number(raw);
-                if (!Number.isFinite(n) || n < 0 || n > 100) {
-                    this.showMessage('比率は0〜100で入力してください', true);
-                    resetInput();
-                    return;
-                }
-                pct = Math.round(n * 100) / 100;
-                // Same value as the department config → no override
-                if (this.getTaskPricePctOverride(canonical) == null && pct === this.getDepartmentDefaultTaskPercent(canonical)) {
-                    resetInput();
-                    return;
-                }
-            }
-            if (pct === this.getTaskPricePctOverride(canonical)) {
-                resetInput();
-                return;
-            }
-            const effective = pct != null ? pct : (this.getDepartmentDefaultTaskPercent(canonical) || 0);
-            if (this.getExistingDefaultTaskPercentTotal(canonical.id) + effective > 100) {
-                this.showMessage('既定タスクの比率の合計は100%以下にしてください', true);
-                resetInput();
-                return;
-            }
-            this.pricePctSavingTaskIds = { ...this.pricePctSavingTaskIds, [task.id]: true };
-            try {
-                const formData = new FormData();
-                formData.append('id', task.id);
-                formData.append('project_id', this.projectId);
-                formData.append('price_pct', pct == null ? '' : String(pct));
-                const response = await axios.post('/api/index.php?model=task&method=updatePricePct', formData);
-                if (response.data && response.data.status === 'success') {
-                    const saved = response.data.price_pct;
-                    canonical.price_pct = (saved === null || saved === undefined) ? null : saved;
-                    if (canonical !== task) task.price_pct = canonical.price_pct;
-                    resetInput();
-                } else {
-                    this.showMessage(response.data?.message || '比率の更新に失敗しました', true);
-                    resetInput();
-                }
-            } catch (error) {
-                this.showMessage('比率の更新に失敗しました', true);
-                resetInput();
-            } finally {
-                const next = { ...this.pricePctSavingTaskIds };
-                delete next[task.id];
-                this.pricePctSavingTaskIds = next;
-            }
-        },
-        getDrawingPricePoolPercent() {
-            return Math.max(0, 100 - this.getExistingDefaultTaskPercentTotal());
-        },
         collectDrawingLinkedTasksForPercent() {
             return (this.tasks || []).filter((task) => {
-                return task && task.id
-                    && this.isTaskLinkedToDrawings(task)
-                    && !this.isDefaultTaskWithAutoDrawingLink(task);
+                return task && task.id && this.isTaskLinkedToDrawings(task);
             });
         },
         getTaskDrawingSlotCount(task) {
@@ -1147,23 +1028,16 @@ const TaskApp = createApp({
                 return sum + this.getTaskDrawingSlotCount(task);
             }, 0);
         },
+        /** 作業比重: weight (drawing_count) / total weight of all linked tasks, default tasks included. */
         getTaskDrawingPricePercent(task) {
-            if (!task || !task.id) {
-                return null;
-            }
-            if (this.isDefaultTaskWithAutoDrawingLink(task)) {
-                return this.getDefaultTaskEffectivePercent(task);
-            }
-            if (!this.isTaskLinkedToDrawings(task)) {
+            if (!task || !task.id || !this.isTaskLinkedToDrawings(task)) {
                 return null;
             }
             const totalSlots = this.getTotalDrawingSlotsForPercent();
             if (totalSlots <= 0) {
                 return null;
             }
-            const pool = this.getDrawingPricePoolPercent();
-            const slots = this.getTaskDrawingSlotCount(task);
-            return (pool * slots) / totalSlots;
+            return (100 * this.getTaskDrawingSlotCount(task)) / totalSlots;
         },
         formatTaskDrawingPricePercent(task) {
             const pct = this.getTaskDrawingPricePercent(task);
