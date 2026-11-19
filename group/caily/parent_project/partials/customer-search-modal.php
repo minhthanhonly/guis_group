@@ -17,18 +17,12 @@
                 <div class="row g-2 mb-3">
                     <div class="col-md-4">
                         <label class="form-label"><span data-i18n="会社名">会社名</span></label>
-                        <select class="form-select" v-model="customerSearchCompany" @change="onCustomerSearchCompanyChange">
-                            <option value="" data-i18n="すべて">すべて</option>
-                            <option v-for="option in customerSearchCompanyOptions" :key="option.value" :value="option.value">{{ option.value }} ({{ option.count }})</option>
-                        </select>
+                        <!-- Options are filled by select2 (initCustomerSearchSelects); 東建 / 大東 / ナミキ first -->
+                        <select class="form-select customer-search-company-select"></select>
                     </div>
                     <div class="col-md-3">
                         <label class="form-label"><span data-i18n="支店名">支店名</span></label>
-                        <select class="form-select" v-model="customerSearchBranch" @change="searchCustomersByKeyword"
-                                :disabled="!customerSearchCompany || customerSearchBranchOptions.length === 0">
-                            <option value="" data-i18n="すべて">すべて</option>
-                            <option v-for="option in customerSearchBranchOptions" :key="option.value" :value="option.value">{{ option.value }} ({{ option.count }})</option>
-                        </select>
+                        <select class="form-select customer-search-branch-select" disabled></select>
                     </div>
                     <div class="col-md-5">
                         <label class="form-label"><span data-i18n="キーワード">キーワード</span></label>

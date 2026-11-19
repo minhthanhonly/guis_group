@@ -14,6 +14,17 @@
 (function () {
     'use strict';
 
+    // 顧客検索 会社名: companies whose name contains one of these come first, in this order
+    const PINNED_CUSTOMER_COMPANIES = ['東建', '大東', 'ナミキ'];
+
+    function pinnedCompanyRank(name) {
+        const text = String(name || '');
+        // 大東建託 contains 東建: check 大東 before 東建
+        const group = ['大東', '東建', 'ナミキ'].find((key) => text.indexOf(key) !== -1);
+        const index = group ? PINNED_CUSTOMER_COMPANIES.indexOf(group) : -1;
+        return index === -1 ? PINNED_CUSTOMER_COMPANIES.length : index;
+    }
+
     function notify(message, isError) {
         if (typeof showMessage === 'function') {
             showMessage(message, !!isError);
@@ -55,7 +66,13 @@
             },
             // 顧客検索: company names of the customer master, with their customer count
             customerSearchCompanyOptions() {
-                return this.countCustomerSearchOptions(this.allCustomersForSearch, 'company_name');
+                // 東建 / 大東 / ナミキ first (largest first inside each), then the rest by name
+                return this.countCustomerSearchOptions(this.allCustomersForSearch, 'company_name')
+                    .map((option, order) => ({ option, order, rank: pinnedCompanyRank(option.value) }))
+                    .sort((a, b) => (a.rank - b.rank)
+                        || (a.rank < PINNED_CUSTOMER_COMPANIES.length ? b.option.count - a.option.count : 0)
+                        || (a.order - b.order))
+                    .map((entry) => entry.option);
             },
             // 顧客検索: branches of the selected company
             customerSearchBranchOptions() {
@@ -336,7 +353,47 @@
             },
             onCustomerSearchCompanyChange() {
                 this.customerSearchBranch = '';
+                this.refreshCustomerSearchBranchSelect();
                 this.searchCustomersByKeyword();
+            },
+            // ---- 会社名 / 支店名 select2 (type to search) ----
+            customerSearchSelect(kind) {
+                return $('#' + this.customerSearchModalId + ' .customer-search-' + kind + '-select');
+            },
+            buildCustomerSearchSelect(kind, options, value, onChange) {
+                const $select = this.customerSearchSelect(kind);
+                if (!$select.length || typeof $select.select2 !== 'function') {
+                    return;
+                }
+                if ($select.data('select2')) {
+                    $select.off('change.customerSearch').select2('destroy');
+                }
+                const data = [{ id: '', text: 'すべて' }].concat(options.map((option) => ({
+                    id: option.value,
+                    text: option.value + ' (' + option.count + ')'
+                })));
+                $select.empty().prop('disabled', kind === 'branch' && !this.customerSearchCompany);
+                $select.select2({
+                    data: data,
+                    width: '100%',
+                    dropdownParent: $('#' + this.customerSearchModalId),
+                    minimumResultsForSearch: 0
+                });
+                $select.val(value || '').trigger('change.select2');
+                $select.on('change.customerSearch', () => onChange(String($select.val() || '')));
+            },
+            initCustomerSearchSelects() {
+                this.buildCustomerSearchSelect('company', this.customerSearchCompanyOptions, this.customerSearchCompany, (value) => {
+                    this.customerSearchCompany = value;
+                    this.onCustomerSearchCompanyChange();
+                });
+                this.refreshCustomerSearchBranchSelect();
+            },
+            refreshCustomerSearchBranchSelect() {
+                this.buildCustomerSearchSelect('branch', this.customerSearchBranchOptions, this.customerSearchBranch, (value) => {
+                    this.customerSearchBranch = value;
+                    this.searchCustomersByKeyword();
+                });
             },
             async openCustomerSearchModal() {
                 this.customerSearchKeyword = '';
@@ -349,6 +406,7 @@
                 if (!this.customerSearchLoaded) {
                     await this.loadAllCustomersForSearch();
                 }
+                this.initCustomerSearchSelects();
             },
             async loadAllCustomersForSearch() {
                 this.customerSearchLoading = true;
