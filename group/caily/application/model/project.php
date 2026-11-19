@@ -4922,7 +4922,8 @@ class Project extends ApplicationModel {
     /**
      * Whether UI should prompt for 省エネ drawing share confirmation.
      * Requires: dept 意匠設計/設備設計/技術課設備 + sibling project in 省エネ計算.
-     * Asks again on each 完了/納品済み even if already answered.
+     * The UI asks on GUIS納期状況 → 納品済み and on status → 請求待ち / 完了 (not on CAILY納期状況),
+     * and no longer once the project was answered 共有する (energy_drawing_share_status = shared).
      */
     public function needsEnergyDrawingShareConfirm($projectOrId) {
         $project = is_array($projectOrId) ? $projectOrId : $this->getById(intval($projectOrId));

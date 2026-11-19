@@ -31,6 +31,21 @@
         return String(departmentName || '').trim().indexOf('省エネ') !== -1;
     }
 
+    /**
+     * Status changes that ask about sharing: 請求待ち / 完了.
+     * (GUIS納期状況 → 納品済み also asks; CAILY never shares with 省エネ, so its 納期状況 does not.)
+     */
+    var SHARE_TRIGGER_STATUSES = { waiting_invoice: true, completed: true };
+
+    function isShareTriggerStatus(status) {
+        return !!SHARE_TRIGGER_STATUSES[String(status || '').trim()];
+    }
+
+    /** Already answered 共有する for this project → never ask again. */
+    function isEnergyDrawingAlreadyShared(project) {
+        return !!project && String(project.energy_drawing_share_status || '').trim() === 'shared';
+    }
+
     function isActiveProjectStatus(status) {
         var s = String(status || '').trim();
         return s !== 'cancelled' && s !== 'deleted';
@@ -187,7 +202,7 @@
      * @returns {Promise<object|null|false>} answer object, null if not required, false if cancelled
      */
     function promptEnergyDrawingShareConfirm(project, options) {
-        if (!needsEnergyDrawingShareConfirm(project, options)) {
+        if (!needsEnergyDrawingShareConfirm(project, options) || isEnergyDrawingAlreadyShared(project)) {
             return Promise.resolve(null);
         }
         if (typeof Swal === 'undefined') {
@@ -228,6 +243,8 @@
         SHARE_DEPT_NAMES: SHARE_DEPT_NAMES,
         REASON_OPTIONS: REASON_OPTIONS,
         isShareSourceDepartment: isShareSourceDepartment,
+        isShareTriggerStatus: isShareTriggerStatus,
+        isEnergyDrawingAlreadyShared: isEnergyDrawingAlreadyShared,
         isEnergyDepartmentName: isEnergyDepartmentName,
         hasEnergySavingSibling: hasEnergySavingSibling,
         needsEnergyDrawingShareConfirm: needsEnergyDrawingShareConfirm,
