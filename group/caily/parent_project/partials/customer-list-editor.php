@@ -19,10 +19,6 @@
                 <i class="fa fa-plus me-1"></i> <span data-i18n="新規顧客">新規顧客</span>
             </button>
             <?php } ?>
-            <button v-if="customerList.length > 0" type="button" class="btn btn-sm btn-outline-info py-0 small"
-                @click="openCustomerListModal" title="顧客情報表示・編集">
-                <i class="fa fa-info-circle me-1"></i> <span data-i18n="顧客情報">顧客情報</span>
-            </button>
         </label>
         <div class="table-responsive border rounded">
             <table class="table table-sm align-middle mb-0 parent-project-customer-table">
@@ -32,7 +28,7 @@
                         <th><span data-i18n="会社名">会社名</span></th>
                         <th><span data-i18n="支店名">支店名</span></th>
                         <th><span data-i18n="担当様">担当様</span></th>
-                        <th style="width: 48px;"></th>
+                        <th style="width: 110px;"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -55,7 +51,11 @@
                         </td>
                         <td>{{ customer.branch_name || '-' }}</td>
                         <td>{{ customer.contact_name || '-' }}</td>
-                        <td class="text-center">
+                        <td class="text-end text-nowrap">
+                            <button v-if="customer.customer_id" type="button" class="btn btn-sm btn-outline-info py-0"
+                                @click="openCustomerInfoFromList(customer)" title="顧客情報表示・編集">
+                                <i class="fa fa-info-circle me-1"></i><span data-i18n="詳細">詳細</span>
+                            </button>
                             <button type="button" class="btn btn-sm btn-icon btn-text-danger" @click="removeCustomerFromList(index)" title="リストから削除">
                                 <i class="fa fa-trash"></i>
                             </button>

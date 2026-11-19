@@ -14,6 +14,17 @@
 (function () {
     'use strict';
 
+    // 顧客検索 会社名: companies whose name contains one of these come first, in this order
+    const PINNED_CUSTOMER_COMPANIES = ['大東', '東建', 'ナミキ'];
+
+    function pinnedCompanyRank(name) {
+        const text = String(name || '');
+        // 大東建託 contains 東建: check 大東 before 東建
+        const group = ['大東', '東建', 'ナミキ'].find((key) => text.indexOf(key) !== -1);
+        const index = group ? PINNED_CUSTOMER_COMPANIES.indexOf(group) : -1;
+        return index === -1 ? PINNED_CUSTOMER_COMPANIES.length : index;
+    }
+
     function notify(message, isError) {
         if (typeof showMessage === 'function') {
             showMessage(message, !!isError);
@@ -29,7 +40,11 @@
                 customerSearchModalId: 'customerSearchModal',
                 customerListModalId: 'customerListModal',
                 customerSearchKeyword: '',
+                // 会社 / 支店 selects narrowing the 顧客検索 results ('' = all)
+                customerSearchCompany: '',
+                customerSearchBranch: '',
                 customerSearchResults: [],
+                customerSearchMatchCount: 0, // matches before the 100-row display limit
                 customerSearchLoading: false,
                 allCustomersForSearch: [],
                 customerSearchLoaded: false,
@@ -48,6 +63,29 @@
             hasUnlinkedCustomerRow() {
                 const list = this.customerList || [];
                 return list.some((c) => !c.customer_id) && list.some((c) => !!c.customer_id);
+            },
+            // 顧客検索: company names of the customer master, with their customer count
+            customerSearchCompanyOptions() {
+                // 大東 / 東建 / ナミキ first (largest first inside each), then the rest by name
+                return this.countCustomerSearchOptions(this.allCustomersForSearch, 'company_name')
+                    .map((option, order) => ({ option, order, rank: pinnedCompanyRank(option.value) }))
+                    .sort((a, b) => (a.rank - b.rank)
+                        || (a.rank < PINNED_CUSTOMER_COMPANIES.length ? b.option.count - a.option.count : 0)
+                        || (a.order - b.order))
+                    .map((entry) => entry.option);
+            },
+            // 顧客検索: branches of the selected company
+            customerSearchBranchOptions() {
+                if (!this.customerSearchCompany) {
+                    return [];
+                }
+                const company = this.customerSearchCompany;
+                const rows = (this.allCustomersForSearch || [])
+                    .filter((customer) => String(customer.company_name || '').trim() === company);
+                return this.countCustomerSearchOptions(rows, 'branch');
+            },
+            hasCustomerSearchCriteria() {
+                return !!(this.customerSearchCompany || (this.customerSearchKeyword || '').trim());
             }
         },
         methods: {
@@ -300,15 +338,82 @@
                     }
                 }, { once: true });
             },
+            // [{ value, count }] of the distinct non-empty values of `key`, sorted by name
+            countCustomerSearchOptions(customers, key) {
+                const counts = {};
+                (customers || []).forEach((customer) => {
+                    const value = String((customer && customer[key]) || '').trim();
+                    if (value) {
+                        counts[value] = (counts[value] || 0) + 1;
+                    }
+                });
+                return Object.keys(counts)
+                    .sort((a, b) => a.localeCompare(b, 'ja'))
+                    .map((value) => ({ value, count: counts[value] }));
+            },
+            onCustomerSearchCompanyChange() {
+                this.customerSearchBranch = '';
+                this.refreshCustomerSearchBranchSelect();
+                this.searchCustomersByKeyword();
+            },
+            // ---- 会社名 / 支店名 select2 (type to search) ----
+            customerSearchSelect(kind) {
+                return $('#' + this.customerSearchModalId + ' .customer-search-' + kind + '-select');
+            },
+            buildCustomerSearchSelect(kind, options, value, onChange) {
+                const $select = this.customerSearchSelect(kind);
+                if (!$select.length || typeof $select.select2 !== 'function') {
+                    return;
+                }
+                if ($select.data('select2')) {
+                    $select.off('change.customerSearch').select2('destroy');
+                }
+                const data = [{ id: '', text: 'すべて' }].concat(options.map((option) => ({
+                    id: option.value,
+                    text: option.value + ' (' + option.count + ')'
+                })));
+                $select.empty().prop('disabled', kind === 'branch' && !this.customerSearchCompany);
+                $select.select2({
+                    data: data,
+                    width: '100%',
+                    dropdownParent: $('#' + this.customerSearchModalId),
+                    minimumResultsForSearch: 0
+                });
+                $select.val(value || '').trigger('change.select2');
+                $select.on('change.customerSearch', () => onChange(String($select.val() || '')));
+            },
+            initCustomerSearchSelects() {
+                this.buildCustomerSearchSelect('company', this.customerSearchCompanyOptions, this.customerSearchCompany, (value) => {
+                    this.customerSearchCompany = value;
+                    this.onCustomerSearchCompanyChange();
+                });
+                this.refreshCustomerSearchBranchSelect();
+            },
+            refreshCustomerSearchBranchSelect() {
+                this.buildCustomerSearchSelect('branch', this.customerSearchBranchOptions, this.customerSearchBranch, (value) => {
+                    this.customerSearchBranch = value;
+                    this.searchCustomersByKeyword();
+                });
+            },
+            // The 会社名 / 支店名 / キーワード of the last search are kept, so reopening shows the same results
             async openCustomerSearchModal() {
-                this.customerSearchKeyword = '';
-                this.customerSearchResults = [];
                 this.keepModalOpenStateAfterHide(this.customerSearchModalId);
                 $('#' + this.customerSearchModalId).modal('show');
                 await this.loadCustomerSearchDepartments();
                 if (!this.customerSearchLoaded) {
                     await this.loadAllCustomersForSearch();
                 }
+                // A kept company / branch that no longer exists in the customer master falls back to すべて
+                if (this.customerSearchCompany
+                    && !this.customerSearchCompanyOptions.some((option) => option.value === this.customerSearchCompany)) {
+                    this.customerSearchCompany = '';
+                }
+                if (this.customerSearchBranch
+                    && !this.customerSearchBranchOptions.some((option) => option.value === this.customerSearchBranch)) {
+                    this.customerSearchBranch = '';
+                }
+                this.initCustomerSearchSelects();
+                this.searchCustomersByKeyword();
             },
             async loadAllCustomersForSearch() {
                 this.customerSearchLoading = true;
@@ -331,8 +436,11 @@
             },
             searchCustomersByKeyword() {
                 const keyword = (this.customerSearchKeyword || '').trim().toLowerCase();
-                if (!keyword) {
+                const company = this.customerSearchCompany || '';
+                const branch = this.customerSearchBranch || '';
+                if (!keyword && !company) {
                     this.customerSearchResults = [];
+                    this.customerSearchMatchCount = 0;
                     return;
                 }
                 const fieldsForSearch = (customer) => [
@@ -346,9 +454,13 @@
                     customer.email,
                     this.customerSearchDepartmentLabel(customer)
                 ];
-                this.customerSearchResults = (this.allCustomersForSearch || [])
-                    .filter((customer) => fieldsForSearch(customer).some((value) => String(value || '').toLowerCase().includes(keyword)))
-                    .slice(0, 100);
+                const matches = (this.allCustomersForSearch || [])
+                    .filter((customer) => !company || String(customer.company_name || '').trim() === company)
+                    .filter((customer) => !branch || String(customer.branch || '').trim() === branch)
+                    .filter((customer) => !keyword
+                        || fieldsForSearch(customer).some((value) => String(value || '').toLowerCase().includes(keyword)));
+                this.customerSearchMatchCount = matches.length;
+                this.customerSearchResults = matches.slice(0, 100);
             },
             // Clicking a search result adds it to the list; the modal stays open to add more
             selectCustomerFromSearch(customer) {
@@ -380,6 +492,81 @@
                 }
                 $('#' + this.customerListModalId).modal('hide');
                 await this.showCustomerInfoModal(customer);
+            },
+            // 顧客検索 -> 詳細: show the customer, then come back to the search (its values are kept)
+            async openCustomerInfoFromSearch(searchCustomer) {
+                if (!searchCustomer || !searchCustomer.id) {
+                    return;
+                }
+                const customer = (await this.fetchCustomerMasterById(searchCustomer.id)) || { ...searchCustomer };
+                if (this.$data && Object.prototype.hasOwnProperty.call(this.$data, 'customerInfoModalContext')) {
+                    this.customerInfoModalContext = 'parent';
+                    this.customerInfoModalChildProjectId = null;
+                }
+                // The customer may have been edited: refresh the results, keeping the search values
+                await this.openOverCustomerSearch(() => this.showCustomerInfoModal(customer), () => this.refreshCustomerSearch());
+            },
+            // 顧客検索 -> 新規顧客: create a customer in the global customer modal, prefilled with the
+            // selected 会社名 / 支店名; once saved it is added to the list and shows up in the results
+            async openNewCustomerFromSearch() {
+                if (typeof window.openGlobalCustomerCreateModal !== 'function') {
+                    notify('新規顧客を登録できません。ページを再読み込みしてください。', true);
+                    return;
+                }
+                const prefill = {
+                    company_name: this.customerSearchCompany || '',
+                    branch: this.customerSearchBranch || '',
+                    category_id: 2
+                };
+                let created = null;
+                await this.openOverCustomerSearch(
+                    () => window.openGlobalCustomerCreateModal(prefill, {
+                        onSaved: (customer) => { created = customer; }
+                    }),
+                    async () => {
+                        if (created) {
+                            await this.addNewCustomerToList(created);
+                        }
+                        await this.refreshCustomerSearch();
+                    }
+                );
+            },
+            // Open a 顧客情報 modal (the page's own or the global one) on top of the still open 顧客検索;
+            // onHidden runs when it closes
+            async openOverCustomerSearch(open, onHidden) {
+                const searchEl = document.getElementById(this.customerSearchModalId);
+                const infoModals = ['customerInfoModal', 'globalCustomerModal']
+                    .map((id) => document.getElementById(id))
+                    .filter(Boolean);
+                const searchZIndex = (searchEl && parseInt(window.getComputedStyle(searchEl).zIndex, 10)) || 1090;
+                const liftAbove = (event) => {
+                    infoModals.forEach((el) => el.removeEventListener('show.bs.modal', liftAbove));
+                    const infoEl = event.currentTarget;
+                    infoEl.style.zIndex = String(searchZIndex + 10);
+                    // Its own backdrop sits below the search modal: dim the search modal with the modal's background
+                    infoEl.style.backgroundColor = 'rgba(0, 0, 0, 0.45)';
+                    this.keepModalOpenStateAfterHide(infoEl.id);
+                    infoEl.addEventListener('hidden.bs.modal', () => {
+                        infoEl.style.zIndex = '';
+                        infoEl.style.backgroundColor = '';
+                        if (typeof onHidden === 'function') {
+                            onHidden();
+                        }
+                    }, { once: true });
+                };
+                infoModals.forEach((el) => el.addEventListener('show.bs.modal', liftAbove));
+                try {
+                    await open();
+                } finally {
+                    // Not opened (no modal on this page): drop the pending listeners
+                    setTimeout(() => infoModals.forEach((el) => el.removeEventListener('show.bs.modal', liftAbove)), 1000);
+                }
+            },
+            async refreshCustomerSearch() {
+                this.customerSearchLoaded = false;
+                await this.loadAllCustomersForSearch();
+                this.initCustomerSearchSelects();
+                this.searchCustomersByKeyword();
             }
         }
     };

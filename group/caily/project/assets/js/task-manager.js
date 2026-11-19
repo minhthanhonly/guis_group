@@ -27,6 +27,7 @@ const FALLBACK_DEFAULT_TASK_KIND_BY_TITLE = {
     '全図面のチェック・確認作業': 'チェック'
 };
 
+// Fixed % of default tasks, used only by projects from before 作業比重 (task_weight_mode = 0)
 const FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
     'お客様との連絡・調整・納品対応': 15,
     '全図面のチェック・確認作業': 20
@@ -705,6 +706,7 @@ const TaskApp = createApp({
             try {
                 const res = await axios.get(
                     '/api/index.php?model=department&method=getDefaultTasks&department_id=' + encodeURIComponent(deptId)
+                    + (this.projectId ? '&project_id=' + encodeURIComponent(this.projectId) : '')
                 );
                 const data = res && res.data ? res.data : {};
                 const tasks = Array.isArray(data.tasks) ? data.tasks : [];
@@ -1028,6 +1030,10 @@ const TaskApp = createApp({
             const title = (task.title || '').trim();
             return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(title) !== -1;
         },
+        /** 作業比重 project (new); projects from before it keep fixed default-task %. */
+        isTaskWeightMode() {
+            return !!(this.projectInfo && String(this.projectInfo.task_weight_mode) === '1');
+        },
         getExistingDefaultTaskPercentTotal() {
             const titles = new Set((this.tasks || []).map((t) => (t.title || '').trim()));
             let total = 0;
@@ -1038,14 +1044,11 @@ const TaskApp = createApp({
             });
             return total;
         },
-        getDrawingPricePoolPercent() {
-            return Math.max(0, 100 - this.getExistingDefaultTaskPercentTotal());
-        },
         collectDrawingLinkedTasksForPercent() {
+            const weightMode = this.isTaskWeightMode();
             return (this.tasks || []).filter((task) => {
-                return task && task.id
-                    && this.isTaskLinkedToDrawings(task)
-                    && !this.isDefaultTaskWithAutoDrawingLink(task);
+                return task && task.id && this.isTaskLinkedToDrawings(task)
+                    && (weightMode || !this.isDefaultTaskWithAutoDrawingLink(task));
             });
         },
         getTaskDrawingSlotCount(task) {
@@ -1057,13 +1060,17 @@ const TaskApp = createApp({
                 return sum + this.getTaskDrawingSlotCount(task);
             }, 0);
         },
+        /**
+         * 作業比重: weight (drawing_count) / total weight of all linked tasks, default tasks included.
+         * Projects from before it: default tasks fixed %, others share the rest by drawing_count.
+         */
         getTaskDrawingPricePercent(task) {
             if (!task || !task.id) {
                 return null;
             }
-            if (this.isDefaultTaskWithAutoDrawingLink(task)) {
-                const title = (task.title || '').trim();
-                const fixed = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
+            const weightMode = this.isTaskWeightMode();
+            if (!weightMode && this.isDefaultTaskWithAutoDrawingLink(task)) {
+                const fixed = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[(task.title || '').trim()];
                 return fixed != null ? fixed : null;
             }
             if (!this.isTaskLinkedToDrawings(task)) {
@@ -1073,9 +1080,8 @@ const TaskApp = createApp({
             if (totalSlots <= 0) {
                 return null;
             }
-            const pool = this.getDrawingPricePoolPercent();
-            const slots = this.getTaskDrawingSlotCount(task);
-            return (pool * slots) / totalSlots;
+            const pool = weightMode ? 100 : Math.max(0, 100 - this.getExistingDefaultTaskPercentTotal());
+            return (pool * this.getTaskDrawingSlotCount(task)) / totalSlots;
         },
         formatTaskDrawingPricePercent(task) {
             const pct = this.getTaskDrawingPricePercent(task);
@@ -1526,12 +1532,21 @@ const TaskApp = createApp({
                 this.setEstimatedHoursSaving(task.id, false);
             }
         },
-        async saveTaskDrawingCount(task, value) {
+        /** 作業比重 inputs take whole numbers only: block ".", ",", "e", "+", "-". */
+        blockNonIntegerKey(event) {
+            if (event && ['.', ',', 'e', 'E', '+', '-'].indexOf(event.key) !== -1) {
+                event.preventDefault();
+            }
+        },
+        async saveTaskDrawingCount(task, value, inputEl) {
             if (!task || !task.id || !this.canEditTaskDrawingCount(task)) {
                 return;
             }
             const n = parseInt(value, 10);
             const drawingCount = Number.isNaN(n) || n < 1 ? 1 : n;
+            if (inputEl) {
+                inputEl.value = drawingCount;
+            }
             const canonical = this.tasks.find(t => t.id === task.id);
             const currentCount = parseInt(canonical ? canonical.drawing_count : task.drawing_count, 10);
             if (currentCount === drawingCount) {

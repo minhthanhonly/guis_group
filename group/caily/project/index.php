@@ -1700,6 +1700,57 @@ body > .select2-container--default,
     z-index: 10050 !important;
 }
 
+/* Space + drag hint (project-list.js): slides up from the bottom edge while Space is held */
+.pl-space-pan-hint {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    z-index: 10060;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.55rem 1rem;
+    border-radius: 999px;
+    background: rgba(33, 37, 41, 0.92);
+    color: #fff;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.3;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, calc(100% + 32px));
+    transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.18s ease;
+}
+.pl-space-pan-hint.is-visible {
+    opacity: 1;
+    transform: translate(-50%, 0);
+}
+.pl-space-pan-hint kbd {
+    padding: 0.1rem 0.45rem;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.pl-space-pan-hint-plus { opacity: 0.6; }
+[data-bs-theme="dark"] .pl-space-pan-hint {
+    background: rgba(248, 249, 250, 0.95);
+    color: #212529;
+}
+[data-bs-theme="dark"] .pl-space-pan-hint kbd {
+    border-color: rgba(0, 0, 0, 0.25);
+    background: rgba(0, 0, 0, 0.06);
+    color: #212529;
+}
+@media (prefers-reduced-motion: reduce) {
+    .pl-space-pan-hint { transition: opacity 0.15s ease; transform: translate(-50%, 0); }
+}
+
 /* ===== Memo readability (案件一覧 note cells) =====
    Larger body text with line-height 1.5, a quiet card frame, and solid label pills whose
    text is darkened from the label colour so light colours (yellow, lime) stay readable. */
@@ -1760,6 +1811,7 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-note-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-note-board-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/note-color-contrast.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/note-edit-presence.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/business-document-ui-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

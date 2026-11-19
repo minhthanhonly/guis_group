@@ -226,7 +226,8 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                                                 <label class="form-check-label" for="edit_pp_request_energy_saving">省エネ</label>
                                             </div>
                                         </div>
-                                        <div class="col-md-3">
+                                        <!-- その他 is no longer offered: shown only for buildings that already have it, so it can be removed -->
+                                        <div v-if="editParentHadRequestOther" class="col-md-3">
                                             <div class="form-check">
                                                 <input class="form-check-input" type="checkbox" id="edit_pp_request_other" v-model="editParentRequestFlags.other">
                                                 <label class="form-check-label" for="edit_pp_request_other">その他</label>
@@ -370,7 +371,7 @@ body:has(#editParentProjectModal.show) .tagify__dropdown {
 }
 
 .customer-search-row {
-    cursor: pointer;
+    cursor: default;
 }
 
 .customer-search-row:hover {

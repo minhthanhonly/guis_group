@@ -265,7 +265,7 @@ if (!$isAdministrator && !$projectModel->canUserViewBusinessDocuments($project_i
                                             </button>
                                         </td>
                                         <td class="text-center align-middle">
-                                            <span v-if="!isDefaultTaskDrawing(drawing)" class="badge bg-label-info">{{ getDrawingQuantity(drawing) }}</span>
+                                            <span v-if="isTaskWeightMode || !isDefaultTaskDrawing(drawing)" class="badge bg-label-info">{{ getDrawingQuantity(drawing) }}</span>
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">
@@ -357,7 +357,7 @@ if (!$isAdministrator && !$projectModel->canUserViewBusinessDocuments($project_i
                             </div>
                             <div class="mb-3">
                                 <label class="form-label"><span data-i18n="図面数">図面数</span></label>
-                                <input type="number" class="form-control" min="1" step="1" v-model.number="editingDrawing.drawing_count" :readonly="!!editingDrawing.task_id" :disabled="!!editingDrawing.task_id">
+                                <input type="number" class="form-control" min="1" step="1" inputmode="numeric" @keydown="if (['.', ',', 'e', 'E', '+', '-'].includes($event.key)) $event.preventDefault()" v-model.number="editingDrawing.drawing_count" :readonly="!!editingDrawing.task_id" :disabled="!!editingDrawing.task_id">
                                 <small v-if="editingDrawing.task_id" class="text-muted"><span data-i18n="タスクの図面数と連動しています">タスクの図面数と連動しています</span></small>
                             </div>
                             <div class="mb-3">

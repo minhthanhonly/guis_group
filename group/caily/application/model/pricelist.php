@@ -388,4 +388,4 @@ class PriceList extends ApplicationModel {
         return $str;
     }
 }
-?> 
+?>

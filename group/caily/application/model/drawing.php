@@ -1109,7 +1109,7 @@ class Drawing extends ApplicationModel {
     }
 
     /**
-     * Redistribute project amount: default tasks keep fixed %, others share the remainder by drawing_count.
+     * Redistribute project amount by 作業比重 (drawing_count) over all drawings; unfinished tasks get 0.
      */
     function autoCalculateAllDrawingPricesForProject($projectId) {
         $projectId = intval($projectId);
@@ -1125,7 +1125,65 @@ class Drawing extends ApplicationModel {
         if ($amount <= 0) {
             return false;
         }
+        // Projects from before 作業比重 keep the old split (fixed default-task %)
+        if (isset($project['task_weight_mode']) && intval($project['task_weight_mode']) !== 1) {
+            return $this->autoCalculateLegacyDrawingPrices($projectId, $amount);
+        }
 
+        $drawings = $this->fetchAll(sprintf(
+            "SELECT d.id, d.drawing_count, d.name, d.task_id, t.status AS task_status
+            FROM %s d
+            LEFT JOIN %stasks t ON d.task_id = t.id
+            WHERE d.project_id = %d
+            ORDER BY d.id ASC",
+            $this->table,
+            DB_PREFIX,
+            $projectId
+        ));
+        if (empty($drawings)) {
+            return false;
+        }
+
+        // 作業比重: every drawing (default tasks included) weighs its drawing_count;
+        // share = amount x weight / total weight. Unfinished task drawings get 0 for now.
+        $totalQty = 0;
+        foreach ($drawings as $drawing) {
+            $totalQty += max(1, intval($drawing['drawing_count']));
+        }
+        if ($totalQty <= 0) {
+            return true;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $allocated = 0;
+        $count = count($drawings);
+        foreach ($drawings as $index => $drawing) {
+            $qty = max(1, intval($drawing['drawing_count']));
+            if ($index === $count - 1) {
+                $share = round($amount - $allocated, 2);
+            } else {
+                $share = (int) floor(($amount * $qty) / $totalQty);
+                $allocated += $share;
+            }
+            $taskId = isset($drawing['task_id']) ? intval($drawing['task_id']) : 0;
+            $taskStatus = isset($drawing['task_status']) ? (string) $drawing['task_status'] : '';
+            $price = ($taskId > 0 && $taskStatus !== 'completed') ? 0 : $share;
+            $this->query_update(
+                array('price' => $price, 'updated_at' => $now),
+                array('id' => intval($drawing['id']))
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Split used before 作業比重 (task_weight_mode = 0): default tasks keep fixed 15%/20% when completed,
+     * other drawings share the remainder by drawing_count among completed ones.
+     */
+    private function autoCalculateLegacyDrawingPrices($projectId, $amount) {
+        $projectId = intval($projectId);
+        $amount = floatval($amount);
         $drawings = $this->fetchAll(sprintf(
             "SELECT d.id, d.drawing_count, d.name, d.task_id, t.title AS task_title, t.status AS task_status
             FROM %s d

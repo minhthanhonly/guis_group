@@ -509,7 +509,7 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
     border-radius: 4px;
     background: var(--bs-body-bg, #fff);
     color: var(--bs-secondary-color, #6c757d);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     line-height: 20px;
     text-align: center;
     cursor: pointer;
@@ -525,9 +525,32 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
 }
 
 /* 編集ロック: someone else has the note open in the editor */
-.note-board .note-editing-icon {
-    color: var(--bs-warning-text-emphasis, #997404);
-    font-size: 0.8rem;
+/* someone else has the note open in the editor: name chip on the board card and in a 案件一覧
+   memo cell (note-edit-presence.js); fixed colours so it reads on every note colour, both themes */
+.note-editing-chip {
+    display: inline-block;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 11em;
+    padding: 0 6px;
+    border: 1px solid #ffda6a;
+    border-radius: 10px;
+    background: #fff3cd;
+    color: #664d03;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+.note-editing-chip .fa {
+    margin-right: 2px;
+}
+#projectTable .note-text-row .note-editing-chip {
+    margin-right: 4px;
+    align-self: flex-start;
 }
 
 /* ===== Memo label chip (shared: 案件一覧, 案件詳細 board, memo dialog) =====

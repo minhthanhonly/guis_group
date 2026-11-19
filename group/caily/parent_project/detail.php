@@ -36,7 +36,7 @@ $view->heading('建物詳細');
             <nav class="navbar navbar-expand-lg navbar-light bg-light">
                 <div class="container-fluid">
                     <a class="navbar-brand fw-bold" href="#" v-if="parentProject">
-                        <span class="badge badge-sm bg-label-info">#{{ parentProject.project_number || 'N/A' }}</span>
+                        <span v-if="parentProject.project_number" class="badge badge-sm bg-label-info">#{{ parentProject.project_number }}</span>
                     </a>
                     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#parentProjectNavbar" aria-controls="parentProjectNavbar" aria-expanded="false" aria-label="Toggle navigation">
                         <span class="navbar-toggler-icon"></span>
@@ -293,6 +293,11 @@ $view->heading('建物詳細');
                                             <li v-if="canEditBusinessDocuments">
                                                 <a class="dropdown-item" href="javascript:void(0);" @click.prevent="openBusinessDocumentModal(project)">
                                                     <i class="fa fa-file-invoice me-1"></i> <span data-i18n="決済情報">決済情報</span>
+                                                </a>
+                                            </li>
+                                            <li v-if="canAddProject">
+                                                <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showCopyChildProjectModal(project)">
+                                                    <i class="fa fa-clone me-1"></i> <span data-i18n="案件をコピー">案件をコピー</span>
                                                 </a>
                                             </li>
                                             <li>
@@ -2418,6 +2423,9 @@ $view->heading('建物詳細');
                 class="dropdown-item" type="button" @click.stop="openChildProjectEditFromContextMenu">
             <i class="fa fa-edit me-1"></i><span data-i18n="案件編集">案件編集</span>
         </button>
+        <button v-if="canAddProject" class="dropdown-item" type="button" @click.stop="openChildProjectCopyFromContextMenu">
+            <i class="fa fa-clone me-1"></i><span data-i18n="案件をコピー">案件をコピー</span>
+        </button>
         <button class="dropdown-item" type="button" @click.stop="goToChildProjectDetailFromContextMenu">
             <i class="fa fa-external-link-alt me-1"></i><span data-i18n="詳細ページへ">詳細ページへ</span>
         </button>
@@ -2463,7 +2471,7 @@ $view->footing();
     }
 
     .customer-search-row {
-        cursor: pointer;
+        cursor: default;
     }
 
     .customer-search-row:hover {

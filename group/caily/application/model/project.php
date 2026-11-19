@@ -92,6 +92,55 @@ class Project extends ApplicationModel {
         $this->ensureProgressStartedAtColumn();
         $this->ensureEnergyFieldColumns();
         $this->ensureOrderFormColumns();
+        $this->ensureTaskWeightModeColumn();
+    }
+
+    /**
+     * projects.task_weight_mode — sql/add_task_weight_mode_to_projects.sql.
+     * 0 = projects that existed before 作業比重 (default tasks keep their fixed %, weight not editable),
+     * 1 = 作業比重 (every task weighs its drawing_count, % = weight / total).
+     * Added with DEFAULT 0 so existing rows stay 0, then the default becomes 1 for every new project.
+     */
+    private function ensureTaskWeightModeColumn() {
+        static $ensured = false;
+        if ($ensured) {
+            return;
+        }
+        $ensured = true;
+        $table = preg_replace('/[^a-zA-Z0-9_]/', '', (string) $this->table);
+        if ($table === '') {
+            $table = DB_PREFIX . 'projects';
+        }
+        try {
+            $row = $this->fetchOne(
+                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+                . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
+                . "AND COLUMN_NAME = 'task_weight_mode'"
+            );
+            if (empty($row['cnt'])) {
+                $this->query(
+                    "ALTER TABLE `{$table}` ADD COLUMN `task_weight_mode` TINYINT(1) NOT NULL DEFAULT 0 "
+                    . "COMMENT '1 = 作業比重 (new projects), 0 = fixed default-task % (projects before 作業比重)'"
+                );
+                $this->query("ALTER TABLE `{$table}` ALTER COLUMN `task_weight_mode` SET DEFAULT 1");
+            }
+        } catch (Exception $e) {
+            error_log('ensureTaskWeightModeColumn failed: ' . $e->getMessage());
+        }
+    }
+
+    /** True when the project uses 作業比重 (see ensureTaskWeightModeColumn). */
+    public function isTaskWeightModeProject($projectId) {
+        $projectId = intval($projectId);
+        if ($projectId <= 0) {
+            return true;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT task_weight_mode FROM %s WHERE id = %d LIMIT 1",
+            $this->table,
+            $projectId
+        ));
+        return !$row || intval($row['task_weight_mode']) === 1;
     }
 
     /**
@@ -4571,6 +4620,7 @@ class Project extends ApplicationModel {
             $project['payment_version'] = isset($project['payment_version']) ? intval($project['payment_version']) : 1;
             $project['yotei'] = $this->parseYoteiField(isset($project['yotei']) ? $project['yotei'] : null);
             $project['has_energy_sibling'] = $this->hasEnergySavingSiblingProject($project) ? 1 : 0;
+            $project['task_weight_mode'] = $this->isTaskWeightModeProject($projectId) ? 1 : 0;
             $project['payment_items'] = $this->getPaymentItemsForProject($project);
             $project['payment_item_types'] = $this->getPaymentItemTypeSuggestions();
             $project['closed_months'] = $this->getClosedMonthsForDepartment($project['department_id'] ?? 0);
@@ -7980,6 +8030,13 @@ class Project extends ApplicationModel {
         require_once('projectnote.php');
         $noteModel = new ProjectNote();
         return $noteModel->unlock($params);
+    }
+
+    /** メモ 編集ロック: which of POST note_ids someone else is editing now → editing { id: name } */
+    function editingNotes($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->editingNotes($params);
     }
 
     /** メモボード (案件詳細): move a note on the own grid. POST project_id, note_id, col, row */

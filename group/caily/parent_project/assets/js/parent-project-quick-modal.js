@@ -135,6 +135,7 @@
                         { value: '08990', label: '08990 その他' }
                     ],
                     editParentRequestFlags: { design: false, equipment: false, equipment3d: false, energy: false, other: false },
+                    editParentHadRequestOther: false, // 依頼 その他: only kept for buildings that already have it
                     editParentMaterialFlags: { layout: false, rental: false, contract: false, tac: false, other: false },
                     extraRequestTypes: [],
                     duplicateDismissedKey: '',
@@ -470,6 +471,7 @@
                         energy: requests.includes('省エネ'),
                         other: requests.includes('その他')
                     };
+                    this.editParentHadRequestOther = this.editParentRequestFlags.other;
                 },
                 parseEditParentMaterials: function (materialsStr) {
                     var materials = splitList(materialsStr);

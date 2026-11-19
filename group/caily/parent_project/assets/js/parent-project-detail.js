@@ -1779,8 +1779,20 @@ createApp({
             }
             try {
                 const payload = this.buildCopyParentProjectPayload(this.parentProject);
-                sessionStorage.setItem('copyParentProjectData', JSON.stringify(payload));
-                window.location.href = 'create.php';
+                if (typeof window.openParentProjectCreateModal === 'function') {
+                    // 建物登録 modal, prefilled with this building; open the new one once saved
+                    window.openParentProjectCreateModal({
+                        copyFrom: payload,
+                        onSaved: (savedId) => {
+                            if (savedId) {
+                                window.location.href = 'detail.php?id=' + encodeURIComponent(savedId);
+                            }
+                        }
+                    });
+                } else {
+                    sessionStorage.setItem('copyParentProjectData', JSON.stringify(payload));
+                    window.location.href = 'create.php';
+                }
             } catch (error) {
                 console.error('Error copying parent project:', error);
                 showMessage(this.tText('建物のコピーに失敗しました。'), true);
@@ -2102,6 +2114,33 @@ createApp({
                 showGuisReceiver: true,
                 onSaved: (id, info) => this.onChildProjectFormSaved(info)
             });
+        },
+
+        /** 案件をコピー: the create form of this building, prefilled from one of its projects. */
+        showCopyChildProjectModal(project) {
+            if (!project || !project.id || !this.canAddProject) return;
+            if (typeof window.openProjectFormModal !== 'function') {
+                showParentProjectError('案件フォームを開けません。ページを再読み込みしてください。');
+                return;
+            }
+            const parent = this.parentProject || {};
+            window.openProjectFormModal({
+                mode: 'create',
+                parentProject: {
+                    id: PARENT_PROJECT_ID,
+                    project_name: parent.project_name || '',
+                    customer_id: project.customer_id || parent.customer_id || ''
+                },
+                copyFromId: project.id,
+                siblings: this.childProjects || [],
+                showGuisReceiver: true,
+                onSaved: (id, info) => this.onChildProjectFormSaved(info)
+            });
+        },
+        openChildProjectCopyFromContextMenu() {
+            const project = this.childProjectContextMenuProject;
+            this.closeChildProjectContextMenu();
+            this.showCopyChildProjectModal(project);
         },
 
         async loadDepartments() {

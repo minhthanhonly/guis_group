@@ -1,6 +1,16 @@
 <?php
 
 class Task extends ApplicationModel {
+    /** Note of the task log written when an assignee acknowledges (受領) a task. */
+    const ACKNOWLEDGED_LOG_NOTE = '受領';
+
+    /** Status values the task UI knows (task-manager.js taskStatuses). */
+    const VALID_STATUSES = array('todo', 'in-progress', 'confirming', 'paused', 'completed', 'cancelled');
+
+    private static function isValidStatus($status) {
+        return in_array((string) $status, self::VALID_STATUSES, true);
+    }
+
     function __construct() {
         $this->table = DB_PREFIX . 'tasks';
         $this->schema = array(
@@ -488,17 +498,58 @@ class Task extends ApplicationModel {
     /**
      * Resolve default task definitions for a department (config or builtin).
      */
-    private function resolveDepartmentDefaultTaskDefinitions($departmentId) {
+    private function resolveDepartmentDefaultTaskDefinitions($departmentId, $projectId = 0) {
         if (!class_exists('Department')) {
             require_once DIR_MODEL . 'department.php';
         }
         $departmentModel = new Department();
+        // 省エネ: switch by the building's company name (大東 4 tasks / 東建 3 tasks)
+        if (intval($projectId) > 0 && method_exists($departmentModel, 'resolveDefaultTaskDefinitionsForCustomer')) {
+            return $departmentModel->resolveDefaultTaskDefinitionsForCustomer(
+                intval($departmentId),
+                $departmentModel->getProjectCompanyName(intval($projectId))
+            );
+        }
         if (method_exists($departmentModel, 'resolveDefaultTaskDefinitions')) {
             return $departmentModel->resolveDefaultTaskDefinitions(intval($departmentId));
         }
         return method_exists($departmentModel, 'getBuiltinDefaultTaskDefinitions')
             ? $departmentModel->getBuiltinDefaultTaskDefinitions()
             : array();
+    }
+
+    /** 作業比重 project (projects.task_weight_mode = 1)? Projects from before it return false. */
+    private function isTaskWeightModeProject($projectId) {
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        return (new Project())->isTaskWeightModeProject(intval($projectId));
+    }
+
+    /**
+     * Default tasks keep their weight (drawing_count) as created, in old and 作業比重 projects alike.
+     */
+    private function isLockedDefaultTaskWeight($taskRow) {
+        $projectId = isset($taskRow['project_id']) ? intval($taskRow['project_id']) : 0;
+        $title = isset($taskRow['title']) ? trim((string) $taskRow['title']) : '';
+        if ($projectId <= 0 || $title === '') {
+            return false;
+        }
+        if ($this->isDefaultTaskTitleWithAutoDrawingLink($title)) {
+            return true;
+        }
+        $project = $this->fetchOne(sprintf(
+            "SELECT department_id FROM %sprojects WHERE id = %d LIMIT 1",
+            DB_PREFIX,
+            $projectId
+        ));
+        $departmentId = $project ? intval($project['department_id']) : 0;
+        foreach ($this->resolveDepartmentDefaultTaskDefinitions($departmentId) as $def) {
+            if (isset($def['title']) && trim((string) $def['title']) === $title) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -537,7 +588,8 @@ class Task extends ApplicationModel {
             ? Department::getDefaultContactTaskTitle()
             : 'お客様との連絡・調整・納品対応';
 
-        $taskDefs = $this->resolveDepartmentDefaultTaskDefinitions($departmentId);
+        $taskDefs = $this->resolveDepartmentDefaultTaskDefinitions($departmentId, $projectId);
+        $weightMode = $this->isTaskWeightModeProject($projectId);
         $defaults = array();
         foreach ($taskDefs as $def) {
             $title = isset($def['title']) ? trim((string) $def['title']) : '';
@@ -550,8 +602,11 @@ class Task extends ApplicationModel {
                 'assigned_to' => ($isContact && $contactTaskAssignee > 0) ? (string) $contactTaskAssignee : null,
                 'status' => $isContact ? 'completed' : 'todo',
                 'progress' => $isContact ? 100 : 0,
-                'drawing_count' => isset($def['drawing_count']) ? max(0, intval($def['drawing_count'])) : 1,
-                'price_pct' => $pricePctDisplay / 100.0,
+                // 作業比重: a linked default task starts with its 比率(%) as weight (min 1).
+                // Projects from before 作業比重 keep the configured drawing_count (fixed % applies).
+                'drawing_count' => (isset($def['drawing_count']) ? intval($def['drawing_count']) : 1) > 0
+                    ? ($weightMode ? max(1, (int) round($pricePctDisplay)) : max(1, intval($def['drawing_count'])))
+                    : 0,
                 'assign_guis_receiver' => $isContact ? 1 : 0,
             );
         }
@@ -632,22 +687,6 @@ class Task extends ApplicationModel {
             $data['id'] = $taskId;
             if (intval($def['drawing_count']) > 0) {
                 $drawingModel->syncFromTask($data, array('skip_price_recalc' => true));
-            }
-
-            if ($amount > 0 && isset($def['price_pct']) && isset($def['status']) && $def['status'] === 'completed'
-                && intval($def['drawing_count']) > 0) {
-                $price = round($amount * $def['price_pct'], 2);
-                $drawing = $this->fetchOne(sprintf(
-                    "SELECT id FROM %sproject_drawings WHERE task_id = %d ORDER BY id ASC LIMIT 1",
-                    DB_PREFIX,
-                    intval($taskId)
-                ));
-                if ($drawing && !empty($drawing['id'])) {
-                    $drawingModel->query_update(
-                        array('price' => $price, 'updated_at' => date('Y-m-d H:i:s')),
-                        array('id' => intval($drawing['id']))
-                    );
-                }
             }
         }
 
@@ -1172,12 +1211,15 @@ class Task extends ApplicationModel {
             $drawingCount = 0;
         }
         $estimatedHours = $this->normalize_estimated_hours(isset($_POST['estimated_hours']) ? $_POST['estimated_hours'] : 0);
+        if (isset($_POST['status']) && $_POST['status'] !== '' && !self::isValidStatus($_POST['status'])) {
+            return ['status' => 'error', 'message' => '無効なステータスです'];
+        }
         $data = array(
             'project_id' => $_POST['project_id'],
             'parent_id' => isset($_POST['parent_id']) && $_POST['parent_id'] ? $_POST['parent_id'] : null,
             'title' => $_POST['title'],
             'description' => isset($_POST['description']) ? $_POST['description'] : '',
-            'status' => isset($_POST['status']) ? $_POST['status'] : 'todo',
+            'status' => isset($_POST['status']) && $_POST['status'] !== '' ? $_POST['status'] : 'todo',
             'priority' => isset($_POST['priority']) ? $_POST['priority'] : 'medium',
             'task_kind' => $taskKind,
             'drawing_count' => $drawingCount,
@@ -1294,7 +1336,10 @@ class Task extends ApplicationModel {
         }
         $title = (isset($_POST['title']) && trim((string)$_POST['title']) !== '') ? trim($_POST['title']) : (isset($old['title']) ? $old['title'] : '');
         $description = isset($_POST['description']) ? $_POST['description'] : (isset($old['description']) ? $old['description'] : '');
-        $status = isset($_POST['status']) ? $_POST['status'] : (isset($old['status']) ? $old['status'] : 'new');
+        $status = isset($_POST['status']) && $_POST['status'] !== '' ? $_POST['status'] : (isset($old['status']) ? $old['status'] : 'todo');
+        if (isset($_POST['status']) && $_POST['status'] !== '' && !self::isValidStatus($_POST['status'])) {
+            return ['status' => 'error', 'message' => '無効なステータスです'];
+        }
         $priority = isset($_POST['priority']) ? $_POST['priority'] : (isset($old['priority']) ? $old['priority'] : 'medium');
         $assignedTo = isset($_POST['assigned_to']) ? $_POST['assigned_to'] : (isset($old['assigned_to']) ? $old['assigned_to'] : null);
         $dueDate = (isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '') ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
@@ -1594,11 +1639,14 @@ class Task extends ApplicationModel {
         if (!$id || !$status) {
             return ['status' => 'error', 'message' => 'Missing required parameters'];
         }
-        
+        if (!self::isValidStatus($status)) {
+            return ['status' => 'error', 'message' => '無効なステータスです'];
+        }
+
         if (!$this->checkPermission($project_id, $id)) {
             return ['status' => 'error', 'message' => 'このタスクを更新する権限がありません'];
         }
-        
+
         $old = $this->getById($id);
         $data = array(
             'status' => $status,
@@ -1711,6 +1759,9 @@ class Task extends ApplicationModel {
         }
         if (!$this->userCanEditTaskDrawing($project_id, isset($old['task_kind']) ? $old['task_kind'] : '')) {
             return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        }
+        if ($this->isLockedDefaultTaskWeight($old)) {
+            return ['status' => 'error', 'message' => '既定タスクの作業比重は変更できません'];
         }
         $linked = isset($_POST['linked']) && (string) $_POST['linked'] === '1';
         if ($linked) {
@@ -1870,7 +1921,7 @@ class Task extends ApplicationModel {
         }
         
         if (!$isAssigned) {
-            return ['status' => 'error', 'message' => 'Bạn không được giao việc này'];
+            return ['status' => 'error', 'message' => 'このタスクの担当者ではありません'];
         }
         
         // Update or insert acknowledgement
@@ -1888,8 +1939,8 @@ class Task extends ApplicationModel {
         $result = $this->query($query);
         
         if ($result) {
-            $this->logTaskAction($task_id, 'acknowledged', 'Đã nhận việc', null, $user_id);
-            return ['status' => 'success', 'message' => 'Đã đánh dấu nhận việc thành công'];
+            $this->logTaskAction($task_id, 'acknowledged', self::ACKNOWLEDGED_LOG_NOTE, null, $user_id);
+            return ['status' => 'success', 'message' => '受領しました'];
         } else {
             return ['status' => 'error', 'message' => 'Failed to acknowledge task'];
         }
@@ -3197,7 +3248,7 @@ class Task extends ApplicationModel {
         $source = intval($_POST['source_task_id']);
         $target = intval($_POST['target_task_id']);
         $type = isset($_POST['link_type']) ? $_POST['link_type'] : '0';
-        if (!$source || !$target) return ['success' => false, 'message' => 'Thiếu thông tin'];
+        if (!$source || !$target) return ['success' => false, 'message' => 'タスクの指定が不足しています'];
         // Both ends must be tasks of one project the user may modify; the link is stored under that project.
         $sourceProjectId = $this->getTaskProjectId($source);
         if (!$sourceProjectId || $sourceProjectId !== $this->getTaskProjectId($target)
@@ -3268,6 +3319,13 @@ class Task extends ApplicationModel {
             $task_id
         );
         $logs = $this->fetchAll($query);
+        // Older 受領 logs were written in Vietnamese; show them like the new ones
+        foreach ($logs as &$log) {
+            if (isset($log['action'], $log['note']) && $log['action'] === 'acknowledged' && $log['note'] === 'Đã nhận việc') {
+                $log['note'] = self::ACKNOWLEDGED_LOG_NOTE;
+            }
+        }
+        unset($log);
         return $logs;
     }
     
