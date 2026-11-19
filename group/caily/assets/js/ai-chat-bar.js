@@ -286,6 +286,21 @@
     });
   }
 
+  /**
+   * Is the bar in its wide "typing" state after this focus change?
+   * It widens when a text field of the bar takes the focus, stays as it is while the focus moves
+   * between elements of the bar (so a press on a button never moves that button), and narrows when
+   * the focus leaves the bar.
+   * @param current the state before
+   * @param change  { type: 'focusin', field: bool } | { type: 'focusout', staysInside: bool }
+   */
+  function barActive(current, change) {
+    if (change.type === 'focusin') {
+      return change.field ? true : !!current;
+    }
+    return change.staysInside ? !!current : false;
+  }
+
   var DEPT_KEY = 'aiChatDept';
 
   /**
@@ -853,6 +868,17 @@
       els.bar.addEventListener('focusin', loadDepartments);
     }
     els.input.placeholder = tr('AIに質問…');
+    var setActive = function (active) {
+      els.bar.classList.toggle('is-active', active);
+    };
+    els.bar.addEventListener('focusin', function (e) {
+      var field = e.target === els.input || e.target === els.dept;
+      setActive(barActive(els.bar.classList.contains('is-active'), { type: 'focusin', field: field }));
+    });
+    els.bar.addEventListener('focusout', function (e) {
+      var staysInside = !!(e.relatedTarget && els.bar.contains(e.relatedTarget));
+      setActive(barActive(els.bar.classList.contains('is-active'), { type: 'focusout', staysInside: staysInside }));
+    });
     var hideBtn = document.getElementById('ai-chat-hide');
     var showBtn = document.getElementById('ai-chat-show');
     if (hideBtn && showBtn) {
@@ -934,5 +960,5 @@
     });
   }
 
-  return { renderMarkdown: renderMarkdown, shouldSend: shouldSend, isSafeUrl: isSafeUrl, shouldOpenOnFocus: shouldOpenOnFocus, helpGroups: helpGroups, bottomOffset: bottomOffset, hiddenPlace: hiddenPlace, departmentChoice: departmentChoice, init: init };
+  return { renderMarkdown: renderMarkdown, shouldSend: shouldSend, isSafeUrl: isSafeUrl, shouldOpenOnFocus: shouldOpenOnFocus, helpGroups: helpGroups, bottomOffset: bottomOffset, hiddenPlace: hiddenPlace, departmentChoice: departmentChoice, barActive: barActive, init: init };
 });

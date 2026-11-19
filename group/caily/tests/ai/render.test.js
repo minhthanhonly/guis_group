@@ -1,5 +1,5 @@
 // Run: node tests/ai/render.test.js
-const { renderMarkdown, shouldSend, isSafeUrl, shouldOpenOnFocus, helpGroups, bottomOffset, hiddenPlace, departmentChoice } = require('../../assets/js/ai-chat-bar.js');
+const { renderMarkdown, shouldSend, isSafeUrl, shouldOpenOnFocus, helpGroups, bottomOffset, hiddenPlace, departmentChoice, barActive } = require('../../assets/js/ai-chat-bar.js');
 let failed = 0, count = 0;
 function ok(cond, name) { count++; if (!cond) failed++; console.log((cond ? 'PASS' : 'FAIL') + '  ' + name); }
 function eq(a, b, name) { ok(a === b, name + (a === b ? '' : '\n      got: ' + JSON.stringify(a))); }
@@ -87,6 +87,17 @@ eq(JSON.stringify(departmentChoice({ id: '5', name: 'old name' }, [{ id: 3, name
 eq(departmentChoice({ id: 9, name: 'gone' }, [{ id: 3, name: 'A' }]), null, 'department: one that is not in the list is dropped');
 eq(departmentChoice(null, [{ id: 3, name: 'A' }]), null, 'department: nothing remembered means all departments');
 eq(departmentChoice({ id: '5 OR 1=1', name: 'x' }, null), null, 'department: only a number is accepted');
+
+// The bar widens for its text fields only. A press on one of its buttons must not move the button
+// away from under the pointer before the release (the click would be lost).
+eq(barActive(false, { type: 'focusin', field: true }), true, 'active: focusing the text field widens the bar');
+eq(barActive(false, { type: 'focusin', field: false }), false, 'active: pressing a button on the idle bar does not widen it');
+eq(barActive(true, { type: 'focusin', field: false }), true, 'active: pressing a button while typing keeps it wide');
+eq(barActive(true, { type: 'focusout', staysInside: true }), true, 'active: focus moving to a button of the bar keeps it wide');
+eq(barActive(true, { type: 'focusout', staysInside: false }), false, 'active: focus leaving the bar narrows it');
+const css = require('fs').readFileSync(require('path').join(__dirname, '../../assets/css/ai-chat-bar.css'), 'utf8');
+ok(!/focus-within[^{]*\{[^}]*(width|display)/.test(css), 'css: no size or layout change hangs on :focus-within');
+ok(/\.ai-chat-bar\.is-active,[\s\S]*?width: min\(720px/.test(css) && /\.ai-chat-bar\.is-active \.ai-chat-dept/.test(css), 'css: the wide state is the is-active class');
 
 console.log('\n' + (count - failed) + '/' + count + ' passed');
 process.exit(failed ? 1 : 0);
