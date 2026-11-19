@@ -518,6 +518,40 @@ class Task extends ApplicationModel {
             : array();
     }
 
+    /** 作業比重 project (projects.task_weight_mode = 1)? Projects from before it return false. */
+    private function isTaskWeightModeProject($projectId) {
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        return (new Project())->isTaskWeightModeProject(intval($projectId));
+    }
+
+    /**
+     * Default tasks keep their weight (drawing_count) as created, in old and 作業比重 projects alike.
+     */
+    private function isLockedDefaultTaskWeight($taskRow) {
+        $projectId = isset($taskRow['project_id']) ? intval($taskRow['project_id']) : 0;
+        $title = isset($taskRow['title']) ? trim((string) $taskRow['title']) : '';
+        if ($projectId <= 0 || $title === '') {
+            return false;
+        }
+        if ($this->isDefaultTaskTitleWithAutoDrawingLink($title)) {
+            return true;
+        }
+        $project = $this->fetchOne(sprintf(
+            "SELECT department_id FROM %sprojects WHERE id = %d LIMIT 1",
+            DB_PREFIX,
+            $projectId
+        ));
+        $departmentId = $project ? intval($project['department_id']) : 0;
+        foreach ($this->resolveDepartmentDefaultTaskDefinitions($departmentId) as $def) {
+            if (isset($def['title']) && trim((string) $def['title']) === $title) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Bootstrap default tasks (and task-linked drawings) for a new child project.
      */
@@ -555,6 +589,7 @@ class Task extends ApplicationModel {
             : 'お客様との連絡・調整・納品対応';
 
         $taskDefs = $this->resolveDepartmentDefaultTaskDefinitions($departmentId, $projectId);
+        $weightMode = $this->isTaskWeightModeProject($projectId);
         $defaults = array();
         foreach ($taskDefs as $def) {
             $title = isset($def['title']) ? trim((string) $def['title']) : '';
@@ -567,9 +602,10 @@ class Task extends ApplicationModel {
                 'assigned_to' => ($isContact && $contactTaskAssignee > 0) ? (string) $contactTaskAssignee : null,
                 'status' => $isContact ? 'completed' : 'todo',
                 'progress' => $isContact ? 100 : 0,
-                // 作業比重: a linked default task starts with its 比率(%) as weight (min 1)
+                // 作業比重: a linked default task starts with its 比率(%) as weight (min 1).
+                // Projects from before 作業比重 keep the configured drawing_count (fixed % applies).
                 'drawing_count' => (isset($def['drawing_count']) ? intval($def['drawing_count']) : 1) > 0
-                    ? max(1, (int) round($pricePctDisplay))
+                    ? ($weightMode ? max(1, (int) round($pricePctDisplay)) : max(1, intval($def['drawing_count'])))
                     : 0,
                 'assign_guis_receiver' => $isContact ? 1 : 0,
             );
@@ -1723,6 +1759,9 @@ class Task extends ApplicationModel {
         }
         if (!$this->userCanEditTaskDrawing($project_id, isset($old['task_kind']) ? $old['task_kind'] : '')) {
             return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
+        }
+        if ($this->isLockedDefaultTaskWeight($old)) {
+            return ['status' => 'error', 'message' => '既定タスクの作業比重は変更できません'];
         }
         $linked = isset($_POST['linked']) && (string) $_POST['linked'] === '1';
         if ($linked) {

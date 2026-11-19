@@ -271,7 +271,8 @@ if($_SESSION['show_project'] == 0){
                                         :disabled="!canEditDrawingLink(task)"
                                         @change="onInlineDrawingLinkChange(task._inlineIndex, $event.target.checked)">
                                 </div>
-                                <input v-if="isTaskLinkedToDrawings(task)" type="number" class="form-control form-control-sm task-drawing-count-input" min="1" step="1"
+                                <input v-if="isTaskLinkedToDrawings(task)" type="number" class="form-control form-control-sm task-drawing-count-input" min="1" step="1" inputmode="numeric"
+                                    @keydown="blockNonIntegerKey"
                                     :value="task.drawing_count > 0 ? task.drawing_count : 1"
                                     :disabled="!canEditDrawingLink(task)"
                                     @input="updateTaskField(task._inlineIndex, 'drawing_count', $event.target.value)">
@@ -415,25 +416,15 @@ if($_SESSION['show_project'] == 0){
                                     :class="{ 'task-drawing-count-input--loading': isDrawingCountSaving(task.id) }"
                                     min="1"
                                     step="1"
+                                    inputmode="numeric"
                                     :value="task.drawing_count > 0 ? task.drawing_count : 1"
                                     :disabled="isDrawingCountSaving(task.id)"
-                                    @change="saveTaskDrawingCount(task, $event.target.value)">
+                                    @keydown="blockNonIntegerKey"
+                                    @change="saveTaskDrawingCount(task, $event.target.value, $event.target)">
                                 <span v-else-if="isTaskLinkedToDrawings(task)" class="text-nowrap">{{ task.drawing_count }}</span>
                                 <span v-if="task.id && isTaskLinkedToDrawings(task) && formatTaskDrawingPricePercent(task)" class="badge bg-label-info text-nowrap">{{ formatTaskDrawingPricePercent(task) }}%</span>
                             </template>
-                            <template v-else-if="task.id && isDefaultTaskWithAutoDrawingLink(task)">
-                                <input v-if="canEditTaskDrawingCount(task)"
-                                    type="number"
-                                    class="form-control form-control-sm task-drawing-count-input"
-                                    :class="{ 'task-drawing-count-input--loading': isDrawingCountSaving(task.id) }"
-                                    min="1"
-                                    step="1"
-                                    :value="task.drawing_count > 0 ? task.drawing_count : 1"
-                                    :disabled="isDrawingCountSaving(task.id)"
-                                    @change="saveTaskDrawingCount(task, $event.target.value)">
-                                <span v-else class="text-nowrap">{{ task.drawing_count }}</span>
-                                <span v-if="formatTaskDrawingPricePercent(task)" class="badge bg-label-info text-nowrap">{{ formatTaskDrawingPricePercent(task) }}%</span>
-                            </template>
+                            <span v-else-if="task.id && isDefaultTaskWithAutoDrawingLink(task) && formatTaskDrawingPricePercent(task)" class="badge bg-label-info text-nowrap">{{ formatTaskDrawingPricePercent(task) }}%</span>
                             <span v-else-if="!isDefaultTaskWithAutoDrawingLink(task)" class="text-muted">—</span>
                         </div>
                     </div>

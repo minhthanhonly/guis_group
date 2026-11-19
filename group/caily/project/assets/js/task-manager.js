@@ -27,19 +27,28 @@ const FALLBACK_DEFAULT_TASK_KIND_BY_TITLE = {
     '全図面のチェック・確認作業': 'チェック'
 };
 
+// Fixed % of default tasks, used only by projects from before 作業比重 (task_weight_mode = 0)
+const FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
+    'お客様との連絡・調整・納品対応': 15,
+    '全図面のチェック・確認作業': 20
+};
+
 // Legacy aliases (mutated after department config load)
 let DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
 let DEFAULT_TASK_KIND_BY_TITLE = Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
+let DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
 
 function applyDepartmentDefaultTaskConfig(tasks) {
     const list = Array.isArray(tasks) ? tasks : [];
     if (!list.length) {
         DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
         DEFAULT_TASK_KIND_BY_TITLE = Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
+        DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
         return;
     }
     const titles = [];
     const kinds = {};
+    const percents = {};
     list.forEach((t) => {
         const title = String(t && t.title ? t.title : '').trim();
         if (!title) return;
@@ -50,6 +59,10 @@ function applyDepartmentDefaultTaskConfig(tasks) {
         if (t.task_kind) {
             kinds[title] = String(t.task_kind).trim();
         }
+        const pct = Number(t.price_pct);
+        if (Number.isFinite(pct)) {
+            percents[title] = pct;
+        }
     });
     DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = titles.length
         ? titles
@@ -57,6 +70,9 @@ function applyDepartmentDefaultTaskConfig(tasks) {
     DEFAULT_TASK_KIND_BY_TITLE = Object.keys(kinds).length
         ? kinds
         : Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
+    DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.keys(percents).length
+        ? percents
+        : Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
 }
 
 const TaskApp = createApp({
@@ -1014,9 +1030,25 @@ const TaskApp = createApp({
             const title = (task.title || '').trim();
             return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(title) !== -1;
         },
+        /** 作業比重 project (new); projects from before it keep fixed default-task %. */
+        isTaskWeightMode() {
+            return !!(this.projectInfo && String(this.projectInfo.task_weight_mode) === '1');
+        },
+        getExistingDefaultTaskPercentTotal() {
+            const titles = new Set((this.tasks || []).map((t) => (t.title || '').trim()));
+            let total = 0;
+            Object.keys(DEFAULT_TASK_DRAWING_PRICE_PERCENTS).forEach((title) => {
+                if (titles.has(title)) {
+                    total += DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
+                }
+            });
+            return total;
+        },
         collectDrawingLinkedTasksForPercent() {
+            const weightMode = this.isTaskWeightMode();
             return (this.tasks || []).filter((task) => {
-                return task && task.id && this.isTaskLinkedToDrawings(task);
+                return task && task.id && this.isTaskLinkedToDrawings(task)
+                    && (weightMode || !this.isDefaultTaskWithAutoDrawingLink(task));
             });
         },
         getTaskDrawingSlotCount(task) {
@@ -1028,16 +1060,28 @@ const TaskApp = createApp({
                 return sum + this.getTaskDrawingSlotCount(task);
             }, 0);
         },
-        /** 作業比重: weight (drawing_count) / total weight of all linked tasks, default tasks included. */
+        /**
+         * 作業比重: weight (drawing_count) / total weight of all linked tasks, default tasks included.
+         * Projects from before it: default tasks fixed %, others share the rest by drawing_count.
+         */
         getTaskDrawingPricePercent(task) {
-            if (!task || !task.id || !this.isTaskLinkedToDrawings(task)) {
+            if (!task || !task.id) {
+                return null;
+            }
+            const weightMode = this.isTaskWeightMode();
+            if (!weightMode && this.isDefaultTaskWithAutoDrawingLink(task)) {
+                const fixed = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[(task.title || '').trim()];
+                return fixed != null ? fixed : null;
+            }
+            if (!this.isTaskLinkedToDrawings(task)) {
                 return null;
             }
             const totalSlots = this.getTotalDrawingSlotsForPercent();
             if (totalSlots <= 0) {
                 return null;
             }
-            return (100 * this.getTaskDrawingSlotCount(task)) / totalSlots;
+            const pool = weightMode ? 100 : Math.max(0, 100 - this.getExistingDefaultTaskPercentTotal());
+            return (pool * this.getTaskDrawingSlotCount(task)) / totalSlots;
         },
         formatTaskDrawingPricePercent(task) {
             const pct = this.getTaskDrawingPricePercent(task);
@@ -1488,12 +1532,21 @@ const TaskApp = createApp({
                 this.setEstimatedHoursSaving(task.id, false);
             }
         },
-        async saveTaskDrawingCount(task, value) {
+        /** 作業比重 inputs take whole numbers only: block ".", ",", "e", "+", "-". */
+        blockNonIntegerKey(event) {
+            if (event && ['.', ',', 'e', 'E', '+', '-'].indexOf(event.key) !== -1) {
+                event.preventDefault();
+            }
+        },
+        async saveTaskDrawingCount(task, value, inputEl) {
             if (!task || !task.id || !this.canEditTaskDrawingCount(task)) {
                 return;
             }
             const n = parseInt(value, 10);
             const drawingCount = Number.isNaN(n) || n < 1 ? 1 : n;
+            if (inputEl) {
+                inputEl.value = drawingCount;
+            }
             const canonical = this.tasks.find(t => t.id === task.id);
             const currentCount = parseInt(canonical ? canonical.drawing_count : task.drawing_count, 10);
             if (currentCount === drawingCount) {

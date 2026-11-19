@@ -1125,6 +1125,10 @@ class Drawing extends ApplicationModel {
         if ($amount <= 0) {
             return false;
         }
+        // Projects from before 作業比重 keep the old split (fixed default-task %)
+        if (isset($project['task_weight_mode']) && intval($project['task_weight_mode']) !== 1) {
+            return $this->autoCalculateLegacyDrawingPrices($projectId, $amount);
+        }
 
         $drawings = $this->fetchAll(sprintf(
             "SELECT d.id, d.drawing_count, d.name, d.task_id, t.status AS task_status
@@ -1164,6 +1168,102 @@ class Drawing extends ApplicationModel {
             $taskId = isset($drawing['task_id']) ? intval($drawing['task_id']) : 0;
             $taskStatus = isset($drawing['task_status']) ? (string) $drawing['task_status'] : '';
             $price = ($taskId > 0 && $taskStatus !== 'completed') ? 0 : $share;
+            $this->query_update(
+                array('price' => $price, 'updated_at' => $now),
+                array('id' => intval($drawing['id']))
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Split used before 作業比重 (task_weight_mode = 0): default tasks keep fixed 15%/20% when completed,
+     * other drawings share the remainder by drawing_count among completed ones.
+     */
+    private function autoCalculateLegacyDrawingPrices($projectId, $amount) {
+        $projectId = intval($projectId);
+        $amount = floatval($amount);
+        $drawings = $this->fetchAll(sprintf(
+            "SELECT d.id, d.drawing_count, d.name, d.task_id, t.title AS task_title, t.status AS task_status
+            FROM %s d
+            LEFT JOIN %stasks t ON d.task_id = t.id
+            WHERE d.project_id = %d
+            ORDER BY d.id ASC",
+            $this->table,
+            DB_PREFIX,
+            $projectId
+        ));
+        if (empty($drawings)) {
+            return false;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $fixedAllocated = 0;
+        $otherDrawings = array();
+
+        $defaultPcts = $this->getDefaultTaskDrawingPricePercents();
+
+        foreach ($drawings as $drawing) {
+            $drawingId = intval($drawing['id']);
+            $taskId = isset($drawing['task_id']) ? intval($drawing['task_id']) : 0;
+            $taskStatus = isset($drawing['task_status']) ? (string) $drawing['task_status'] : '';
+            $defaultKey = $this->resolveDefaultTaskDrawingTitleKey($drawing);
+
+            if ($defaultKey !== null) {
+                if ($taskStatus === 'completed' && isset($defaultPcts[$defaultKey])) {
+                    $price = round($amount * $defaultPcts[$defaultKey], 2);
+                    $this->query_update(
+                        array('price' => $price, 'updated_at' => $now),
+                        array('id' => $drawingId)
+                    );
+                    $fixedAllocated += $price;
+                } else {
+                    $this->query(sprintf(
+                        "UPDATE %s SET price = 0, updated_at = '%s' WHERE id = %d",
+                        $this->table,
+                        $this->quote($now),
+                        $drawingId
+                    ));
+                }
+                continue;
+            }
+
+            if ($taskId > 0 && $taskStatus !== 'completed') {
+                $this->query(sprintf(
+                    "UPDATE %s SET price = 0, updated_at = '%s' WHERE id = %d",
+                    $this->table,
+                    $this->quote($now),
+                    $drawingId
+                ));
+            } elseif ($taskId <= 0 || $taskStatus === 'completed') {
+                $otherDrawings[] = $drawing;
+            }
+        }
+
+        if (empty($otherDrawings)) {
+            return true;
+        }
+
+        $rest = max(0, $amount - $fixedAllocated);
+        $totalQty = 0;
+        foreach ($otherDrawings as $drawing) {
+            $totalQty += max(1, intval($drawing['drawing_count']));
+        }
+        if ($totalQty <= 0) {
+            return true;
+        }
+
+        $allocated = 0;
+        $count = count($otherDrawings);
+        foreach ($otherDrawings as $index => $drawing) {
+            $qty = max(1, intval($drawing['drawing_count']));
+            if ($index === $count - 1) {
+                $price = round($rest - $allocated, 2);
+            } else {
+                $price = (int) floor(($rest * $qty) / $totalQty);
+                $allocated += $price;
+            }
             $this->query_update(
                 array('price' => $price, 'updated_at' => $now),
                 array('id' => intval($drawing['id']))
