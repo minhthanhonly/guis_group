@@ -823,7 +823,94 @@ class Department extends ApplicationModel {
     }
 
     /**
+     * 省エネ: customer of the building (建物情報の会社名) → default-task variant.
+     * 'daito' = 大東建託 (department config as is, 4 tasks), 'token' = 東建コーポレーション
+     * (no 申請代行, 計算確認 40%), '' = other customers (department config as is).
+     * Note "大東建託" contains "東建", so 大東 is checked first.
+     */
+    public static function resolveCustomerDefaultTaskVariant($companyName) {
+        $name = preg_replace('/[\s　]+/u', '', (string) $companyName);
+        if ($name === '') {
+            return '';
+        }
+        if (mb_strpos($name, '大東建託') !== false || mb_strpos($name, '大東') === 0) {
+            return 'daito';
+        }
+        $name = preg_replace('/^(株式会社|\(株\)|（株）)/u', '', $name);
+        if (mb_strpos($name, '東建コーポレーション') !== false || mb_strpos($name, '東建') === 0) {
+            return 'token';
+        }
+        return '';
+    }
+
+    private function isEnergyDepartmentId($departmentId) {
+        $departmentId = intval($departmentId);
+        if ($departmentId <= 0) {
+            return false;
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT name FROM %s WHERE id = %d LIMIT 1",
+            $this->table,
+            $departmentId
+        ));
+        $name = isset($row['name']) ? trim((string) $row['name']) : '';
+        return $name !== '' && mb_strpos($name, '省エネ') !== false;
+    }
+
+    /**
+     * Apply the per-customer rule to department default tasks (省エネ departments only).
+     */
+    private function applyCustomerDefaultTaskRule($defs, $departmentId, $companyName) {
+        if (!$this->isEnergyDepartmentId($departmentId)) {
+            return $defs;
+        }
+        if (self::resolveCustomerDefaultTaskVariant($companyName) !== 'token') {
+            return $defs;
+        }
+        $out = array();
+        foreach ($defs as $def) {
+            $title = isset($def['title']) ? trim((string) $def['title']) : '';
+            if ($title === '申請代行') {
+                continue;
+            }
+            if ($title === '計算確認') {
+                $def['price_pct'] = 40;
+            }
+            $out[] = $def;
+        }
+        return $out;
+    }
+
+    /**
+     * Building (親案件) company name of a child project.
+     */
+    public function getProjectCompanyName($projectId) {
+        $projectId = intval($projectId);
+        if ($projectId <= 0) {
+            return '';
+        }
+        $row = $this->fetchOne(sprintf(
+            "SELECT pp.company_name FROM %sprojects p "
+            . "LEFT JOIN %sparent_projects pp ON pp.id = p.parent_project_id "
+            . "WHERE p.id = %d LIMIT 1",
+            DB_PREFIX,
+            DB_PREFIX,
+            $projectId
+        ));
+        return ($row && isset($row['company_name'])) ? (string) $row['company_name'] : '';
+    }
+
+    /**
+     * Default tasks for a department, switched by the building's company name (省エネ: 大東 4 / 東建 3).
+     */
+    public function resolveDefaultTaskDefinitionsForCustomer($departmentId, $companyName) {
+        $defs = $this->resolveDefaultTaskDefinitions($departmentId);
+        return $this->applyCustomerDefaultTaskRule($defs, $departmentId, $companyName);
+    }
+
+    /**
      * List all department default-task configs (admin UI).
+     * With project_id: the tasks for that project (department + building company name).
      */
     function getDefaultTasks($params = null) {
         $this->ensureDefaultTasksTable();
@@ -834,6 +921,26 @@ class Department extends ApplicationModel {
             $departmentId = intval($_GET['department_id']);
         } elseif (isset($_POST['department_id'])) {
             $departmentId = intval($_POST['department_id']);
+        }
+        $projectId = 0;
+        if (is_array($params) && isset($params['project_id'])) {
+            $projectId = intval($params['project_id']);
+        } elseif (isset($_GET['project_id'])) {
+            $projectId = intval($_GET['project_id']);
+        } elseif (isset($_POST['project_id'])) {
+            $projectId = intval($_POST['project_id']);
+        }
+        if ($departmentId > 0 && $projectId > 0) {
+            $companyName = $this->getProjectCompanyName($projectId);
+            return array(
+                'department_id' => $departmentId,
+                'project_id' => $projectId,
+                'customer_variant' => $this->isEnergyDepartmentId($departmentId)
+                    ? self::resolveCustomerDefaultTaskVariant($companyName)
+                    : '',
+                'tasks' => $this->resolveDefaultTaskDefinitionsForCustomer($departmentId, $companyName),
+                'is_builtin' => !$this->hasSavedDefaultTasks($departmentId) ? 1 : 0,
+            );
         }
         if ($departmentId > 0) {
             return array(

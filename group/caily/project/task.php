@@ -421,6 +421,18 @@ if($_SESSION['show_project'] == 0){
                                 <span v-else-if="isTaskLinkedToDrawings(task)" class="text-nowrap">{{ task.drawing_count }}</span>
                                 <span v-if="task.id && isTaskLinkedToDrawings(task) && formatTaskDrawingPricePercent(task)" class="badge bg-label-info text-nowrap">{{ formatTaskDrawingPricePercent(task) }}%</span>
                             </template>
+                            <span v-else-if="task.id && canEditTaskPricePct(task)" class="d-inline-flex align-items-center gap-1 text-nowrap"
+                                :title="getTaskPricePctOverride(task) != null
+                                    ? ($t('部署の既定') + ': ' + (getDepartmentDefaultTaskPercent(task) != null ? getDepartmentDefaultTaskPercent(task) + '%' : '—') + ' / ' + $t('空欄で既定に戻す'))
+                                    : $t('比率(%)')">
+                                <input type="number"
+                                    class="form-control form-control-sm task-drawing-count-input"
+                                    :class="{ 'task-drawing-count-input--loading': isPricePctSaving(task.id), 'border-warning': getTaskPricePctOverride(task) != null }"
+                                    min="0" max="100" step="0.1"
+                                    :value="formatTaskDrawingPricePercent(task)"
+                                    :disabled="isPricePctSaving(task.id)"
+                                    @change="saveTaskPricePct(task, $event.target.value, $event.target)">%
+                            </span>
                             <span v-else-if="task.id && isDefaultTaskWithAutoDrawingLink(task) && formatTaskDrawingPricePercent(task)" class="badge bg-label-info text-nowrap">{{ formatTaskDrawingPricePercent(task) }}%</span>
                             <span v-else-if="!isDefaultTaskWithAutoDrawingLink(task)" class="text-muted">—</span>
                         </div>

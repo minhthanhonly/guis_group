@@ -235,6 +235,7 @@ const TaskApp = createApp({
             quillTaskNoteContent: '',
             quillTaskNoteInitTimer: null,
             creatingDefaultTasks: false,
+            pricePctSavingTaskIds: {},
             departmentDefaultTasks: []
         }
     },
@@ -705,6 +706,7 @@ const TaskApp = createApp({
             try {
                 const res = await axios.get(
                     '/api/index.php?model=department&method=getDefaultTasks&department_id=' + encodeURIComponent(deptId)
+                    + (this.projectId ? '&project_id=' + encodeURIComponent(this.projectId) : '')
                 );
                 const data = res && res.data ? res.data : {};
                 const tasks = Array.isArray(data.tasks) ? data.tasks : [];
@@ -1028,15 +1030,103 @@ const TaskApp = createApp({
             const title = (task.title || '').trim();
             return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(title) !== -1;
         },
-        getExistingDefaultTaskPercentTotal() {
-            const titles = new Set((this.tasks || []).map((t) => (t.title || '').trim()));
+        /** Task's own 比率 when set on this project (tasks.price_pct), else null. */
+        getTaskPricePctOverride(task) {
+            if (!task || task.price_pct === null || task.price_pct === undefined || task.price_pct === '') {
+                return null;
+            }
+            const n = Number(task.price_pct);
+            return Number.isFinite(n) ? n : null;
+        },
+        getDepartmentDefaultTaskPercent(task) {
+            const title = (task && task.title ? task.title : '').trim();
+            const pct = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
+            return pct != null ? pct : null;
+        },
+        /** 比率 of a default task on this project: own override, else department config. */
+        getDefaultTaskEffectivePercent(task) {
+            const override = this.getTaskPricePctOverride(task);
+            return override != null ? override : this.getDepartmentDefaultTaskPercent(task);
+        },
+        getExistingDefaultTaskPercentTotal(excludeTaskId) {
+            const seen = new Set();
             let total = 0;
-            Object.keys(DEFAULT_TASK_DRAWING_PRICE_PERCENTS).forEach((title) => {
-                if (titles.has(title)) {
-                    total += DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
-                }
+            (this.tasks || []).forEach((task) => {
+                if (!task || !this.isDefaultTaskWithAutoDrawingLink(task)) return;
+                if (excludeTaskId && task.id === excludeTaskId) return;
+                const title = (task.title || '').trim();
+                if (seen.has(title)) return;
+                seen.add(title);
+                const pct = this.getDefaultTaskEffectivePercent(task);
+                if (pct != null) total += pct;
             });
             return total;
+        },
+        canEditTaskPricePct(task) {
+            return !!(task && task.id && this.isDefaultTaskWithAutoDrawingLink(task)
+                && this.permission && this.permission.can_manage_project);
+        },
+        isPricePctSaving(taskId) {
+            return !!(taskId && this.pricePctSavingTaskIds[taskId]);
+        },
+        async saveTaskPricePct(task, value, inputEl) {
+            if (!this.canEditTaskPricePct(task) || this.isPricePctSaving(task.id)) {
+                return;
+            }
+            const canonical = this.tasks.find(t => t.id === task.id) || task;
+            const resetInput = () => {
+                if (inputEl) inputEl.value = this.formatTaskDrawingPricePercent(canonical);
+            };
+            const raw = String(value == null ? '' : value).trim();
+            let pct = null;
+            if (raw !== '') {
+                const n = Number(raw);
+                if (!Number.isFinite(n) || n < 0 || n > 100) {
+                    this.showMessage('比率は0〜100で入力してください', true);
+                    resetInput();
+                    return;
+                }
+                pct = Math.round(n * 100) / 100;
+                // Same value as the department config → no override
+                if (this.getTaskPricePctOverride(canonical) == null && pct === this.getDepartmentDefaultTaskPercent(canonical)) {
+                    resetInput();
+                    return;
+                }
+            }
+            if (pct === this.getTaskPricePctOverride(canonical)) {
+                resetInput();
+                return;
+            }
+            const effective = pct != null ? pct : (this.getDepartmentDefaultTaskPercent(canonical) || 0);
+            if (this.getExistingDefaultTaskPercentTotal(canonical.id) + effective > 100) {
+                this.showMessage('既定タスクの比率の合計は100%以下にしてください', true);
+                resetInput();
+                return;
+            }
+            this.pricePctSavingTaskIds = { ...this.pricePctSavingTaskIds, [task.id]: true };
+            try {
+                const formData = new FormData();
+                formData.append('id', task.id);
+                formData.append('project_id', this.projectId);
+                formData.append('price_pct', pct == null ? '' : String(pct));
+                const response = await axios.post('/api/index.php?model=task&method=updatePricePct', formData);
+                if (response.data && response.data.status === 'success') {
+                    const saved = response.data.price_pct;
+                    canonical.price_pct = (saved === null || saved === undefined) ? null : saved;
+                    if (canonical !== task) task.price_pct = canonical.price_pct;
+                    resetInput();
+                } else {
+                    this.showMessage(response.data?.message || '比率の更新に失敗しました', true);
+                    resetInput();
+                }
+            } catch (error) {
+                this.showMessage('比率の更新に失敗しました', true);
+                resetInput();
+            } finally {
+                const next = { ...this.pricePctSavingTaskIds };
+                delete next[task.id];
+                this.pricePctSavingTaskIds = next;
+            }
         },
         getDrawingPricePoolPercent() {
             return Math.max(0, 100 - this.getExistingDefaultTaskPercentTotal());
@@ -1062,9 +1152,7 @@ const TaskApp = createApp({
                 return null;
             }
             if (this.isDefaultTaskWithAutoDrawingLink(task)) {
-                const title = (task.title || '').trim();
-                const fixed = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
-                return fixed != null ? fixed : null;
+                return this.getDefaultTaskEffectivePercent(task);
             }
             if (!this.isTaskLinkedToDrawings(task)) {
                 return null;
