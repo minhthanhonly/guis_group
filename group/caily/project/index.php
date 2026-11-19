@@ -1760,6 +1760,7 @@ window.__CACHE_VERSION = <?= json_encode(CACHE_VERSION) ?>;
 <script src="assets/js/project-note-modal-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-note-board-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/note-color-contrast.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
+<script src="assets/js/note-edit-presence.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/business-document-ui-mixin.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-form-modal.js?v=<?=PROJECT_CACHE_VERSION?>"></script>
 <script src="assets/js/project-list.js?v=<?=PROJECT_CACHE_VERSION?>"></script>

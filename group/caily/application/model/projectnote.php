@@ -215,6 +215,40 @@ class ProjectNote extends ApplicationModel {
         ));
     }
 
+    /**
+     * Who else is editing which of the given notes right now (live locks of other users, only notes
+     * the viewer may see). POST note_ids (JSON array or comma list) → editing: { note id: realname }.
+     * 案件一覧 / メモボード poll it to show the editor's name on the note.
+     */
+    function editingNotes($params = null) {
+        $raw = isset($_POST['note_ids']) ? $_POST['note_ids'] : '';
+        $ids = is_array($raw) ? $raw : (json_decode((string)$raw, true) ?: preg_split('/\s*,\s*/', (string)$raw, -1, PREG_SPLIT_NO_EMPTY));
+        $ids = array_slice(array_values(array_unique(array_filter(array_map('intval', (array)$ids)))), 0, 2000);
+        $editing = new stdClass();
+        if (!$ids) {
+            return ['status' => 'success', 'editing' => $editing];
+        }
+        $rows = $this->fetchAll(sprintf(
+            "SELECT n.id, n.edit_locked_by, n.edit_locked_at FROM {$this->table} n
+            WHERE n.id IN (%s) AND n.edit_locked_by IS NOT NULL AND n.edit_locked_by <> ''
+              AND n.edit_locked_at >= '%s' AND " . $this->currentVisibilitySql('n'),
+            implode(',', $ids),
+            $this->editLockCutoff()
+        ));
+        $names = array();
+        foreach ((array)$rows as $r) {
+            $by = $this->otherEditor($r);
+            if ($by === '') {
+                continue;
+            }
+            if (!isset($names[$by])) {
+                $names[$by] = $this->userRealname($by);
+            }
+            $editing->{intval($r['id'])} = $names[$by];
+        }
+        return ['status' => 'success', 'editing' => $editing];
+    }
+
     /* ---------- メモボード: each user arranges their own board ----------
      * ピン（全員） notes form a band at the top, in the user's own order (pin_order);
      * newly pinned notes (no pin_order yet) come first, newest pin first.

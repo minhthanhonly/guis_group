@@ -21,6 +21,8 @@
     var NOTE_SHOW_FULL_STORAGE_KEY = 'projectDetail.noteShowFull';
     /** free placement from this width up — 3 columns, see project-notes.css .note-board */
     var NOTE_BOARD_FREE_MEDIA = '(min-width: 992px)';
+    /** 編集ロック: how often the board asks who is editing its notes */
+    var NOTE_EDIT_POLL_MS = 20000;
 
     global.ProjectNoteBoardMixin = {
         data() {
@@ -153,8 +155,14 @@
         },
         mounted() {
             this.initNoteBoardMedia();
+            // 編集ロック: who is editing which card (note-edit-presence.js), kept current while the page is open
+            this._noteEditPoll = setInterval(() => this.pollNoteEditors(), NOTE_EDIT_POLL_MS);
+            this._onNoteEditVisible = () => { if (!document.hidden) this.pollNoteEditors(); };
+            document.addEventListener('visibilitychange', this._onNoteEditVisible);
         },
         beforeUnmount() {
+            clearInterval(this._noteEditPoll);
+            document.removeEventListener('visibilitychange', this._onNoteEditVisible);
             this.cancelNoteDrag();
             if (this.noteBoardFullscreen) this.exitNoteBoardFullscreen();
             if (this._onNoteFsChange) {
@@ -167,6 +175,22 @@
             }
         },
         methods: {
+            /** Refresh note.edit_locked_name (someone else has the note open in the editor) */
+            async pollNoteEditors() {
+                const presence = global.NoteEditPresence;
+                const notes = this.notes || [];
+                if (document.hidden || !presence || !notes.length || !this.getNoteBoardProjectId()) return;
+                let map;
+                try {
+                    map = await presence.fetch(notes.map(function (n) { return n.id; }));
+                } catch (e) {
+                    return;
+                }
+                (this.notes || []).forEach(function (n) {
+                    const name = map[n.id] || null;
+                    if ((n.edit_locked_name || null) !== name) n.edit_locked_name = name;
+                });
+            },
             decodeNoteHtml(str) {
                 if (!str) return '';
                 // HTML from Quill is used as is; only escaped HTML entities are decoded
