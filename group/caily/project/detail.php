@@ -105,9 +105,9 @@ if($_SESSION['show_project'] == 0){
                                     <i class="fa fa-check me-1"></i>{{ translateLabel('案件を承認') }}
                                 </button>
                                 
-                                <button v-if="!isEditMode && project && project.parent_project_id && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" :title="translateLabel('案件をコピー')">
-                                    <i class="fa fa-clone me-1"></i><span data-i18n="案件をコピー">案件をコピー</span>
-                                </button>
+                                <!-- <button v-if="!isEditMode && canAddProject" class="btn btn-outline-info btn-sm me-2" @click="copyProject" :title="translateLabel('案件をコピー')">
+                                    <i class="fa fa-copy"></i> <span data-i18n="案件をコピー">案件をコピー</span>
+                                </button> -->
                                 <button v-if="!isEditMode && canEditProject && !(project && project.is_kadai == 1)" class="btn btn-outline-warning btn-sm me-2" @click="openEditForm" :title="translateLabel('編集')">
                                     <i class="fa fa-pencil-alt me-1"></i> <span data-i18n="編集">編集</span>
                                 </button>

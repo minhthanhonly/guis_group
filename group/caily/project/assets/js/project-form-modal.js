@@ -12,6 +12,7 @@
  *   mode: 'create' create a project instead (no projectId); needs parentProject
  *   parentProject  { id, project_name, customer_id } of the building (create)
  *   copyFrom       create: a project to prefill from, plus managers_list / members_list ([{user_id, user_name}])
+ *   copyFromId     create: id of a project to load and prefill from (instead of copyFrom)
  *   managerOnly    edit as a 管理 without full edit rights: the .pf-full-only fields are hidden
  *   siblings       the building's other projects (for the 省エネ drawing-share question)
  *   showGuisReceiver  include the GUIS受付者 field (child projects)
@@ -149,7 +150,8 @@
                         energy_drawing_share_reason: '',
                         energy_drawing_share_note: ''
                     };
-                    if (opts.copyFrom) this.applyCopySource(opts.copyFrom);
+                    var copySource = opts.copyFrom || (opts.copyFromId ? await this.fetchCopySource(opts.copyFromId) : null);
+                    if (copySource) this.applyCopySource(copySource);
                     this.syncYoteiDraftFromProject();
                     await this.loadFormDepartments();
                 },
@@ -157,6 +159,33 @@
                  * Create mode with copyFrom: start from another project of the same building.
                  * Its own identity (number, status, progress, completion, drawing-share answer) is not copied.
                  */
+                /** copyFromId: load the project to copy with its teams and people. */
+                fetchCopySource: async function (id) {
+                    var enc = encodeURIComponent(id);
+                    var results = await Promise.all([
+                        axios.get('/api/index.php?model=project&method=getById&id=' + enc),
+                        axios.get('/api/index.php?model=project&method=getMembers&project_id=' + enc).catch(function () { return { data: [] }; })
+                    ]);
+                    var src = results[0].data;
+                    if (!src || typeof src !== 'object' || !src.id) throw new Error('copy source not found');
+                    var self = this;
+                    ['name', 'tags', 'project_order_type'].forEach(function (key) {
+                        if (typeof src[key] === 'string' && src[key].indexOf('&') !== -1) src[key] = self.decodeHtmlEntities(src[key]);
+                    });
+                    var people = Array.isArray(results[1].data) ? results[1].data : [];
+                    src.managers_list = people.filter(function (m) { return m && m.role === 'manager'; });
+                    var managerIds = src.managers_list.map(function (m) { return String(m.user_id); });
+                    src.members_list = people.filter(function (m) { return m && m.role === 'member' && managerIds.indexOf(String(m.user_id)) === -1; });
+                    src.team_list = [];
+                    var teamIds = String(src.teams || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+                    if (teamIds.length) {
+                        try {
+                            var teams = await axios.get('/api/index.php?model=team&method=listbyids&ids=' + teamIds.join(','));
+                            src.team_list = Array.isArray(teams.data) ? teams.data : [];
+                        } catch (e) { src.team_list = []; }
+                    }
+                    return src;
+                },
                 applyCopySource: function (src) {
                     var project = this.project;
                     var keep = ['department_id', 'department_name', 'priority', 'tantou', 'project_order_type',

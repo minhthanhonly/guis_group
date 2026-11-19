@@ -2116,6 +2116,33 @@ createApp({
             });
         },
 
+        /** 案件をコピー: the create form of this building, prefilled from one of its projects. */
+        showCopyChildProjectModal(project) {
+            if (!project || !project.id || !this.canAddProject) return;
+            if (typeof window.openProjectFormModal !== 'function') {
+                showParentProjectError('案件フォームを開けません。ページを再読み込みしてください。');
+                return;
+            }
+            const parent = this.parentProject || {};
+            window.openProjectFormModal({
+                mode: 'create',
+                parentProject: {
+                    id: PARENT_PROJECT_ID,
+                    project_name: parent.project_name || '',
+                    customer_id: project.customer_id || parent.customer_id || ''
+                },
+                copyFromId: project.id,
+                siblings: this.childProjects || [],
+                showGuisReceiver: true,
+                onSaved: (id, info) => this.onChildProjectFormSaved(info)
+            });
+        },
+        openChildProjectCopyFromContextMenu() {
+            const project = this.childProjectContextMenuProject;
+            this.closeChildProjectContextMenu();
+            this.showCopyChildProjectModal(project);
+        },
+
         async loadDepartments() {
             try {
                 // All project-capable departments (not limited to the current user's departments)

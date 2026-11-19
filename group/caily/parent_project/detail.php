@@ -295,6 +295,11 @@ $view->heading('建物詳細');
                                                     <i class="fa fa-file-invoice me-1"></i> <span data-i18n="決済情報">決済情報</span>
                                                 </a>
                                             </li>
+                                            <li v-if="canAddProject">
+                                                <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showCopyChildProjectModal(project)">
+                                                    <i class="fa fa-clone me-1"></i> <span data-i18n="案件をコピー">案件をコピー</span>
+                                                </a>
+                                            </li>
                                             <li>
                                                 <a class="dropdown-item" href="javascript:void(0);" @click.prevent="showChildProjectLogs(project)">
                                                     <i class="fa fa-history me-1"></i> {{ translateLabel('ログ') }}
@@ -2417,6 +2422,9 @@ $view->heading('建物詳細');
         <button v-if="childProjectContextMenuProject && canEditChildProject(childProjectContextMenuProject)"
                 class="dropdown-item" type="button" @click.stop="openChildProjectEditFromContextMenu">
             <i class="fa fa-edit me-1"></i><span data-i18n="案件編集">案件編集</span>
+        </button>
+        <button v-if="canAddProject" class="dropdown-item" type="button" @click.stop="openChildProjectCopyFromContextMenu">
+            <i class="fa fa-clone me-1"></i><span data-i18n="案件をコピー">案件をコピー</span>
         </button>
         <button class="dropdown-item" type="button" @click.stop="goToChildProjectDetailFromContextMenu">
             <i class="fa fa-external-link-alt me-1"></i><span data-i18n="詳細ページへ">詳細ページへ</span>
