@@ -1678,6 +1678,34 @@ const vueApp = createApp({
             }
         },
         copyProject() {
+            if (!this.project) return;
+            // 子案件: open the shared 案件登録 form for the same building, prefilled with this project
+            if (this.project.parent_project_id && typeof window.openProjectFormModal === 'function') {
+                const src = Object.assign({}, this.project, {
+                    managers_list: this.managers || [],
+                    members_list: this.members || []
+                });
+                ['name', 'tags', 'project_order_type'].forEach((key) => {
+                    if (typeof src[key] === 'string' && src[key].indexOf('&') !== -1) {
+                        src[key] = this.decodeHtmlEntities(src[key]);
+                    }
+                });
+                window.openProjectFormModal({
+                    mode: 'create',
+                    parentProject: {
+                        id: this.project.parent_project_id,
+                        project_name: this.project.building_name || '',
+                        customer_id: this.project.customer_id || ''
+                    },
+                    copyFrom: src,
+                    siblings: this.parentSiblingProjects || [],
+                    showGuisReceiver: true,
+                    onSaved: (id) => {
+                        if (id) window.location.href = 'detail.php?id=' + encodeURIComponent(id);
+                    }
+                });
+                return;
+            }
             // Get the current custom fields data
             let customFieldsData = [];
             let raw = this.project.custom_fields;

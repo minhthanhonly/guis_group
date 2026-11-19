@@ -11,6 +11,7 @@
  *   projectId      edit this project
  *   mode: 'create' create a project instead (no projectId); needs parentProject
  *   parentProject  { id, project_name, customer_id } of the building (create)
+ *   copyFrom       create: a project to prefill from, plus managers_list / members_list ([{user_id, user_name}])
  *   managerOnly    edit as a 管理 without full edit rights: the .pf-full-only fields are hidden
  *   siblings       the building's other projects (for the 省エネ drawing-share question)
  *   showGuisReceiver  include the GUIS受付者 field (child projects)
@@ -148,8 +149,30 @@
                         energy_drawing_share_reason: '',
                         energy_drawing_share_note: ''
                     };
+                    if (opts.copyFrom) this.applyCopySource(opts.copyFrom);
                     this.syncYoteiDraftFromProject();
                     await this.loadFormDepartments();
+                },
+                /**
+                 * Create mode with copyFrom: start from another project of the same building.
+                 * Its own identity (number, status, progress, completion, drawing-share answer) is not copied.
+                 */
+                applyCopySource: function (src) {
+                    var project = this.project;
+                    var keep = ['department_id', 'department_name', 'priority', 'tantou', 'project_order_type',
+                        'start_date', 'end_date', 'caily_nouki', 'guis_nouki', 'caily_nouki_status', 'guis_nouki_status',
+                        'yotei', 'teams', 'tags', 'description', 'custom_fields', 'guis_receiver',
+                        'energy_materials', 'energy_materials_memo', 'application_review_agency', 'bels_zeh_grade'];
+                    keep.forEach(function (key) {
+                        if (src[key] !== undefined && src[key] !== null) project[key] = src[key];
+                    });
+                    project.name = src.name ? src.name + ' (コピー)' : project.name;
+                    project.team_list = Array.isArray(src.team_list) ? src.team_list.slice() : [];
+                    var people = function (list) {
+                        return (Array.isArray(list) ? list : []).map(function (m) { return { user_id: m.user_id, user_name: m.user_name }; });
+                    };
+                    this.managers = people(src.managers_list);
+                    this.members = people(src.members_list);
                 },
                 loadFormDepartments: async function () {
                     try {
