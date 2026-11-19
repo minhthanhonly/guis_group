@@ -126,7 +126,8 @@
                     </button>
                     <button v-if="canEditCustomer" type="button" class="btn btn-primary" @click="saveCustomer" :disabled="savingCustomer">
                         <span v-if="savingCustomer" class="spinner-border spinner-border-sm me-1"></span>
-                        <span data-i18n="更新">更新</span>
+                        <span v-if="editingCustomer" data-i18n="更新">更新</span>
+                        <span v-else data-i18n="登録">登録</span>
                     </button>
                 </div>
             </div>

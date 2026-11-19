@@ -503,22 +503,70 @@
                     this.customerInfoModalContext = 'parent';
                     this.customerInfoModalChildProjectId = null;
                 }
-                const $search = $('#' + this.customerSearchModalId);
-                // The page's own 顧客情報 modal or the global one opens: return from whichever closes first
+                // The customer may have been edited: refresh the results, keeping the search values
+                await this.openOverCustomerSearch(() => this.showCustomerInfoModal(customer), () => this.refreshCustomerSearch());
+            },
+            // 顧客検索 -> 新規顧客: create a customer in the global customer modal, prefilled with the
+            // selected 会社名 / 支店名; once saved it is added to the list and shows up in the results
+            async openNewCustomerFromSearch() {
+                if (typeof window.openGlobalCustomerCreateModal !== 'function') {
+                    notify('新規顧客を登録できません。ページを再読み込みしてください。', true);
+                    return;
+                }
+                const prefill = {
+                    company_name: this.customerSearchCompany || '',
+                    branch: this.customerSearchBranch || '',
+                    category_id: 2
+                };
+                let created = null;
+                await this.openOverCustomerSearch(
+                    () => window.openGlobalCustomerCreateModal(prefill, {
+                        onSaved: (customer) => { created = customer; }
+                    }),
+                    async () => {
+                        if (created) {
+                            await this.addNewCustomerToList(created);
+                        }
+                        await this.refreshCustomerSearch();
+                    }
+                );
+            },
+            // Open a 顧客情報 modal (the page's own or the global one) on top of the still open 顧客検索;
+            // onHidden runs when it closes
+            async openOverCustomerSearch(open, onHidden) {
+                const searchEl = document.getElementById(this.customerSearchModalId);
                 const infoModals = ['customerInfoModal', 'globalCustomerModal']
                     .map((id) => document.getElementById(id))
                     .filter(Boolean);
-                const backToSearch = () => {
-                    infoModals.forEach((el) => el.removeEventListener('hidden.bs.modal', backToSearch));
-                    // The customer may have been edited: reload the search list
-                    this.customerSearchLoaded = false;
-                    this.openCustomerSearchModal();
+                const searchZIndex = (searchEl && parseInt(window.getComputedStyle(searchEl).zIndex, 10)) || 1090;
+                const liftAbove = (event) => {
+                    infoModals.forEach((el) => el.removeEventListener('show.bs.modal', liftAbove));
+                    const infoEl = event.currentTarget;
+                    infoEl.style.zIndex = String(searchZIndex + 10);
+                    // Its own backdrop sits below the search modal: dim the search modal with the modal's background
+                    infoEl.style.backgroundColor = 'rgba(0, 0, 0, 0.45)';
+                    this.keepModalOpenStateAfterHide(infoEl.id);
+                    infoEl.addEventListener('hidden.bs.modal', () => {
+                        infoEl.style.zIndex = '';
+                        infoEl.style.backgroundColor = '';
+                        if (typeof onHidden === 'function') {
+                            onHidden();
+                        }
+                    }, { once: true });
                 };
-                $search.one('hidden.bs.modal', async () => {
-                    infoModals.forEach((el) => el.addEventListener('hidden.bs.modal', backToSearch));
-                    await this.showCustomerInfoModal(customer);
-                });
-                $search.modal('hide');
+                infoModals.forEach((el) => el.addEventListener('show.bs.modal', liftAbove));
+                try {
+                    await open();
+                } finally {
+                    // Not opened (no modal on this page): drop the pending listeners
+                    setTimeout(() => infoModals.forEach((el) => el.removeEventListener('show.bs.modal', liftAbove)), 1000);
+                }
+            },
+            async refreshCustomerSearch() {
+                this.customerSearchLoaded = false;
+                await this.loadAllCustomersForSearch();
+                this.initCustomerSearchSelects();
+                this.searchCustomersByKeyword();
             }
         }
     };

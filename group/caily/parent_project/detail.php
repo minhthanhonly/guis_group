@@ -2471,7 +2471,7 @@ $view->footing();
     }
 
     .customer-search-row {
-        cursor: pointer;
+        cursor: default;
     }
 
     .customer-search-row:hover {

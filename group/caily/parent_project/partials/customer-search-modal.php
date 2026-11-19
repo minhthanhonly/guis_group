@@ -11,6 +11,9 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><span data-i18n="顧客検索">顧客検索</span></h5>
+                <button type="button" class="btn btn-sm btn-outline-primary ms-3" @click="openNewCustomerFromSearch" title="新規顧客追加">
+                    <i class="fa fa-plus me-1"></i><span data-i18n="新規顧客">新規顧客</span>
+                </button>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
@@ -35,7 +38,7 @@
                             autocomplete="off">
                     </div>
                     <div class="col-12 form-text text-muted mt-1">
-                        <span data-i18n="行をクリックすると顧客リストに追加されます。">行をクリックすると顧客リストに追加されます。</span>
+                        <span data-i18n="「追加」をクリックすると顧客リストに追加されます。">「追加」をクリックすると顧客リストに追加されます。</span>
                     </div>
                 </div>
                 <div v-if="customerSearchLoading" class="text-center py-4">
@@ -67,8 +70,7 @@
                                 v-for="customer in customerSearchResults"
                                 :key="customer.id"
                                 class="customer-search-row"
-                                :class="{ 'customer-search-row-added': isCustomerInList(customer.id) }"
-                                @click="selectCustomerFromSearch(customer)">
+                                :class="{ 'customer-search-row-added': isCustomerInList(customer.id) }">
                                 <td>{{ customer.company_name }}</td>
                                 <td>{{ customer.branch }}</td>
                                 <td>{{ customer.name }}</td>
@@ -81,7 +83,10 @@
                                         <i class="fa fa-info-circle me-1"></i><span data-i18n="詳細">詳細</span>
                                     </button>
                                     <span v-if="isCustomerInList(customer.id)" class="badge bg-label-success"><span data-i18n="追加済み">追加済み</span></span>
-                                    <span v-else class="badge bg-label-primary"><i class="fa fa-plus me-1"></i><span data-i18n="追加">追加</span></span>
+                                    <button v-else type="button" class="btn btn-sm btn-primary py-0" title="顧客リストに追加"
+                                        @click="selectCustomerFromSearch(customer)">
+                                        <i class="fa fa-plus me-1"></i><span data-i18n="追加">追加</span>
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>

@@ -370,7 +370,7 @@ body:has(#editParentProjectModal.show) .tagify__dropdown {
 }
 
 .customer-search-row {
-    cursor: pointer;
+    cursor: default;
 }
 
 .customer-search-row:hover {

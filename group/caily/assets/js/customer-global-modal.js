@@ -56,6 +56,7 @@
                     },
                     ready: false,
                     savingCustomer: false,
+                    onSavedCallback: null, // set by openNew(): receives the created customer
                     isProjectManager: !!(
                         (typeof window.IS_PROJECT_MANAGER !== 'undefined' && window.IS_PROJECT_MANAGER) ||
                         (typeof IS_PROJECT_MANAGER !== 'undefined' && IS_PROJECT_MANAGER)
@@ -63,8 +64,10 @@
                 };
             },
             computed: {
+                // Editing an existing customer needs project manager rights; anyone may register a new one
+                // (same as parent_project/create.php)
                 canEditCustomer: function () {
-                    return !!this.isProjectManager;
+                    return !this.editingCustomer || !!this.isProjectManager;
                 }
             },
             methods: {
@@ -180,6 +183,7 @@
                             return;
                         }
                         var customer = this.normalizeCustomer(response.data.data);
+                        this.onSavedCallback = null;
                         this.editingCustomer = customer;
                         this.newCustomer = Object.assign(emptyCustomer(), customer);
                         this.setSelectedCategory(customer.category_id);
@@ -195,6 +199,29 @@
                         console.error('Error opening customer modal:', error);
                         if (typeof showMessage === 'function') {
                             showMessage('顧客情報の読み込みに失敗しました。', true);
+                        }
+                    }
+                },
+                // 新規顧客: empty form (prefill: company_name / branch / category_id ...); options.onSaved(customer)
+                async openNew(prefill, options) {
+                    try {
+                        await this.ensureLoaded();
+                        var opts = options || {};
+                        this.onSavedCallback = typeof opts.onSaved === 'function' ? opts.onSaved : null;
+                        this.editingCustomer = null;
+                        this.newCustomer = Object.assign(emptyCustomer(), prefill || {});
+                        this.setSelectedCategory(this.newCustomer.category_id);
+                        this.customerErrors = { company_name: '', name: '', branch: '', guis_department: '' };
+                        await this.$nextTick();
+                        if (this.$refs.guisDepartmentSelect && typeof window.jQuery !== 'undefined') {
+                            window.jQuery(this.$refs.guisDepartmentSelect).val(this.newCustomer.guis_department).trigger('change');
+                        }
+                        this.syncSelect2Disabled();
+                        this.showModalElement();
+                    } catch (error) {
+                        console.error('Error opening new customer modal:', error);
+                        if (typeof showMessage === 'function') {
+                            showMessage('顧客モーダルを開けません。', true);
                         }
                     }
                 },
@@ -291,6 +318,20 @@
 
                         if (typeof showMessage === 'function') {
                             showMessage(this.editingCustomer ? '顧客情報を更新しました。' : '担当者を保存しました。');
+                        }
+                        if (!this.editingCustomer && this.onSavedCallback) {
+                            var onSaved = this.onSavedCallback;
+                            this.onSavedCallback = null;
+                            try {
+                                onSaved({
+                                    id: response.data.id || null,
+                                    company_name: this.newCustomer.company_name,
+                                    branch: this.newCustomer.branch,
+                                    name: this.newCustomer.name
+                                });
+                            } catch (callbackError) {
+                                console.error('customer onSaved callback failed:', callbackError);
+                            }
                         }
                         modalEl = document.getElementById('globalCustomerModal');
                         if (modalEl && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
@@ -417,6 +458,24 @@
             return instance.openById(customerId);
         }).catch(function (err) {
             console.error('openGlobalCustomerModal failed:', err);
+            if (typeof showMessage === 'function') {
+                showMessage('顧客モーダルを開けません。ページを再読み込みしてください。', true);
+            }
+        });
+    };
+
+    // 新規顧客 in the same modal: openGlobalCustomerCreateModal({ company_name, branch, ... }, { onSaved(customer) })
+    window.openGlobalCustomerCreateModal = function (prefill, options) {
+        return initVm().then(function (instance) {
+            if (!instance || typeof instance.openNew !== 'function') {
+                if (typeof showMessage === 'function') {
+                    showMessage('顧客モーダルを開けません。', true);
+                }
+                return;
+            }
+            return instance.openNew(prefill, options);
+        }).catch(function (err) {
+            console.error('openGlobalCustomerCreateModal failed:', err);
             if (typeof showMessage === 'function') {
                 showMessage('顧客モーダルを開けません。ページを再読み込みしてください。', true);
             }
