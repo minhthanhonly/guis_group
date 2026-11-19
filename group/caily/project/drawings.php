@@ -265,7 +265,7 @@ if (!$isAdministrator && !$projectModel->canUserViewBusinessDocuments($project_i
                                             </button>
                                         </td>
                                         <td class="text-center align-middle">
-                                            <span v-if="!isDefaultTaskDrawing(drawing)" class="badge bg-label-info">{{ getDrawingQuantity(drawing) }}</span>
+                                            <span class="badge bg-label-info">{{ getDrawingQuantity(drawing) }}</span>
                                         </td>
                                         <td>
                                             <div class="d-flex align-items-center">

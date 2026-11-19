@@ -46,10 +46,11 @@ function formatDrawingDateTimeForDisplay(value) {
     );
 }
 
-const DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
-    'お客様との連絡・調整・納品対応': 0.15,
-    '全図面のチェック・確認作業': 0.20
-};
+// Default-task drawings (not real drawings): left out of 図面 counts; price follows 作業比重 like the rest
+const DEFAULT_TASK_DRAWING_TITLES = [
+    'お客様との連絡・調整・納品対応',
+    '全図面のチェック・確認作業'
+];
 
 createApp({
     data() {
@@ -201,39 +202,38 @@ createApp({
             return this.totalDrawingsPrice - this.projectAmount;
         },
         
-        // Tổng giá đã phân bổ: đơn giá đã nhập + phần cố định 15%/20% của bản vẽ task mặc định đã hoàn thành
+        // Tổng giá đã phân bổ: đơn giá đã nhập
         totalPriceOfDrawingsWithPrice() {
-            return this.drawings.reduce((sum, d) => {
-                const effective = this.getEffectiveDrawingPrice(d);
-                if (effective > 0) {
-                    return sum + effective;
-                }
-                const reserved = this.getDefaultTaskDrawingReservedPrice(d);
-                return sum + (reserved || 0);
-            }, 0);
+            return this.drawings.reduce((sum, d) => sum + this.getEffectiveDrawingPrice(d), 0);
         },
-        // Các bản vẽ còn lại được chia phần dư (không gồm task mặc định / task chưa hoàn thành)
+        // Các bản vẽ còn lại được chia phần dư theo 作業比重 (không gồm task chưa hoàn thành)
         remainingDrawingsList() {
             return this.drawings.filter(d => this.isDrawingEligibleForRemainderAutoPrice(d));
         },
         remainingDrawingsCount() {
             return this.remainingDrawingsList.reduce((sum, d) => sum + this.getDrawingQuantity(d), 0);
         },
+        // 作業比重 of every drawing without a price, unfinished tasks included (their share waits until 完了)
+        unpricedDrawingsWeight() {
+            return this.drawings.reduce((sum, d) => sum + (this.hasPrice(d) ? 0 : this.getDrawingQuantity(d)), 0);
+        },
         autoPricePerRemaining() {
             if (this.projectAmount <= 0 || this.remainingDrawingsCount <= 0) return null;
             const rest = this.projectAmount - this.totalPriceOfDrawingsWithPrice;
             if (rest < 0) return null;
-            return Math.floor(rest / this.remainingDrawingsCount);
+            return Math.floor(rest / Math.max(this.remainingDrawingsCount, this.unpricedDrawingsWeight));
         },
         autoPriceListForRemaining() {
             if (this.projectAmount <= 0 || this.remainingDrawingsCount <= 0) return [];
             const rest = this.projectAmount - this.totalPriceOfDrawingsWithPrice;
             if (rest < 0) return [];
             const rows = this.remainingDrawingsList;
-            const totalQty = this.remainingDrawingsCount;
+            const totalQty = Math.max(this.remainingDrawingsCount, this.unpricedDrawingsWeight);
+            // Last row takes the rounding remainder only when nothing is left waiting
+            const takesAll = totalQty === this.remainingDrawingsCount;
             let allocated = 0;
             return rows.map((d, index) => {
-                if (index === rows.length - 1) {
+                if (takesAll && index === rows.length - 1) {
                     return rest - allocated;
                 }
                 const qty = this.getDrawingQuantity(d);
@@ -415,7 +415,7 @@ createApp({
         },
         resolveDefaultTaskDrawingTitleKey(drawing) {
             const name = (drawing?.name || '').trim();
-            return Object.prototype.hasOwnProperty.call(DEFAULT_TASK_DRAWING_PRICE_PERCENTS, name)
+            return DEFAULT_TASK_DRAWING_TITLES.indexOf(name) !== -1
                 ? name
                 : null;
         },
@@ -430,20 +430,6 @@ createApp({
                 return sum + this.getDrawingQuantity(d);
             }, 0);
         },
-        getDefaultTaskDrawingPricePercent(drawing) {
-            const key = this.resolveDefaultTaskDrawingTitleKey(drawing);
-            if (!key || (drawing?.status || '') !== 'completed') {
-                return null;
-            }
-            return DEFAULT_TASK_DRAWING_PRICE_PERCENTS[key];
-        },
-        getDefaultTaskDrawingReservedPrice(drawing) {
-            const pct = this.getDefaultTaskDrawingPricePercent(drawing);
-            if (pct == null || this.projectAmount <= 0) {
-                return 0;
-            }
-            return Math.round(this.projectAmount * pct * 100) / 100;
-        },
         getEffectiveDrawingPrice(drawing) {
             if (!drawing) return 0;
             if (this.isDefaultTaskDrawing(drawing) && (drawing.status || '') !== 'completed') {
@@ -454,9 +440,6 @@ createApp({
         },
         isDrawingEligibleForRemainderAutoPrice(drawing) {
             if (!drawing || this.hasPrice(drawing)) {
-                return false;
-            }
-            if (this.isDefaultTaskDrawing(drawing)) {
                 return false;
             }
             const taskId = parseInt(drawing.task_id, 10);
