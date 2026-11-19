@@ -1497,8 +1497,10 @@
                     if (!ok) return;
                 }
                 let shareAnswer = null;
-                const needsShare = status === 'completed' && prev !== 'completed';
-                if (needsShare && window.EnergyDrawingShare) {
+                // 請求待ち / 完了 ask about sharing with 省エネ (not again once answered 共有する)
+                const needsShare = status !== prev && window.EnergyDrawingShare
+                    && window.EnergyDrawingShare.isShareTriggerStatus(status);
+                if (needsShare) {
                     const answer = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(this.project, {
                         departmentName: this.project.department_name,
                         siblings: this.parentSiblingProjects,
@@ -2401,7 +2403,8 @@
                 const oldVal = (this.originalProject && this.originalProject[field] != null)
                     ? (this.originalProject[field] || '')
                     : (newVal === '納品済み' ? '' : '納品済み');
-                const becameDelivered = newVal === '納品済み' && oldVal !== '納品済み';
+                // Only GUIS shares drawings with 省エネ; CAILY納期状況 does not ask
+                const becameDelivered = kind === 'guis' && newVal === '納品済み' && oldVal !== '納品済み';
                 let shareAnswer = null;
                 if (becameDelivered && window.EnergyDrawingShare) {
                     const answer = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(this.project, {
@@ -2486,14 +2489,15 @@
                     const ok = await this.confirmPaymentInfoBeforeComplete(this.project);
                     if (!ok) return;
                 }
-                const prevCaily = this.originalProject ? (this.originalProject.caily_nouki_status || '') : '';
+                // Ask about sharing with 省エネ on GUIS納期状況 → 納品済み or status → 請求待ち / 完了
+                // (CAILY does not share with 省エネ; not again once answered 共有する)
                 const prevGuis = this.originalProject ? (this.originalProject.guis_nouki_status || '') : '';
                 const noukiBecameDelivered =
-                    ((this.project.caily_nouki_status || '') === '納品済み' && prevCaily !== '納品済み')
-                    || ((this.project.guis_nouki_status || '') === '納品済み' && prevGuis !== '納品済み');
-                const statusBecameCompleted = this.project.status === 'completed' && prevStatus !== 'completed';
+                    (this.project.guis_nouki_status || '') === '納品済み' && prevGuis !== '納品済み';
+                const statusBecameShareTrigger = this.project.status !== prevStatus && window.EnergyDrawingShare
+                    && window.EnergyDrawingShare.isShareTriggerStatus(this.project.status);
                 let shareAnswer = null;
-                if ((statusBecameCompleted || noukiBecameDelivered) && window.EnergyDrawingShare) {
+                if ((statusBecameShareTrigger || noukiBecameDelivered) && window.EnergyDrawingShare) {
                     const answer = await window.EnergyDrawingShare.ensureEnergyDrawingShareAnswer(this.project, {
                         departmentName: this.project.department_name,
                         siblings: this.parentSiblingProjects,

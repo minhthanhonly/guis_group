@@ -174,3 +174,9 @@ Sửa: `config.php` giữ thêm một bản sao các giá trị `.env` trong ph�
 - Mỗi dòng có thêm `detail`: số ngày (đơn nghỉ, công tác) hoặc khung giờ (tăng ca, làm ngày nghỉ, ra ngoài). Lý do, ghi chú, nơi đến, dòng mua hàng và số tiền không bao giờ được trả về.
 
 Test: `tests/ai/requests-all.test.php` (21 kiểm tra).
+
+## 18. Sửa lỗi: bấm icon trợ giúp / ẩn thì thanh chat giãn ra thay vì thực hiện (2026-11-19)
+
+Nguyên nhân: thanh chat giãn rộng (360px → 720px, 0,2 giây) mỗi khi bất kỳ phần tử nào bên trong nhận focus (`:focus-within`). Nhấn chuột vào một nút làm nút đó nhận focus, thanh giãn ra và nút trượt đi 180px trước khi nhả chuột, nên trình duyệt không tính là một lần click.
+
+Sửa: trạng thái rộng khi đang gõ là class `is-active` do script đặt, chỉ khi ô nhập hoặc ô chọn bộ phận nhận focus; focus chuyển giữa các phần tử trong thanh không đổi trạng thái; rời khỏi thanh thì thu lại. `:focus-within` chỉ còn dùng cho màu viền. Test: 7 kiểm tra mới trong `tests/ai/render.test.js`.

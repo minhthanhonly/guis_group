@@ -8809,6 +8809,39 @@ var projectTable;
             var startY = 0;
             var startScrollLeft = 0;
             var startScrollTop = 0;
+            // Hint shown while Space is held: slides up from the bottom edge, hidden as soon
+            // as the drag starts or Space is released. A short delay keeps a quick tap silent.
+            var hintEl = null;
+            var hintTimer = null;
+            function getSpacePanHint() {
+                if (hintEl) return hintEl;
+                var label = typeof translateText === 'function'
+                    ? translateText('ドラッグで表をスクロール')
+                    : 'ドラッグで表をスクロール';
+                hintEl = document.createElement('div');
+                hintEl.className = 'pl-space-pan-hint';
+                hintEl.setAttribute('role', 'status');
+                hintEl.setAttribute('aria-live', 'polite');
+                hintEl.innerHTML = '<kbd>Space</kbd><span class="pl-space-pan-hint-plus">+</span>' +
+                    '<i class="fa fa-arrows-alt" aria-hidden="true"></i><span class="pl-space-pan-hint-text"></span>';
+                hintEl.querySelector('.pl-space-pan-hint-text').textContent = label;
+                document.body.appendChild(hintEl);
+                return hintEl;
+            }
+            function showSpacePanHint() {
+                if (hintTimer || (hintEl && hintEl.classList.contains('is-visible'))) return;
+                hintTimer = setTimeout(function() {
+                    hintTimer = null;
+                    if (!spaceHeld || dragging) return;
+                    var el = getSpacePanHint();
+                    void el.offsetWidth; // start the transition from the hidden state
+                    el.classList.add('is-visible');
+                }, 180);
+            }
+            function hideSpacePanHint() {
+                if (hintTimer) { clearTimeout(hintTimer); hintTimer = null; }
+                if (hintEl) hintEl.classList.remove('is-visible');
+            }
             function getScrollContainer() {
                 var el = document.getElementById('projectTable');
                 if (!el) return null;
@@ -8835,13 +8868,20 @@ var projectTable;
                     }
                     e.preventDefault();
                     spaceHeld = true;
+                    if (!dragging) showSpacePanHint();
                 }
             });
             $(document).plInitOn('keyup', function(e) {
                 if (e.key === ' ' || e.which === 32) {
                     spaceHeld = false;
                     dragging = false;
+                    hideSpacePanHint();
                 }
+            });
+            $(window).plInitOn('blur', function() {
+                spaceHeld = false;
+                dragging = false;
+                hideSpacePanHint();
             });
             $('#projectTable').closest('.card-body').plInitOn('mousedown', function(e) {
                 if (!spaceHeld || e.which !== 1) return;
@@ -8849,6 +8889,7 @@ var projectTable;
                 if (!container) return;
                 e.preventDefault();
                 dragging = true;
+                hideSpacePanHint();
                 startX = e.clientX;
                 startY = e.clientY;
                 startScrollLeft = container.scrollLeft;

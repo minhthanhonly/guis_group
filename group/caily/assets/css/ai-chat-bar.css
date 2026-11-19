@@ -20,8 +20,10 @@
 .ai-chat-bar:focus-within {
   border-color: var(--bs-primary);
 }
-/* In use: typing, conversation open, an answer shown above the input, or the help box open. */
-.ai-chat-bar:focus-within,
+/* In use: typing (is-active, set by the script for the text fields only: a press on a button must not
+   move that button before the release), conversation open, an answer shown above the input, or the
+   help box open. */
+.ai-chat-bar.is-active,
 .ai-chat-bar.is-open,
 .ai-chat-bar.has-peek,
 .ai-chat-bar.has-help {
@@ -350,7 +352,7 @@
   color: var(--bs-body-color, #000);
   background: var(--bs-paper-bg, var(--bs-body-bg, #fff));
 }
-.ai-chat-bar:focus-within .ai-chat-dept,
+.ai-chat-bar.is-active .ai-chat-dept,
 .ai-chat-bar.is-open .ai-chat-dept,
 .ai-chat-bar.has-peek .ai-chat-dept,
 .ai-chat-bar.has-help .ai-chat-dept {

@@ -36,34 +36,6 @@ class Task extends ApplicationModel {
             'position' => array('type' => 'int')
         );
         $this->connect();
-        self::ensurePricePctColumn($this);
-    }
-
-    /**
-     * tasks.price_pct: per-project override of a default task's 比率(%). NULL = department config.
-     * Also called from Drawing before it reads the column.
-     */
-    public static function ensurePricePctColumn($db) {
-        static $ensured = false;
-        if ($ensured) {
-            return;
-        }
-        $ensured = true;
-        try {
-            $row = $db->fetchOne(
-                "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
-                . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . DB_PREFIX . "tasks' AND COLUMN_NAME = 'price_pct'"
-            );
-            if (!empty($row['cnt'])) {
-                return;
-            }
-            $db->query(
-                "ALTER TABLE `" . DB_PREFIX . "tasks` ADD COLUMN `price_pct` DECIMAL(5,2) NULL DEFAULT NULL "
-                . "COMMENT 'Default task 比率(%) override for this project; NULL = department config' AFTER `drawing_count`"
-            );
-        } catch (Exception $e) {
-            error_log('ensurePricePctColumn failed: ' . $e->getMessage());
-        }
     }
 
     /**
@@ -546,6 +518,40 @@ class Task extends ApplicationModel {
             : array();
     }
 
+    /** 作業比重 project (projects.task_weight_mode = 1)? Projects from before it return false. */
+    private function isTaskWeightModeProject($projectId) {
+        if (!class_exists('Project')) {
+            require_once DIR_MODEL . 'project.php';
+        }
+        return (new Project())->isTaskWeightModeProject(intval($projectId));
+    }
+
+    /**
+     * Default tasks keep their weight (drawing_count) as created, in old and 作業比重 projects alike.
+     */
+    private function isLockedDefaultTaskWeight($taskRow) {
+        $projectId = isset($taskRow['project_id']) ? intval($taskRow['project_id']) : 0;
+        $title = isset($taskRow['title']) ? trim((string) $taskRow['title']) : '';
+        if ($projectId <= 0 || $title === '') {
+            return false;
+        }
+        if ($this->isDefaultTaskTitleWithAutoDrawingLink($title)) {
+            return true;
+        }
+        $project = $this->fetchOne(sprintf(
+            "SELECT department_id FROM %sprojects WHERE id = %d LIMIT 1",
+            DB_PREFIX,
+            $projectId
+        ));
+        $departmentId = $project ? intval($project['department_id']) : 0;
+        foreach ($this->resolveDepartmentDefaultTaskDefinitions($departmentId) as $def) {
+            if (isset($def['title']) && trim((string) $def['title']) === $title) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * Bootstrap default tasks (and task-linked drawings) for a new child project.
      */
@@ -583,6 +589,7 @@ class Task extends ApplicationModel {
             : 'お客様との連絡・調整・納品対応';
 
         $taskDefs = $this->resolveDepartmentDefaultTaskDefinitions($departmentId, $projectId);
+        $weightMode = $this->isTaskWeightModeProject($projectId);
         $defaults = array();
         foreach ($taskDefs as $def) {
             $title = isset($def['title']) ? trim((string) $def['title']) : '';
@@ -595,8 +602,11 @@ class Task extends ApplicationModel {
                 'assigned_to' => ($isContact && $contactTaskAssignee > 0) ? (string) $contactTaskAssignee : null,
                 'status' => $isContact ? 'completed' : 'todo',
                 'progress' => $isContact ? 100 : 0,
-                'drawing_count' => isset($def['drawing_count']) ? max(0, intval($def['drawing_count'])) : 1,
-                'price_pct' => $pricePctDisplay / 100.0,
+                // 作業比重: a linked default task starts with its 比率(%) as weight (min 1).
+                // Projects from before 作業比重 keep the configured drawing_count (fixed % applies).
+                'drawing_count' => (isset($def['drawing_count']) ? intval($def['drawing_count']) : 1) > 0
+                    ? ($weightMode ? max(1, (int) round($pricePctDisplay)) : max(1, intval($def['drawing_count'])))
+                    : 0,
                 'assign_guis_receiver' => $isContact ? 1 : 0,
             );
         }
@@ -677,22 +687,6 @@ class Task extends ApplicationModel {
             $data['id'] = $taskId;
             if (intval($def['drawing_count']) > 0) {
                 $drawingModel->syncFromTask($data, array('skip_price_recalc' => true));
-            }
-
-            if ($amount > 0 && isset($def['price_pct']) && isset($def['status']) && $def['status'] === 'completed'
-                && intval($def['drawing_count']) > 0) {
-                $price = round($amount * $def['price_pct'], 2);
-                $drawing = $this->fetchOne(sprintf(
-                    "SELECT id FROM %sproject_drawings WHERE task_id = %d ORDER BY id ASC LIMIT 1",
-                    DB_PREFIX,
-                    intval($taskId)
-                ));
-                if ($drawing && !empty($drawing['id'])) {
-                    $drawingModel->query_update(
-                        array('price' => $price, 'updated_at' => date('Y-m-d H:i:s')),
-                        array('id' => intval($drawing['id']))
-                    );
-                }
             }
         }
 
@@ -1766,6 +1760,9 @@ class Task extends ApplicationModel {
         if (!$this->userCanEditTaskDrawing($project_id, isset($old['task_kind']) ? $old['task_kind'] : '')) {
             return ['status' => 'error', 'message' => 'Forbidden', 'http_status' => 403];
         }
+        if ($this->isLockedDefaultTaskWeight($old)) {
+            return ['status' => 'error', 'message' => '既定タスクの作業比重は変更できません'];
+        }
         $linked = isset($_POST['linked']) && (string) $_POST['linked'] === '1';
         if ($linked) {
             $drawingCount = isset($_POST['drawing_count']) ? max(1, intval($_POST['drawing_count'])) : max(1, intval($old['drawing_count']));
@@ -1792,67 +1789,6 @@ class Task extends ApplicationModel {
         }
         $this->syncTaskDrawingsForTask($id, $mergedTask, $syncOptions);
         return ['status' => 'success', 'drawing_count' => $drawingCount];
-    }
-
-    /**
-     * Set the 比率(%) of one task on this project (default tasks). Empty value = back to department config.
-     */
-    function updatePricePct() {
-        $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
-        $project_id = isset($_POST['project_id']) ? intval($_POST['project_id']) : 0;
-        if ($id <= 0 || $project_id <= 0) {
-            return ['status' => 'error', 'message' => 'Missing required parameters'];
-        }
-        $old = $this->getById($id);
-        if (!$old || intval($old['project_id']) !== $project_id) {
-            return ['status' => 'error', 'message' => 'Task not found'];
-        }
-        $perm = $this->resolveProjectTaskPermissions($project_id);
-        if (!$perm || empty($perm['can_manage_project'])) {
-            return ['status' => 'error', 'message' => '比率を変更する権限がありません', 'http_status' => 403];
-        }
-
-        $raw = isset($_POST['price_pct']) ? trim((string) $_POST['price_pct']) : '';
-        $pricePct = null;
-        if ($raw !== '') {
-            if (!is_numeric($raw)) {
-                return ['status' => 'error', 'message' => '比率は数値で入力してください'];
-            }
-            $pricePct = round(floatval($raw), 2);
-            if ($pricePct < 0 || $pricePct > 100) {
-                return ['status' => 'error', 'message' => '比率は0〜100で入力してください'];
-            }
-        }
-
-        $result = $this->query(sprintf(
-            "UPDATE %s SET price_pct = %s, updated_at = '%s' WHERE id = %d",
-            $this->table,
-            $pricePct === null ? 'NULL' : sprintf('%.2F', $pricePct),
-            $this->quote(date('Y-m-d H:i:s')),
-            $id
-        ));
-        if ($result === false) {
-            return ['status' => 'error', 'message' => 'Update failed'];
-        }
-
-        $oldPct = (isset($old['price_pct']) && $old['price_pct'] !== null && $old['price_pct'] !== '')
-            ? floatval($old['price_pct'])
-            : null;
-        if ($oldPct !== $pricePct) {
-            $this->logTaskAction(
-                $id,
-                'updated',
-                '比率を変更',
-                $oldPct === null ? '既定' : ($oldPct . '%'),
-                $pricePct === null ? '既定' : ($pricePct . '%')
-            );
-        }
-
-        if (intval($old['drawing_count']) > 0) {
-            $this->getDrawingModel()->autoCalculateAllDrawingPricesForProject($project_id);
-        }
-
-        return ['status' => 'success', 'price_pct' => $pricePct];
     }
 
     function updateAssignee() {
