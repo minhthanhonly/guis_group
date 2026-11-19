@@ -7982,6 +7982,13 @@ class Project extends ApplicationModel {
         return $noteModel->unlock($params);
     }
 
+    /** メモ 編集ロック: which of POST note_ids someone else is editing now → editing { id: name } */
+    function editingNotes($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->editingNotes($params);
+    }
+
     /** メモボード (案件詳細): move a note on the own grid. POST project_id, note_id, col, row */
     function moveNoteOnBoard($params = null) {
         require_once('projectnote.php');

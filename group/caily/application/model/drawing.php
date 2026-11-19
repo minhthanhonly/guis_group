@@ -1126,8 +1126,14 @@ class Drawing extends ApplicationModel {
             return false;
         }
 
+        if (!class_exists('Task')) {
+            require_once DIR_MODEL . 'task.php';
+        }
+        Task::ensurePricePctColumn($this);
+
         $drawings = $this->fetchAll(sprintf(
-            "SELECT d.id, d.drawing_count, d.name, d.task_id, t.title AS task_title, t.status AS task_status
+            "SELECT d.id, d.drawing_count, d.name, d.task_id, t.title AS task_title, t.status AS task_status,
+                t.price_pct AS task_price_pct
             FROM %s d
             LEFT JOIN %stasks t ON d.task_id = t.id
             WHERE d.project_id = %d
@@ -1151,6 +1157,21 @@ class Drawing extends ApplicationModel {
             $taskId = isset($drawing['task_id']) ? intval($drawing['task_id']) : 0;
             $taskStatus = isset($drawing['task_status']) ? (string) $drawing['task_status'] : '';
             $defaultKey = $this->resolveDefaultTaskDrawingTitleKey($drawing);
+
+            // 比率(%) set on this project's task (タスク画面) overrides the fixed default %
+            $overridePct = ($taskId > 0 && isset($drawing['task_price_pct']) && $drawing['task_price_pct'] !== null
+                && $drawing['task_price_pct'] !== '')
+                ? floatval($drawing['task_price_pct']) / 100.0
+                : null;
+            if ($overridePct !== null) {
+                $price = ($taskStatus === 'completed') ? round($amount * $overridePct, 2) : 0;
+                $this->query_update(
+                    array('price' => $price, 'updated_at' => $now),
+                    array('id' => $drawingId)
+                );
+                $fixedAllocated += $price;
+                continue;
+            }
 
             if ($defaultKey !== null) {
                 if ($taskStatus === 'completed' && isset($defaultPcts[$defaultKey])) {
