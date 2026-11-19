@@ -15,7 +15,7 @@
     'use strict';
 
     // 顧客検索 会社名: companies whose name contains one of these come first, in this order
-    const PINNED_CUSTOMER_COMPANIES = ['東建', '大東', 'ナミキ'];
+    const PINNED_CUSTOMER_COMPANIES = ['大東', '東建', 'ナミキ'];
 
     function pinnedCompanyRank(name) {
         const text = String(name || '');
@@ -66,7 +66,7 @@
             },
             // 顧客検索: company names of the customer master, with their customer count
             customerSearchCompanyOptions() {
-                // 東建 / 大東 / ナミキ first (largest first inside each), then the rest by name
+                // 大東 / 東建 / ナミキ first (largest first inside each), then the rest by name
                 return this.countCustomerSearchOptions(this.allCustomersForSearch, 'company_name')
                     .map((option, order) => ({ option, order, rank: pinnedCompanyRank(option.value) }))
                     .sort((a, b) => (a.rank - b.rank)
@@ -395,18 +395,25 @@
                     this.searchCustomersByKeyword();
                 });
             },
+            // The 会社名 / 支店名 / キーワード of the last search are kept, so reopening shows the same results
             async openCustomerSearchModal() {
-                this.customerSearchKeyword = '';
-                this.customerSearchCompany = '';
-                this.customerSearchBranch = '';
-                this.customerSearchResults = [];
                 this.keepModalOpenStateAfterHide(this.customerSearchModalId);
                 $('#' + this.customerSearchModalId).modal('show');
                 await this.loadCustomerSearchDepartments();
                 if (!this.customerSearchLoaded) {
                     await this.loadAllCustomersForSearch();
                 }
+                // A kept company / branch that no longer exists in the customer master falls back to すべて
+                if (this.customerSearchCompany
+                    && !this.customerSearchCompanyOptions.some((option) => option.value === this.customerSearchCompany)) {
+                    this.customerSearchCompany = '';
+                }
+                if (this.customerSearchBranch
+                    && !this.customerSearchBranchOptions.some((option) => option.value === this.customerSearchBranch)) {
+                    this.customerSearchBranch = '';
+                }
                 this.initCustomerSearchSelects();
+                this.searchCustomersByKeyword();
             },
             async loadAllCustomersForSearch() {
                 this.customerSearchLoading = true;
@@ -485,6 +492,33 @@
                 }
                 $('#' + this.customerListModalId).modal('hide');
                 await this.showCustomerInfoModal(customer);
+            },
+            // 顧客検索 -> 詳細: show the customer, then come back to the search (its values are kept)
+            async openCustomerInfoFromSearch(searchCustomer) {
+                if (!searchCustomer || !searchCustomer.id) {
+                    return;
+                }
+                const customer = (await this.fetchCustomerMasterById(searchCustomer.id)) || { ...searchCustomer };
+                if (this.$data && Object.prototype.hasOwnProperty.call(this.$data, 'customerInfoModalContext')) {
+                    this.customerInfoModalContext = 'parent';
+                    this.customerInfoModalChildProjectId = null;
+                }
+                const $search = $('#' + this.customerSearchModalId);
+                // The page's own 顧客情報 modal or the global one opens: return from whichever closes first
+                const infoModals = ['customerInfoModal', 'globalCustomerModal']
+                    .map((id) => document.getElementById(id))
+                    .filter(Boolean);
+                const backToSearch = () => {
+                    infoModals.forEach((el) => el.removeEventListener('hidden.bs.modal', backToSearch));
+                    // The customer may have been edited: reload the search list
+                    this.customerSearchLoaded = false;
+                    this.openCustomerSearchModal();
+                };
+                $search.one('hidden.bs.modal', async () => {
+                    infoModals.forEach((el) => el.addEventListener('hidden.bs.modal', backToSearch));
+                    await this.showCustomerInfoModal(customer);
+                });
+                $search.modal('hide');
             }
         }
     };

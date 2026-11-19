@@ -17,7 +17,7 @@
                 <div class="row g-2 mb-3">
                     <div class="col-md-4">
                         <label class="form-label"><span data-i18n="会社名">会社名</span></label>
-                        <!-- Options are filled by select2 (initCustomerSearchSelects); 東建 / 大東 / ナミキ first -->
+                        <!-- Options are filled by select2 (initCustomerSearchSelects); 大東 / 東建 / ナミキ first -->
                         <select class="form-select customer-search-company-select"></select>
                     </div>
                     <div class="col-md-3">
@@ -59,7 +59,7 @@
                                 <th style="width: 12%;"><span data-i18n="自社担当部署名">自社担当部署名</span></th>
                                 <th style="width: 13%;"><span data-i18n="電話">電話</span></th>
                                 <th><span data-i18n="メール">メール</span></th>
-                                <th style="width: 88px;"></th>
+                                <th style="width: 150px;"></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -76,6 +76,10 @@
                                 <td>{{ customer.tel || customer.phone }}</td>
                                 <td>{{ customer.email }}</td>
                                 <td class="text-end text-nowrap">
+                                    <button type="button" class="btn btn-sm btn-outline-info py-0 me-1" title="顧客情報表示・編集"
+                                        @click.stop="openCustomerInfoFromSearch(customer)">
+                                        <i class="fa fa-info-circle me-1"></i><span data-i18n="詳細">詳細</span>
+                                    </button>
                                     <span v-if="isCustomerInList(customer.id)" class="badge bg-label-success"><span data-i18n="追加済み">追加済み</span></span>
                                     <span v-else class="badge bg-label-primary"><i class="fa fa-plus me-1"></i><span data-i18n="追加">追加</span></span>
                                 </td>
