@@ -6168,6 +6168,31 @@ class Project extends ApplicationModel {
         return ['rows' => $summaryRows, 'totals' => $totals];
     }
 
+    /**
+     * Short name of a user for the 担当者 column:
+     *  - Japanese name (kanji / kana): 姓, or 姓(結婚後の姓) like Helper::userDisplayName;
+     *  - otherwise (Vietnamese etc.): 名 (firstname), else the last word of realname.
+     */
+    private function revenueStatsManagerShortName(array $user) {
+        $realname = trim((string)($user['realname'] ?? ''));
+        $lastname = trim((string)($user['lastname'] ?? ''));
+        $firstname = trim((string)($user['firstname'] ?? ''));
+        $married = trim((string)($user['lastname_after_married'] ?? ''));
+
+        $isJapanese = preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}]/u', $lastname . $firstname . $realname) === 1;
+        if ($isJapanese) {
+            if ($lastname === '') {
+                return $realname;
+            }
+            return $married !== '' ? $lastname . '(' . $married . ')' : $lastname;
+        }
+        if ($firstname !== '') {
+            return $firstname;
+        }
+        $words = preg_split('/\s+/u', $realname, -1, PREG_SPLIT_NO_EMPTY);
+        return $words ? (string)end($words) : $lastname;
+    }
+
     private function enrichMonthlyRevenueStatsProjects(array &$projects) {
         if (empty($projects)) {
             return;
@@ -6195,7 +6220,8 @@ class Project extends ApplicationModel {
                 $teamNameMap[(int)$row['id']] = $row['name'] ?? '';
             }
         }
-        // 担当者 = the project's managers (project_members.role = 'manager').
+        // 担当者 = the project's managers (project_members.role = 'manager'), one short name each
+        // (see revenueStatsManagerShortName).
         $managerNameMap = [];
         $projectIds = [];
         foreach ($projects as $project) {
@@ -6206,17 +6232,24 @@ class Project extends ApplicationModel {
         }
         if (!empty($projectIds)) {
             $managerRows = $this->fetchAll(sprintf(
-                "SELECT pm.project_id, GROUP_CONCAT(DISTINCT u.realname ORDER BY u.realname SEPARATOR ', ') AS names
+                "SELECT DISTINCT pm.project_id, u.id AS user_id, u.realname, u.lastname, u.firstname, u.lastname_after_married
                  FROM %sproject_members pm
                  INNER JOIN %suser u ON pm.user_id = u.id
-                 WHERE pm.project_id IN (%s) AND pm.role = 'manager'
-                 GROUP BY pm.project_id",
+                 WHERE pm.project_id IN (%s) AND pm.role = 'manager'",
                 DB_PREFIX,
                 DB_PREFIX,
                 implode(',', array_keys($projectIds))
             ));
+            $namesByProject = [];
             foreach ($managerRows as $row) {
-                $managerNameMap[(int)$row['project_id']] = $row['names'] ?? '';
+                $name = $this->revenueStatsManagerShortName($row);
+                if ($name !== '') {
+                    $namesByProject[(int)$row['project_id']][] = $name;
+                }
+            }
+            foreach ($namesByProject as $pid => $names) {
+                sort($names, SORT_STRING);
+                $managerNameMap[$pid] = implode(', ', $names);
             }
         }
         foreach ($projects as &$project) {
