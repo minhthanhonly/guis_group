@@ -3782,6 +3782,13 @@ class Project extends ApplicationModel {
         if (isset($data['status']) && $data['status'] === 'completed') {
             $data['progress'] = 100;
         }
+        // 実終了日: the moment the project becomes 完了, when neither the form nor the record has one
+        if (isset($data['status']) && $data['status'] === 'completed'
+            && (!$old || $old['status'] !== 'completed')
+            && empty($data['actual_end_date']) && empty($old['actual_end_date'])) {
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
+            $nullDatetimeFields = array_values(array_diff(isset($nullDatetimeFields) ? $nullDatetimeFields : [], ['actual_end_date']));
+        }
 
         $this->applyProgressStartedAt($old, $data);
 
@@ -4998,6 +5005,10 @@ class Project extends ApplicationModel {
         // Auto-set progress to 100 if status is completed
         if ($status == 'completed') {
             $data['progress'] = 100;
+        }
+        // 実終了日: the moment the project becomes 完了, unless one is already stored
+        if ($status === 'completed' && $old && $old['status'] !== 'completed' && empty($old['actual_end_date'])) {
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
         }
 
         $this->applyEnergyDrawingShareFromPost($data, $old);
