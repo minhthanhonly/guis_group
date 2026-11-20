@@ -37,7 +37,7 @@
     };
     var ENERGY_EXTRA = { value: '対象外', label: '対象外', color: 'dark' };
     var LEGACY_TYPES = ['申請費', '設計費'];
-    // default blank lines per 見積/請求 when there is none (the old fixed fields)
+    // default blank 見積 lines when there is none (the old fixed fields); 請求 starts empty
     var DEFAULT_TYPES = ['設計費'];
     var DEFAULT_TYPES_ENERGY = ['申請費', '設計費'];
     // 省エネ for 東建 (東建コーポレーション, not 大東建託): 申請費 only
@@ -851,11 +851,13 @@
                 return item;
             },
             /**
-             * No line of this kind yet: show the default blank lines, like the old fixed fields
+             * No 見積 line yet: show the default blank lines, like the old fixed fields
              * (省エネ: 申請費 + 設計費, 東建 申請費 only; other departments: 設計費). Blank lines are not stored
              * (the server skips them), so an untouched project comes back with them again.
+             * 請求 starts empty (明細を追加 / 見積からコピー).
              */
             fillDefaultItems: function () {
+                if (this.kind === 'invoice') return;
                 if (!this.editable || !uses(this.project) || itemsOf(this.project, this.kind).length) return;
                 var self = this;
                 var types = !this.energy ? DEFAULT_TYPES

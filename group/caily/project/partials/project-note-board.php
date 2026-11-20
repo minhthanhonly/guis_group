@@ -47,7 +47,11 @@ $nbStandalone = !empty($noteBoardStandalone);
                     :aria-label="noteBoardFullscreen ? translateLabel('全画面表示を終了') : translateLabel('全画面表示')"
                     :aria-pressed="noteBoardFullscreen ? 'true' : 'false'"
                     @click="toggleNoteBoardFullscreen">
-                <i class="fa" :class="noteBoardFullscreen ? 'fa-compress' : 'fa-expand'"></i>
+                <i class="fa me-1" :class="noteBoardFullscreen ? 'fa-compress' : 'fa-expand'"></i>
+                <span>{{ noteBoardFullscreen ? translateLabel('全画面表示を終了') : translateLabel('全画面表示') }}</span>
+<?php if (!$nbStandalone): ?>
+                <kbd class="note-board-shortcut ms-1">F12</kbd>
+<?php endif; ?>
             </button>
         </div>
     </div>

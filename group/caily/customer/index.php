@@ -60,7 +60,20 @@ $view->heading('顧客情報');
                             </div>
                         </div>
                         <div class="table-responsive" id="customerTable">
-                            <table class="table table-hover">
+                            <table class="table table-hover customer-list-table">
+                                <colgroup>
+                                <col style="width: 180px">
+                                <col style="width: 90px">
+                                <col style="width: 110px">
+                                <col style="width: 110px">
+                                <col style="width: 100px">
+                                <col style="width: 120px">
+                                <col style="width: 120px">
+                                <col style="width: 200px">
+                                <col style="width: 140px">
+                                <col style="width: 180px">
+                                <col style="width: 110px">
+                                </colgroup>
                                 <thead>
                                     <tr>
                                         <th>会社名</th>
@@ -72,9 +85,9 @@ $view->heading('顧客情報');
                                         <th>電話番号</th>
                                         <th>携帯</th>
                                         <th>メールアドレス</th>
-                                        <th class="text-nowrap">自社担当部署名</th>
+                                        <th>自社担当部署名</th>
                                         <!-- <th>住所</th> -->
-                                        <th class="text-nowrap">メモ</th>
+                                        <th>メモ</th>
                                         <th>操作</th>
                                     </tr>
                                 </thead>
@@ -96,9 +109,9 @@ $view->heading('顧客情報');
                                         <td class="text-nowrap">{{ customer.tel }}</td>
                                         <td class="text-nowrap">{{ customer.phone }}</td>
                                         <td>{{ customer.email }}</td>
-                                        <td class="text-nowrap">{{ formatGuisDepartmentNames(customer) }}</td>
+                                        <td>{{ formatGuisDepartmentNames(customer) }}</td>
                                         <!-- <td>{{ customer.zip }} {{ customer.address1 }} {{ customer.address2 }}</td> -->
-                                        <td>{{ customer.memo }}</td>
+                                        <td><div class="customer-memo-cell" :title="customer.memo">{{ customer.memo }}</div></td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
                                                 <button class="btn btn-outline-primary" @click="editCustomer(customer)">
@@ -245,6 +258,29 @@ $view->heading('顧客情報');
 <style>
     #customerTable {
        font-size: 0.875rem;
+    }
+    /* 列幅を固定してデータ量で列が伸縮・崩れないようにする */
+    #customerTable .customer-list-table {
+        table-layout: fixed;
+        width: 100%;
+        min-width: 1460px;
+    }
+    #customerTable .customer-list-table th {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    #customerTable .customer-list-table td {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        vertical-align: middle;
+    }
+    #customerTable .customer-memo-cell {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        white-space: pre-line;
     }
 </style>
 <?php
