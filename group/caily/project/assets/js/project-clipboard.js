@@ -297,7 +297,7 @@
     async function fetchEnergyTask(projectId) {
         if (!global.axios || !projectId) return null;
         try {
-            var res = await global.axios.get('/api/index.php?model=task&method=list&project_id=' + encodeURIComponent(projectId));
+            var res = await global.axios.get('/api/index.php?model=task&method=list&include_subtasks=1&project_id=' + encodeURIComponent(projectId));
             var list = Array.isArray(res.data) ? res.data : (res.data && Array.isArray(res.data.data) ? res.data.data : []);
             for (var i = 0; i < list.length; i++) {
                 if (String(list[i].title || '').trim() === ENERGY_TASK_TITLE) {
