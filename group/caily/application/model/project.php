@@ -676,7 +676,7 @@ class Project extends ApplicationModel {
             'guis_nouki', 'guis_nouki_status', 'progress', 'amount', 'estimate_date', 'estimate_status',
             'invoice_date', 'invoice_status', 'invoice_amount', 'payment_note', 'project_order_type',
             'project_number', 'created_at', 'updated_at', 'teams', 'building_size', 'is_kadai',
-            'yotei',
+            'yotei', 'energy_materials',
             'estimate_application_date', 'estimate_design_date',
             'invoice_application_date', 'invoice_design_date',
         );

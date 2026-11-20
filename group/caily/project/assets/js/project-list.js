@@ -490,6 +490,8 @@ var projectTable;
     };
     /** Columns 省エネ departments do not use: never shown on that tab, not offered in 列の表示. */
     var ENERGY_HIDDEN_COLUMN_KEYS = { teams: true, members: true, caily_nouki: true, guis_nouki: true };
+    /** Columns only 省エネ departments use: never shown on any other tab, not offered in 列の表示 there. */
+    var ENERGY_ONLY_COLUMN_KEYS = { energy_materials: true };
 
     function getProjectBaseColumnLabel(col) {
         if (!col) return '';
@@ -503,8 +505,10 @@ var projectTable;
     function getProjectBaseColumnTitle(key, defaultLabel) {
         return getProjectBaseColumnLabel({ key: key, label: defaultLabel });
     }
+    /** Column hidden on the selected department tab: 省エネ-unused columns there, 省エネ-only columns elsewhere. */
     function isColumnHiddenForEnergyDepartment(columnKey) {
-        return !!ENERGY_HIDDEN_COLUMN_KEYS[columnKey] && isEnergyDepartmentSelectedForStatus();
+        if (isEnergyDepartmentSelectedForStatus()) return !!ENERGY_HIDDEN_COLUMN_KEYS[columnKey];
+        return !!ENERGY_ONLY_COLUMN_KEYS[columnKey];
     }
     /** A column the current user / department tab must not see (CAILY branch rules or 省エネ tab). */
     function isProjectColumnUnavailable(columnKey) {
@@ -3728,22 +3732,23 @@ var projectTable;
         { key: 'parent_features', label: '特徴', index: 18, defaultVisible: false },
         { key: 'parent_application_review_agency', label: '申請提出先の審査機関', index: 19, defaultVisible: false },
         { key: 'parent_bels_zeh_grade', label: 'BELSのZEH等級', index: 20, defaultVisible: false },
-        { key: 'yotei', label: '予定工程', index: 21, defaultVisible: true },
-        { key: 'start_date', label: '開始日', index: 22, defaultVisible: true },
-        { key: 'caily_nouki', label: 'CAILY納期', index: 23, defaultVisible: true },
-        { key: 'guis_nouki', label: 'GUIS納期', index: 24, defaultVisible: true },
-        { key: 'end_date', label: '期限日', index: 25, defaultVisible: true },
-        { key: 'other_dept_nouki', label: '他部署の納期', index: 26, defaultVisible: true },
-        { key: 'priority', label: '優先度', index: 27, defaultVisible: true },
-        { key: 'estimate_date', label: '見積日', index: 28, defaultVisible: false },
-        { key: 'amount', label: '見積金額', index: 29, defaultVisible: false },
-        { key: 'estimate_status', label: '見積状況', index: 30, defaultVisible: false },
-        { key: 'invoice_date', label: '請求日', index: 31, defaultVisible: false },
-        { key: 'invoice_status', label: '請求状況', index: 32, defaultVisible: false },
-        { key: 'invoice_amount', label: '請求金額', index: 33, defaultVisible: false },
-        { key: 'payment_note', label: '決済備考', index: 34, defaultVisible: false },
-        { key: 'customer_info', label: '顧客情報', index: 35, defaultVisible: true },
-        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 36, defaultVisible: false }
+        { key: 'energy_materials', label: '省エネ向け資料', index: 21, defaultVisible: false },
+        { key: 'yotei', label: '予定工程', index: 22, defaultVisible: true },
+        { key: 'start_date', label: '開始日', index: 23, defaultVisible: true },
+        { key: 'caily_nouki', label: 'CAILY納期', index: 24, defaultVisible: true },
+        { key: 'guis_nouki', label: 'GUIS納期', index: 25, defaultVisible: true },
+        { key: 'end_date', label: '期限日', index: 26, defaultVisible: true },
+        { key: 'other_dept_nouki', label: '他部署の納期', index: 27, defaultVisible: true },
+        { key: 'priority', label: '優先度', index: 28, defaultVisible: true },
+        { key: 'estimate_date', label: '見積日', index: 29, defaultVisible: false },
+        { key: 'amount', label: '見積金額', index: 30, defaultVisible: false },
+        { key: 'estimate_status', label: '見積状況', index: 31, defaultVisible: false },
+        { key: 'invoice_date', label: '請求日', index: 32, defaultVisible: false },
+        { key: 'invoice_status', label: '請求状況', index: 33, defaultVisible: false },
+        { key: 'invoice_amount', label: '請求金額', index: 34, defaultVisible: false },
+        { key: 'payment_note', label: '決済備考', index: 35, defaultVisible: false },
+        { key: 'customer_info', label: '顧客情報', index: 36, defaultVisible: true },
+        { key: 'parent_guis_receiver', label: 'GUIS 受付者', index: 37, defaultVisible: false }
     ];
     // Số cột base trước khi chèn các cột custom (bắt đầu từ CAILY納期)
     const BASE_CUSTOM_START_INDEX = COLUMN_DEFINITIONS.find(col => col.key === 'caily_nouki').index;
@@ -7122,6 +7127,39 @@ var projectTable;
                     title: '<span data-i18n="BELSのZEH等級">BELSのZEH等級</span>',
                     visible: false,
                     width: '140px'
+                },
+                {
+                    // 省エネ向け資料 (省エネ tab only). Choices the department keeps as composite custom
+                    // fields (意匠図 / 設備図 / 配置図) have their own columns and are left out here.
+                    name: 'energy_materials',
+                    data: 'energy_materials',
+                    render: function(data, type, row) {
+                        var ownColumns = {};
+                        (customFieldColumnDefinitions || []).forEach(function(c) {
+                            ownColumns[String(c.label || '').trim()] = true;
+                        });
+                        var memo = String((row && row.energy_materials_memo) || '').trim();
+                        var items = String(data || '').split(',').map(function(item) {
+                            return item.trim();
+                        }).filter(function(item) {
+                            return item && !ownColumns[item];
+                        });
+                        if (!items.length) {
+                            return (type === 'display') ? '<span class="text-muted">-</span>' : '';
+                        }
+                        if (type === 'sort' || type === 'type' || type === 'filter') {
+                            return items.map(function(item) {
+                                return (item === 'その他' && memo) ? item + '(' + memo + ')' : item;
+                            }).join(', ');
+                        }
+                        return items.map(function(item) {
+                            var text = (item === 'その他' && memo) ? item + '(' + memo + ')' : item;
+                            return '<span class="badge badge-outline-primary small me-1">' + escapeHtmlForNote(text) + '</span>';
+                        }).join('');
+                    },
+                    title: '<span data-i18n="省エネ向け資料">省エネ向け資料</span>',
+                    visible: false,
+                    width: '180px'
                 },
                 {
                     name: 'yotei',
