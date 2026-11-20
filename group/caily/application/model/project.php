@@ -7325,7 +7325,7 @@ class Project extends ApplicationModel {
         foreach ($items as $it) {
             $parts[] = ($it['kind'] === 'estimate' ? '見積' : '請求')
                 . ($it['item_type'] !== '' ? '[' . $it['item_type'] . ']' : '')
-                . ' ' . ($it['item_date'] !== '' ? str_replace('-', '/', substr($it['item_date'], 0, 10)) : '—')
+                . ' ' . ($it['item_date'] !== '' ? str_replace('-', '/', substr($it['item_date'], 0, 16)) : '—')
                 . ' ' . ($it['amount'] === null ? '—' : '¥' . number_format(floatval($it['amount'])))
                 . ' ' . $it['status'];
         }

@@ -345,7 +345,8 @@
 
     /**
      * Date input of one line: flatpickr (Y/m/d) when the page has it, native date otherwise.
-     * with-time (注文書): 'YYYY-MM-DD HH:mm:ss' in, 'YYYY-MM-DD HH:mm:00' out, shown as Y/m/d H:i.
+     * with-time (決済明細, 注文書): 'YYYY-MM-DD HH:mm:ss' in, 'YYYY-MM-DD HH:mm:00' out, shown as Y/m/d H:i;
+     * default-hour: the time a newly picked date gets.
      */
     var PaymentItemDateInput = {
         props: {
@@ -353,6 +354,7 @@
             disabled: Boolean,
             placeholder: { type: String, default: '' },
             withTime: Boolean,
+            defaultHour: { type: Number, default: 12 },
             closedMonths: { type: Array, default: function () { return []; } }
         },
         emits: ['update:modelValue', 'closed-date'],
@@ -377,6 +379,8 @@
                 dateFormat: this.fpFormat,
                 enableTime: this.withTime,
                 time_24hr: true,
+                defaultHour: this.defaultHour,
+                defaultMinute: 0,
                 allowInput: true,
                 disableMobile: true,
                 // 月次締め: days of closed months are greyed out; picking one is refused in emitValue
@@ -480,10 +484,10 @@
             // input order: 日付 → 種別 (row 1), 金額 → 状態 (row 2, status last)
             + '    <div class="pi-line-row">'
             + '      <div v-if="lineEditable(item)" class="input-group input-group-sm pi-date-group">'
-            + '        <payment-item-date-input :model-value="datePart(item)" :placeholder="t(dateLabel)" :closed-months="closedMonths" @update:model-value="setDate(item, $event)" @closed-date="refuseClosedDate($event)"></payment-item-date-input>'
-            + '        <button v-if="!item.item_date && !todayClosed" type="button" class="btn btn-outline-primary" :title="t(\'今日の日付を入力\')" @click="setToday(item)">{{ t("今日") }}</button>'
+            + '        <payment-item-date-input with-time :default-hour="18" :model-value="item.item_date || \'\'" :placeholder="t(dateLabel)" :closed-months="closedMonths" @update:model-value="setDate(item, $event)" @closed-date="refuseClosedDate($event)"></payment-item-date-input>'
+            + '        <button v-if="!item.item_date && !todayClosed" type="button" class="btn btn-outline-primary" :title="t(\'現在の日時を入力\')" @click="setToday(item)">{{ t("今日") }}</button>'
             + '      </div>'
-            + '      <div v-else class="pi-value">{{ item.item_date ? datePart(item).replace(/-/g, "/") : "—" }}</div>'
+            + '      <div v-else class="pi-value">{{ item.item_date ? dateTimePart(item).replace(/-/g, "/") : "—" }}</div>'
             + '      <input v-if="lineEditable(item)" type="text" class="form-control form-control-sm pi-type" :list="listId" maxlength="100"'
             + '             v-model="item.item_type" :placeholder="t(\'種別\')" @change="emitChange">'
             + '      <span v-else class="pi-type-badge" :class="{ \'pi-type-none\': !item.item_type }">{{ item.item_type || t("種別なし") }}</span>'
@@ -742,23 +746,26 @@
                 if (isWaived(value)) item.amount = 0;
                 this.emitChange();
             },
-            datePart: function (item) {
-                return item && item.item_date ? String(item.item_date).slice(0, 10) : '';
+            /** 'YYYY-MM-DD HH:mm' of a line ('' when none) */
+            dateTimePart: function (item) {
+                return item && item.item_date ? String(item.item_date).slice(0, 16) : '';
             },
-            /** Date picked in the UI; the stored time (e.g. 18:57 from the old 見積日) is kept. */
-            setDate: function (item, ymd) {
+            /** Date + time picked in the UI: 'YYYY-MM-DD HH:mm:00' (or a bare 'YYYY-MM-DD': the time is kept). */
+            setDate: function (item, value) {
                 var current = String(item.item_date || '');
                 var was = isLineComplete(item);
+                var v = String(value || '');
+                if (/^\d{4}-\d{2}-\d{2}$/.test(v)) v += current.slice(10) || ' 18:00:00';
                 // the date input already refuses closed months (and shows why); this guards other callers
-                if (ymd && ymd !== current.slice(0, 10) && this.closedMonths.indexOf(monthOf(ymd)) !== -1) return;
-                if (!ymd) {
+                if (v && v.slice(0, 7) !== current.slice(0, 7) && this.closedMonths.indexOf(monthOf(v)) !== -1) return;
+                if (!v) {
                     if (current === '') return;
                     item.item_date = '';
                     // like clearing the amount: a 発行済 line needs a date, or every save fails
                     if (normalizeStatus(item.status) === '発行済') item.status = '未発行';
                 } else {
-                    if (ymd === current.slice(0, 10)) return;
-                    item.item_date = ymd + current.slice(10);
+                    if (v.slice(0, 16) === current.slice(0, 16)) return;
+                    item.item_date = v;
                 }
                 this.emitChange();
                 this.askIssuedIfJustCompleted(item, was);
@@ -766,7 +773,7 @@
             setToday: function (item) {
                 var was = isLineComplete(item);
                 if (this.refuseClosedDate(todayServer())) return;
-                item.item_date = todayServer();
+                item.item_date = nowServer();
                 this.emitChange();
                 this.askIssuedIfJustCompleted(item, was);
             },
