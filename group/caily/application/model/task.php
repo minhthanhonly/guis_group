@@ -11,6 +11,29 @@ class Task extends ApplicationModel {
         return in_array((string) $status, self::VALID_STATUSES, true);
     }
 
+    /**
+     * 完了日時 (actual_end_date): set to now when the task enters 'completed'.
+     * Returns true when the task leaves 'completed', so the caller clears it with clearTaskCompletedAt()
+     * (query_update cannot write NULL).
+     */
+    private function applyTaskCompletedAt(array &$data, $newStatus, $oldStatus) {
+        $newStatus = (string) $newStatus;
+        $oldStatus = (string) $oldStatus;
+        if ($newStatus === 'completed' && $oldStatus !== 'completed') {
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
+            return false;
+        }
+        return $oldStatus === 'completed' && $newStatus !== 'completed';
+    }
+
+    private function clearTaskCompletedAt($taskId) {
+        $this->query(sprintf(
+            "UPDATE %s SET actual_end_date = NULL WHERE id = %d",
+            DB_PREFIX . 'tasks',
+            intval($taskId)
+        ));
+    }
+
     function __construct() {
         $this->table = DB_PREFIX . 'tasks';
         $this->schema = array(
@@ -797,6 +820,7 @@ class Task extends ApplicationModel {
                 'created_at' => $now,
                 'updated_at' => $now,
             );
+            $this->applyTaskCompletedAt($data, $data['status'], '');
 
             if (!empty($data['assigned_to'])) {
                 $assignedIds = array_filter(array_map('intval', explode(',', (string) $data['assigned_to'])));
@@ -1379,6 +1403,7 @@ class Task extends ApplicationModel {
 
         $this->applyDefaultTaskKindToData($data);
         $this->applyDefaultTaskDrawingLinkToData($data);
+        $this->applyTaskCompletedAt($data, $data['status'], '');
 
         // Nếu user được phân công chưa là thành viên dự án thì tự động thêm vào dự án (role = member)
         if (!empty($data['assigned_to'])) {
@@ -1541,8 +1566,12 @@ class Task extends ApplicationModel {
             $data['parent_id'] = ($_POST['parent_id'] !== '' && $_POST['parent_id'] !== null) ? intval($_POST['parent_id']) : (isset($old['parent_id']) ? $old['parent_id'] : null);
         }
         $this->applyDefaultTaskDrawingLinkToData($data);
+        $clearCompletedAt = $this->applyTaskCompletedAt($data, $status, isset($old['status']) ? $old['status'] : '');
         $result = $this->query_update($data, ['id' => $id]);
-        
+        if ($result >= 0 && $clearCompletedAt) {
+            $this->clearTaskCompletedAt($id);
+        }
+
         // if ($result && $task['parent_id']) {
         //     $this->updateParentTaskProgress($task['parent_id']);
         // }
@@ -1792,11 +1821,16 @@ class Task extends ApplicationModel {
         if ($status === 'completed') {
             $data['progress'] = 100;
         }
+        $clearCompletedAt = $this->applyTaskCompletedAt($data, $status, isset($old['status']) ? $old['status'] : '');
 
         $result = $this->query_update($data, ['id' => $id]);
 
         if ($result < 0) {
             return ['status' => 'error', 'message' => 'Update failed'];
+        }
+        if ($clearCompletedAt) {
+            $this->clearTaskCompletedAt($id);
+            $data['actual_end_date'] = null;
         }
 
         $this->logTaskAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
