@@ -108,6 +108,43 @@
         }
     }
 
+    // ---- time zone: stored in JST; shown / typed in the language's zone (Vietnamese: Asia/Ho_Chi_Minh),
+    // like the other project dates (business-document-modal-mixin.js). Changing the language reloads the page.
+    var SERVER_TZ = 'Asia/Tokyo';
+    var VIETNAM_TZ = 'Asia/Ho_Chi_Minh';
+
+    function displayTz() {
+        var lang = typeof window.getAppLanguage === 'function' ? window.getAppLanguage()
+            : (window.i18next && window.i18next.language) || '';
+        return String(lang || '').toLowerCase().indexOf('vi') === 0 ? VIETNAM_TZ : SERVER_TZ;
+    }
+
+    /** 'YYYY-MM-DD HH:mm' from one zone to the other ('' / unparsable / no moment-timezone: unchanged) */
+    function convertDateTime(v, fromTz, toTz) {
+        var s = String(v || '').slice(0, 16);
+        if (!s || fromTz === toTz || !window.moment || typeof window.moment.tz !== 'function') return s;
+        var m = window.moment.tz(s, 'YYYY-MM-DD HH:mm', true, fromTz);
+        return m.isValid() ? m.tz(toTz).format('YYYY-MM-DD HH:mm') : s;
+    }
+
+    /** stored 'YYYY-MM-DD HH:mm[:ss]' (JST) → 'YYYY-MM-DD HH:mm' in the display zone */
+    function serverToDisplay(v) {
+        return convertDateTime(v, SERVER_TZ, displayTz());
+    }
+
+    /** 'YYYY-MM-DD HH:mm' in the display zone → 'YYYY-MM-DD HH:mm:00' (JST) */
+    function displayToServer(v) {
+        var s = convertDateTime(v, displayTz(), SERVER_TZ);
+        return s ? s + ':00' : '';
+    }
+
+    /** The display-zone hour of 'hour:00' JST (a newly picked date gets 18:00 JST) */
+    function displayHourOfServerHour(hour) {
+        var s = serverToDisplay('2000-01-01 ' + (hour < 10 ? '0' : '') + hour + ':00');
+        var h = parseInt(s.slice(11, 13), 10);
+        return isNaN(h) ? hour : h;
+    }
+
     /** Now in the server's time zone (JST), 'YYYY-MM-DD HH:mm:00' — when a 注文書 is checked. */
     function nowServer() {
         try {
@@ -345,8 +382,9 @@
 
     /**
      * Date input of one line: flatpickr (Y/m/d) when the page has it, native date otherwise.
-     * with-time (決済明細, 注文書): 'YYYY-MM-DD HH:mm:ss' in, 'YYYY-MM-DD HH:mm:00' out, shown as Y/m/d H:i;
-     * default-hour: the time a newly picked date gets.
+     * with-time (決済明細, 注文書): 'YYYY-MM-DD HH:mm:ss' (JST) in, 'YYYY-MM-DD HH:mm:00' (JST) out,
+     * shown / typed as Y/m/d H:i in the language's time zone;
+     * default-hour: the time (JST) a newly picked date gets.
      */
     var PaymentItemDateInput = {
         props: {
@@ -379,7 +417,7 @@
                 dateFormat: this.fpFormat,
                 enableTime: this.withTime,
                 time_24hr: true,
-                defaultHour: this.defaultHour,
+                defaultHour: this.withTime ? displayHourOfServerHour(this.defaultHour) : this.defaultHour,
                 defaultMinute: 0,
                 allowInput: true,
                 disableMobile: true,
@@ -419,21 +457,21 @@
             }
         },
         methods: {
-            /** 'YYYY-MM-DD[ HH:mm[:ss]]' → 'YYYY/MM/DD[ HH:mm]' */
+            /** 'YYYY-MM-DD[ HH:mm[:ss]]' → 'YYYY/MM/DD[ HH:mm]' (with time: in the display zone) */
             toDisplay: function (v) {
                 if (!v) return '';
                 var s = String(v);
-                return (this.withTime ? s.slice(0, 16) : s.slice(0, 10)).replace(/-/g, '/');
+                return (this.withTime ? serverToDisplay(s) : s.slice(0, 10)).replace(/-/g, '/');
             },
-            /** flatpickr / native value → 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:00' */
+            /** flatpickr / native value → 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:00' (JST) */
             fromDisplay: function (str) {
                 if (!str) return '';
                 var s = String(str).replace(/\//g, '-').replace('T', ' ');
-                return this.withTime ? s.slice(0, 16) + ':00' : s.slice(0, 10);
+                return this.withTime ? displayToServer(s.slice(0, 16)) : s.slice(0, 10);
             },
             toNative: function (v) {
                 if (!v) return '';
-                return this.withTime ? String(v).slice(0, 16).replace(' ', 'T') : String(v).slice(0, 10);
+                return this.withTime ? serverToDisplay(v).replace(' ', 'T') : String(v).slice(0, 10);
             },
             onNativeChange: function (e) {
                 if (this._fp) {
@@ -746,9 +784,9 @@
                 if (isWaived(value)) item.amount = 0;
                 this.emitChange();
             },
-            /** 'YYYY-MM-DD HH:mm' of a line ('' when none) */
+            /** 'YYYY-MM-DD HH:mm' of a line in the display zone ('' when none) */
             dateTimePart: function (item) {
-                return item && item.item_date ? String(item.item_date).slice(0, 16) : '';
+                return item && item.item_date ? serverToDisplay(item.item_date) : '';
             },
             /** Date + time picked in the UI: 'YYYY-MM-DD HH:mm:00' (or a bare 'YYYY-MM-DD': the time is kept). */
             setDate: function (item, value) {
@@ -924,7 +962,7 @@
                 return isEmpty(v) ? '' : String(v);
             },
             displayOf: function (type) {
-                return this.valueOf(type).slice(0, 16).replace(/-/g, '/');
+                return serverToDisplay(this.valueOf(type)).replace(/-/g, '/');
             },
             /** Refuse unchecking while a 請求 of this 種別 is 発行済; true when it was refused. */
             refuseUncheck: function (type) {
