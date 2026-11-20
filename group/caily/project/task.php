@@ -503,6 +503,10 @@ if($_SESSION['show_project'] == 0){
                                     </li>
                                 </ul>
                             </div>
+                            <div v-if="task.status === 'completed' && task.actual_end_date" class="task-completed-at text-muted text-center mt-1"
+                                 :title="$t('完了日時') + ': ' + formatDateTime(task.actual_end_date)">
+                                {{ formatTaskDueDate(task.actual_end_date) }}
+                            </div>
                         </div>
                     </div>
 
@@ -1032,6 +1036,16 @@ if($_SESSION['show_project'] == 0){
     }
 }
 .task-col-workload { justify-content: flex-start; }
+.task-list .task-row {
+    font-size: 1.0833rem; /* 13px */
+}
+.task-list .task-row .btn-sm {
+    font-size: 0.9375rem;
+}
+.task-completed-at {
+    font-size: 0.8333rem; /* 10px */
+    line-height: 1.2;
+}
 .inline-assignee-placeholder {
     color: var(--bs-primary);
     text-decoration: underline;

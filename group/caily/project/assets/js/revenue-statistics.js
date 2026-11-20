@@ -1,7 +1,7 @@
 (function() {
     const STORAGE_KEY_MONTH = 'revenue_statistics_selected_month';
     const STORAGE_KEY_DEPT = 'revenue_statistics_selected_department';
-    const VALID_SUB_TABS = ['summary', 'detail', 'backlog', 'estimated', 'cancelled'];
+    const VALID_SUB_TABS = ['summary', 'detail', 'backlog', 'estimated', 'unquoted', 'cancelled'];
 
     /** 種別 (決済明細 tag) arrives entity-encoded like every API string; show it as plain text. */
     function decodeTypeText(s) {
@@ -137,213 +137,26 @@
         return typeof translateText === 'function' ? translateText(key) : key;
     }
 
-    function excelDash(val) {
-        if (val == null || val === '') return '—';
-        return val;
-    }
-
     function excelAmount(val) {
         const n = Number(val);
         return Number.isFinite(n) ? Math.round(n) : 0;
     }
 
-    function sanitizeExcelFilenamePart(text) {
-        return String(text || '')
-            .replace(/[\\/:*?"<>|]/g, '_')
-            .replace(/\s+/g, '_')
-            .substring(0, 80) || 'export';
-    }
-
-    function withEnergyFeeTypeColumn(headers, mapRow, insertAfterTeam) {
-        return {
-            headers: headers,
-            mapRow: mapRow,
-            energyHeaders: function() {
-                const h = headers.slice();
-                const idx = typeof insertAfterTeam === 'number' ? insertAfterTeam : 9;
-                h.splice(idx, 0, '種類');
-                return h;
-            },
-            energyMapRow: function(p, vm) {
-                const row = mapRow(p, vm);
-                const idx = typeof insertAfterTeam === 'number' ? insertAfterTeam : 9;
-                row.splice(idx, 0, excelDash(p.fee_type));
-                return row;
-            }
-        };
-    }
-
-    const REVENUE_EXPORT_DETAIL = withEnergyFeeTypeColumn(
-        ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '請求日', '請求金額', '決済備考'],
-        function(p, vm) {
-            return [
-                p.id,
-                excelDash(p.name),
-                excelDash(p.branch_name),
-                excelDash(p.parent_construction_number),
-                excelDash(p.tantou),
-                excelDash(p.project_order_type),
-                excelDash(p.parent_scale),
-                vm.formatDate(p.end_date),
-                vm.formatProjectTeams(p),
-                vm.formatDate(p.invoice_date),
-                excelAmount(p.invoice_amount),
-                excelDash(p.payment_note)
-            ];
-        },
-        9
-    );
-
-    const REVENUE_EXPORT_ESTIMATED = withEnergyFeeTypeColumn(
-        ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '見積日', '見積状況', '決済備考'],
-        function(p, vm) {
-            return [
-                p.id,
-                excelDash(p.name),
-                excelDash(p.branch_name),
-                excelDash(p.parent_construction_number),
-                excelDash(p.tantou),
-                excelDash(p.project_order_type),
-                excelDash(p.parent_scale),
-                vm.formatDate(p.end_date),
-                vm.formatProjectTeams(p),
-                excelAmount(p.amount),
-                vm.formatDate(p.estimate_date),
-                excelDash(p.estimate_status),
-                excelDash(p.payment_note)
-            ];
-        },
-        9
-    );
-
-    const REVENUE_EXPORT_CONFIG = {
-        detail: {
-            groupsComputed: 'invoicedGroups',
-            sheetName: '請求済み案件',
-            filenamePrefix: '請求済み案件',
-            headers: REVENUE_EXPORT_DETAIL.headers,
-            mapRow: REVENUE_EXPORT_DETAIL.mapRow,
-            energyHeaders: REVENUE_EXPORT_DETAIL.energyHeaders,
-            energyMapRow: REVENUE_EXPORT_DETAIL.energyMapRow
-        },
-        backlog: (function() {
-            const base = withEnergyFeeTypeColumn(
-                ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '完了日', '決済備考'],
-                function(p, vm) {
-                    return [
-                        p.id,
-                        excelDash(p.name),
-                        excelDash(p.branch_name),
-                        excelDash(p.parent_construction_number),
-                        excelDash(p.tantou),
-                        excelDash(p.project_order_type),
-                        excelDash(p.parent_scale),
-                        vm.formatDate(p.end_date),
-                        vm.formatProjectTeams(p),
-                        excelAmount(p.amount),
-                        vm.formatDate(p.actual_end_date),
-                        excelDash(p.payment_note)
-                    ];
-                },
-                9
-            );
-            return {
-                groupsComputed: 'backlogGroups',
-                sheetName: '未請求案件',
-                filenamePrefix: '未請求案件_請求待ち_完了',
-                headers: base.headers,
-                mapRow: base.mapRow,
-                energyHeaders: function() {
-                    const h = base.energyHeaders();
-                    // After 種類 + 見積金額, insert 請求状況 before 完了日
-                    const completeIdx = h.indexOf('完了日');
-                    if (completeIdx >= 0) {
-                        h.splice(completeIdx, 0, '請求状況');
-                    }
-                    return h;
-                },
-                energyMapRow: function(p, vm) {
-                    const row = base.energyMapRow(p, vm);
-                    // base energy row: ...チーム, 種類, 見積金額, 完了日, 決済備考
-                    // insert 請求状況 before 完了日 (index length-2)
-                    row.splice(row.length - 2, 0, excelDash(p.invoice_status));
-                    return row;
-                }
-            };
-        })(),
-        estimated: {
-            groupsComputed: 'estimatedGroups',
-            sheetName: '見積済未完了',
-            filenamePrefix: '見積済未完了',
-            headers: REVENUE_EXPORT_ESTIMATED.headers,
-            mapRow: REVENUE_EXPORT_ESTIMATED.mapRow,
-            energyHeaders: REVENUE_EXPORT_ESTIMATED.energyHeaders,
-            energyMapRow: REVENUE_EXPORT_ESTIMATED.energyMapRow
-        },
-        cancelled: (function() {
-            const base = withEnergyFeeTypeColumn(
-                ['ID', '案件名', '支店名', '工事番号', '担当', '受注形態', '規模', '期限日', 'チーム', '見積金額', '決済備考'],
-                function(p, vm) {
-                    return [
-                        p.id,
-                        excelDash(p.name),
-                        excelDash(p.branch_name),
-                        excelDash(p.parent_construction_number),
-                        excelDash(p.tantou),
-                        excelDash(p.project_order_type),
-                        excelDash(p.parent_scale),
-                        vm.formatDate(p.end_date),
-                        vm.formatProjectTeams(p),
-                        excelAmount(p.amount),
-                        excelDash(p.payment_note)
-                    ];
-                },
-                9
-            );
-            return {
-                groupsComputed: 'cancelledGroups',
-                sheetName: 'キャンセル',
-                filenamePrefix: 'キャンセル案件',
-                headers: base.headers,
-                mapRow: base.mapRow,
-                energyHeaders: base.energyHeaders,
-                energyMapRow: base.energyMapRow
-            };
-        })()
-    };
-
-    function buildRevenueStatsExcelRows(groups, config, vm, title, useEnergyFeeType) {
-        const rows = [];
-        const rawHeaders = (useEnergyFeeType && typeof config.energyHeaders === 'function')
-            ? config.energyHeaders()
-            : (config.headers || []);
-        const headers = rawHeaders.map(translateLabel);
-        const mapRowFn = (useEnergyFeeType && typeof config.energyMapRow === 'function')
-            ? config.energyMapRow
-            : config.mapRow;
-        const companyRowNumbers = [];
-        const headerRowNumbers = [];
-
-        if (title) {
-            rows.push([title]);
+    /**
+     * 無償 label of a row for a tab, from the status of that tab's kind
+     * (請求済み → 請求; 未請求 → 請求 or 見積; the others → 見積). '' when not 無償.
+     */
+    function revenueFreeLabel(p, tabKey) {
+        if (!p) return '';
+        if (tabKey === 'detail') {
+            return p.invoice_status === '無償' ? '無償' : '';
         }
-
-        (groups || []).forEach(function(group) {
-            rows.push([]);
-            rows.push([group.company_name]);
-            companyRowNumbers.push(rows.length);
-            rows.push(headers.slice());
-            headerRowNumbers.push(rows.length);
-            (group.projects || []).forEach(function(p) {
-                rows.push(mapRowFn(p, vm));
-            });
-        });
-
-        return {
-            rows: rows,
-            companyRowNumbers: companyRowNumbers,
-            headerRowNumbers: headerRowNumbers
-        };
+        if (tabKey === 'backlog') {
+            if (p.invoice_status === '無償') return '請求無償';
+            if (p.estimate_status === '無償') return '見積無償';
+            return '';
+        }
+        return p.estimate_status === '無償' ? '無償' : '';
     }
 
     function buildRevenueExportTitle(tabKey, vm) {
@@ -351,7 +164,7 @@
             case 'detail':
                 return translateLabel('請求済み案件') + '（' + vm.monthLabel + '）';
             case 'backlog':
-                return translateLabel('未請求案件(請求待ち・完了)') + '（' + translateLabel('すべての期間') + '）';
+                return translateLabel('未請求案件(請求待ち)') + '（' + translateLabel('すべての期間') + '）';
             case 'estimated': {
                 const period = vm.showEstimatedAllTime
                     ? translateLabel('すべての期間')
@@ -364,277 +177,331 @@
                     : vm.monthLabel;
                 return translateLabel('キャンセル案件') + '（' + period + '）';
             }
+            case 'unquoted':
+                return translateLabel('未見積案件') + '（' + translateLabel('すべての期間') + '）';
             default:
                 return '';
         }
     }
 
-    function findElementsByLocalName(root, localName) {
-        const result = [];
-        const nodes = root.getElementsByTagName('*');
-        for (let i = 0; i < nodes.length; i++) {
-            if (nodes[i].localName === localName) {
-                result.push(nodes[i]);
-            }
-        }
-        return result;
+    // ===== 月末締め Excel: one workbook, one sheet per tab (styled after the 月末締め workbooks) =====
+    const XL_FONT = 'ＭＳ Ｐゴシック';
+    const XL_BLUE = 'FF00B0F0';
+    const XL_PINK = 'FFFFCCFF';
+    const XL_YELLOW = 'FFFFFFCC';
+    const XL_GRAY = 'FFD9D9D9';
+    const XL_AMOUNT_FMT = '"¥"#,##0_);[Red]\\("¥"#,##0\\)';
+    const XL_PERCENT_FMT = '0.0%';
+    const XL_THIN = { style: 'thin' };
+    const XL_BORDER = { top: XL_THIN, left: XL_THIN, bottom: XL_THIN, right: XL_THIN };
+
+    /** List sheets in tab order: tab key, sheet name, groups computed. */
+    const REVENUE_EXCEL_LIST_SHEETS = [
+        { tab: 'detail', sheet: '請求済み案件', groups: 'invoicedGroups' },
+        { tab: 'backlog', sheet: '未請求案件', groups: 'backlogGroups' },
+        { tab: 'estimated', sheet: '見積済案件', groups: 'estimatedGroups' },
+        { tab: 'unquoted', sheet: '未見積', groups: 'unquotedGroups' },
+        { tab: 'cancelled', sheet: 'キャンセル案件', groups: 'cancelledGroups' }
+    ];
+
+    function xlStyle(cell, opts) {
+        opts = opts || {};
+        cell.font = Object.assign({ name: XL_FONT, size: opts.size || 10, bold: !!opts.bold }, opts.font || {});
+        cell.border = XL_BORDER;
+        cell.alignment = { vertical: 'middle', horizontal: opts.align || 'left', wrapText: !!opts.wrap };
+        if (opts.fill) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: opts.fill } };
+        if (opts.numFmt) cell.numFmt = opts.numFmt;
     }
 
-    function findFirstElementByLocalName(root, localName) {
-        const nodes = root.getElementsByTagName('*');
-        for (let i = 0; i < nodes.length; i++) {
-            if (nodes[i].localName === localName) {
-                return nodes[i];
-            }
+    /** Merge r1:c1–r2:c2 (when more than one cell), set the value and style every cell of the range. */
+    function xlMerge(ws, r1, c1, r2, c2, value, opts) {
+        if (r1 !== r2 || c1 !== c2) ws.mergeCells(r1, c1, r2, c2);
+        ws.getCell(r1, c1).value = value;
+        for (let r = r1; r <= r2; r++) {
+            for (let c = c1; c <= c2; c++) xlStyle(ws.getCell(r, c), opts);
         }
-        return null;
     }
 
-    function columnIndexToLetter(index) {
-        let n = index + 1;
-        let letters = '';
+    function xlColLetter(col) {
+        let n = col;
+        let s = '';
         while (n > 0) {
             const rem = (n - 1) % 26;
-            letters = String.fromCharCode(65 + rem) + letters;
+            s = String.fromCharCode(65 + rem) + s;
             n = Math.floor((n - 1) / 26);
         }
-        return letters;
+        return s;
     }
 
-    function getCellDisplayWidth(value) {
-        if (value == null || value === '') return 0;
-        const text = String(value);
-        let width = 0;
-        for (let i = 0; i < text.length; i++) {
-            const code = text.charCodeAt(i);
-            if (code > 255 || (code >= 0x3000 && code <= 0x9fff) || (code >= 0xff00 && code <= 0xffef)) {
-                width += 2;
-            } else {
-                width += 1;
-            }
-        }
-        return width;
+    function xlText(val) {
+        const s = val == null ? '' : String(val).trim();
+        return s === '' ? '—' : s;
     }
 
-    function computeColumnWidths(rows, colCount, skipRows) {
-        const maxWidths = new Array(colCount).fill(0);
-        const start = Math.max(0, skipRows || 0);
-        for (let r = start; r < rows.length; r++) {
-            const row = rows[r] || [];
-            for (let c = 0; c < colCount; c++) {
-                const width = getCellDisplayWidth(row[c]);
-                if (width > maxWidths[c]) maxWidths[c] = width;
-            }
+    /** Columns of a list sheet (after 会社 / NO), per tab; exactly one has amount: true. */
+    function revenueExcelColumns(tabKey, vm) {
+        const energy = !!vm.showEnergyFeeType;
+        // 省エネ: 担当者 (the project's managers) instead of 担当, and no チーム.
+        const energyDept = !!vm.isEnergyDepartment;
+        const cols = [
+            { h: 'ID', w: 7, align: 'center', v: function(p) { return Number(p.id) || p.id; } },
+            { h: '支店名', w: 14, v: function(p) { return xlText(p.branch_name); } },
+            { h: '案件名', w: 32, link: true, v: function(p) { return xlText(p.name); } },
+            { h: '工事番号', w: 12, v: function(p) { return xlText(p.parent_construction_number); } },
+            energyDept
+                ? { h: '担当者', w: 16, v: function(p) { return xlText(p.manager_names); } }
+                : { h: '担当', w: 8, align: 'center', v: function(p) { return xlText(p.tantou); } },
+            { h: '受注形態', w: 10, v: function(p) { return xlText(p.project_order_type); } },
+            { h: '規模', w: 10, v: function(p) { return xlText(p.parent_scale); } },
+            { h: '期限日', w: 11, align: 'center', v: function(p) { return vm.formatDate(p.end_date); } }
+        ];
+        if (!energyDept) {
+            cols.push({ h: 'チーム', w: 14, v: function(p) { return vm.formatProjectTeams(p); } });
         }
-        return maxWidths.map(function(width) {
-            return Math.min(48, Math.max(5, width + 2));
-        });
-    }
-
-    function applyRevenueStatsExcelSheetFormatting(stylesXml, sheetXml, options) {
-        const parser = new DOMParser();
-        const styleDoc = parser.parseFromString(stylesXml, 'application/xml');
-        const sheetDoc = parser.parseFromString(sheetXml, 'application/xml');
-        if (styleDoc.getElementsByTagName('parsererror').length || sheetDoc.getElementsByTagName('parsererror').length) {
-            return { stylesXml: stylesXml, sheetXml: sheetXml };
+        if (energy) {
+            cols.push({ h: '種類', w: 9, align: 'center', v: function(p) { return xlText(p.fee_type); } });
         }
-
-        const bordersEl = findFirstElementByLocalName(styleDoc.documentElement, 'borders');
-        const cellXfsEl = findFirstElementByLocalName(styleDoc.documentElement, 'cellXfs');
-        const sheetRoot = sheetDoc.documentElement;
-        const sheetNs = sheetRoot.namespaceURI;
-        const startRow = options && Number.isFinite(options.borderStartRow) ? options.borderStartRow : 1;
-        const boldRows = {};
-        (options && options.boldRows ? options.boldRows : []).forEach(function(rowNum) {
-            boldRows[rowNum] = true;
-        });
-
-        if (options && options.columnWidths && options.columnWidths.length) {
-            let colsEl = findFirstElementByLocalName(sheetRoot, 'cols');
-            if (!colsEl) {
-                colsEl = sheetDoc.createElementNS(sheetNs, 'cols');
-                const sheetData = findFirstElementByLocalName(sheetRoot, 'sheetData');
-                if (sheetData) {
-                    sheetRoot.insertBefore(colsEl, sheetData);
-                } else {
-                    sheetRoot.insertBefore(colsEl, sheetRoot.firstChild);
-                }
-            } else {
-                while (colsEl.firstChild) {
-                    colsEl.removeChild(colsEl.firstChild);
-                }
-            }
-
-            options.columnWidths.forEach(function(width, index) {
-                const col = sheetDoc.createElementNS(sheetNs, 'col');
-                const colNum = index + 1;
-                col.setAttribute('min', String(colNum));
-                col.setAttribute('max', String(colNum));
-                col.setAttribute('width', String(Math.round(width * 10) / 10));
-                col.setAttribute('customWidth', '1');
-                colsEl.appendChild(col);
-            });
-        }
-
-        if (options && options.titleMerge && options.titleMerge.colCount > 1) {
-            const mergeRow = options.titleMerge.row || 1;
-            const endCol = columnIndexToLetter(options.titleMerge.colCount - 1);
-            const mergeRef = 'A' + mergeRow + ':' + endCol + mergeRow;
-            let mergeCellsEl = findFirstElementByLocalName(sheetRoot, 'mergeCells');
-            if (!mergeCellsEl) {
-                mergeCellsEl = sheetDoc.createElementNS(sheetNs, 'mergeCells');
-                sheetRoot.appendChild(mergeCellsEl);
-            }
-            const mergeCell = sheetDoc.createElementNS(sheetNs, 'mergeCell');
-            mergeCell.setAttribute('ref', mergeRef);
-            mergeCellsEl.appendChild(mergeCell);
-            mergeCellsEl.setAttribute('count', String(findElementsByLocalName(mergeCellsEl, 'mergeCell').length));
-        }
-
-        if (!bordersEl || !cellXfsEl) {
-            const serializer = new XMLSerializer();
-            return {
-                stylesXml: serializer.serializeToString(styleDoc),
-                sheetXml: serializer.serializeToString(sheetDoc)
-            };
-        }
-
-        const ns = bordersEl.namespaceURI;
-        const styleCache = {};
-
-        function createBorderSide(sideName) {
-            const side = styleDoc.createElementNS(ns, sideName);
-            side.setAttribute('style', 'thin');
-            const color = styleDoc.createElementNS(ns, 'color');
-            color.setAttribute('auto', '1');
-            side.appendChild(color);
-            return side;
-        }
-
-        function getStyledCellXf(styleIndex, useBorder, useBold) {
-            styleIndex = parseInt(styleIndex || '0', 10);
-            const cacheKey = [styleIndex, useBorder ? 1 : 0, useBold ? 1 : 0].join(':');
-            if (styleCache[cacheKey] !== undefined) {
-                return styleCache[cacheKey];
-            }
-
-            const xfs = findElementsByLocalName(cellXfsEl, 'xf');
-            const baseXf = xfs[styleIndex] || xfs[0];
-            if (!baseXf) {
-                styleCache[cacheKey] = 0;
-                return 0;
-            }
-
-            let borderId = baseXf.getAttribute('borderId') || '0';
-            if (useBorder) {
-                const border = styleDoc.createElementNS(ns, 'border');
-                ['left', 'right', 'top', 'bottom'].forEach(function(sideName) {
-                    border.appendChild(createBorderSide(sideName));
-                });
-                bordersEl.appendChild(border);
-
-                borderId = String(findElementsByLocalName(bordersEl, 'border').length - 1);
-                bordersEl.setAttribute('count', String(parseInt(borderId, 10) + 1));
-            }
-
-            let fontId = baseXf.getAttribute('fontId') || '0';
-            if (useBold) {
-                const fontsEl = findFirstElementByLocalName(styleDoc.documentElement, 'fonts');
-                const baseFonts = findElementsByLocalName(fontsEl, 'font');
-                const baseFont = baseFonts[parseInt(fontId, 10)] || baseFonts[0];
-                if (fontsEl && baseFont) {
-                    const boldFont = baseFont.cloneNode(true);
-                    if (!findFirstElementByLocalName(boldFont, 'b')) {
-                        boldFont.appendChild(styleDoc.createElementNS(ns, 'b'));
-                    }
-                    fontsEl.appendChild(boldFont);
-                    fontId = String(findElementsByLocalName(fontsEl, 'font').length - 1);
-                    fontsEl.setAttribute('count', String(parseInt(fontId, 10) + 1));
-                }
-            }
-
-            const xf = styleDoc.createElementNS(ns, 'xf');
-            xf.setAttribute('numFmtId', baseXf.getAttribute('numFmtId') || '0');
-            xf.setAttribute('fontId', fontId);
-            xf.setAttribute('fillId', baseXf.getAttribute('fillId') || '0');
-            xf.setAttribute('borderId', borderId);
-            xf.setAttribute('xfId', baseXf.getAttribute('xfId') || '0');
-            if (baseXf.getAttribute('applyFont') || useBold) xf.setAttribute('applyFont', '1');
-            if (baseXf.getAttribute('applyFill')) xf.setAttribute('applyFill', '1');
-            if (baseXf.getAttribute('applyNumberFormat')) xf.setAttribute('applyNumberFormat', '1');
-            if (baseXf.getAttribute('applyAlignment')) xf.setAttribute('applyAlignment', '1');
-            if (useBorder) xf.setAttribute('applyBorder', '1');
-            cellXfsEl.appendChild(xf);
-
-            const newIndex = findElementsByLocalName(cellXfsEl, 'xf').length - 1;
-            cellXfsEl.setAttribute('count', String(newIndex + 1));
-            styleCache[cacheKey] = newIndex;
-            return newIndex;
-        }
-
-        findElementsByLocalName(sheetRoot, 'row').forEach(function(rowEl) {
-            const rowNum = parseInt(rowEl.getAttribute('r') || '0', 10);
-            findElementsByLocalName(rowEl, 'c').forEach(function(cellEl) {
-                const useBorder = !!rowNum && rowNum >= startRow;
-                const useBold = !!boldRows[rowNum];
-                if (!useBorder && !useBold) return;
-                cellEl.setAttribute('s', String(getStyledCellXf(cellEl.getAttribute('s'), useBorder, useBold)));
-            });
-        });
-
-        const serializer = new XMLSerializer();
-        return {
-            stylesXml: serializer.serializeToString(styleDoc),
-            sheetXml: serializer.serializeToString(sheetDoc)
+        const amount = function(field) {
+            return { h: field === 'invoice_amount' ? '請求金額' : '見積金額', w: 14, amount: true, field: field };
         };
+        const note = { h: '決済備考', w: 30, v: function(p) { return xlText(p.payment_note); } };
+        switch (tabKey) {
+            case 'detail':
+                cols.push({ h: '請求日', w: 11, align: 'center', v: function(p) { return vm.formatDate(p.invoice_date); } });
+                cols.push(amount('invoice_amount'));
+                break;
+            case 'backlog':
+                cols.push({ h: '状態', w: 10, align: 'center', v: function(p) { return xlText(p.status_label); } });
+                cols.push(amount('amount'));
+                if (energy) cols.push({ h: '請求状況', w: 10, align: 'center', v: function(p) { return xlText(p.invoice_status); } });
+                cols.push({ h: '完了日', w: 11, align: 'center', v: function(p) { return vm.formatDate(p.actual_end_date); } });
+                break;
+            case 'estimated':
+                cols.push(amount('amount'));
+                cols.push({ h: '見積日', w: 11, align: 'center', v: function(p) { return vm.formatDate(p.estimate_date); } });
+                cols.push({ h: '見積状況', w: 10, align: 'center', v: function(p) { return xlText(p.estimate_status); } });
+                break;
+            case 'unquoted':
+                cols.push({ h: '状態', w: 10, align: 'center', v: function(p) { return xlText(p.status_label); } });
+                cols.push(amount('amount'));
+                cols.push({ h: '見積状況', w: 10, align: 'center', v: function(p) { return xlText(p.estimate_status); } });
+                break;
+            case 'cancelled':
+                cols.push(amount('amount'));
+                break;
+        }
+        cols.push(note);
+        return cols;
     }
 
-    function findWorksheetZipPath(zip) {
-        return Object.keys(zip.files).find(function(name) {
-            return /^xl\/worksheets\/sheet\d+\.xml$/.test(name);
-        }) || 'xl/worksheets/sheet1.xml';
-    }
+    /**
+     * One list sheet: title band (部署 / 月 / 一覧名), header row, then per company a block whose
+     * 会社 cell is merged down column B, closed by a 合計 row (SUM formula); a 総合計 row at the end.
+     */
+    function addRevenueListSheet(workbook, def, vm, detailBaseUrl) {
+        const ws = workbook.addWorksheet(translateLabel(def.sheet).substring(0, 31), {
+            views: [{ state: 'frozen', ySplit: 4, showGridLines: false }],
+            pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, printTitlesRow: '4:4' }
+        });
+        const cols = revenueExcelColumns(def.tab, vm);
+        const firstCol = 4; // A: margin, B: 会社, C: NO
+        const lastCol = firstCol + cols.length - 1;
+        const amountIdx = cols.findIndex(function(c) { return c.amount; });
+        const amountField = cols[amountIdx].field;
+        const amountCol = firstCol + amountIdx;
+        const amountLetter = xlColLetter(amountCol);
 
-    function downloadWorkbookWithBorders(workbook, filename, formatOptions) {
-        if (typeof JSZip === 'undefined') {
-            XLSX.writeFile(workbook, filename);
+        ws.getColumn(1).width = 2;
+        ws.getColumn(2).width = 14;
+        ws.getColumn(3).width = 5;
+        cols.forEach(function(c, i) { ws.getColumn(firstCol + i).width = c.w; });
+
+        const titleOpts = { size: 14, bold: true, fill: XL_BLUE, align: 'center' };
+        xlMerge(ws, 2, 2, 3, 4, (vm.selectedDepartment && vm.selectedDepartment.name) || '', titleOpts);
+        xlMerge(ws, 2, 5, 3, 6, translateLabel('月末締め'), titleOpts);
+        xlMerge(ws, 2, 7, 3, lastCol, buildRevenueExportTitle(def.tab, vm) + vm.tantouFilterSuffix(),
+            Object.assign({}, titleOpts, { align: 'left' }));
+
+        const headOpts = { fill: XL_BLUE, align: 'center', bold: true };
+        xlMerge(ws, 4, 2, 4, 2, translateLabel('会社'), headOpts);
+        xlMerge(ws, 4, 3, 4, 3, 'NO', headOpts);
+        cols.forEach(function(c, i) { xlMerge(ws, 4, firstCol + i, 4, firstCol + i, translateLabel(c.h), headOpts); });
+
+        const groups = vm[def.groups] || [];
+        let row = 5;
+        if (!groups.length) {
+            xlMerge(ws, row, 2, row, lastCol, translateLabel('データがありません'),
+                { align: 'center', font: { color: { argb: 'FF808080' } } });
             return;
         }
 
-        const data = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
-        JSZip.loadAsync(data).then(function(zip) {
-            const styleFile = 'xl/styles.xml';
-            const sheetFile = findWorksheetZipPath(zip);
-            if (!zip.file(styleFile) || !zip.file(sheetFile)) {
-                XLSX.writeFile(workbook, filename);
-                return null;
-            }
-            return Promise.all([
-                zip.file(styleFile).async('string'),
-                zip.file(sheetFile).async('string')
-            ]).then(function(parts) {
-                const updated = applyRevenueStatsExcelSheetFormatting(parts[0], parts[1], formatOptions || {});
-                zip.file(styleFile, updated.stylesXml);
-                zip.file(sheetFile, updated.sheetXml);
-                return zip.generateAsync({
-                    type: 'blob',
-                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        const subtotalCells = [];
+        let projectCount = 0;
+        groups.forEach(function(group) {
+            const start = row;
+            (group.projects || []).forEach(function(p, idx) {
+                ws.getCell(row, 3).value = idx + 1;
+                xlStyle(ws.getCell(row, 3), { align: 'center' });
+                cols.forEach(function(c, i) {
+                    const cell = ws.getCell(row, firstCol + i);
+                    if (c.amount) {
+                        const free = revenueFreeLabel(p, def.tab);
+                        cell.value = free ? translateLabel(free) : excelAmount(p[c.field]);
+                        xlStyle(cell, free ? { align: 'center' } : { align: 'right', numFmt: XL_AMOUNT_FMT });
+                        return;
+                    }
+                    const val = c.v(p);
+                    if (c.link && detailBaseUrl && p.id) {
+                        cell.value = { text: String(val), hyperlink: detailBaseUrl + encodeURIComponent(p.id) };
+                        xlStyle(cell, { font: { color: { argb: 'FF0563C1' }, underline: true } });
+                    } else {
+                        cell.value = val;
+                        xlStyle(cell, { align: c.align });
+                    }
                 });
-            }).then(function(blob) {
-                if (!blob) return;
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = filename;
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                URL.revokeObjectURL(url);
+                row++;
+                projectCount++;
             });
-        }).catch(function(err) {
-            console.error('downloadWorkbookWithBorders:', err);
-            XLSX.writeFile(workbook, filename);
+            const end = row - 1;
+            xlMerge(ws, start, 2, end, 2, group.company_name, { fill: XL_BLUE, align: 'center', wrap: true });
+
+            // 合計 row: label over 会社 … the column before the amount, SUM under the amount.
+            const label = translateLabel('合計') + '（' + group.projects.length + translateLabel('件') + '）';
+            xlMerge(ws, row, 2, row, amountCol - 1, label, { fill: XL_BLUE, align: 'right', bold: true });
+            const sumCell = ws.getCell(row, amountCol);
+            sumCell.value = {
+                formula: 'SUM(' + amountLetter + start + ':' + amountLetter + end + ')',
+                result: Number(group.totals[amountField]) || 0
+            };
+            xlStyle(sumCell, { align: 'right', bold: true, numFmt: XL_AMOUNT_FMT });
+            for (let c = amountCol + 1; c <= lastCol; c++) xlStyle(ws.getCell(row, c), {});
+            subtotalCells.push(amountLetter + row);
+            row++;
         });
+
+        row++;
+        const grandTotal = groups.reduce(function(sum, g) { return sum + (Number(g.totals[amountField]) || 0); }, 0);
+        const grandLabel = translateLabel('総合計') + '（' + projectCount + translateLabel('件') + '）';
+        xlMerge(ws, row, 2, row, amountCol - 1, grandLabel, { fill: XL_YELLOW, align: 'right', bold: true });
+        const grandCell = ws.getCell(row, amountCol);
+        grandCell.value = { formula: subtotalCells.join('+'), result: grandTotal };
+        xlStyle(grandCell, { fill: XL_YELLOW, align: 'right', bold: true, numFmt: XL_AMOUNT_FMT });
+        for (let c = amountCol + 1; c <= lastCol; c++) xlStyle(ws.getCell(row, c), { fill: XL_YELLOW });
+    }
+
+    /**
+     * まとめ sheet: 目標 / 実績 / 達成率 (月間・累計), then 請求 per company, 未請求分,
+     * and (except 省エネ) 担当別 CAILY / GUIS blocks — like the まとめ sheet of the 月末締め workbooks.
+     */
+    function addRevenueSummarySheet(workbook, vm) {
+        const ws = workbook.addWorksheet(translateLabel('まとめ'), {
+            views: [{ showGridLines: false }],
+            pageSetup: { paperSize: 9, orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 }
+        });
+        [2, 14, 18, 14, 16, 7, 7, 16].forEach(function(w, i) { ws.getColumn(i + 1).width = w; });
+
+        const t = vm.targetSummary || {};
+        ws.getCell('B2').value = (vm.selectedDepartment && vm.selectedDepartment.name) || '';
+        ws.getCell('B2').font = { name: XL_FONT, size: 14, bold: true };
+        ws.getCell('E2').value = vm.monthLabel + translateLabel('分');
+        ws.getCell('E2').font = { name: XL_FONT, size: 14, bold: true };
+
+        const pinkLabel = { fill: XL_PINK, align: 'center' };
+        const pinkAmount = { fill: XL_PINK, align: 'right', numFmt: XL_AMOUNT_FMT };
+        [
+            { r: 3, tl: '月間目標売上', tv: t.monthly_target_sales, al: '月間実績売上', av: t.monthly_actual_sales },
+            { r: 4, tl: '累計目標売上', tv: t.cumulative_target_sales, al: '累計実績売上', av: t.cumulative_actual_sales }
+        ].forEach(function(x) {
+            xlMerge(ws, x.r, 2, x.r, 2, translateLabel(x.tl), pinkLabel);
+            xlMerge(ws, x.r, 3, x.r, 3, excelAmount(x.tv), pinkAmount);
+            xlMerge(ws, x.r, 4, x.r, 4, translateLabel(x.al), pinkLabel);
+            xlMerge(ws, x.r, 5, x.r, 5, excelAmount(x.av), pinkAmount);
+            xlMerge(ws, x.r, 6, x.r, 7, translateLabel('達成率'), pinkLabel);
+            const target = Number(x.tv) || 0;
+            xlMerge(ws, x.r, 8, x.r, 8, {
+                formula: 'IF(C' + x.r + '=0,0,E' + x.r + '/C' + x.r + ')',
+                result: target > 0 ? (Number(x.av) || 0) / target : 0
+            }, { fill: XL_PINK, align: 'center', numFmt: XL_PERCENT_FMT, bold: true });
+            ws.getRow(x.r).height = 22;
+        });
+
+        const head = { fill: XL_YELLOW, align: 'center', bold: true };
+        xlMerge(ws, 6, 2, 6, 4, '', head);
+        xlMerge(ws, 6, 5, 6, 5, translateLabel('請求金額'), head);
+        xlMerge(ws, 6, 6, 6, 7, translateLabel('請求件数'), head);
+        xlMerge(ws, 6, 8, 6, 8, translateLabel('合計'), head);
+
+        let row = 7;
+        function block(label, rows) {
+            const list = rows && rows.length ? rows : [{ company_name: '—', invoice_amount: 0, invoice_count: 0 }];
+            const start = row;
+            list.forEach(function(r) {
+                xlMerge(ws, row, 3, row, 4, r.company_name, { fill: XL_BLUE, align: 'center' });
+                xlMerge(ws, row, 5, row, 5, excelAmount(r.invoice_amount), { align: 'right', numFmt: XL_AMOUNT_FMT });
+                xlMerge(ws, row, 6, row, 7, Number(r.invoice_count) || 0, { align: 'center' });
+                xlStyle(ws.getCell(row, 8), { align: 'right', numFmt: XL_AMOUNT_FMT });
+                row++;
+            });
+            const end = row - 1;
+            xlMerge(ws, start, 2, end, 2, label, { fill: XL_YELLOW, align: 'center', wrap: true, bold: true });
+            const total = list.reduce(function(s, r) { return s + (Number(r.invoice_amount) || 0); }, 0);
+            const totalCell = ws.getCell(end, 8);
+            totalCell.value = { formula: 'SUM(E' + start + ':E' + end + ')', result: total };
+            xlStyle(totalCell, { align: 'right', bold: true, numFmt: XL_AMOUNT_FMT });
+        }
+
+        block(translateLabel('請求'), vm.summaryByCompany);
+
+        const unbilled = vm.summaryUnbilledTotals || {};
+        xlMerge(ws, row, 2, row, 4, translateLabel('未請求分'), { fill: XL_GRAY, align: 'center', bold: true });
+        xlMerge(ws, row, 5, row, 5, excelAmount(unbilled.amount), { align: 'right', numFmt: XL_AMOUNT_FMT });
+        xlMerge(ws, row, 6, row, 7, Number(unbilled.project_count) || 0, { align: 'center' });
+        xlMerge(ws, row, 8, row, 8, { formula: 'E' + row, result: excelAmount(unbilled.amount) },
+            { align: 'right', numFmt: XL_AMOUNT_FMT, bold: true });
+        row++;
+
+        if (!vm.isEnergyDepartment) {
+            (vm.summaryTantouBlocks || []).forEach(function(b) {
+                block(b.tantou + '\n' + translateLabel('担当別'), b.rows);
+            });
+        }
+
+        row++;
+        ws.getCell(row, 2).value = translateLabel('出力日時') + '：' + new Date().toLocaleString('ja-JP');
+        ws.getCell(row, 2).font = { name: XL_FONT, size: 9, color: { argb: 'FF808080' } };
+    }
+
+    /** 2026年11月分_「部署」_月末締め.xlsx (the naming rule of the 月末締め workbooks). */
+    function buildRevenueWorkbookFilename(vm) {
+        const parts = String(vm.selectedMonth || '').split('-');
+        const monthText = parts.length === 2
+            ? (parts[0] + '年' + parseInt(parts[1], 10) + '月分')
+            : String(vm.selectedMonth || '');
+        const dept = (vm.selectedDepartment && vm.selectedDepartment.name) || 'department';
+        return (monthText + '_「' + dept + '」_月末締め.xlsx').replace(/[\\/:*?"<>|]/g, '_');
+    }
+
+    async function exportRevenueWorkbook(vm) {
+        const workbook = new ExcelJS.Workbook();
+        workbook.created = new Date();
+        const detailBaseUrl = window.location.origin
+            + window.location.pathname.replace(/[^/]*$/, '') + 'detail.php?id=';
+
+        addRevenueSummarySheet(workbook, vm);
+        REVENUE_EXCEL_LIST_SHEETS.forEach(function(def) {
+            addRevenueListSheet(workbook, def, vm, detailBaseUrl);
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = buildRevenueWorkbookFilename(vm);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
     }
 
     const app = Vue.createApp({
@@ -676,6 +543,8 @@
                 invoicedProjects: [],
                 completedUninvoiced: [],
                 cancelledProjects: [],
+                unquotedProjects: [],
+                exportingExcel: false,
                 isEnergyDepartment: false
             };
         },
@@ -739,6 +608,15 @@
             cancelledGroups() {
                 return groupProjectsByCompany(this.filteredCancelledProjects, ['amount']);
             },
+            unquotedGroups() {
+                return groupProjectsByCompany(this.filteredUnquotedProjects, ['amount']);
+            },
+            filteredUnquotedProjects() {
+                return this.filterProjectsByTantou(this.unquotedProjects);
+            },
+            unquotedAmountTotal() {
+                return sumProjectField(this.filteredUnquotedProjects, 'amount');
+            },
             filteredInvoicedProjects() {
                 return this.filterProjectsByTantou(this.invoicedProjects);
             },
@@ -778,7 +656,10 @@
                 ];
             },
             summaryUnbilledTotals() {
-                const projects = this.completedUninvoiced || [];
+                // 無償 rows leave nothing to invoice: not counted as 未請求.
+                const projects = (this.completedUninvoiced || []).filter(function(p) {
+                    return !revenueFreeLabel(p, 'backlog');
+                });
                 const companySet = {};
                 let amount = 0;
                 projects.forEach(function(p) {
@@ -813,6 +694,9 @@
                 if (feeType === '申請費') return 'bg-label-primary';
                 if (feeType === '設計費') return 'bg-label-info';
                 return 'bg-label-secondary';
+            },
+            freeLabel(p, tabKey) {
+                return revenueFreeLabel(p, tabKey);
             },
             formatCurrency(val) {
                 const n = Number(val);
@@ -1113,61 +997,33 @@
                 this.showCancelledEstimatedOnly = !!checked;
                 this.loadStats();
             },
-            getExportPeriodLabel(tabKey) {
-                if (tabKey === 'backlog') {
-                    return translateLabel('すべての期間');
-                }
-                if (tabKey === 'estimated' && this.showEstimatedAllTime) {
-                    return translateLabel('すべての期間');
-                }
-                if (tabKey === 'cancelled' && this.showCancelledAllTime) {
-                    return translateLabel('すべての期間');
-                }
-                return this.monthLabel || this.selectedMonth || '';
+            /** Suffix of the list titles when the CAILY / GUIS filter hides one side. */
+            tantouFilterSuffix() {
+                if (this.showTantouCaily && this.showTantouGuis) return '';
+                if (this.showTantouCaily) return '［CAILY］';
+                if (this.showTantouGuis) return '［GUIS］';
+                return '';
             },
-            exportTabToExcel(tabKey) {
-                if (typeof XLSX === 'undefined') {
-                    const msg = translateLabel('Excel出力に失敗しました。');
-                    if (typeof Notiflix !== 'undefined') {
-                        Notiflix.Notify.failure(msg);
-                    } else {
-                        alert(msg);
-                    }
+            /** 月末締め Excel: one workbook, one sheet per tab. */
+            async exportAllToExcel() {
+                if (this.exportingExcel) return;
+                const failMsg = translateLabel('Excel出力に失敗しました。');
+                const fail = function() {
+                    if (typeof Notiflix !== 'undefined') Notiflix.Notify.failure(failMsg); else alert(failMsg);
+                };
+                if (typeof ExcelJS === 'undefined') {
+                    fail();
                     return;
                 }
-
-                const config = REVENUE_EXPORT_CONFIG[tabKey];
-                if (!config) return;
-
-                const groups = this[config.groupsComputed] || [];
-                if (!groups.length) return;
-
-                const title = buildRevenueExportTitle(tabKey, this);
-                const useEnergy = this.showEnergyFeeType
-                    && (tabKey === 'detail' || tabKey === 'estimated' || tabKey === 'backlog' || tabKey === 'cancelled');
-                const exportData = buildRevenueStatsExcelRows(groups, config, this, title, useEnergy);
-                const rows = exportData.rows;
-                const colCount = useEnergy && typeof config.energyHeaders === 'function'
-                    ? config.energyHeaders().length
-                    : (config.headers || []).length;
-                const worksheet = XLSX.utils.aoa_to_sheet(rows);
-                const workbook = XLSX.utils.book_new();
-                const sheetName = String(config.sheetName || 'Sheet1').substring(0, 31);
-                XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-
-                const deptName = (this.selectedDepartment && this.selectedDepartment.name) || 'department';
-                const period = this.getExportPeriodLabel(tabKey);
-                const filename = sanitizeExcelFilenamePart(deptName)
-                    + '_' + sanitizeExcelFilenamePart(config.filenamePrefix)
-                    + '_' + sanitizeExcelFilenamePart(period)
-                    + '.xlsx';
-
-                downloadWorkbookWithBorders(workbook, filename, {
-                    borderStartRow: title ? 2 : 1,
-                    titleMerge: title ? { row: 1, colCount: colCount } : null,
-                    columnWidths: computeColumnWidths(rows, colCount, title ? 1 : 0),
-                    boldRows: exportData.companyRowNumbers.concat(exportData.headerRowNumbers)
-                });
+                this.exportingExcel = true;
+                try {
+                    await exportRevenueWorkbook(this);
+                } catch (err) {
+                    console.error('exportAllToExcel:', err);
+                    fail();
+                } finally {
+                    this.exportingExcel = false;
+                }
             },
             formatClosingAt(value) {
                 const s = String(value || '');
@@ -1240,6 +1096,7 @@
                         this.invoicedProjects = [];
                         this.completedUninvoiced = [];
                         this.cancelledProjects = [];
+                        this.unquotedProjects = [];
                         this.isEnergyDepartment = false;
                         this.monthClosing = null;
                         return;
@@ -1267,6 +1124,7 @@
                     this.invoicedProjects = data.invoiced_projects || [];
                     this.completedUninvoiced = data.completed_uninvoiced || [];
                     this.cancelledProjects = data.cancelled_projects || [];
+                    this.unquotedProjects = data.unquoted_projects || [];
                     // Always keep the default month window + current selection so the
                     // select never goes blank when a department has few/no invoice months.
                     this.refreshAvailableMonths(

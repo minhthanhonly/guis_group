@@ -2764,8 +2764,7 @@ const vueApp = createApp({
         async copyProjectInfoToClipboard() {
             if (!this.project || !window.ProjectClipboard) return;
             try {
-                const text = window.ProjectClipboard.buildText(this.project);
-                const copied = await window.ProjectClipboard.copy(text);
+                const copied = await window.ProjectClipboard.copyProject(this.project);
                 if (!copied) throw new Error('copy failed');
                 const msg = (typeof translateText === 'function')
                     ? translateText('案件情報をコピーしました')

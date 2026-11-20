@@ -345,6 +345,20 @@ class Project extends ApplicationModel {
             . " ELSE COALESCE(NULLIF(TRIM(pp_c.company_name), ''), NULLIF(TRIM(pp.company_name), '')) END";
     }
 
+    /** Effective 会社名 of one project (same rule as the 案件一覧 column), '' when none. */
+    private function getEffectiveCompanyNameForProject($projectId) {
+        $row = $this->fetchOne(sprintf(
+            "SELECT %s AS effective_company_name
+            FROM {$this->table} p
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+            " . $this->getProjectListCustomerJoinSql() . "
+            WHERE p.id = %d",
+            $this->sqlEffectiveCompanyName(),
+            intval($projectId)
+        ));
+        return $row && isset($row['effective_company_name']) ? (string)$row['effective_company_name'] : '';
+    }
+
     private function sqlEffectiveBranchName() {
         return "CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.branch), '')"
             . " ELSE COALESCE(NULLIF(TRIM(pp_c.branch), ''), NULLIF(TRIM(pp.branch_name), '')) END";
@@ -662,7 +676,7 @@ class Project extends ApplicationModel {
             'guis_nouki', 'guis_nouki_status', 'progress', 'amount', 'estimate_date', 'estimate_status',
             'invoice_date', 'invoice_status', 'invoice_amount', 'payment_note', 'project_order_type',
             'project_number', 'created_at', 'updated_at', 'teams', 'building_size', 'is_kadai',
-            'yotei',
+            'yotei', 'energy_materials',
             'estimate_application_date', 'estimate_design_date',
             'invoice_application_date', 'invoice_design_date',
         );
@@ -3768,6 +3782,13 @@ class Project extends ApplicationModel {
         if (isset($data['status']) && $data['status'] === 'completed') {
             $data['progress'] = 100;
         }
+        // 実終了日: the moment the project becomes 完了, when neither the form nor the record has one
+        if (isset($data['status']) && $data['status'] === 'completed'
+            && (!$old || $old['status'] !== 'completed')
+            && empty($data['actual_end_date']) && empty($old['actual_end_date'])) {
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
+            $nullDatetimeFields = array_values(array_diff(isset($nullDatetimeFields) ? $nullDatetimeFields : [], ['actual_end_date']));
+        }
 
         $this->applyProgressStartedAt($old, $data);
 
@@ -4621,6 +4642,8 @@ class Project extends ApplicationModel {
             $project['yotei'] = $this->parseYoteiField(isset($project['yotei']) ? $project['yotei'] : null);
             $project['has_energy_sibling'] = $this->hasEnergySavingSiblingProject($project) ? 1 : 0;
             $project['task_weight_mode'] = $this->isTaskWeightModeProject($projectId) ? 1 : 0;
+            // 会社名 as on 案件一覧: the project's own customer, else the 建物's (決済情報 default lines)
+            $project['effective_company_name'] = $this->getEffectiveCompanyNameForProject($projectId);
             $project['payment_items'] = $this->getPaymentItemsForProject($project);
             $project['payment_item_types'] = $this->getPaymentItemTypeSuggestions();
             $project['closed_months'] = $this->getClosedMonthsForDepartment($project['department_id'] ?? 0);
@@ -4982,6 +5005,10 @@ class Project extends ApplicationModel {
         // Auto-set progress to 100 if status is completed
         if ($status == 'completed') {
             $data['progress'] = 100;
+        }
+        // 実終了日: the moment the project becomes 完了, unless one is already stored
+        if ($status === 'completed' && $old && $old['status'] !== 'completed' && empty($old['actual_end_date'])) {
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
         }
 
         $this->applyEnergyDrawingShareFromPost($data, $old);
@@ -6141,6 +6168,31 @@ class Project extends ApplicationModel {
         return ['rows' => $summaryRows, 'totals' => $totals];
     }
 
+    /**
+     * Short name of a user for the 担当者 column:
+     *  - Japanese name (kanji / kana): 姓, or 姓(結婚後の姓) like Helper::userDisplayName;
+     *  - otherwise (Vietnamese etc.): 名 (firstname), else the last word of realname.
+     */
+    private function revenueStatsManagerShortName(array $user) {
+        $realname = trim((string)($user['realname'] ?? ''));
+        $lastname = trim((string)($user['lastname'] ?? ''));
+        $firstname = trim((string)($user['firstname'] ?? ''));
+        $married = trim((string)($user['lastname_after_married'] ?? ''));
+
+        $isJapanese = preg_match('/[\p{Han}\p{Hiragana}\p{Katakana}]/u', $lastname . $firstname . $realname) === 1;
+        if ($isJapanese) {
+            if ($lastname === '') {
+                return $realname;
+            }
+            return $married !== '' ? $lastname . '(' . $married . ')' : $lastname;
+        }
+        if ($firstname !== '') {
+            return $firstname;
+        }
+        $words = preg_split('/\s+/u', $realname, -1, PREG_SPLIT_NO_EMPTY);
+        return $words ? (string)end($words) : $lastname;
+    }
+
     private function enrichMonthlyRevenueStatsProjects(array &$projects) {
         if (empty($projects)) {
             return;
@@ -6168,7 +6220,40 @@ class Project extends ApplicationModel {
                 $teamNameMap[(int)$row['id']] = $row['name'] ?? '';
             }
         }
+        // 担当者 = the project's managers (project_members.role = 'manager'), one short name each
+        // (see revenueStatsManagerShortName).
+        $managerNameMap = [];
+        $projectIds = [];
+        foreach ($projects as $project) {
+            $pid = (int)($project['id'] ?? 0);
+            if ($pid > 0) {
+                $projectIds[$pid] = true;
+            }
+        }
+        if (!empty($projectIds)) {
+            $managerRows = $this->fetchAll(sprintf(
+                "SELECT DISTINCT pm.project_id, u.id AS user_id, u.realname, u.lastname, u.firstname, u.lastname_after_married
+                 FROM %sproject_members pm
+                 INNER JOIN %suser u ON pm.user_id = u.id
+                 WHERE pm.project_id IN (%s) AND pm.role = 'manager'",
+                DB_PREFIX,
+                DB_PREFIX,
+                implode(',', array_keys($projectIds))
+            ));
+            $namesByProject = [];
+            foreach ($managerRows as $row) {
+                $name = $this->revenueStatsManagerShortName($row);
+                if ($name !== '') {
+                    $namesByProject[(int)$row['project_id']][] = $name;
+                }
+            }
+            foreach ($namesByProject as $pid => $names) {
+                sort($names, SORT_STRING);
+                $managerNameMap[$pid] = implode(', ', $names);
+            }
+        }
         foreach ($projects as &$project) {
+            $project['manager_names'] = $managerNameMap[(int)($project['id'] ?? 0)] ?? '';
             $typeParts = array_values(array_filter(array_map('trim', [
                 $project['parent_type1'] ?? '',
                 $project['parent_type2'] ?? '',
@@ -6271,7 +6356,7 @@ class Project extends ApplicationModel {
         $summaryCaily = $this->buildMonthlyRevenueSummaryByCompany($baseFrom, $baseWhere, $companyLabel, $monthEsc, $lines, 'CAILY');
         $summaryGuis = $this->buildMonthlyRevenueSummaryByCompany($baseFrom, $baseWhere, $companyLabel, $monthEsc, $lines, 'GUIS');
 
-        // 請求済み: one row per 発行済 請求 line dated in the month.
+        // 請求済み: one row per 発行済 (or 無償, amount 0) 請求 line dated in the month.
         // amount / estimate_status: the 見積 lines of the same 種別.
         $invoicedQuery = "SELECT
                 {$projectColumns},
@@ -6290,12 +6375,12 @@ class Project extends ApplicationModel {
             LEFT JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate' AND ge.item_type = l.item_type
             WHERE {$baseWhere}
               AND l.kind = 'invoice'
-              AND l.status = '発行済'
+              AND l.status IN ('発行済', '無償')
               AND l.item_date IS NOT NULL
               AND DATE_FORMAT(l.item_date, '%Y-%m') = '{$monthEsc}'
             ORDER BY invoice_date ASC, company_name ASC, p.id ASC, fee_type ASC, row_key ASC";
 
-        // 見積済 (未完了): one row per dated 見積 line whose 種別 is not invoiced yet
+        // 見積済 (未完了): one row per dated 発行済 (or 無償) 見積 line whose 種別 is not invoiced yet
         // (no 請求 line of that 種別, or they are still 未発行 / 請求準備).
         $estimatedMonthFilter = $estimatedAllTime ? '' : "AND DATE_FORMAT(l.item_date, '%Y-%m') = '{$monthEsc}'";
         $estimatedQuery = "SELECT
@@ -6313,6 +6398,7 @@ class Project extends ApplicationModel {
             WHERE {$baseWhere}
               AND p.status NOT IN ('waiting_invoice', 'completed', 'cancelled', 'deleted')
               AND l.kind = 'estimate'
+              AND l.status IN ('発行済', '無償')
               AND l.item_date IS NOT NULL
               AND COALESCE(gi.group_status, '未発行') IN ('未発行', '請求準備')
               {$estimatedMonthFilter}
@@ -6324,11 +6410,14 @@ class Project extends ApplicationModel {
         $invoicedProjects = $this->fetchAll($invoicedQuery);
         $this->enrichMonthlyRevenueStatsProjects($invoicedProjects);
 
-        // 未請求 (請求待ち・完了): per 種別 with a 発行済 見積 whose 請求 is not done.
-        // amount = 発行済 見積 − 発行済 請求 of that 種別 (what is left to invoice).
-        $backlogQuery = "SELECT
+        // 未請求 (請求待ち): per 種別 whose 請求 is not done (未発行 / 請求準備; all 無償 = done), 請求待ち projects only
+        // (完了 counts as already invoiced: old data often has no 請求 entered).
+        //  - 種別 with a 発行済 (or all 無償) 見積: amount = 発行済 見積 − 発行済 請求 (0 when 見積 無償);
+        //  - 請求 種別 with no 見積 of that 種別: amount = the 請求 not issued yet.
+        $backlogQuery = "SELECT * FROM (SELECT
                 {$projectColumns},
-                GREATEST(ge.issued_amount - COALESCE(gi.issued_amount, 0), 0) AS amount,
+                CASE WHEN ge.group_status = '無償' THEN 0
+                     ELSE GREATEST(ge.issued_amount - COALESCE(gi.issued_amount, 0), 0) END AS amount,
                 COALESCE(gi.total_amount, 0) AS invoice_amount,
                 ge.group_status AS estimate_status,
                 COALESCE(gi.group_status, '未発行') AS invoice_status,
@@ -6338,19 +6427,41 @@ class Project extends ApplicationModel {
             INNER JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate'
             LEFT JOIN {$groups} gi ON gi.project_id = p.id AND gi.kind = 'invoice' AND gi.item_type = ge.item_type
             WHERE {$baseWhere}
-              AND p.status IN ('waiting_invoice', 'completed')
-              AND ge.issued_count > 0
+              AND p.status = 'waiting_invoice'
+              AND (ge.issued_count > 0 OR ge.group_status = '無償')
               AND COALESCE(gi.group_status, '未発行') IN ('未発行', '請求準備')
-            ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC, fee_type ASC";
+            UNION ALL
+            SELECT
+                {$projectColumns},
+                GREATEST(gi.total_amount - gi.issued_amount, 0) AS amount,
+                gi.total_amount AS invoice_amount,
+                NULL AS estimate_status,
+                gi.group_status AS invoice_status,
+                gi.item_type AS fee_type,
+                CONCAT(p.id, ':', gi.item_type) AS row_key
+            {$baseFrom}
+            INNER JOIN {$groups} gi ON gi.project_id = p.id AND gi.kind = 'invoice'
+            LEFT JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate' AND ge.item_type = gi.item_type
+            WHERE {$baseWhere}
+              AND p.status = 'waiting_invoice'
+              AND ge.project_id IS NULL
+              AND gi.group_status IN ('未発行', '請求準備')
+            ) b
+            ORDER BY (b.end_date IS NULL) ASC, b.end_date ASC, b.company_name ASC, b.id ASC, b.fee_type ASC";
         $completedUninvoiced = $this->fetchAll($backlogQuery);
         $this->enrichMonthlyRevenueStatsProjects($completedUninvoiced);
+        foreach ($completedUninvoiced as &$backlogProject) {
+            $backlogProject['status_label'] = $this->getProjectStatusLabelJa($backlogProject['status'] ?? '');
+        }
+        unset($backlogProject);
 
         // キャンセル: per 見積 種別 (a project with no 見積 line: one row, amount 0).
-        // 見積済みのみ: the 種別 has a 発行済 見積 line.
-        $cancelledEstimatedWhere = $cancelledEstimatedOnly ? 'AND ge.issued_count > 0' : '';
+        // 見積済みのみ: the 種別 has a 発行済 見積 line (or its 見積 are all 無償).
+        // Month: 完了日, else 期限日, else the last update, else the creation date (never left out).
+        $cancelledEstimatedWhere = $cancelledEstimatedOnly ? "AND (ge.issued_count > 0 OR ge.group_status = '無償')" : '';
         $cancelledMonthFilter = $cancelledAllTime
             ? ''
-            : "AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date), '%Y-%m') = '{$monthEsc}'";
+            : "AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date, p.updated_at, p.created_at), '%Y-%m') = '{$monthEsc}'";
         $cancelledQuery = "SELECT
                 {$projectColumns},
                 COALESCE(ge.total_amount, 0) AS amount,
@@ -6366,6 +6477,46 @@ class Project extends ApplicationModel {
             ORDER BY company_name ASC, (p.end_date IS NULL) ASC, p.end_date ASC, p.id ASC, fee_type ASC";
         $cancelledProjects = $this->fetchAll($cancelledQuery);
         $this->enrichMonthlyRevenueStatsProjects($cancelledProjects);
+
+        // 未見積: projects (not キャンセル / 完了) with no 発行済 見積 line and no 発行済 請求 line (all periods).
+        // Left out: projects whose 見積 lines are all 無償 / 対象外 (counted as quoted), and projects
+        // already listed in 未請求 (a 請求 with no 見積), so a project is never in both.
+        // amount = the 見積 lines not issued yet (draft amount); estimate_status = 見積作成中 when any line is.
+        $unquotedQuery = "SELECT
+                {$projectColumns},
+                COALESCE(ua.estimate_amount, 0) AS amount,
+                CASE
+                    WHEN COALESCE(ua.estimate_lines, 0) = 0 THEN NULL
+                    WHEN ua.drafting_lines > 0 THEN '見積作成中'
+                    ELSE '未発行'
+                END AS estimate_status,
+                CONCAT('unq-', p.id) AS row_key
+            {$baseFrom}
+            LEFT JOIN (SELECT ul.project_id,
+                    SUM(CASE WHEN ul.kind = 'estimate' THEN 1 ELSE 0 END) AS estimate_lines,
+                    SUM(CASE WHEN ul.kind = 'estimate' AND ul.status NOT IN ('無償', '対象外') THEN 1 ELSE 0 END) AS estimate_chargeable,
+                    SUM(CASE WHEN ul.kind = 'estimate' AND ul.status = '見積作成中' THEN 1 ELSE 0 END) AS drafting_lines,
+                    SUM(CASE WHEN ul.kind = 'estimate' AND ul.status NOT IN ('無償', '対象外') THEN COALESCE(ul.amount, 0) ELSE 0 END) AS estimate_amount,
+                    SUM(CASE WHEN ul.status = '発行済' THEN 1 ELSE 0 END) AS issued_lines
+                FROM {$lines} ul
+                GROUP BY ul.project_id) ua ON ua.project_id = p.id
+            WHERE {$baseWhere}
+              AND p.status NOT IN ('completed', 'cancelled', 'deleted')
+              AND COALESCE(ua.issued_lines, 0) = 0
+              AND NOT (COALESCE(ua.estimate_lines, 0) > 0 AND COALESCE(ua.estimate_chargeable, 0) = 0)
+            ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC";
+        $backlogIds = [];
+        foreach ($completedUninvoiced as $backlogRow) {
+            $backlogIds[(int)$backlogRow['id']] = true;
+        }
+        $unquotedProjects = array_values(array_filter($this->fetchAll($unquotedQuery), function ($row) use ($backlogIds) {
+            return !isset($backlogIds[(int)$row['id']]);
+        }));
+        $this->enrichMonthlyRevenueStatsProjects($unquotedProjects);
+        foreach ($unquotedProjects as &$unquotedProject) {
+            $unquotedProject['status_label'] = $this->getProjectStatusLabelJa($unquotedProject['status'] ?? '');
+        }
+        unset($unquotedProject);
 
         $monthsQuery = "SELECT DISTINCT month_value AS month,
                 DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%Y-%m-%d'), '%Y年%m月') AS month_label
@@ -6414,6 +6565,7 @@ class Project extends ApplicationModel {
             'invoiced_projects' => $invoicedProjects,
             'completed_uninvoiced' => $completedUninvoiced,
             'cancelled_projects' => $cancelledProjects,
+            'unquoted_projects' => $unquotedProjects,
         ];
     }
 
@@ -7309,7 +7461,7 @@ class Project extends ApplicationModel {
         foreach ($items as $it) {
             $parts[] = ($it['kind'] === 'estimate' ? '見積' : '請求')
                 . ($it['item_type'] !== '' ? '[' . $it['item_type'] . ']' : '')
-                . ' ' . ($it['item_date'] !== '' ? str_replace('-', '/', substr($it['item_date'], 0, 10)) : '—')
+                . ' ' . ($it['item_date'] !== '' ? str_replace('-', '/', substr($it['item_date'], 0, 16)) : '—')
                 . ' ' . ($it['amount'] === null ? '—' : '¥' . number_format(floatval($it['amount'])))
                 . ' ' . $it['status'];
         }

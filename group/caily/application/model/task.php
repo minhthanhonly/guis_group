@@ -11,6 +11,29 @@ class Task extends ApplicationModel {
         return in_array((string) $status, self::VALID_STATUSES, true);
     }
 
+    /**
+     * 完了日時 (actual_end_date): set to now when the task enters 'completed'.
+     * Returns true when the task leaves 'completed', so the caller clears it with clearTaskCompletedAt()
+     * (query_update cannot write NULL).
+     */
+    private function applyTaskCompletedAt(array &$data, $newStatus, $oldStatus) {
+        $newStatus = (string) $newStatus;
+        $oldStatus = (string) $oldStatus;
+        if ($newStatus === 'completed' && $oldStatus !== 'completed') {
+            $data['actual_end_date'] = date('Y-m-d H:i:s');
+            return false;
+        }
+        return $oldStatus === 'completed' && $newStatus !== 'completed';
+    }
+
+    private function clearTaskCompletedAt($taskId) {
+        $this->query(sprintf(
+            "UPDATE %s SET actual_end_date = NULL WHERE id = %d",
+            DB_PREFIX . 'tasks',
+            intval($taskId)
+        ));
+    }
+
     function __construct() {
         $this->table = DB_PREFIX . 'tasks';
         $this->schema = array(
@@ -519,6 +542,142 @@ class Task extends ApplicationModel {
     }
 
     /** 作業比重 project (projects.task_weight_mode = 1)? Projects from before it return false. */
+    /**
+     * 作業比重 (%) of each task within its project, same rule as the project task page
+     * (task-manager.js getTaskDrawingPricePercent), computed over ALL tasks of the project
+     * so filtered lists still show the real share.
+     * - 作業比重 projects: drawing_count / total drawing_count of linked tasks (default tasks included).
+     * - Projects from before 作業比重: default tasks keep their fixed %, the others share the rest.
+     * Sets 'drawing_weight_pct' (float, 1 decimal) or null when the task has no share.
+     */
+    private function attachDrawingWeightPercents(array &$tasks) {
+        if (empty($tasks)) {
+            return;
+        }
+        $projectIds = array();
+        foreach ($tasks as $t) {
+            $pid = isset($t['project_id']) ? intval($t['project_id']) : 0;
+            if ($pid > 0) {
+                $projectIds[$pid] = true;
+            }
+        }
+        if (empty($projectIds)) {
+            return;
+        }
+        $idList = implode(',', array_map('intval', array_keys($projectIds)));
+
+        $projectRows = $this->fetchAll(sprintf(
+            "SELECT * FROM %sprojects WHERE id IN (%s)",
+            DB_PREFIX,
+            $idList
+        ));
+        $projectInfo = array();
+        foreach ($projectRows as $row) {
+            $projectInfo[intval($row['id'])] = array(
+                // Missing column = every project is 作業比重 (same as Project::isTaskWeightModeProject)
+                'weight_mode' => !array_key_exists('task_weight_mode', $row) || intval($row['task_weight_mode']) === 1,
+                'department_id' => isset($row['department_id']) ? intval($row['department_id']) : 0,
+            );
+        }
+
+        $projectTasks = array();
+        $rows = $this->fetchAll(sprintf(
+            "SELECT id, project_id, title, drawing_count FROM %stasks WHERE project_id IN (%s)",
+            DB_PREFIX,
+            $idList
+        ));
+        foreach ($rows as $row) {
+            $projectTasks[intval($row['project_id'])][] = $row;
+        }
+
+        // Department default-task config (titles linked to drawings + fixed % for old projects)
+        if (!class_exists('Department')) {
+            require_once DIR_MODEL . 'department.php';
+        }
+        $departmentModel = new Department();
+        $defaultConfigCache = array();
+        $getDefaultConfig = function ($departmentId) use (&$defaultConfigCache, $departmentModel) {
+            if (isset($defaultConfigCache[$departmentId])) {
+                return $defaultConfigCache[$departmentId];
+            }
+            $titles = array();
+            $percents = array();
+            foreach ($departmentModel->resolveDefaultTaskDefinitions($departmentId) as $def) {
+                $title = isset($def['title']) ? trim((string) $def['title']) : '';
+                if ($title === '') {
+                    continue;
+                }
+                $count = isset($def['drawing_count']) ? intval($def['drawing_count']) : 1;
+                if ($count > 0) {
+                    $titles[$title] = true;
+                }
+                if (isset($def['price_pct']) && is_numeric($def['price_pct'])) {
+                    $percents[$title] = floatval($def['price_pct']);
+                }
+            }
+            return $defaultConfigCache[$departmentId] = array('titles' => $titles, 'percents' => $percents);
+        };
+
+        $slots = function ($task) {
+            $n = isset($task['drawing_count']) ? intval($task['drawing_count']) : 0;
+            return $n > 0 ? $n : 1;
+        };
+        $isLinked = function ($task) {
+            return isset($task['drawing_count']) && intval($task['drawing_count']) > 0;
+        };
+
+        // Per project: total slots and the % pool shared by linked tasks
+        $projectShare = array();
+        foreach ($projectTasks as $pid => $list) {
+            $info = isset($projectInfo[$pid]) ? $projectInfo[$pid] : array('weight_mode' => true, 'department_id' => 0);
+            $config = $getDefaultConfig($info['department_id']);
+            $weightMode = $info['weight_mode'];
+            $totalSlots = 0;
+            $existingTitles = array();
+            foreach ($list as $task) {
+                $title = trim((string) $task['title']);
+                $existingTitles[$title] = true;
+                if (!$isLinked($task)) {
+                    continue;
+                }
+                if (!$weightMode && isset($config['titles'][$title])) {
+                    continue;
+                }
+                $totalSlots += $slots($task);
+            }
+            $fixedTotal = 0;
+            foreach ($config['percents'] as $title => $pct) {
+                if (isset($existingTitles[$title])) {
+                    $fixedTotal += $pct;
+                }
+            }
+            $projectShare[$pid] = array(
+                'weight_mode' => $weightMode,
+                'config' => $config,
+                'total_slots' => $totalSlots,
+                'pool' => $weightMode ? 100 : max(0, 100 - $fixedTotal),
+            );
+        }
+
+        foreach ($tasks as &$task) {
+            $task['drawing_weight_pct'] = null;
+            $pid = isset($task['project_id']) ? intval($task['project_id']) : 0;
+            if (!isset($projectShare[$pid])) {
+                continue;
+            }
+            $share = $projectShare[$pid];
+            $title = trim((string) $task['title']);
+            $pct = null;
+            if (!$share['weight_mode'] && isset($share['config']['titles'][$title])) {
+                $pct = isset($share['config']['percents'][$title]) ? $share['config']['percents'][$title] : null;
+            } elseif ($isLinked($task) && $share['total_slots'] > 0) {
+                $pct = ($share['pool'] * $slots($task)) / $share['total_slots'];
+            }
+            $task['drawing_weight_pct'] = $pct === null ? null : round($pct, 1);
+        }
+        unset($task);
+    }
+
     private function isTaskWeightModeProject($projectId) {
         if (!class_exists('Project')) {
             require_once DIR_MODEL . 'project.php';
@@ -661,6 +820,7 @@ class Task extends ApplicationModel {
                 'created_at' => $now,
                 'updated_at' => $now,
             );
+            $this->applyTaskCompletedAt($data, $data['status'], '');
 
             if (!empty($data['assigned_to'])) {
                 $assignedIds = array_filter(array_map('intval', explode(',', (string) $data['assigned_to'])));
@@ -1243,6 +1403,7 @@ class Task extends ApplicationModel {
 
         $this->applyDefaultTaskKindToData($data);
         $this->applyDefaultTaskDrawingLinkToData($data);
+        $this->applyTaskCompletedAt($data, $data['status'], '');
 
         // Nếu user được phân công chưa là thành viên dự án thì tự động thêm vào dự án (role = member)
         if (!empty($data['assigned_to'])) {
@@ -1405,8 +1566,12 @@ class Task extends ApplicationModel {
             $data['parent_id'] = ($_POST['parent_id'] !== '' && $_POST['parent_id'] !== null) ? intval($_POST['parent_id']) : (isset($old['parent_id']) ? $old['parent_id'] : null);
         }
         $this->applyDefaultTaskDrawingLinkToData($data);
+        $clearCompletedAt = $this->applyTaskCompletedAt($data, $status, isset($old['status']) ? $old['status'] : '');
         $result = $this->query_update($data, ['id' => $id]);
-        
+        if ($result >= 0 && $clearCompletedAt) {
+            $this->clearTaskCompletedAt($id);
+        }
+
         // if ($result && $task['parent_id']) {
         //     $this->updateParentTaskProgress($task['parent_id']);
         // }
@@ -1656,11 +1821,16 @@ class Task extends ApplicationModel {
         if ($status === 'completed') {
             $data['progress'] = 100;
         }
+        $clearCompletedAt = $this->applyTaskCompletedAt($data, $status, isset($old['status']) ? $old['status'] : '');
 
         $result = $this->query_update($data, ['id' => $id]);
 
         if ($result < 0) {
             return ['status' => 'error', 'message' => 'Update failed'];
+        }
+        if ($clearCompletedAt) {
+            $this->clearTaskCompletedAt($id);
+            $data['actual_end_date'] = null;
         }
 
         $this->logTaskAction($id, 'status_changed', 'ステータス変更', $old['status'], $status);
@@ -4355,6 +4525,7 @@ class Task extends ApplicationModel {
 
         $this->attachTimeEntryHours($tasks);
         $this->attachActiveTimerFlags($tasks);
+        $this->attachDrawingWeightPercents($tasks);
 
         // 5. Determine unassigned users (no active tasks: exclude completed & cancelled)
         // Build set of users that have at least one active task

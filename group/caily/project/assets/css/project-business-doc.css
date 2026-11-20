@@ -336,7 +336,7 @@
 }
 .bd-scope .pi-line-row { display: flex; gap: 8px; align-items: center; min-width: 0; }
 .bd-scope .pi-type { flex: 1 1 auto; min-width: 0; }
-.bd-scope .pi-date-group { flex: 0 1 12rem; min-width: 0; }
+.bd-scope .pi-date-group { flex: 0 0 calc(50% - 4px); min-width: 0; } /* half of the line (gap 8px) */
 .bd-scope .pi-amount-group { flex: 1 1 auto; min-width: 0; }
 .bd-scope .pi-remove { flex: 0 0 auto; }
 

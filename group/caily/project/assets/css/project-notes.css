@@ -611,3 +611,21 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
 .note-board .note-card-content.ql-editor p + p {
     margin-top: 0.3em;
 }
+
+/* collapsed card that cuts its text: ⌄ at the bottom right (project-note-board-mixin.js measureNoteOverflow) */
+.note-board .note-more-icon {
+    position: absolute;
+    right: 10px;
+    bottom: 5px;
+    font-size: 1rem;
+    line-height: 1;
+    opacity: 0.75;
+    cursor: pointer;
+}
+.note-board .note-card-footer {
+    padding-right: 18px;
+}
+
+/* 最終編集: who last saved the note and when (after the author) */
+.note-board .note-card-footer .note-edited-meta { margin-left: 8px; }
+.note-board .note-card-footer .note-edited-meta .fa { font-size: 0.65rem; margin-right: 2px; }
