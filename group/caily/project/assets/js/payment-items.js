@@ -108,6 +108,43 @@
         }
     }
 
+    // ---- time zone: stored in JST; shown / typed in the language's zone (Vietnamese: Asia/Ho_Chi_Minh),
+    // like the other project dates (business-document-modal-mixin.js). Changing the language reloads the page.
+    var SERVER_TZ = 'Asia/Tokyo';
+    var VIETNAM_TZ = 'Asia/Ho_Chi_Minh';
+
+    function displayTz() {
+        var lang = typeof window.getAppLanguage === 'function' ? window.getAppLanguage()
+            : (window.i18next && window.i18next.language) || '';
+        return String(lang || '').toLowerCase().indexOf('vi') === 0 ? VIETNAM_TZ : SERVER_TZ;
+    }
+
+    /** 'YYYY-MM-DD HH:mm' from one zone to the other ('' / unparsable / no moment-timezone: unchanged) */
+    function convertDateTime(v, fromTz, toTz) {
+        var s = String(v || '').slice(0, 16);
+        if (!s || fromTz === toTz || !window.moment || typeof window.moment.tz !== 'function') return s;
+        var m = window.moment.tz(s, 'YYYY-MM-DD HH:mm', true, fromTz);
+        return m.isValid() ? m.tz(toTz).format('YYYY-MM-DD HH:mm') : s;
+    }
+
+    /** stored 'YYYY-MM-DD HH:mm[:ss]' (JST) → 'YYYY-MM-DD HH:mm' in the display zone */
+    function serverToDisplay(v) {
+        return convertDateTime(v, SERVER_TZ, displayTz());
+    }
+
+    /** 'YYYY-MM-DD HH:mm' in the display zone → 'YYYY-MM-DD HH:mm:00' (JST) */
+    function displayToServer(v) {
+        var s = convertDateTime(v, displayTz(), SERVER_TZ);
+        return s ? s + ':00' : '';
+    }
+
+    /** The display-zone hour of 'hour:00' JST (a newly picked date gets 18:00 JST) */
+    function displayHourOfServerHour(hour) {
+        var s = serverToDisplay('2000-01-01 ' + (hour < 10 ? '0' : '') + hour + ':00');
+        var h = parseInt(s.slice(11, 13), 10);
+        return isNaN(h) ? hour : h;
+    }
+
     /** Now in the server's time zone (JST), 'YYYY-MM-DD HH:mm:00' — when a 注文書 is checked. */
     function nowServer() {
         try {
@@ -345,7 +382,9 @@
 
     /**
      * Date input of one line: flatpickr (Y/m/d) when the page has it, native date otherwise.
-     * with-time (注文書): 'YYYY-MM-DD HH:mm:ss' in, 'YYYY-MM-DD HH:mm:00' out, shown as Y/m/d H:i.
+     * with-time (決済明細, 注文書): 'YYYY-MM-DD HH:mm:ss' (JST) in, 'YYYY-MM-DD HH:mm:00' (JST) out,
+     * shown / typed as Y/m/d H:i in the language's time zone;
+     * default-hour: the time (JST) a newly picked date gets.
      */
     var PaymentItemDateInput = {
         props: {
@@ -353,6 +392,7 @@
             disabled: Boolean,
             placeholder: { type: String, default: '' },
             withTime: Boolean,
+            defaultHour: { type: Number, default: 12 },
             closedMonths: { type: Array, default: function () { return []; } }
         },
         emits: ['update:modelValue', 'closed-date'],
@@ -377,6 +417,8 @@
                 dateFormat: this.fpFormat,
                 enableTime: this.withTime,
                 time_24hr: true,
+                defaultHour: this.withTime ? displayHourOfServerHour(this.defaultHour) : this.defaultHour,
+                defaultMinute: 0,
                 allowInput: true,
                 disableMobile: true,
                 // 月次締め: days of closed months are greyed out; picking one is refused in emitValue
@@ -415,21 +457,21 @@
             }
         },
         methods: {
-            /** 'YYYY-MM-DD[ HH:mm[:ss]]' → 'YYYY/MM/DD[ HH:mm]' */
+            /** 'YYYY-MM-DD[ HH:mm[:ss]]' → 'YYYY/MM/DD[ HH:mm]' (with time: in the display zone) */
             toDisplay: function (v) {
                 if (!v) return '';
                 var s = String(v);
-                return (this.withTime ? s.slice(0, 16) : s.slice(0, 10)).replace(/-/g, '/');
+                return (this.withTime ? serverToDisplay(s) : s.slice(0, 10)).replace(/-/g, '/');
             },
-            /** flatpickr / native value → 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:00' */
+            /** flatpickr / native value → 'YYYY-MM-DD' or 'YYYY-MM-DD HH:mm:00' (JST) */
             fromDisplay: function (str) {
                 if (!str) return '';
                 var s = String(str).replace(/\//g, '-').replace('T', ' ');
-                return this.withTime ? s.slice(0, 16) + ':00' : s.slice(0, 10);
+                return this.withTime ? displayToServer(s.slice(0, 16)) : s.slice(0, 10);
             },
             toNative: function (v) {
                 if (!v) return '';
-                return this.withTime ? String(v).slice(0, 16).replace(' ', 'T') : String(v).slice(0, 10);
+                return this.withTime ? serverToDisplay(v).replace(' ', 'T') : String(v).slice(0, 10);
             },
             onNativeChange: function (e) {
                 if (this._fp) {
@@ -480,10 +522,10 @@
             // input order: 日付 → 種別 (row 1), 金額 → 状態 (row 2, status last)
             + '    <div class="pi-line-row">'
             + '      <div v-if="lineEditable(item)" class="input-group input-group-sm pi-date-group">'
-            + '        <payment-item-date-input :model-value="datePart(item)" :placeholder="t(dateLabel)" :closed-months="closedMonths" @update:model-value="setDate(item, $event)" @closed-date="refuseClosedDate($event)"></payment-item-date-input>'
-            + '        <button v-if="!item.item_date && !todayClosed" type="button" class="btn btn-outline-primary" :title="t(\'今日の日付を入力\')" @click="setToday(item)">{{ t("今日") }}</button>'
+            + '        <payment-item-date-input with-time :default-hour="18" :model-value="item.item_date || \'\'" :placeholder="t(dateLabel)" :closed-months="closedMonths" @update:model-value="setDate(item, $event)" @closed-date="refuseClosedDate($event)"></payment-item-date-input>'
+            + '        <button v-if="!item.item_date && !todayClosed" type="button" class="btn btn-outline-primary" :title="t(\'現在の日時を入力\')" @click="setToday(item)">{{ t("今日") }}</button>'
             + '      </div>'
-            + '      <div v-else class="pi-value">{{ item.item_date ? datePart(item).replace(/-/g, "/") : "—" }}</div>'
+            + '      <div v-else class="pi-value">{{ item.item_date ? dateTimePart(item).replace(/-/g, "/") : "—" }}</div>'
             + '      <input v-if="lineEditable(item)" type="text" class="form-control form-control-sm pi-type" :list="listId" maxlength="100"'
             + '             v-model="item.item_type" :placeholder="t(\'種別\')" @change="emitChange">'
             + '      <span v-else class="pi-type-badge" :class="{ \'pi-type-none\': !item.item_type }">{{ item.item_type || t("種別なし") }}</span>'
@@ -742,23 +784,26 @@
                 if (isWaived(value)) item.amount = 0;
                 this.emitChange();
             },
-            datePart: function (item) {
-                return item && item.item_date ? String(item.item_date).slice(0, 10) : '';
+            /** 'YYYY-MM-DD HH:mm' of a line in the display zone ('' when none) */
+            dateTimePart: function (item) {
+                return item && item.item_date ? serverToDisplay(item.item_date) : '';
             },
-            /** Date picked in the UI; the stored time (e.g. 18:57 from the old 見積日) is kept. */
-            setDate: function (item, ymd) {
+            /** Date + time picked in the UI: 'YYYY-MM-DD HH:mm:00' (or a bare 'YYYY-MM-DD': the time is kept). */
+            setDate: function (item, value) {
                 var current = String(item.item_date || '');
                 var was = isLineComplete(item);
+                var v = String(value || '');
+                if (/^\d{4}-\d{2}-\d{2}$/.test(v)) v += current.slice(10) || ' 18:00:00';
                 // the date input already refuses closed months (and shows why); this guards other callers
-                if (ymd && ymd !== current.slice(0, 10) && this.closedMonths.indexOf(monthOf(ymd)) !== -1) return;
-                if (!ymd) {
+                if (v && v.slice(0, 7) !== current.slice(0, 7) && this.closedMonths.indexOf(monthOf(v)) !== -1) return;
+                if (!v) {
                     if (current === '') return;
                     item.item_date = '';
                     // like clearing the amount: a 発行済 line needs a date, or every save fails
                     if (normalizeStatus(item.status) === '発行済') item.status = '未発行';
                 } else {
-                    if (ymd === current.slice(0, 10)) return;
-                    item.item_date = ymd + current.slice(10);
+                    if (v.slice(0, 16) === current.slice(0, 16)) return;
+                    item.item_date = v;
                 }
                 this.emitChange();
                 this.askIssuedIfJustCompleted(item, was);
@@ -766,7 +811,7 @@
             setToday: function (item) {
                 var was = isLineComplete(item);
                 if (this.refuseClosedDate(todayServer())) return;
-                item.item_date = todayServer();
+                item.item_date = nowServer();
                 this.emitChange();
                 this.askIssuedIfJustCompleted(item, was);
             },
@@ -917,7 +962,7 @@
                 return isEmpty(v) ? '' : String(v);
             },
             displayOf: function (type) {
-                return this.valueOf(type).slice(0, 16).replace(/-/g, '/');
+                return serverToDisplay(this.valueOf(type)).replace(/-/g, '/');
             },
             /** Refuse unchecking while a 請求 of this 種別 is 発行済; true when it was refused. */
             refuseUncheck: function (type) {
