@@ -9109,8 +9109,7 @@ var projectTable;
             $rowContextMenu.hide();
             if (!contextMenuRowData || !window.ProjectClipboard) return;
             try {
-                var text = window.ProjectClipboard.buildText(contextMenuRowData, teamIdToName);
-                var copied = await window.ProjectClipboard.copy(text);
+                var copied = await window.ProjectClipboard.copyProject(contextMenuRowData, teamIdToName);
                 if (!copied) throw new Error('copy failed');
                 if (typeof showMessage === 'function') {
                     showMessage(typeof translateText === 'function' ? translateText('案件情報をコピーしました') : '案件情報をコピーしました');

@@ -161,6 +161,7 @@
             project_order_type: plain(data.project_order_type || ''),
             teams: data.teams || '',
             caily_nouki: data.caily_nouki || '',
+            department_name: plain(data.department_name || ''),
             team_list: data.team_list || []
         };
     }
@@ -195,13 +196,66 @@
         return ids.map(function(id) { return map[id] || id; }).join(', ');
     }
 
-    function buildProjectClipboardText(data, teamIdToName) {
+    /** 省エネ projects copy a shorter block with the 計算書作成 task 期限 instead of CAILY納期 */
+    var ENERGY_TASK_TITLE = '計算書作成';
+
+    function isEnergyClipboardProject(row) {
+        if (global.EnergyFeePayment && global.EnergyFeePayment.isEnergyProject) {
+            return !!global.EnergyFeePayment.isEnergyProject(row);
+        }
+        return String(row.department_name || '').indexOf('省エネ') !== -1;
+    }
+
+    function projectDetailUrl(id) {
+        var url = new URL('detail.php', global.location.href);
+        url.searchParams.set('id', id);
+        return url.href;
+    }
+
+    function energyTaskUrl(projectId, taskId) {
+        var url = new URL('task.php', global.location.href);
+        url.searchParams.set('project_id', projectId);
+        url.searchParams.set('task_id', taskId);
+        return url.href;
+    }
+
+    /**
+     * Lines of the 省エネ block. Each line is {text} or, for the task line, {text, link, linkText}
+     * so the rich copy can make 計算書作成 a link to the task.
+     */
+    function buildEnergyClipboardLines(row, energyTask) {
+        var lines = [
+            { text: PROJECT_CLIPBOARD_SEPARATOR },
+            { text: 'ID: ' + row.id }
+        ];
+        buildBranchClipboardLines(row).forEach(function (t) { lines.push({ text: t }); });
+        lines.push(
+            { text: 'お施主様名: ' + (row.name || '') },
+            { text: '規模: ' + (row.parent_scale || '') }
+        );
+        var due = energyTask ? formatProjectClipboardDateTime(energyTask.due_date) : '';
+        lines.push({
+            text: ENERGY_TASK_TITLE + '納期: ' + due,
+            link: energyTask && energyTask.id ? energyTaskUrl(row.id, energyTask.id) : '',
+            linkText: ENERGY_TASK_TITLE,
+            rest: '納期: ' + due
+        });
+        lines.push(
+            { text: 'URL: ' + projectDetailUrl(row.id) },
+            { text: PROJECT_CLIPBOARD_SEPARATOR }
+        );
+        return lines;
+    }
+
+    function buildProjectClipboardText(data, teamIdToName, energyTask) {
         var row = normalizeProjectForClipboard(data);
         if (!row.id) return '';
-        var detailUrl = new URL('detail.php', global.location.href);
-        detailUrl.searchParams.set('id', row.id);
+        if (isEnergyClipboardProject(row)) {
+            return buildEnergyClipboardLines(row, energyTask).map(function (l) { return l.text; }).join('\n') + '\n';
+        }
         var lines = [
             PROJECT_CLIPBOARD_SEPARATOR,
+            'ID: ' + row.id,
             '工事番号: ' + (row.parent_construction_number || '')
         ];
         lines.push.apply(lines, buildBranchClipboardLines(row));
@@ -211,7 +265,7 @@
             '受注形態: ' + (row.project_order_type || ''),
             'チーム: ' + formatTeamsForClipboard(row, teamIdToName),
             'CAILY納期: ' + formatProjectClipboardDateTime(row.caily_nouki),
-            'URL: ' + detailUrl.href,
+            'URL: ' + projectDetailUrl(row.id),
             PROJECT_CLIPBOARD_SEPARATOR
         );
         return lines.join('\n') + '\n';
@@ -235,7 +289,58 @@
         }
     }
 
+    function escapeHtml(t) {
+        return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    /** The 計算書作成 task of the project ({id, due_date}) or null */
+    async function fetchEnergyTask(projectId) {
+        if (!global.axios || !projectId) return null;
+        try {
+            var res = await global.axios.get('/api/index.php?model=task&method=list&project_id=' + encodeURIComponent(projectId));
+            var list = Array.isArray(res.data) ? res.data : (res.data && Array.isArray(res.data.data) ? res.data.data : []);
+            for (var i = 0; i < list.length; i++) {
+                if (String(list[i].title || '').trim() === ENERGY_TASK_TITLE) {
+                    return { id: list[i].id, due_date: list[i].due_date || '' };
+                }
+            }
+        } catch (e) { /* copy without the 期限 */ }
+        return null;
+    }
+
+    /**
+     * 案件情報をコピー: builds and copies the block. 省エネ projects look up the 計算書作成 task and
+     * also put an HTML version on the clipboard where 計算書作成 links to the task.
+     */
+    async function copyProjectInfo(data, teamIdToName) {
+        var row = normalizeProjectForClipboard(data);
+        if (!row.id) return false;
+        if (!isEnergyClipboardProject(row)) {
+            return copyTextToClipboard(buildProjectClipboardText(data, teamIdToName));
+        }
+        var task = await fetchEnergyTask(row.id);
+        var lines = buildEnergyClipboardLines(row, task);
+        var text = lines.map(function (l) { return l.text; }).join('\n') + '\n';
+        var html = lines.map(function (l) {
+            if (l.link) {
+                return '<a href="' + escapeHtml(l.link) + '">' + escapeHtml(l.linkText) + '</a>' + escapeHtml(l.rest);
+            }
+            return escapeHtml(l.text);
+        }).join('<br>');
+        if (global.ClipboardItem && global.navigator && global.navigator.clipboard && global.navigator.clipboard.write) {
+            try {
+                await global.navigator.clipboard.write([new global.ClipboardItem({
+                    'text/plain': new Blob([text], { type: 'text/plain' }),
+                    'text/html': new Blob([html], { type: 'text/html' })
+                })]);
+                return true;
+            } catch (e) { /* fall back to plain text */ }
+        }
+        return copyTextToClipboard(text);
+    }
+
     global.ProjectClipboard = {
+        copyProject: copyProjectInfo,
         getBranchRomaji: getBranchRomaji,
         formatBranchNameForClipboard: formatBranchNameForClipboard,
         buildText: buildProjectClipboardText,
