@@ -164,7 +164,7 @@
             case 'detail':
                 return translateLabel('請求済み案件') + '（' + vm.monthLabel + '）';
             case 'backlog':
-                return translateLabel('未請求案件(請求待ち・完了)') + '（' + translateLabel('すべての期間') + '）';
+                return translateLabel('未請求案件(請求待ち)') + '（' + translateLabel('すべての期間') + '）';
             case 'estimated': {
                 const period = vm.showEstimatedAllTime
                     ? translateLabel('すべての期間')

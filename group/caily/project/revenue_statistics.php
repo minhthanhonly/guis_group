@@ -84,7 +84,7 @@ if (!$canAccessRevenueStats) {
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" :class="{ active: activeSubTab === 'backlog' }" type="button" @click="setActiveSubTab('backlog')">
-                    <i class="fa fa-clock-o me-1"></i><span data-i18n="未請求案件(請求待ち・完了)">未請求案件(請求待ち・完了)</span>
+                    <i class="fa fa-clock-o me-1"></i><span data-i18n="未請求案件(請求待ち)">未請求案件(請求待ち)</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -439,7 +439,7 @@ if (!$canAccessRevenueStats) {
             <div class="card mb-4">
                 <div class="card-header revenue-stats-card-header">
                     <h5 class="mb-0">
-                        <span data-i18n="未請求案件(請求待ち・完了)">未請求案件(請求待ち・完了)</span>（<span data-i18n="すべての期間">すべての期間</span>）
+                        <span data-i18n="未請求案件(請求待ち)">未請求案件(請求待ち)</span>（<span data-i18n="すべての期間">すべての期間</span>）
                         <span class="form-check form-check-inline ms-3 mb-0 align-middle">
                             <input class="form-check-input" type="checkbox" id="tantouCailyBacklogToggle" v-model="showTantouCaily">
                             <label class="form-check-label small" for="tantouCailyBacklogToggle">CAILY</label>

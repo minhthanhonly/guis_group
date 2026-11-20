@@ -6410,7 +6410,8 @@ class Project extends ApplicationModel {
         $invoicedProjects = $this->fetchAll($invoicedQuery);
         $this->enrichMonthlyRevenueStatsProjects($invoicedProjects);
 
-        // 未請求 (請求待ち・完了): per 種別 whose 請求 is not done (未発行 / 請求準備; all 無償 = done):
+        // 未請求 (請求待ち): per 種別 whose 請求 is not done (未発行 / 請求準備; all 無償 = done).
+        // 完了 projects count as already invoiced (old data often has no 請求 entered), so they are left out.
         //  - 種別 with a 発行済 (or all 無償) 見積: amount = 発行済 見積 − 発行済 請求 (0 when 見積 無償);
         //  - 請求 種別 with no 見積 of that 種別: amount = the 請求 not issued yet.
         $backlogQuery = "SELECT * FROM (SELECT
@@ -6426,7 +6427,7 @@ class Project extends ApplicationModel {
             INNER JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate'
             LEFT JOIN {$groups} gi ON gi.project_id = p.id AND gi.kind = 'invoice' AND gi.item_type = ge.item_type
             WHERE {$baseWhere}
-              AND p.status IN ('waiting_invoice', 'completed')
+              AND p.status = 'waiting_invoice'
               AND (ge.issued_count > 0 OR ge.group_status = '無償')
               AND COALESCE(gi.group_status, '未発行') IN ('未発行', '請求準備')
             UNION ALL
@@ -6442,7 +6443,7 @@ class Project extends ApplicationModel {
             INNER JOIN {$groups} gi ON gi.project_id = p.id AND gi.kind = 'invoice'
             LEFT JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate' AND ge.item_type = gi.item_type
             WHERE {$baseWhere}
-              AND p.status IN ('waiting_invoice', 'completed')
+              AND p.status = 'waiting_invoice'
               AND ge.project_id IS NULL
               AND gi.group_status IN ('未発行', '請求準備')
             ) b
