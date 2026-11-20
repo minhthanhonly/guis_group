@@ -1043,7 +1043,7 @@ if($_SESSION['show_project'] == 0){
     font-size: 0.9375rem;
 }
 .task-completed-at {
-    font-size: 1rem;
+    font-size: 0.8333rem; /* 10px */
     line-height: 1.2;
 }
 .inline-assignee-placeholder {
