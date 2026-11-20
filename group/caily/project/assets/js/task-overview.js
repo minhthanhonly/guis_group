@@ -116,7 +116,7 @@ createApp({
                 myTask: defaultMyTask,
                 timerActiveOnly: false,
                 // Default OFF: hide tasks without assignee
-                showUnassignedTasks: false
+                unassignedOnly: false
             },
             taskStatuses: [
                 { value: 'todo', label: '未開始', i18nKey: '未開始', color: 'secondary' },
@@ -185,7 +185,7 @@ createApp({
                     excludeCompleted: this.filters.excludeCompleted,
                     myTask: this.filters.myTask,
                     timerActiveOnly: this.filters.timerActiveOnly,
-                    showUnassignedTasks: this.filters.showUnassignedTasks
+                    unassignedOnly: this.filters.unassignedOnly
                 },
                 searchQuery: this.searchQuery,
                 quickFilter: this.quickFilter,
@@ -226,7 +226,7 @@ createApp({
         },
         // People shown in the member bar, with how many visible tasks each one has
         boardMembers() {
-            if (this.filters.myTask || this.filters.user_id) return [];
+            if (this.filters.myTask || this.filters.user_id || this.filters.unassignedOnly) return [];
             const counts = new Map();
             let unassigned = 0;
             this.baseBoardTasks.forEach(task => {
@@ -250,9 +250,6 @@ createApp({
                 if (user) pushUser(user);
             });
             members.sort((a, b) => (b.count - a.count) || String(a.name).localeCompare(String(b.name), 'ja'));
-            if (this.filters.showUnassignedTasks && unassigned > 0) {
-                members.push({ id: 'none', name: this.$t('未割り当て'), user: null, count: unassigned });
-            }
             return members;
         },
         memberFilteredTasks() {
@@ -369,7 +366,7 @@ createApp({
                     this.filters[key] = String(f[key]);
                 }
             });
-            ['excludeCompleted', 'myTask', 'timerActiveOnly', 'showUnassignedTasks'].forEach((key) => {
+            ['excludeCompleted', 'myTask', 'timerActiveOnly', 'unassignedOnly'].forEach((key) => {
                 if (typeof f[key] === 'boolean') {
                     this.filters[key] = f[key];
                 }
@@ -645,8 +642,8 @@ createApp({
             if (params.has('timer_active_only')) {
                 this.filters.timerActiveOnly = this.parseBoolParam(params.get('timer_active_only'), false);
             }
-            if (params.has('show_unassigned')) {
-                this.filters.showUnassignedTasks = this.parseBoolParam(params.get('show_unassigned'), false);
+            if (params.has('unassigned_only')) {
+                this.filters.unassignedOnly = this.parseBoolParam(params.get('unassigned_only'), false);
             }
 
             const tab = params.get('tab') || '';
@@ -703,8 +700,8 @@ createApp({
             if (this.filters.timerActiveOnly) {
                 params.set('timer_active_only', '1');
             }
-            if (this.filters.showUnassignedTasks) {
-                params.set('show_unassigned', '1');
+            if (this.filters.unassignedOnly) {
+                params.set('unassigned_only', '1');
             }
             if (this.activeTab && this.activeTab !== 'tasks') {
                 params.set('tab', this.activeTab);
@@ -1043,12 +1040,16 @@ createApp({
             // Lọc theoユーザー đã được xử lý ở phía API (listOverview), 
             // nên không cần kiểm tra lại ở đây để tránh sai khi task có nhiều assignee.
             const assignedIds = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
-            if (!this.filters.showUnassignedTasks && assignedIds.length === 0) {
+            // 未割り当てタスクのみ: ON → only tasks with no assignee; OFF → hide them
+            if (this.filters.unassignedOnly) {
+                if (assignedIds.length > 0) return false;
+            } else if (assignedIds.length === 0) {
                 return false;
             }
 
             // Nếu filter theo team: ít nhất 1 user được assign thuộc team đó
-            if (this.filters.team_id) {
+            // (team comes from assignees, so it cannot apply to unassigned tasks)
+            if (this.filters.team_id && !this.filters.unassignedOnly) {
                 const teamId = parseInt(this.filters.team_id, 10);
                 const hasUserInTeam = assignedIds.some(uid => {
                     const user = this.users.find(u => u.id == uid);
@@ -1288,7 +1289,37 @@ createApp({
                 this.loadWeeklyTasks();
             }
         },
+        onUnassignedOnlyChange() {
+            if (!this.filters.unassignedOnly) {
+                this.syncFiltersToUrl();
+                return;
+            }
+            // Only unassigned tasks: filters that look at assignees / timers make no sense
+            this.filters.timerActiveOnly = false;
+            this.memberFilterIds = [];
+            const needsReload = this.filters.myTask || !!this.filters.user_id;
+            if (this.filters.myTask) {
+                this.filters.myTask = false;
+                this.onMyTaskChange(); // reloads and restores the department for non-managers
+                return;
+            }
+            if (needsReload) {
+                this.filters.user_id = '';
+                this.loadOverview();
+                return;
+            }
+            this.syncFiltersToUrl();
+        },
+        onTimerActiveOnlyChange() {
+            if (this.filters.timerActiveOnly) {
+                this.filters.unassignedOnly = false;
+            }
+            this.syncFiltersToUrl();
+        },
         onMyTaskChange() {
+            if (this.filters.myTask) {
+                this.filters.unassignedOnly = false;
+            }
             // When "My Task" is checked, set user_id to current user and reload from API
             // When unchecked, clear user_id and reload to show all tasks
             if (this.filters.myTask) {
@@ -1317,6 +1348,7 @@ createApp({
             // When user is manually selected, uncheck "My Task"
             if (this.filters.user_id) {
                 this.filters.myTask = false;
+                this.filters.unassignedOnly = false;
             }
             this.loadOverview();
             if (this.activeTab === 'weekly') {
@@ -1334,7 +1366,7 @@ createApp({
                 excludeCompleted: true,
                 myTask: userDepartmentId ? false : !isProjectManager,
                 timerActiveOnly: false,
-                showUnassignedTasks: false
+                unassignedOnly: false
             };
         },
         resetFilters() {
@@ -1576,6 +1608,12 @@ createApp({
         const appliedFromUrl = this.applyFiltersFromUrl();
         if (!appliedFromUrl) {
             this.restoreFilterState();
+        }
+        // 未割り当てタスクのみ excludes the assignee-based switches
+        if (this.filters.unassignedOnly) {
+            this.filters.myTask = false;
+            this.filters.timerActiveOnly = false;
+            this.filters.user_id = '';
         }
 
         // Non-managers cannot pick another user. Defaults (own department, or own tasks

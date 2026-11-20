@@ -102,13 +102,13 @@ try {
             </div>
             <div class="form-check form-switch">
                 <input class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
-                       v-model="filters.timerActiveOnly" @change="syncFiltersToUrl">
+                       v-model="filters.timerActiveOnly" @change="onTimerActiveOnlyChange">
                 <label class="form-check-label text-nowrap" for="filterTimerActiveOnly" data-i18n="作業計測中のタスクのみ">作業計測中のタスクのみ</label>
             </div>
             <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="showUnassignedTasks"
-                       v-model="filters.showUnassignedTasks" @change="syncFiltersToUrl">
-                <label class="form-check-label text-nowrap" for="showUnassignedTasks" data-i18n="未割り当てタスクを表示">未割り当てタスクを表示</label>
+                <input class="form-check-input" type="checkbox" id="unassignedOnly"
+                       v-model="filters.unassignedOnly" @change="onUnassignedOnlyChange">
+                <label class="form-check-label text-nowrap" for="unassignedOnly" data-i18n="未割り当てタスクのみ">未割り当てタスクのみ</label>
             </div>
             <button class="btn btn-sm btn-outline-secondary ms-auto" type="button" @click="resetFilters" :disabled="loading || weeklyLoading"
                     :title="$t('自分の部署の表示に戻す')">
