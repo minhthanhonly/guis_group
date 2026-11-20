@@ -71,6 +71,12 @@ function getOverviewPreferredDepartmentId() {
     return window.currentUser && window.currentUser.department_id ? String(window.currentUser.department_id) : '';
 }
 
+// 作成月 filter default: the current month (YYYY-MM)
+function getOverviewCurrentMonth() {
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+}
+
 function readOverviewBoardPrefs() {
     try {
         const raw = window.localStorage ? window.localStorage.getItem(OVERVIEW_BOARD_PREFS_KEY) : null;
@@ -134,9 +140,9 @@ createApp({
                 department_id: userDepartmentId,
                 team_id: '',
                 user_id: '',
-                created_month: '',
-                // Mặc định loại bỏ completed để giảm tải
-                excludeCompleted: true,
+                created_month: getOverviewCurrentMonth(),
+                // Default: 完了・キャンセルを表示 ON (the 作成月 default keeps the load small)
+                excludeCompleted: false,
                 myTask: defaultMyTask,
                 timerActiveOnly: false,
                 // Default OFF: hide tasks without assignee
@@ -205,12 +211,13 @@ createApp({
                     department_id: this.filters.department_id,
                     team_id: this.filters.team_id,
                     user_id: this.filters.user_id,
-                    created_month: this.filters.created_month,
-                    excludeCompleted: this.filters.excludeCompleted,
                     myTask: this.filters.myTask,
                     timerActiveOnly: this.filters.timerActiveOnly,
                     unassignedOnly: this.filters.unassignedOnly
                 },
+                // '' (すべて) is saved as 'all' so it is told apart from "not saved"
+                createdMonth: this.filters.created_month || 'all',
+                showClosed: !this.filters.excludeCompleted,
                 searchQuery: this.searchQuery,
                 quickFilter: this.quickFilter,
                 memberFilterIds: this.memberFilterIds.slice(),
@@ -407,12 +414,21 @@ createApp({
                 return false;
             }
             const f = saved.filters && typeof saved.filters === 'object' ? saved.filters : {};
-            ['department_id', 'team_id', 'user_id', 'created_month'].forEach((key) => {
+            // 作成月: only the newer `createdMonth` key counts (older saves had '' = old default)
+            if (saved.createdMonth === 'all') {
+                this.filters.created_month = '';
+            } else if (/^\d{4}-\d{2}$/.test(String(saved.createdMonth || ''))) {
+                this.filters.created_month = String(saved.createdMonth);
+            }
+            ['department_id', 'team_id', 'user_id'].forEach((key) => {
                 if (typeof f[key] === 'string' || typeof f[key] === 'number') {
                     this.filters[key] = String(f[key]);
                 }
             });
-            ['excludeCompleted', 'myTask', 'timerActiveOnly', 'unassignedOnly'].forEach((key) => {
+            if (typeof saved.showClosed === 'boolean') {
+                this.filters.excludeCompleted = !saved.showClosed;
+            }
+            ['myTask', 'timerActiveOnly', 'unassignedOnly'].forEach((key) => {
                 if (typeof f[key] === 'boolean') {
                     this.filters[key] = f[key];
                 }
@@ -911,10 +927,11 @@ createApp({
                 this.filters.user_id = params.get('user_id') || '';
             }
             if (params.has('created_month')) {
-                this.filters.created_month = params.get('created_month') || '';
+                const month = String(params.get('created_month') || '');
+                this.filters.created_month = /^\d{4}-\d{2}$/.test(month) ? month : '';
             }
             if (params.has('exclude_completed')) {
-                this.filters.excludeCompleted = this.parseBoolParam(params.get('exclude_completed'), true);
+                this.filters.excludeCompleted = this.parseBoolParam(params.get('exclude_completed'), false);
             }
             if (params.has('my_task')) {
                 this.filters.myTask = this.parseBoolParam(params.get('my_task'), false);
@@ -972,9 +989,7 @@ createApp({
             if (this.filters.user_id && !this.filters.myTask) {
                 params.set('user_id', String(this.filters.user_id));
             }
-            if (this.filters.created_month) {
-                params.set('created_month', String(this.filters.created_month));
-            }
+            params.set('created_month', this.filters.created_month ? String(this.filters.created_month) : 'all');
             params.set('exclude_completed', this.filters.excludeCompleted ? '1' : '0');
             params.set('my_task', this.filters.myTask ? '1' : '0');
             if (this.filters.timerActiveOnly) {
@@ -1672,8 +1687,8 @@ createApp({
                 department_id: userDepartmentId,
                 team_id: '',
                 user_id: '',
-                created_month: '',
-                excludeCompleted: true,
+                created_month: getOverviewCurrentMonth(),
+                excludeCompleted: false,
                 myTask: userDepartmentId ? false : !isProjectManager,
                 timerActiveOnly: false,
                 unassignedOnly: false

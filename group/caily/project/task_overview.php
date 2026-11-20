@@ -56,28 +56,28 @@ try {
                         <option v-for="dep in departments" :key="dep.id" :value="String(dep.id)">{{ isMyDepartment(dep.id) ? '★ ' : '' }}{{ dep.name }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-3 col-xl-2">
+                <div class="col-6 col-md-3 col-xl-2" :class="{ 'kb-filter-on': !!filters.team_id }">
                     <label class="form-label small mb-1"><span data-i18n="チーム">チーム</span></label>
                     <select autocomplete="off" class="form-select form-select-sm" v-model="filters.team_id" @change="loadOverview">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-3 col-xl-2" v-if="canSelectUser">
+                <div class="col-6 col-md-3 col-xl-2" v-if="canSelectUser" :class="{ 'kb-filter-on': !!filters.user_id && !filters.myTask }">
                     <label class="form-label small mb-1"><span data-i18n="ユーザー">ユーザー</span></label>
                     <select autocomplete="off" id="overviewUserFilter" class="form-select form-select-sm" ref="userFilterSelect">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="user in filteredUsers" :key="user.id" :value="String(user.id)">{{ user.realname }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-3 col-xl-2">
+                <div class="col-6 col-md-3 col-xl-2" :class="{ 'kb-filter-on': !!filters.created_month }">
                     <label class="form-label small mb-1"><span data-i18n="作成月">作成月</span></label>
                     <select autocomplete="off" class="form-select form-select-sm" v-model="filters.created_month" @change="loadOverview">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="month in createdMonthOptions" :key="month.value" :value="month.value">{{ month.label }}</option>
                     </select>
                 </div>
-                <div class="col-12 col-md-6 col-xl-4" v-show="activeTab === 'tasks'">
+                <div class="col-12 col-md-6 col-xl-4" v-show="activeTab === 'tasks'" :class="{ 'kb-filter-on': !!searchQuery }">
                     <label class="form-label small mb-1" for="kbSearch"><span data-i18n="検索">検索</span></label>
                     <div class="input-group input-group-sm">
                         <span class="input-group-text"><i class="fa fa-search"></i></span>
@@ -87,22 +87,22 @@ try {
                 </div>
             </div>
             <div class="d-flex flex-wrap align-items-center column-gap-4 row-gap-2 mt-3">
-            <div class="form-check form-switch mb-0">
+            <div class="form-check form-switch mb-0" :class="{ 'kb-filter-on': !filters.excludeCompleted }">
                 <input autocomplete="off" class="form-check-input" type="checkbox" id="showClosedTasks"
                        :checked="!filters.excludeCompleted" @change="setShowClosedTasks($event.target.checked)">
                 <label class="form-check-label text-nowrap" for="showClosedTasks"><span data-i18n="完了・キャンセルを表示">完了・キャンセルを表示</span></label>
             </div>
-            <div class="form-check form-switch">
+            <div class="form-check form-switch" :class="{ 'kb-filter-on': filters.myTask }">
                 <input autocomplete="off" class="form-check-input" type="checkbox" id="myTask"
                        v-model="filters.myTask" @change="onMyTaskChange">
                 <label class="form-check-label" for="myTask"><span data-i18n="自分のタスク">自分のタスク</span></label>
             </div>
-            <div class="form-check form-switch">
+            <div class="form-check form-switch" :class="{ 'kb-filter-on': filters.timerActiveOnly }">
                 <input autocomplete="off" class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
                        v-model="filters.timerActiveOnly" @change="onTimerActiveOnlyChange">
                 <label class="form-check-label text-nowrap" for="filterTimerActiveOnly" data-i18n="作業計測中のタスクのみ">作業計測中のタスクのみ</label>
             </div>
-            <div class="form-check form-switch">
+            <div class="form-check form-switch" :class="{ 'kb-filter-on': filters.unassignedOnly }">
                 <input autocomplete="off" class="form-check-input" type="checkbox" id="unassignedOnly"
                        v-model="filters.unassignedOnly" @change="onUnassignedOnlyChange">
                 <label class="form-check-label text-nowrap" for="unassignedOnly" data-i18n="未割り当てタスクのみ">未割り当てタスクのみ</label>
@@ -767,6 +767,25 @@ try {
 .kb-member.is-active .kb-member-count { background: var(--bs-primary); color: #fff; }
 
 /* Avatars */
+/* Filters that are in effect: highlighted input + label */
+.kb-filter-card .kb-filter-on .form-label {
+    color: var(--bs-primary, #7650b0);
+    font-weight: 600;
+}
+.kb-filter-card .kb-filter-on .form-select,
+.kb-filter-card .kb-filter-on .form-control,
+.kb-filter-card .kb-filter-on .input-group-text,
+.kb-filter-card .kb-filter-on .select2-container--default .select2-selection {
+    border-color: var(--bs-primary, #7650b0) !important;
+    background-color: rgba(var(--bs-primary-rgb, 118, 80, 176), 0.08);
+    font-weight: 600;
+}
+.kb-filter-card .kb-filter-on .input-group-text { color: var(--bs-primary, #7650b0); }
+.kb-filter-card .form-check.kb-filter-on .form-check-label {
+    color: var(--bs-primary, #7650b0);
+    font-weight: 600;
+}
+
 /* List view status filter (same pattern as the project task page) */
 .task-status-filter-group { overflow: visible !important; }
 .status-filter-btn { position: relative; overflow: visible; }
