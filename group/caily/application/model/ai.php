@@ -1223,6 +1223,8 @@ class AI extends ApplicationModel{
         'refusal' => 'この内容にはお答えできません。(Tôi không thể trả lời nội dung này.)',
         'truncated' => '（回答が長すぎるため途中までです。/ Câu trả lời quá dài nên bị cắt.）',
         'money' => '売上・金額に関するご質問には、AIアシスタントはお答えできません。該当の画面でご確認ください。(Trợ lý AI không trả lời các câu hỏi về doanh thu và số tiền. Vui lòng xem trên trang tương ứng.)',
+        'setup' => 'AIアシスタントはこのサーバーでは利用できません。管理者にご連絡ください。(Trợ lý AI chưa dùng được trên máy chủ này, vui lòng báo quản trị viên.)',
+        'server' => 'AIアシスタントでエラーが発生しました。管理者にご連絡ください。(Trợ lý AI gặp lỗi, vui lòng báo quản trị viên.)',
         'too_broad' => '質問の範囲が広すぎます。条件を絞ってもう一度お試しください。(Câu hỏi quá rộng, vui lòng thu hẹp điều kiện.)',
         'forbidden' => 'この操作を行う権限がありません。管理者または案件マネージャーにご依頼ください。(Bạn không có quyền thực hiện thao tác này. Vui lòng nhờ quản trị viên hoặc quản lý dự án.)',
         'not_allowed' => 'この操作はAIアシスタントでは実行できません。(Trợ lý AI không thực hiện được thao tác này.)',
@@ -1744,7 +1746,26 @@ PROMPT;
         }
         $message = isset($input['message']) && (is_string($input['message']) || is_numeric($input['message'])) ? (string) $input['message'] : '';
         $context = isset($input['context']) && is_array($input['context']) ? $input['context'] : [];
-        $limit = $this->checkLimits($message);
+        // From here on the browser always gets a JSON answer. Without this, a server that cannot run
+        // the SDK, or any uncaught error, ended in a 500 with an empty body.
+        $fail = function ($error, $detail = '') {
+            $reply = self::MESSAGES[$error] . ($detail !== '' ? "\n" . $detail : '');
+            echo json_encode(['reply' => $reply, 'pending' => null, 'navigate' => null, 'task_form' => null, 'error' => $error], JSON_UNESCAPED_UNICODE);
+        };
+        $problem = $this->setupProblem();
+        if ($problem !== null) {
+            error_log('AI::chat: setup problem ' . $problem['code'] . ': ' . $problem['detail']);
+            $fail('setup', $problem['detail']);
+            return;
+        }
+        try {
+            $limit = $this->checkLimits($message);
+        } catch (\Throwable $e) {
+            // The usage table is what the rate limit counts on; without it nothing is sent to the AI.
+            error_log('AI::chat: usage table: ' . get_class($e) . ': ' . mb_substr($e->getMessage(), 0, 300));
+            $fail('setup', '利用記録テーブル ' . DB_PREFIX . 'ai_usage を準備できません。sql/ai_usage.sql を実行してください。');
+            return;
+        }
         if ($limit !== null) {
             if ($limit !== 'empty') {
                 $this->logShown($message, self::MESSAGES[$limit]);
@@ -1754,10 +1775,44 @@ PROMPT;
         }
         // Some model files print whitespace when loaded. Buffer it so headers stay unsent (the session is
         // reopened after the API call) and the response is nothing but the JSON.
+        $level = ob_get_level();
         ob_start();
-        $result = $this->runConversation($message, $context, $this->makeClient());
-        ob_end_clean();
+        try {
+            $result = $this->runConversation($message, $context, $this->makeClient());
+        } catch (\Throwable $e) {
+            while (ob_get_level() > $level) {
+                ob_end_clean();
+            }
+            error_log('AI::chat: ' . get_class($e) . ': ' . mb_substr($e->getMessage(), 0, 300) . ' in ' . basename($e->getFile()) . ':' . $e->getLine());
+            $fail('server');
+            return;
+        }
+        while (ob_get_level() > $level) {
+            ob_end_clean();
+        }
         echo json_encode($result, JSON_UNESCAPED_UNICODE);
+    }
+
+    /** @return array|null ['code' => string, 'detail' => string] when this server cannot run the assistant */
+    public function setupProblem(): ?array {
+        return self::setupProblemFor(PHP_VERSION_ID, PHP_VERSION, dirname(__DIR__, 2));
+    }
+
+    /**
+     * What stops the assistant on a server, checked before the SDK is loaded: the SDK's own check
+     * ends the request with a fatal error and an empty page when PHP is too old.
+     * @param int    $phpVersionId PHP_VERSION_ID
+     * @param string $phpVersion   PHP_VERSION, for the message
+     * @param string $appRoot      the folder that holds vendor/
+     */
+    public static function setupProblemFor(int $phpVersionId, string $phpVersion, string $appRoot): ?array {
+        if ($phpVersionId < 80100) {
+            return ['code' => 'php_version', 'detail' => 'PHP 8.1 以上が必要です（現在 ' . $phpVersion . '）。'];
+        }
+        if (!is_file($appRoot . '/vendor/autoload.php') || !is_dir($appRoot . '/vendor/anthropic-ai/sdk')) {
+            return ['code' => 'sdk_missing', 'detail' => 'vendor フォルダーに Claude SDK がありません（vendor/anthropic-ai/sdk）。'];
+        }
+        return null;
     }
 
     /** GET → {history: [{role, text}]} */

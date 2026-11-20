@@ -32,6 +32,7 @@
     "ステータス": "Trạng thái",
     "進捗率": "Tiến độ",
     "実終了日": "Thời gian hoàn thành",
+    "完了日時": "Thời điểm hoàn thành",
     "タグ": "Tag",
     "説明": "Mô tả",
     "カスタム項目セット": "Bộ trường tùy chỉnh",
@@ -955,6 +956,7 @@
     "メモボードを全画面表示": "Mở bảng ghi chú toàn màn hình",
     "さんが編集中": " đang chỉnh sửa",
     "続きあり": "Còn nội dung",
+    "最終編集": "Sửa lần cuối",
     "全画面表示を終了": "Thoát toàn màn hình",
     "メモの移動に失敗しました": "Không thể di chuyển ghi chú",
     "ステータス順で並べ替え": "Sắp xếp theo trạng thái",
@@ -1179,5 +1181,15 @@
     "確認の有効期限が切れました。もう一度依頼してください。": "Xác nhận đã hết hạn. Vui lòng yêu cầu lại.",
     "この操作を行う権限がありません。": "Bạn không có quyền thực hiện thao tác này.",
     "タスクを追加": "Thêm task",
-    "担当者（氏名、カンマ区切り）": "Người phụ trách (họ tên, cách nhau bằng dấu phẩy)"
+    "担当者（氏名、カンマ区切り）": "Người phụ trách (họ tên, cách nhau bằng dấu phẩy)",
+    "未見積案件": "Dự án chưa báo giá",
+    "案件数": "Số dự án",
+    "見積・請求がどちらも未発行の案件（完了・キャンセル・見積無償・未請求案件に表示中の案件を除く）": "Dự án chưa phát hành cả báo giá lẫn hóa đơn (trừ dự án hoàn thành, dự án hủy, báo giá miễn phí và dự án đang ở tab chưa xuất hóa đơn)",
+    "請求無償": "Hóa đơn miễn phí",
+    "見積無償": "Báo giá miễn phí",
+    "Excel出力（全タブ）": "Xuất Excel (tất cả tab)",
+    "全タブを1つのExcelファイルに出力（タブごとに1シート）": "Xuất tất cả tab ra một file Excel (mỗi tab một sheet)",
+    "総合計": "Tổng cộng",
+    "担当別": "Theo phụ trách",
+    "月末締め": "Chốt cuối tháng"
 }

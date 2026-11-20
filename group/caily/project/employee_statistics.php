@@ -1,8 +1,23 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('従業員統計');
-$canAccessEmployeeStats = !empty($_SESSION['isProjectManager'])
-    || (($_SESSION['userid'] ?? '') === 'hayashida');
+// administrator: all departments (with 「すべての部署」).
+// Everyone else: only the departments where they have 業務担当権限「統計」 (project_director_stat); none → no access.
+$employeeStatsFullAccess = (($_SESSION['authority'] ?? '') === 'administrator');
+$employeeStatsAllowedDeptIds = null; // null = all departments
+if (!$employeeStatsFullAccess) {
+    $permModel = new ApplicationModel();
+    $permModel->connect();
+    $statRows = $permModel->fetchAll(sprintf(
+        "SELECT DISTINCT department_id FROM %suser_department WHERE userid = '%s' AND project_director_stat = 1",
+        DB_PREFIX,
+        $permModel->quote($_SESSION['userid'] ?? '')
+    ));
+    $employeeStatsAllowedDeptIds = array_values(array_map(function ($r) {
+        return (string)intval($r['department_id']);
+    }, $statRows ?: []));
+}
+$canAccessEmployeeStats = $employeeStatsFullAccess || !empty($employeeStatsAllowedDeptIds);
 if(!$canAccessEmployeeStats){
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
@@ -38,7 +53,7 @@ if($_SESSION['show_project'] == 0){
                         <div class="col-md-4 col-lg-3">
                             <label class="form-label"><span data-i18n="部署">部署</span></label>
                             <select class="form-select" v-model="sharedFilters.department_id" @change="onSharedFilterChange('department')">
-                                <option :value="null" data-i18n="すべての部署">すべての部署</option>
+                                <option v-if="!restrictedDepartmentIds" :value="null" data-i18n="すべての部署">すべての部署</option>
                                 <option v-for="dept in departments" :key="dept.id" :value="dept.id">{{ dept.name }}</option>
                             </select>
                         </div>
@@ -981,5 +996,8 @@ $root = ROOT;
 ?>
 <script src="https://cdn.jsdelivr.net/npm/vue@3.2.31"></script>
 <script src="<?=$root?>assets/vendor/libs/apex-charts/apexcharts.js"></script>
+<script>
+window.EMPLOYEE_STATS_ALLOWED_DEPT_IDS = <?= json_encode($employeeStatsAllowedDeptIds) ?>;
+</script>
 <script src="assets/js/employee-statistics.js?v=<?=STATS_CACHE_VERSION?>"></script>
 

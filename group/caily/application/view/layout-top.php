@@ -91,13 +91,12 @@
             <?php 
             
             $_revenuePermModel = new ApplicationModel();
-            $isHayashidaUser = (($_SESSION['userid'] ?? '') === 'hayashida');
-            $showEmployeeStatsMenu = (
-                (($_SESSION['authority'] ?? '') === 'administrator'
-                    && ($_SESSION['group'] ?? '') != '7'
-                    && ($_SESSION['group'] ?? '') != '6')
-                || $isHayashidaUser
-            );
+            $_isAdministrator = (($_SESSION['authority'] ?? '') === 'administrator');
+            // 従業員統計: administrator (except groups 6/7), or non-admins with 業務担当権限「統計」 in some department.
+            // (hasDepartmentPermission() is always true for administrators, so it is checked only for non-admins.)
+            $showEmployeeStatsMenu = $_isAdministrator
+                ? (($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6')
+                : $_revenuePermModel->hasDepartmentPermission('project_director_stat');
             $showRevenueStatsMenu = ($_SESSION['authority'] ?? '') === 'administrator'
                 || $_revenuePermModel->hasDepartmentPermission('project_director_stat')
                 || $showEmployeeStatsMenu;
@@ -133,6 +132,8 @@
                       <div data-i18n="従業員統計">従業員統計</div>
                     </a>
                   </li>
+                <?php } ?>
+                <?php if (($_SESSION['authority'] ?? '') === 'administrator') { ?>
                   <li class="menu-item <?php if($directory == 'project' && $page == 'team_revenue_targets') echo 'active'; ?>">
                     <a href="<?=$root?>project/team_revenue_targets.php" class="menu-link">
                       <div data-i18n="売上目標設定">売上目標設定</div>

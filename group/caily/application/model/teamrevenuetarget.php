@@ -38,6 +38,15 @@ class Teamrevenuetarget extends ApplicationModel {
         $ensured = true;
     }
 
+    /** チーム売上目標設定 の書き込みは administrator のみ。 */
+    /** @return array|null 403 response for non-administrators, null when allowed. */
+    private function denyUnlessAdministrator() {
+        if (($_SESSION['authority'] ?? '') !== 'administrator') {
+            return array('http_status' => 403, 'status' => 'error', 'error' => '権限がありません。');
+        }
+        return null;
+    }
+
     /**
      * Get all teams
      */
@@ -110,6 +119,7 @@ class Teamrevenuetarget extends ApplicationModel {
      * Add or update revenue target
      */
     function save($params = null) {
+        if ($denied = $this->denyUnlessAdministrator()) return $denied;
         // Support both $_GET, $_POST and $params array
         if (is_array($params)) {
             $team_id = isset($params['team_id']) ? intval($params['team_id']) : 0;
@@ -170,7 +180,8 @@ class Teamrevenuetarget extends ApplicationModel {
      * Delete revenue target
      */
     function delete($params = null) {
-        $id = isset($_GET['id']) ? intval($_GET['id']) : (isset($params['id']) ? intval($params['id']) : 0);
+        if ($denied = $this->denyUnlessAdministrator()) return $denied;
+        $id =isset($_GET['id']) ? intval($_GET['id']) : (isset($params['id']) ? intval($params['id']) : 0);
         
         if ($id <= 0) {
             $this->error[] = 'IDが無効です';
@@ -220,6 +231,7 @@ class Teamrevenuetarget extends ApplicationModel {
     }
 
     function saveDepartmentTarget($params = null) {
+        if ($denied = $this->denyUnlessAdministrator()) return $denied;
         $this->ensureDepartmentTargetTable();
         if (is_array($params)) {
             $department_id = isset($params['department_id']) ? intval($params['department_id']) : 0;

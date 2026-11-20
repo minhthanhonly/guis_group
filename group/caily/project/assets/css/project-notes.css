@@ -625,3 +625,19 @@ body.note-board-fullscreen-open .note-board.note-drag-layer {
 .note-board .note-card-footer {
     padding-right: 18px;
 }
+
+/* 最終編集: who last saved the note and when (after the author) */
+.note-board .note-card-footer .note-edited-meta { margin-left: 8px; }
+.note-board .note-card-footer .note-edited-meta .fa { font-size: 0.65rem; margin-right: 2px; }
+
+/* 全画面表示 button: shortcut hint (F12, 案件詳細 only) */
+.note-board-card .note-board-shortcut {
+    padding: 0 4px;
+    font-size: 0.68rem;
+    line-height: 1.4;
+    border-radius: 3px;
+    background: rgba(0, 0, 0, 0.08);
+    color: inherit;
+    box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+}
+[data-bs-theme="dark"] .note-board-card .note-board-shortcut { background: rgba(255, 255, 255, 0.12); }
