@@ -3038,7 +3038,8 @@
                     case 'yotei': return this.hasFieldValue(this.yoteiDisplayText);
                     case 'start': return this.hasFieldValue(this.formatDateTime(p.start_date));
                     case 'end': return this.hasFieldValue(this.formatDateTime(p.end_date));
-                    case 'actual_end': return this.hasFieldValue(this.formatDateTime(p.actual_end_date));
+                    // 完了 projects always show the row (empty until the date is entered)
+                    case 'actual_end': return p.status === 'completed' || this.hasFieldValue(this.formatDateTime(p.actual_end_date));
                     case 'caily': return this.hasFieldValue(this.formatDateTime(p.caily_nouki));
                     case 'guis': return this.hasFieldValue(this.formatDateTime(p.guis_nouki));
                     case 'team': return Array.isArray(p.team_list) && p.team_list.length > 0;
