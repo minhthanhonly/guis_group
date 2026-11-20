@@ -180,3 +180,14 @@ Test: `tests/ai/requests-all.test.php` (21 kiểm tra).
 Nguyên nhân: thanh chat giãn rộng (360px → 720px, 0,2 giây) mỗi khi bất kỳ phần tử nào bên trong nhận focus (`:focus-within`). Nhấn chuột vào một nút làm nút đó nhận focus, thanh giãn ra và nút trượt đi 180px trước khi nhả chuột, nên trình duyệt không tính là một lần click.
 
 Sửa: trạng thái rộng khi đang gõ là class `is-active` do script đặt, chỉ khi ô nhập hoặc ô chọn bộ phận nhận focus; focus chuyển giữa các phần tử trong thanh không đổi trạng thái; rời khỏi thanh thì thu lại. `:focus-within` chỉ còn dùng cho màu viền. Test: 7 kiểm tra mới trong `tests/ai/render.test.js`.
+
+## 19. Lỗi 500 rỗng khi chat trên máy chủ (2026-11-20)
+
+Hiện tượng (kanri.guis-lab.com): `POST /ai/index.php?method=chat` trả 500, `Content-Type: application/json`, nội dung rỗng.
+
+Hai đường trong code dẫn tới đúng hiện tượng này:
+
+1. SDK của Claude chỉ được nạp khi gửi chat (`vendor/autoload.php` trong `claudeclient.php`), và bộ kiểm tra của Composer dừng yêu cầu bằng lỗi nghiêm trọng, không in gì, khi PHP thấp hơn 8.1. Các trang khác không nạp SDK nên vẫn chạy bình thường.
+2. Lỗi database khi chuẩn bị bảng `groupware_ai_usage` (tài khoản không có quyền CREATE) nằm ngoài mọi khối bắt lỗi.
+
+Sửa: `AI::chat()` kiểm tra trước khi nạp SDK (`AI::setupProblemFor`: PHP ≥ 8.1, có `vendor/anthropic-ai/sdk`), bắt lỗi khi kiểm tra giới hạn và khi chạy hội thoại. Mọi trường hợp đều trả JSON có thông báo (`error: setup` kèm nguyên nhân, hoặc `error: server`) và ghi chi tiết vào log lỗi của PHP với tiền tố `AI::chat:`. Test: `tests/ai/setup.test.php` (12 kiểm tra).
