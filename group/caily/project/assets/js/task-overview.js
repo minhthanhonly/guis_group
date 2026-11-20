@@ -227,6 +227,15 @@ createApp({
                 weeklyShowEntries: this.weeklyShowEntries
             };
         },
+        // 部署 options: all for administrators; otherwise only the user's own departments
+        // (a user without any department still sees all, so the page is never empty)
+        departmentOptions() {
+            if (window.currentUser && window.currentUser.isAdministrator) {
+                return this.departments;
+            }
+            const own = this.departments.filter(d => this.isMyDepartment(d.id));
+            return own.length ? own : this.departments;
+        },
         currentDepartmentName() {
             if (!this.filters.department_id) return '';
             const dep = this.departments.find(d => String(d.id) === String(this.filters.department_id));
@@ -1499,9 +1508,10 @@ createApp({
                 // The department filter has no "all" option: an empty / unknown department
                 // (old link, saved state, deleted department) falls back to the first one.
                 // (templates call loadOverview(event), so only the explicit retry value 1 counts)
-                if (fallbackAttempt !== 1 && this.departments.length
-                    && !this.departments.some(d => String(d.id) === String(this.filters.department_id))) {
-                    this.filters.department_id = String(this.departments[0].id);
+                const allowedDepartments = this.departmentOptions;
+                if (fallbackAttempt !== 1 && allowedDepartments.length
+                    && !allowedDepartments.some(d => String(d.id) === String(this.filters.department_id))) {
+                    this.filters.department_id = String(allowedDepartments[0].id);
                     this.filters.team_id = '';
                     this.filters.user_id = '';
                     needsDepartmentReload = true;
@@ -1653,8 +1663,9 @@ createApp({
         getDefaultFilters() {
             const isProjectManager = !!(window.currentUser && window.currentUser.isProjectManager);
             let userDepartmentId = getOverviewPreferredDepartmentId();
-            if (this.departments.length && !this.departments.some(d => String(d.id) === userDepartmentId)) {
-                userDepartmentId = String(this.departments[0].id);
+            const allowedDepartments = this.departmentOptions;
+            if (allowedDepartments.length && !allowedDepartments.some(d => String(d.id) === userDepartmentId)) {
+                userDepartmentId = String(allowedDepartments[0].id);
             }
             return {
                 department_id: userDepartmentId,

@@ -53,7 +53,7 @@ try {
                 <div class="col-6 col-md-3 col-xl-2">
                     <label class="form-label small mb-1"><span data-i18n="部署">部署</span></label>
                     <select autocomplete="off" class="form-select form-select-sm" v-model="filters.department_id" @change="onDepartmentChange">
-                        <option v-for="dep in departments" :key="dep.id" :value="String(dep.id)">{{ isMyDepartment(dep.id) ? '★ ' : '' }}{{ dep.name }}</option>
+                        <option v-for="dep in departmentOptions" :key="dep.id" :value="String(dep.id)">{{ isMyDepartment(dep.id) ? '★ ' : '' }}{{ dep.name }}</option>
                     </select>
                 </div>
                 <div class="col-6 col-md-3 col-xl-2" :class="{ 'kb-filter-on': !!filters.team_id }">
@@ -1225,7 +1225,9 @@ window.currentUser = {
     id: <?= json_encode($_SESSION['userid'] ?? '') ?>,
     department_id: <?= json_encode($overviewDefaultDepartmentId) ?>,
     department_ids: <?= json_encode(array_map('strval', $overviewMyDepartmentIds)) ?>,
-    isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>
+    isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>,
+    // 部署 filter: administrators see every department, others only their own
+    isAdministrator: <?= json_encode(($_SESSION['authority'] ?? '') === 'administrator') ?>
 };
 </script>
 
