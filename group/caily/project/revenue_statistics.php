@@ -84,7 +84,7 @@ if (!$canAccessRevenueStats) {
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link" :class="{ active: activeSubTab === 'backlog' }" type="button" @click="setActiveSubTab('backlog')">
-                    <i class="fa fa-clock-o me-1"></i><span data-i18n="未請求案件">未請求案件</span>
+                    <i class="fa fa-clock-o me-1"></i><span data-i18n="未請求案件(請求待ち)">未請求案件(請求待ち)</span>
                 </button>
             </li>
             <li class="nav-item" role="presentation">
@@ -439,7 +439,7 @@ if (!$canAccessRevenueStats) {
             <div class="card mb-4">
                 <div class="card-header revenue-stats-card-header">
                     <h5 class="mb-0">
-                        <span data-i18n="未請求案件">未請求案件</span>（<span data-i18n="すべての期間">すべての期間</span>）
+                        <span data-i18n="未請求案件(請求待ち)">未請求案件(請求待ち)</span>（<span data-i18n="すべての期間">すべての期間</span>）
                         <span class="form-check form-check-inline ms-3 mb-0 align-middle">
                             <input class="form-check-input" type="checkbox" id="tantouCailyBacklogToggle" v-model="showTantouCaily">
                             <label class="form-check-label small" for="tantouCailyBacklogToggle">CAILY</label>
@@ -477,6 +477,7 @@ if (!$canAccessRevenueStats) {
                                     <col style="width: 7%;">
                                     <col v-if="!isEnergyDepartment" style="width: 8%;">
                                     <col v-if="showEnergyFeeType" style="width: 6%;">
+                                    <col style="width: 7%;">
                                     <col style="width: 8%;">
                                     <col v-if="showEnergyFeeType" style="width: 7%;">
                                     <col style="width: 7%;">
@@ -495,6 +496,7 @@ if (!$canAccessRevenueStats) {
                                         <th data-i18n="期限日">期限日</th>
                                         <th v-if="!isEnergyDepartment" data-i18n="チーム">チーム</th>
                                         <th v-if="showEnergyFeeType" data-i18n="種類">種類</th>
+                                        <th data-i18n="状態">状態</th>
                                         <th class="text-end" data-i18n="見積金額">見積金額</th>
                                         <th v-if="showEnergyFeeType" data-i18n="請求状況">請求状況</th>
                                         <th data-i18n="完了日">完了日</th>
@@ -517,6 +519,7 @@ if (!$canAccessRevenueStats) {
                                             <span v-if="p.fee_type" class="badge revenue-fee-type-badge" :class="feeTypeBadgeClass(p.fee_type)">{{ p.fee_type }}</span>
                                             <template v-else>—</template>
                                         </td>
+                                        <td>{{ p.status_label || '—' }}</td>
                                         <td class="text-end"><span v-if="freeLabel(p, 'backlog')" class="badge bg-label-secondary revenue-free-badge me-1">{{ freeLabel(p, 'backlog') }}</span>{{ formatCurrency(p.amount) }}</td>
                                         <td v-if="showEnergyFeeType">{{ p.invoice_status || '—' }}</td>
                                         <td>{{ formatDate(p.actual_end_date) }}</td>
@@ -525,7 +528,7 @@ if (!$canAccessRevenueStats) {
                                 </tbody>
                                 <tfoot v-if="group.projects.length" class="table-secondary fw-semibold">
                                     <tr>
-                                        <td :colspan="(showEnergyFeeType ? 10 : 9) - (isEnergyDepartment ? 1 : 0)" data-i18n="合計">合計</td>
+                                        <td :colspan="(showEnergyFeeType ? 11 : 10) - (isEnergyDepartment ? 1 : 0)" data-i18n="合計">合計</td>
                                         <td class="text-end">{{ formatCurrency(group.totals.amount) }}</td>
                                         <td v-if="showEnergyFeeType"></td>
                                         <td></td>

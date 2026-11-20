@@ -164,7 +164,7 @@
             case 'detail':
                 return translateLabel('請求済み案件') + '（' + vm.monthLabel + '）';
             case 'backlog':
-                return translateLabel('未請求案件') + '（' + translateLabel('すべての期間') + '）';
+                return translateLabel('未請求案件(請求待ち)') + '（' + translateLabel('すべての期間') + '）';
             case 'estimated': {
                 const period = vm.showEstimatedAllTime
                     ? translateLabel('すべての期間')
@@ -271,6 +271,7 @@
                 cols.push(amount('invoice_amount'));
                 break;
             case 'backlog':
+                cols.push({ h: '状態', w: 10, align: 'center', v: function(p) { return xlText(p.status_label); } });
                 cols.push(amount('amount'));
                 if (energy) cols.push({ h: '請求状況', w: 10, align: 'center', v: function(p) { return xlText(p.invoice_status); } });
                 cols.push({ h: '完了日', w: 11, align: 'center', v: function(p) { return vm.formatDate(p.actual_end_date); } });
