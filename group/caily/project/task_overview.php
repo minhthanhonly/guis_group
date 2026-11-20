@@ -761,10 +761,19 @@ try {
     overflow: hidden;
     font-size: 0.7rem;
     font-weight: 600;
+    line-height: 1;
+    white-space: nowrap; /* initials such as "ウエン" / "Duya" must stay on one line */
+    letter-spacing: -0.02em;
     color: var(--bs-primary);
     background: rgba(var(--bs-primary-rgb), 0.16);
 }
 .kb-avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* Larger avatars in the 担当者 filter bar */
+.kb-member .kb-avatar {
+    width: 2.375rem;
+    height: 2.375rem;
+    font-size: 0.6875rem;
+}
 .kb-avatar--none { color: var(--bs-secondary-color); background: rgba(var(--bs-secondary-rgb), 0.16); }
 .kb-avatar--sm {
     width: 1.5rem;
