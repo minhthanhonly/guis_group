@@ -13,6 +13,8 @@ $talk = [['role' => 'user', 'text' => 'q'], ['role' => 'assistant', 'text' => 'a
 unset($_SESSION['ai_chat'], $_SESSION['ai_chat_at'], $_SESSION['ai_chat_log']);
 check('hide and show buttons are in the bar', strpos($render(), 'id="ai-chat-hide"') !== false && strpos($render(), 'id="ai-chat-show"') !== false);
 check('the hidden choice is applied before the script loads', strpos($render(), "localStorage.getItem('aiChatHidden')") !== false);
+check('the bar is rendered hidden, so it never flashes open', preg_match('/id="ai-chat-bar" class="ai-chat-bar is-hidden"/', $render()) === 1);
+check('it is opened before the script loads only for someone who opened it', preg_match("/getItem\('aiChatHidden'\) === '0'[^;]*classList\.remove\('is-hidden'\)/", $render()) === 1);
 check('new conversation button says what it does', preg_match('/id="ai-chat-new"[^>]*title="[^"]+"[^>]*>\s*<svg/', $render()) === 1);
 check('no conversation: flag is 0', strpos($render(), 'data-has-history="0"') !== false);
 

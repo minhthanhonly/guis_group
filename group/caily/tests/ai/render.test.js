@@ -1,5 +1,5 @@
 // Run: node tests/ai/render.test.js
-const { renderMarkdown, shouldSend, isSafeUrl, shouldOpenOnFocus, helpGroups, bottomOffset, hiddenPlace, departmentChoice, barActive } = require('../../assets/js/ai-chat-bar.js');
+const { renderMarkdown, shouldSend, isSafeUrl, shouldOpenOnFocus, helpGroups, bottomOffset, hiddenPlace, departmentChoice, barActive, startsHidden } = require('../../assets/js/ai-chat-bar.js');
 let failed = 0, count = 0;
 function ok(cond, name) { count++; if (!cond) failed++; console.log((cond ? 'PASS' : 'FAIL') + '  ' + name); }
 function eq(a, b, name) { ok(a === b, name + (a === b ? '' : '\n      got: ' + JSON.stringify(a))); }
@@ -80,6 +80,10 @@ const palette = { top: 754, bottom: 790, left: 1102, right: 1138 };
 eq(JSON.stringify(hiddenPlace(1280, 800, [palette])), JSON.stringify({ right: 186, bottom: 10 }), 'hidden: left of the command palette button');
 eq(JSON.stringify(hiddenPlace(1280, 800, [palette, tour])), JSON.stringify({ right: 230, bottom: 10 }), 'hidden: left of the tour button when the page has one');
 eq(JSON.stringify(hiddenPlace(1280, 800, [])), JSON.stringify({ right: 10, bottom: 10 }), 'hidden: bottom right corner when there are no shortcut buttons');
+// The bar starts as that round button; it stays open only for someone who opened it.
+eq(startsHidden(null), true, 'hidden: by default, with no choice remembered');
+eq(startsHidden('1'), true, 'hidden: when the user hid it');
+eq(startsHidden('0'), false, 'hidden: not when the user opened it');
 
 // Default department: remembered as { id, name }; dropped once the server's list no longer has it.
 eq(JSON.stringify(departmentChoice({ id: 5, name: '意匠設計' }, null)), JSON.stringify({ id: 5, name: '意匠設計' }), 'department: the remembered one is used before the list is loaded');

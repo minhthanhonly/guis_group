@@ -15,7 +15,7 @@ $aiIconSparkles = '<svg class="ai-chat-svg" viewBox="0 0 24 24" fill="none" stro
 // that has just loaded.
 $aiHasHistory = !empty($_SESSION['ai_chat_log']) && is_array($_SESSION['ai_chat_log']);
 ?>
-<div id="ai-chat-bar" class="ai-chat-bar" data-has-history="<?= $aiHasHistory ? '1' : '0' ?>">
+<div id="ai-chat-bar" class="ai-chat-bar is-hidden" data-has-history="<?= $aiHasHistory ? '1' : '0' ?>">
   <div id="ai-chat-panel" class="ai-chat-panel" aria-hidden="true">
     <div class="ai-chat-head">
       <span class="ai-chat-title"><?= $aiIconSparkles ?><span data-i18n="AIアシスタント">AIアシスタント</span></span>
@@ -59,6 +59,7 @@ $aiHasHistory = !empty($_SESSION['ai_chat_log']) && is_array($_SESSION['ai_chat_
   <button type="button" id="ai-chat-show" class="btn btn-primary rounded-circle ai-chat-show" title="AIアシスタントを表示" aria-label="AIアシスタントを表示"><?= $aiIconSparkles ?></button>
 </div>
 <script>
-  // Applied before the script loads so a hidden bar does not flash on every page.
-  try { if (localStorage.getItem('aiChatHidden') === '1') { document.getElementById('ai-chat-bar').classList.add('is-hidden'); } } catch (e) {}
+  // The bar starts as the round button (is-hidden above). It is opened here, before the script loads,
+  // only for someone who opened it before, so it does not flash on every page.
+  try { if (localStorage.getItem('aiChatHidden') === '0') { document.getElementById('ai-chat-bar').classList.remove('is-hidden'); } } catch (e) {}
 </script>

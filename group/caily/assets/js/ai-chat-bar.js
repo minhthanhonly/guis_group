@@ -242,6 +242,14 @@
 
   var HIDDEN_KEY = 'aiChatHidden';
 
+  /**
+   * Does the bar start as the round button? Yes unless the user opened it ('0' remembered).
+   * @param stored the remembered choice: '1' hidden, '0' open, null none yet
+   */
+  function startsHidden(stored) {
+    return stored !== '0';
+  }
+
   function isHidden() {
     return els.bar.classList.contains('is-hidden');
   }
@@ -882,6 +890,11 @@
     var hideBtn = document.getElementById('ai-chat-hide');
     var showBtn = document.getElementById('ai-chat-show');
     if (hideBtn && showBtn) {
+      var remembered = null;
+      try {
+        remembered = localStorage.getItem(HIDDEN_KEY);
+      } catch (e) {}
+      els.bar.classList.toggle('is-hidden', startsHidden(remembered));
       hideBtn.title = tr('右に隠す');
       hideBtn.setAttribute('aria-label', hideBtn.title);
       showBtn.title = tr('AIアシスタントを表示');
@@ -960,5 +973,5 @@
     });
   }
 
-  return { renderMarkdown: renderMarkdown, shouldSend: shouldSend, isSafeUrl: isSafeUrl, shouldOpenOnFocus: shouldOpenOnFocus, helpGroups: helpGroups, bottomOffset: bottomOffset, hiddenPlace: hiddenPlace, departmentChoice: departmentChoice, barActive: barActive, init: init };
+  return { renderMarkdown: renderMarkdown, shouldSend: shouldSend, isSafeUrl: isSafeUrl, shouldOpenOnFocus: shouldOpenOnFocus, helpGroups: helpGroups, bottomOffset: bottomOffset, hiddenPlace: hiddenPlace, departmentChoice: departmentChoice, barActive: barActive, startsHidden: startsHidden, init: init };
 });
