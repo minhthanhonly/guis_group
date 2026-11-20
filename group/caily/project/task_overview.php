@@ -169,6 +169,9 @@ try {
                         <i class="fa fa-list me-1"></i><span data-i18n="リスト">リスト</span>
                     </button>
                 </div>
+                <button type="button" class="btn btn-sm btn-outline-success text-nowrap" @click="exportTasksExcel" :disabled="loading || !getExportTasks().length" :title="$t('表示中のタスクをExcelに出力')">
+                    <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" @click="loadOverview" :disabled="loading" :title="$t('更新')" :aria-label="$t('更新')">
                     <i class="fa fa-refresh" :class="{ 'fa-spin': loading }"></i>
                 </button>
@@ -313,7 +316,6 @@ try {
                                     <th><span data-i18n="案件">案件</span></th>
                                     <th><span data-i18n="タスク">タスク</span></th>
                                     <th><span data-i18n="種別">種別</span></th>
-                                    <th><span data-i18n="図面">図面</span></th>
                                     <th><span data-i18n="担当者">担当者</span></th>
                                     <th><span data-i18n="作成者">作成者</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
@@ -340,9 +342,6 @@ try {
                                     </td>
                                     <td>
                                         <span v-if="getTaskKindDisplayValue(task)" class="badge small" :class="getTaskKindBadgeClass(getTaskKindDisplayValue(task))">{{ getTaskKindLabel(getTaskKindDisplayValue(task)) }}</span>
-                                    </td>
-                                    <td>
-                                        <span v-if="shouldShowTaskDrawingCount(task)" class="small">{{ getTaskDrawingCount(task) }}</span>
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center flex-wrap gap-1">
@@ -1206,6 +1205,7 @@ window.currentUser = {
 };
 </script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
 <script src="assets/js/task-overview.js?v=<?=STATS_CACHE_VERSION?>"></script>
 
 

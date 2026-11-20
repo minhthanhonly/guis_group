@@ -509,6 +509,81 @@ createApp({
             this.selectedStatusKeys = keys;
             this.syncFiltersToUrl();
         },
+        // Tasks currently on screen: list view applies the status buttons on top of the other filters
+        getExportTasks() {
+            return this.viewMode === 'list' ? this.listTasks : this.sortedBoardTasks;
+        },
+        exportTasksExcel() {
+            const tr = (key) => (typeof this.$t === 'function' ? this.$t(key) : key);
+            const notify = (msg, type) => {
+                if (typeof Notiflix !== 'undefined' && Notiflix.Notify) {
+                    Notiflix.Notify[type || 'failure'](msg);
+                } else {
+                    alert(msg);
+                }
+            };
+            if (typeof XLSX === 'undefined') {
+                notify(tr('Excel出力に失敗しました。'));
+                return;
+            }
+            const tasks = this.getExportTasks();
+            if (!tasks.length) {
+                notify(tr('出力するタスクがありません'), 'warning');
+                return;
+            }
+            const dateText = (value) => {
+                const v = String(value || '').trim();
+                if (!v || v.startsWith('0000')) return '';
+                return v.replace('T', ' ').slice(0, 16);
+            };
+            const numberOrBlank = (value) => {
+                const n = parseFloat(value);
+                return Number.isNaN(n) ? '' : n;
+            };
+            const headers = [
+                '案件番号', '工事番号', '案件', 'タスクID', 'タスク', '種別', '担当者', '作成者',
+                'ステータス', '優先度', '進捗(%)', '工数(h)', '開始日', '期限', 'メモ'
+            ].map(tr);
+            const rows = tasks.map(task => {
+                const assignees = (Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [])
+                    .map(id => {
+                        const user = this.getAssigneeUser(id);
+                        return user ? (user.realname || user.user_name || String(id)) : String(id);
+                    })
+                    .join(', ');
+                const creator = this.getCreatorMember(task);
+                const kind = this.getTaskKindDisplayValue(task);
+                return [
+                    Number(task.project_id) || task.project_id || '',
+                    task.project_construction_number || '',
+                    task.project_name || '',
+                    Number(task.id) || task.id,
+                    task.title || '',
+                    kind ? this.getTaskKindLabel(kind) : '',
+                    assignees,
+                    (creator && creator.user_name) || task.created_by_name || '',
+                    this.getStatusLabel(task.status) || '',
+                    this.getPriorityLabel(task.priority) || '',
+                    numberOrBlank(task.progress) === '' ? 0 : numberOrBlank(task.progress),
+                    numberOrBlank(task.estimated_hours),
+                    dateText(task.start_date),
+                    dateText(task.due_date),
+                    String(task.note || '').replace(/<[^>]*>/g, '').trim()
+                ];
+            });
+            const sheet = XLSX.utils.aoa_to_sheet([headers].concat(rows));
+            const widths = [10, 14, 40, 10, 32, 12, 28, 18, 10, 8, 8, 8, 17, 17, 40];
+            sheet['!cols'] = widths.map(wch => ({ wch }));
+            sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
+            const book = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(book, sheet, 'タスク一覧');
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const stamp = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '_' + pad(now.getHours()) + pad(now.getMinutes());
+            const safe = (v) => String(v || '').replace(/[\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
+            const parts = ['全タスク一覧', safe(this.currentDepartmentName), stamp].filter(Boolean);
+            XLSX.writeFile(book, parts.join('_') + '.xlsx');
+        },
         toggleColumn(status) {
             this.collapsedColumns = { ...this.collapsedColumns, [status]: !this.collapsedColumns[status] };
             this.persistBoardPrefs();
