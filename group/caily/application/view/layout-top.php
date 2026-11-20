@@ -134,6 +134,8 @@
                       <div data-i18n="従業員統計">従業員統計</div>
                     </a>
                   </li>
+                <?php } ?>
+                <?php if (($_SESSION['authority'] ?? '') === 'administrator') { ?>
                   <li class="menu-item <?php if($directory == 'project' && $page == 'team_revenue_targets') echo 'active'; ?>">
                     <a href="<?=$root?>project/team_revenue_targets.php" class="menu-link">
                       <div data-i18n="売上目標設定">売上目標設定</div>

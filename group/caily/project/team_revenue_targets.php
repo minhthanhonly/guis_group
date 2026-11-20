@@ -1,8 +1,7 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('チーム売上目標設定');
-$canAccessTeamRevenueTargets = !empty($_SESSION['isProjectManager'])
-    || (($_SESSION['userid'] ?? '') === 'hayashida');
+$canAccessTeamRevenueTargets = (($_SESSION['authority'] ?? '') === 'administrator');
 if(!$canAccessTeamRevenueTargets){
     echo '<div class="container-fluid mt-4"><div class="alert alert-danger">権限がありません。</div></div>';
     exit;
