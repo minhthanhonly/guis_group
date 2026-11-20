@@ -270,7 +270,7 @@ if (!$canAccessRevenueStats) {
                 </div>
             </div>
 
-            <div class="row g-3">
+            <div class="row g-3" v-if="!isEnergyDepartment">
                 <div class="col-6" v-for="block in summaryTantouBlocks" :key="block.tantou">
                     <div class="card mt-4">
                         <div class="card-header">
