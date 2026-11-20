@@ -63,7 +63,7 @@ try {
                         <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-3 col-xl-2" v-if="canSelectUser" :class="{ 'kb-filter-on': !!filters.user_id && !filters.myTask }">
+                <div class="col-6 col-md-3 col-xl-2" v-if="canSelectUser" v-show="activeTab === 'weekly'" :class="{ 'kb-filter-on': !!filters.user_id }">
                     <label class="form-label small mb-1"><span data-i18n="ユーザー">ユーザー</span></label>
                     <select autocomplete="off" id="overviewUserFilter" class="form-select form-select-sm" ref="userFilterSelect">
                         <option value="" data-i18n="すべて">すべて</option>

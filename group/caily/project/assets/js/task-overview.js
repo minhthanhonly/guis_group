@@ -258,7 +258,7 @@ createApp({
         },
         // People shown in the member bar, with how many visible tasks each one has
         boardMembers() {
-            if (this.filters.myTask || this.filters.user_id || this.filters.unassignedOnly) return [];
+            if (this.filters.myTask || this.filters.unassignedOnly) return [];
             const counts = new Map();
             let unassigned = 0;
             this.baseBoardTasks.forEach(task => {
@@ -443,9 +443,6 @@ createApp({
             }
             if (typeof saved.weeklyHoursByWeek === 'boolean') this.weeklyHoursByWeek = saved.weeklyHoursByWeek;
             if (typeof saved.weeklyShowEntries === 'boolean') this.weeklyShowEntries = saved.weeklyShowEntries;
-            if (this.filters.myTask) {
-                this.filters.user_id = '';
-            }
             return true;
         },
         // On F5 some browsers restore the previous checked state of form controls after Vue has
@@ -551,10 +548,6 @@ createApp({
             if (f.team_id) {
                 const team = this.teams.find(x => String(x.id) === String(f.team_id));
                 items.push(t('チーム') + '：' + (team ? team.name : f.team_id));
-            }
-            if (f.user_id && !f.myTask) {
-                const user = this.users.find(x => String(x.id) === String(f.user_id));
-                items.push(t('ユーザー') + '：' + (user ? user.realname : f.user_id));
             }
             if (f.created_month) {
                 const m = String(f.created_month).match(/^(\d{4})-(\d{2})$/);
@@ -986,7 +979,7 @@ createApp({
             if (this.filters.team_id) {
                 params.set('team_id', String(this.filters.team_id));
             }
-            if (this.filters.user_id && !this.filters.myTask) {
+            if (this.activeTab === 'weekly' && this.filters.user_id) {
                 params.set('user_id', String(this.filters.user_id));
             }
             params.set('created_month', this.filters.created_month ? String(this.filters.created_month) : 'all');
@@ -1489,11 +1482,10 @@ createApp({
                 if (this.filters.created_month) {
                     params.append('created_month', this.filters.created_month);
                 }
-                // Nếu myTask được chọn, gửi user_id của user hiện tại
+                // 自分のタスク: only the current user's tasks. (filters.user_id is the weekly tab's
+                // user only; the task list narrows people with the 担当者 bar instead.)
                 if (this.filters.myTask && window.currentUser?.user_id) {
                     params.append('user_id', window.currentUser.user_id);
-                } else if (this.filters.user_id) {
-                    params.append('user_id', this.filters.user_id);
                 }
                 if (this.filters.excludeCompleted) {
                     params.append('exclude_completed', 1);
@@ -1630,15 +1622,9 @@ createApp({
             // Only unassigned tasks: filters that look at assignees / timers make no sense
             this.filters.timerActiveOnly = false;
             this.memberFilterIds = [];
-            const needsReload = this.filters.myTask || !!this.filters.user_id;
             if (this.filters.myTask) {
                 this.filters.myTask = false;
-                this.onMyTaskChange(); // reloads and restores the department for non-managers
-                return;
-            }
-            if (needsReload) {
-                this.filters.user_id = '';
-                this.loadOverview();
+                this.onMyTaskChange(); // reloads without the own-task restriction
                 return;
             }
             this.syncFiltersToUrl();
@@ -1653,29 +1639,16 @@ createApp({
             if (this.filters.myTask) {
                 this.filters.unassignedOnly = false;
             }
-            // When "My Task" is checked, set user_id to current user and reload from API
-            // When unchecked, clear user_id and reload to show all tasks
-            if (this.filters.myTask) {
-                // Clear manual user selection when showing own tasks (department stays: there is no "all")
-                this.filters.user_id = '';
-            }
+            // 自分のタスク reloads the list from the API with the current user's id
             this.loadOverview();
             this.memberFilterIds = [];
-            this.$nextTick(() => this.syncUserSelect2Value());
-            if (this.activeTab === 'weekly') {
-                this.loadWeeklyTasks();
-            }
         },
         onUserChange() {
-            // When user is manually selected, uncheck "My Task"
-            if (this.filters.user_id) {
-                this.filters.myTask = false;
-                this.filters.unassignedOnly = false;
-            }
-            this.loadOverview();
+            // The user select lives on the weekly tab only: it does not filter the task list
             if (this.activeTab === 'weekly') {
                 this.loadWeeklyTasks();
             }
+            this.syncFiltersToUrl();
         },
         getDefaultFilters() {
             const isProjectManager = !!(window.currentUser && window.currentUser.isProjectManager);
@@ -1747,9 +1720,6 @@ createApp({
         getWeeklyTargetUserId() {
             if (!this.canSelectUser) {
                 return window.currentUser?.user_id || '';
-            }
-            if (this.filters.myTask && window.currentUser?.user_id) {
-                return window.currentUser.user_id;
             }
             return this.filters.user_id || window.currentUser?.user_id || '';
         },
@@ -1953,7 +1923,6 @@ createApp({
         if (this.filters.unassignedOnly) {
             this.filters.myTask = false;
             this.filters.timerActiveOnly = false;
-            this.filters.user_id = '';
         }
 
         // Non-managers cannot pick another user. Defaults (own department, or own tasks
