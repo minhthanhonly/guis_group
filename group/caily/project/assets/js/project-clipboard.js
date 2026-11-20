@@ -212,17 +212,7 @@
         return url.href;
     }
 
-    function energyTaskUrl(projectId, taskId) {
-        var url = new URL('task.php', global.location.href);
-        url.searchParams.set('project_id', projectId);
-        url.searchParams.set('task_id', taskId);
-        return url.href;
-    }
-
-    /**
-     * Lines of the 省エネ block. Each line is {text} or, for the task line, {text, link, linkText}
-     * so the rich copy can make 計算書作成 a link to the task.
-     */
+    /** Lines ({text}) of the 省エネ block */
     function buildEnergyClipboardLines(row, energyTask) {
         var lines = [
             { text: PROJECT_CLIPBOARD_SEPARATOR },
@@ -234,12 +224,7 @@
             { text: '規模: ' + (row.parent_scale || '') }
         );
         var due = energyTask ? formatProjectClipboardDateTime(energyTask.due_date) : '';
-        lines.push({
-            text: ENERGY_TASK_TITLE + '納期: ' + due,
-            link: energyTask && energyTask.id ? energyTaskUrl(row.id, energyTask.id) : '',
-            linkText: ENERGY_TASK_TITLE,
-            rest: '納期: ' + due
-        });
+        lines.push({ text: ENERGY_TASK_TITLE + '納期: ' + due });
         lines.push(
             { text: 'URL: ' + projectDetailUrl(row.id) },
             { text: PROJECT_CLIPBOARD_SEPARATOR }
@@ -289,10 +274,6 @@
         }
     }
 
-    function escapeHtml(t) {
-        return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
     /** The 計算書作成 task of the project ({id, due_date}) or null */
     async function fetchEnergyTask(projectId) {
         if (!global.axios || !projectId) return null;
@@ -309,8 +290,8 @@
     }
 
     /**
-     * 案件情報をコピー: builds and copies the block. 省エネ projects look up the 計算書作成 task and
-     * also put an HTML version on the clipboard where 計算書作成 links to the task.
+     * 案件情報をコピー: builds and copies the block (plain text). 省エネ projects look up the
+     * 計算書作成 task for its 期限.
      */
     async function copyProjectInfo(data, teamIdToName) {
         var row = normalizeProjectForClipboard(data);
@@ -319,24 +300,7 @@
             return copyTextToClipboard(buildProjectClipboardText(data, teamIdToName));
         }
         var task = await fetchEnergyTask(row.id);
-        var lines = buildEnergyClipboardLines(row, task);
-        var text = lines.map(function (l) { return l.text; }).join('\n') + '\n';
-        var html = lines.map(function (l) {
-            if (l.link) {
-                return '<a href="' + escapeHtml(l.link) + '">' + escapeHtml(l.linkText) + '</a>' + escapeHtml(l.rest);
-            }
-            return escapeHtml(l.text);
-        }).join('<br>');
-        if (global.ClipboardItem && global.navigator && global.navigator.clipboard && global.navigator.clipboard.write) {
-            try {
-                await global.navigator.clipboard.write([new global.ClipboardItem({
-                    'text/plain': new Blob([text], { type: 'text/plain' }),
-                    'text/html': new Blob([html], { type: 'text/html' })
-                })]);
-                return true;
-            } catch (e) { /* fall back to plain text */ }
-        }
-        return copyTextToClipboard(text);
+        return copyTextToClipboard(buildProjectClipboardText(data, teamIdToName, task));
     }
 
     global.ProjectClipboard = {
