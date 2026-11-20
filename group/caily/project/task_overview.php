@@ -6,8 +6,8 @@ if($_SESSION['show_project'] == 0){
     exit;
 }
 
-// Departments the current user belongs to (active only). The board opens on the first one;
-// a user with no department gets the second active department (same order as the department filter).
+// Fallback department for the board (the page JS prefers the department chosen on the project list):
+// the user's first department, or the first active department when the user belongs to none.
 $overviewMyDepartmentIds = array();
 $overviewDefaultDepartmentId = '';
 try {
@@ -26,11 +26,9 @@ try {
     if ($overviewMyDepartmentIds) {
         $overviewDefaultDepartmentId = (string)$overviewMyDepartmentIds[0];
     } else {
-        // Second active department (falls back to the first when only one exists)
-        $overviewFallbackDepts = $overviewDeptModel->fetchAll(
-            "SELECT id FROM " . DB_PREFIX . "departments WHERE is_active = 1 ORDER BY id ASC LIMIT 2"
+        $overviewFallbackDept = $overviewDeptModel->fetchOne(
+            "SELECT id FROM " . DB_PREFIX . "departments WHERE is_active = 1 ORDER BY id ASC LIMIT 1"
         );
-        $overviewFallbackDept = isset($overviewFallbackDepts[1]) ? $overviewFallbackDepts[1] : ($overviewFallbackDepts[0] ?? null);
         if (!empty($overviewFallbackDept['id'])) {
             $overviewDefaultDepartmentId = (string)(int)$overviewFallbackDept['id'];
         }
@@ -55,7 +53,6 @@ try {
                 <div class="col-6 col-md-3 col-xl-2">
                     <label class="form-label small mb-1"><span data-i18n="部署">部署</span></label>
                     <select class="form-select form-select-sm" v-model="filters.department_id" @change="onDepartmentChange">
-                        <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="dep in departments" :key="dep.id" :value="String(dep.id)">{{ isMyDepartment(dep.id) ? '★ ' : '' }}{{ dep.name }}</option>
                     </select>
                 </div>

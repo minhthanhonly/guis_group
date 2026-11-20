@@ -41,13 +41,34 @@ const OVERVIEW_STATUS_ACCENTS = {
     'completed': 'var(--bs-success)',
     'cancelled': 'var(--bs-danger)'
 };
-const OVERVIEW_PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+const OVERVIEW_DEPARTMENT_FALLBACK = { departmentFallback: true };
+const OVERVIEW_PRIORITY_RANK ={ urgent: 0, high: 1, medium: 2, low: 3 };
 
 // Last-used filters, per user, so coming back to the page (e.g. from the menu or a task page)
 // shows the same board. URL parameters still win when present.
 function getOverviewFilterStateKey() {
     const uid = window.currentUser && window.currentUser.user_id ? String(window.currentUser.user_id) : 'guest';
     return 'taskOverviewFilters.v1.' + uid;
+}
+
+// Department picked on the project list page (shared key with project-list.js / project-gantt.js)
+function readProjectListDepartmentId() {
+    try {
+        const raw = window.localStorage ? window.localStorage.getItem('projectListSelectedDepartment') : null;
+        const parsed = raw ? JSON.parse(raw) : null;
+        const id = parsed && parsed.id != null ? String(parsed.id) : '';
+        return /^\d+$/.test(id) && id !== '0' ? id : '';
+    } catch (e) {
+        return '';
+    }
+}
+
+// Board department when nothing else decides it: the project-list department, otherwise the
+// server fallback (user's first department, or the first active department).
+function getOverviewPreferredDepartmentId() {
+    const fromProjectList = readProjectListDepartmentId();
+    if (fromProjectList) return fromProjectList;
+    return window.currentUser && window.currentUser.department_id ? String(window.currentUser.department_id) : '';
 }
 
 function readOverviewBoardPrefs() {
@@ -65,7 +86,7 @@ createApp({
         // Default view: the department the user works in. Users without a department
         // fall back to the previous behaviour (own tasks for non-managers).
         const isProjectManager = window.currentUser?.isProjectManager || false;
-        const userDepartmentId = window.currentUser?.department_id ? String(window.currentUser.department_id) : '';
+        const userDepartmentId = getOverviewPreferredDepartmentId();
         const defaultMyTask = userDepartmentId ? false : !isProjectManager;
         const prefs = readOverviewBoardPrefs();
         const sortValues = ['due', 'priority', 'project', 'newest'];
@@ -1071,11 +1092,11 @@ createApp({
             if (!taskId) {
                 return false;
             }
-            if (window.TaskTimer) {
-                return window.TaskTimer.hasActiveTimerForTask(taskId);
-            }
-            if (taskOrId && typeof taskOrId === 'object' && taskOrId.timer_active) {
-                return true;
+            // Read the reactive task.timer_active flag (kept in sync with TaskTimer by
+            // syncTaskTimerActiveFlags). Reading window.TaskTimer directly is not tracked by Vue,
+            // so computed lists such as "作業計測中のタスクのみ" would keep stale results.
+            if (taskOrId && typeof taskOrId === 'object' && 'timer_active' in taskOrId) {
+                return !!taskOrId.timer_active;
             }
             const canonical = this.tasks.find((t) => parseInt(t.id, 10) === parseInt(taskId, 10));
             return !!(canonical && canonical.timer_active);
@@ -1170,8 +1191,14 @@ createApp({
         getCreatorTooltip(member) {
             return member ? (member.user_name || '') : '';
         },
-        async loadOverview() {
+        async loadOverview(fallbackAttempt = 0) {
             this.loading = true;
+            let needsDepartmentReload = false;
+            // Only the latest request may update the board: an older, slower response
+            // (e.g. with 自分のタスク still on) must not overwrite a newer one.
+            this._overviewRequestSeq = (this._overviewRequestSeq || 0) + 1;
+            const requestSeq = this._overviewRequestSeq;
+            const isStale = () => requestSeq !== this._overviewRequestSeq;
             try {
                 const params = new URLSearchParams({
                     model: 'task',
@@ -1196,14 +1223,31 @@ createApp({
                     params.append('exclude_completed', 1);
                 }
                 const response = await axios.get('/api/index.php?' + params.toString());
+                if (isStale()) {
+                    return;
+                }
                 const data = response.data || {};
                 this.departments = data.departments || [];
+                // The department filter has no "all" option: an empty / unknown department
+                // (old link, saved state, deleted department) falls back to the first one.
+                // (templates call loadOverview(event), so only the explicit retry value 1 counts)
+                if (fallbackAttempt !== 1 && this.departments.length
+                    && !this.departments.some(d => String(d.id) === String(this.filters.department_id))) {
+                    this.filters.department_id = String(this.departments[0].id);
+                    this.filters.team_id = '';
+                    this.filters.user_id = '';
+                    needsDepartmentReload = true;
+                    // leave the try block; the retry runs after `finally`
+                    throw OVERVIEW_DEPARTMENT_FALLBACK;
+                }
                 this.teams = data.teams || [];
                 this.users = data.users || [];
                 this.tasks = data.tasks || [];
                 this.unassignedUsers = data.unassigned_users || [];
                 if (window.TaskTimer && Array.isArray(data.active_task_ids)) {
                     window.TaskTimer.updateActiveTaskIds(data.active_task_ids);
+                    // updateActiveTaskIds only fires an event when the set changed, so sync here too
+                    this.syncTaskTimerActiveFlags(window.TaskTimer.activeTaskIds);
                 } else {
                     this.syncTaskTimerActiveFlags(
                         (this.tasks || []).filter((task) => task.timer_active).map((task) => task.id)
@@ -1214,6 +1258,9 @@ createApp({
                     this.initTooltips();
                 });
             } catch (e) {
+                if (e === OVERVIEW_DEPARTMENT_FALLBACK || isStale()) {
+                    // not an error: fallback reload below / a newer request superseded this one
+                } else {
                 console.error('Error loading task overview:', e);
                 console.error('Error details:', e.response?.data || e.message);
                 if (typeof showMessage === 'function') {
@@ -1221,10 +1268,17 @@ createApp({
                 } else {
                     alert('タスク一覧の読み込みに失敗しました: ' + (e.response?.data?.error || e.message));
                 }
+                }
             } finally {
-                this.loading = false;
-                this.syncFiltersToUrl();
-                this.$nextTick(() => this.initUserSelect2());
+                // a superseded request leaves the spinner / URL to the newer one
+                if (!needsDepartmentReload && !isStale()) {
+                    this.loading = false;
+                    this.syncFiltersToUrl();
+                    this.$nextTick(() => this.initUserSelect2());
+                }
+            }
+            if (needsDepartmentReload) {
+                return this.loadOverview(1);
             }
         },
         initUserSelect2() {
@@ -1323,21 +1377,10 @@ createApp({
             // When "My Task" is checked, set user_id to current user and reload from API
             // When unchecked, clear user_id and reload to show all tasks
             if (this.filters.myTask) {
-                // Clear manual user selection when showing own tasks
+                // Clear manual user selection when showing own tasks (department stays: there is no "all")
                 this.filters.user_id = '';
-                // If not project manager, also clear department_id when showing own tasks
-                if (!window.currentUser?.isProjectManager) {
-                    this.filters.department_id = '';
-                }
-                // Reload data from API with current user filter
-                this.loadOverview();
-            } else {
-                // When unchecked, go back to the user's own department instead of every department
-                if (!this.filters.department_id && window.currentUser?.department_id) {
-                    this.filters.department_id = String(window.currentUser.department_id);
-                }
-                this.loadOverview();
             }
+            this.loadOverview();
             this.memberFilterIds = [];
             this.$nextTick(() => this.syncUserSelect2Value());
             if (this.activeTab === 'weekly') {
@@ -1357,7 +1400,10 @@ createApp({
         },
         getDefaultFilters() {
             const isProjectManager = !!(window.currentUser && window.currentUser.isProjectManager);
-            const userDepartmentId = window.currentUser?.department_id ? String(window.currentUser.department_id) : '';
+            let userDepartmentId = getOverviewPreferredDepartmentId();
+            if (this.departments.length && !this.departments.some(d => String(d.id) === userDepartmentId)) {
+                userDepartmentId = String(this.departments[0].id);
+            }
             return {
                 department_id: userDepartmentId,
                 team_id: '',
@@ -1608,6 +1654,20 @@ createApp({
         const appliedFromUrl = this.applyFiltersFromUrl();
         if (!appliedFromUrl) {
             this.restoreFilterState();
+        }
+        // Department: URL parameter > department chosen on the project list > saved state > fallback
+        const urlHasDepartment = new URLSearchParams(window.location.search || '').has('department_id');
+        if (!urlHasDepartment) {
+            const fromProjectList = readProjectListDepartmentId();
+            if (fromProjectList && fromProjectList !== String(this.filters.department_id)) {
+                this.filters.department_id = fromProjectList;
+                this.filters.team_id = '';
+                this.filters.user_id = '';
+                this.memberFilterIds = [];
+            }
+        }
+        if (!this.filters.department_id) {
+            this.filters.department_id = getOverviewPreferredDepartmentId();
         }
         // 未割り当てタスクのみ excludes the assignee-based switches
         if (this.filters.unassignedOnly) {
