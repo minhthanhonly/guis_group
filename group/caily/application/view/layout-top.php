@@ -91,14 +91,12 @@
             <?php 
             
             $_revenuePermModel = new ApplicationModel();
-            $isHayashidaUser = (($_SESSION['userid'] ?? '') === 'hayashida');
-            $showEmployeeStatsMenu = (
-                (($_SESSION['authority'] ?? '') === 'administrator'
-                    && ($_SESSION['group'] ?? '') != '7'
-                    && ($_SESSION['group'] ?? '') != '6')
-                || $isHayashidaUser
-                || $_revenuePermModel->hasDepartmentPermission('project_director_stat')
-            );
+            $_isAdministrator = (($_SESSION['authority'] ?? '') === 'administrator');
+            // 従業員統計: administrator (except groups 6/7), or non-admins with 業務担当権限「統計」 in some department.
+            // (hasDepartmentPermission() is always true for administrators, so it is checked only for non-admins.)
+            $showEmployeeStatsMenu = $_isAdministrator
+                ? (($_SESSION['group'] ?? '') != '7' && ($_SESSION['group'] ?? '') != '6')
+                : $_revenuePermModel->hasDepartmentPermission('project_director_stat');
             $showRevenueStatsMenu = ($_SESSION['authority'] ?? '') === 'administrator'
                 || $_revenuePermModel->hasDepartmentPermission('project_director_stat')
                 || $showEmployeeStatsMenu;

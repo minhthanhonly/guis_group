@@ -1,11 +1,9 @@
 <?php
 require_once('../application/loader.php');
 $view->heading('従業員統計');
-// Full access (all departments): administrator, project manager, hayashida.
-// 業務担当権限「統計」 (project_director_stat) only: limited to the departments where the user has it.
-$employeeStatsFullAccess = (($_SESSION['authority'] ?? '') === 'administrator')
-    || !empty($_SESSION['isProjectManager'])
-    || (($_SESSION['userid'] ?? '') === 'hayashida');
+// administrator: all departments (with 「すべての部署」).
+// Everyone else: only the departments where they have 業務担当権限「統計」 (project_director_stat); none → no access.
+$employeeStatsFullAccess = (($_SESSION['authority'] ?? '') === 'administrator');
 $employeeStatsAllowedDeptIds = null; // null = all departments
 if (!$employeeStatsFullAccess) {
     $permModel = new ApplicationModel();
