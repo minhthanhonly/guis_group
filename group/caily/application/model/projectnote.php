@@ -19,6 +19,8 @@ class ProjectNote extends ApplicationModel {
             'pinned_at' => array(),
             'edit_locked_by' => array(),
             'edit_locked_at' => array(),
+            'edited_by' => array(),
+            'edited_at' => array(),
             'created_at' => array('except' => array('search')),
             'updated_at' => array('except' => array('search'))
         );
@@ -83,7 +85,7 @@ class ProjectNote extends ApplicationModel {
         $rows = $this->fetchAll(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS "
             . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' "
-            . "AND COLUMN_NAME IN ('bg_color', 'visibility', 'pinned_at', 'edit_locked_by', 'edit_locked_at')"
+            . "AND COLUMN_NAME IN ('bg_color', 'visibility', 'pinned_at', 'edit_locked_by', 'edit_locked_at', 'edited_by', 'edited_at')"
         );
         $have = array();
         foreach ((array)$rows as $r) {
@@ -117,6 +119,18 @@ class ProjectNote extends ApplicationModel {
             $this->query(
                 "ALTER TABLE `{$table}` ADD COLUMN `edit_locked_at` DATETIME DEFAULT NULL "
                 . "COMMENT '編集ロックの最終更新' AFTER `edit_locked_by`"
+            );
+        }
+        if (empty($have['edited_by'])) {
+            $this->query(
+                "ALTER TABLE `{$table}` ADD COLUMN `edited_by` varchar(64) DEFAULT NULL "
+                . "COMMENT '最終編集者 (userid)' AFTER `edit_locked_at`"
+            );
+        }
+        if (empty($have['edited_at'])) {
+            $this->query(
+                "ALTER TABLE `{$table}` ADD COLUMN `edited_at` DATETIME DEFAULT NULL "
+                . "COMMENT '最終編集日時 (内容の保存)' AFTER `edited_by`"
             );
         }
     }
@@ -802,6 +816,8 @@ class ProjectNote extends ApplicationModel {
             'needs_confirmation' => isset($_POST['needs_confirmation']) ? intval($_POST['needs_confirmation']) : 0,
             'display_column' => isset($_POST['display_column']) ? trim((string)$_POST['display_column']) : '',
             'label' => isset($_POST['label']) ? $this->normalizeLabel($_POST['label']) : '',
+            'edited_by' => $_SESSION['userid'],
+            'edited_at' => date('Y-m-d H:i:s'),
             'updated_at' => date('Y-m-d H:i:s')
         );
         if (isset($_POST['bg_color'])) {
@@ -1043,9 +1059,10 @@ class ProjectNote extends ApplicationModel {
 
     function getById($id) {
         $query = sprintf(
-            "SELECT n.*, u.realname
+            "SELECT n.*, u.realname, e.realname AS edited_by_name
             FROM {$this->table} n
             LEFT JOIN " . DB_PREFIX . "user u ON n.user_id = u.userid
+            LEFT JOIN " . DB_PREFIX . "user e ON n.edited_by = e.userid
             WHERE n.id = %d AND " . $this->currentVisibilitySql('n'),
             intval($id)
         );
@@ -1054,9 +1071,10 @@ class ProjectNote extends ApplicationModel {
 
     function getByProject($project_id) {
         $query = sprintf(
-            "SELECT n.*, u.realname
+            "SELECT n.*, u.realname, e.realname AS edited_by_name
             FROM {$this->table} n
             LEFT JOIN " . DB_PREFIX . "user u ON n.user_id = u.userid
+            LEFT JOIN " . DB_PREFIX . "user e ON n.edited_by = e.userid
             WHERE n.project_id = %d AND " . $this->currentVisibilitySql('n') . "
             ORDER BY n.is_important DESC, n.sort_order ASC, n.created_at DESC",
             intval($project_id)
