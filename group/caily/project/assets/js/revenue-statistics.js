@@ -241,17 +241,23 @@
     /** Columns of a list sheet (after 会社 / NO), per tab; exactly one has amount: true. */
     function revenueExcelColumns(tabKey, vm) {
         const energy = !!vm.showEnergyFeeType;
+        // 省エネ: 担当者 (the project's managers) instead of 担当, and no チーム.
+        const energyDept = !!vm.isEnergyDepartment;
         const cols = [
             { h: 'ID', w: 7, align: 'center', v: function(p) { return Number(p.id) || p.id; } },
             { h: '支店名', w: 14, v: function(p) { return xlText(p.branch_name); } },
             { h: '案件名', w: 32, link: true, v: function(p) { return xlText(p.name); } },
             { h: '工事番号', w: 12, v: function(p) { return xlText(p.parent_construction_number); } },
-            { h: '担当', w: 8, align: 'center', v: function(p) { return xlText(p.tantou); } },
+            energyDept
+                ? { h: '担当者', w: 16, v: function(p) { return xlText(p.manager_names); } }
+                : { h: '担当', w: 8, align: 'center', v: function(p) { return xlText(p.tantou); } },
             { h: '受注形態', w: 10, v: function(p) { return xlText(p.project_order_type); } },
             { h: '規模', w: 10, v: function(p) { return xlText(p.parent_scale); } },
-            { h: '期限日', w: 11, align: 'center', v: function(p) { return vm.formatDate(p.end_date); } },
-            { h: 'チーム', w: 14, v: function(p) { return vm.formatProjectTeams(p); } }
+            { h: '期限日', w: 11, align: 'center', v: function(p) { return vm.formatDate(p.end_date); } }
         ];
+        if (!energyDept) {
+            cols.push({ h: 'チーム', w: 14, v: function(p) { return vm.formatProjectTeams(p); } });
+        }
         if (energy) {
             cols.push({ h: '種類', w: 9, align: 'center', v: function(p) { return xlText(p.fee_type); } });
         }

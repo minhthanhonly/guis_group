@@ -6195,7 +6195,32 @@ class Project extends ApplicationModel {
                 $teamNameMap[(int)$row['id']] = $row['name'] ?? '';
             }
         }
+        // 担当者 = the project's managers (project_members.role = 'manager').
+        $managerNameMap = [];
+        $projectIds = [];
+        foreach ($projects as $project) {
+            $pid = (int)($project['id'] ?? 0);
+            if ($pid > 0) {
+                $projectIds[$pid] = true;
+            }
+        }
+        if (!empty($projectIds)) {
+            $managerRows = $this->fetchAll(sprintf(
+                "SELECT pm.project_id, GROUP_CONCAT(DISTINCT u.realname ORDER BY u.realname SEPARATOR ', ') AS names
+                 FROM %sproject_members pm
+                 INNER JOIN %suser u ON pm.user_id = u.id
+                 WHERE pm.project_id IN (%s) AND pm.role = 'manager'
+                 GROUP BY pm.project_id",
+                DB_PREFIX,
+                DB_PREFIX,
+                implode(',', array_keys($projectIds))
+            ));
+            foreach ($managerRows as $row) {
+                $managerNameMap[(int)$row['project_id']] = $row['names'] ?? '';
+            }
+        }
         foreach ($projects as &$project) {
+            $project['manager_names'] = $managerNameMap[(int)($project['id'] ?? 0)] ?? '';
             $typeParts = array_values(array_filter(array_map('trim', [
                 $project['parent_type1'] ?? '',
                 $project['parent_type2'] ?? '',
