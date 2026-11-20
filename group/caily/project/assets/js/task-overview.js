@@ -41,13 +41,40 @@ const OVERVIEW_STATUS_ACCENTS = {
     'completed': 'var(--bs-success)',
     'cancelled': 'var(--bs-danger)'
 };
-const OVERVIEW_PRIORITY_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
+const OVERVIEW_DEPARTMENT_FALLBACK = { departmentFallback: true };
+const OVERVIEW_PRIORITY_RANK ={ urgent: 0, high: 1, medium: 2, low: 3 };
 
 // Last-used filters, per user, so coming back to the page (e.g. from the menu or a task page)
 // shows the same board. URL parameters still win when present.
 function getOverviewFilterStateKey() {
     const uid = window.currentUser && window.currentUser.user_id ? String(window.currentUser.user_id) : 'guest';
     return 'taskOverviewFilters.v1.' + uid;
+}
+
+// Department picked on the project list page (shared key with project-list.js / project-gantt.js)
+function readProjectListDepartmentId() {
+    try {
+        const raw = window.localStorage ? window.localStorage.getItem('projectListSelectedDepartment') : null;
+        const parsed = raw ? JSON.parse(raw) : null;
+        const id = parsed && parsed.id != null ? String(parsed.id) : '';
+        return /^\d+$/.test(id) && id !== '0' ? id : '';
+    } catch (e) {
+        return '';
+    }
+}
+
+// Board department when nothing else decides it: the project-list department, otherwise the
+// server fallback (user's first department, or the first active department).
+function getOverviewPreferredDepartmentId() {
+    const fromProjectList = readProjectListDepartmentId();
+    if (fromProjectList) return fromProjectList;
+    return window.currentUser && window.currentUser.department_id ? String(window.currentUser.department_id) : '';
+}
+
+// 作成月 filter default: the current month (YYYY-MM)
+function getOverviewCurrentMonth() {
+    const now = new Date();
+    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
 }
 
 function readOverviewBoardPrefs() {
@@ -65,13 +92,16 @@ createApp({
         // Default view: the department the user works in. Users without a department
         // fall back to the previous behaviour (own tasks for non-managers).
         const isProjectManager = window.currentUser?.isProjectManager || false;
-        const userDepartmentId = window.currentUser?.department_id ? String(window.currentUser.department_id) : '';
+        const userDepartmentId = getOverviewPreferredDepartmentId();
         const defaultMyTask = userDepartmentId ? false : !isProjectManager;
         const prefs = readOverviewBoardPrefs();
         const sortValues = ['due', 'priority', 'project', 'newest'];
 
         return {
-            viewMode: prefs.viewMode === 'list' ? 'list' : 'kanban',
+            // Default: list. Only an explicit choice (saved as `view`) switches to kanban.
+            viewMode: prefs.view === 'kanban' ? 'kanban' : 'list',
+            // List view status filter (empty = すべて)
+            selectedStatusKeys: [],
             boardSort: sortValues.includes(prefs.boardSort) ? prefs.boardSort : 'due',
             collapsedColumns: (prefs.collapsedColumns && typeof prefs.collapsedColumns === 'object')
                 ? prefs.collapsedColumns
@@ -110,13 +140,13 @@ createApp({
                 department_id: userDepartmentId,
                 team_id: '',
                 user_id: '',
-                created_month: '',
-                // Mặc định loại bỏ completed để giảm tải
-                excludeCompleted: true,
+                created_month: getOverviewCurrentMonth(),
+                // Default: 完了・キャンセルを表示 ON (the 作成月 default keeps the load small)
+                excludeCompleted: false,
                 myTask: defaultMyTask,
                 timerActiveOnly: false,
                 // Default OFF: hide tasks without assignee
-                showUnassignedTasks: false
+                unassignedOnly: false
             },
             taskStatuses: [
                 { value: 'todo', label: '未開始', i18nKey: '未開始', color: 'secondary' },
@@ -181,19 +211,30 @@ createApp({
                     department_id: this.filters.department_id,
                     team_id: this.filters.team_id,
                     user_id: this.filters.user_id,
-                    created_month: this.filters.created_month,
-                    excludeCompleted: this.filters.excludeCompleted,
                     myTask: this.filters.myTask,
                     timerActiveOnly: this.filters.timerActiveOnly,
-                    showUnassignedTasks: this.filters.showUnassignedTasks
+                    unassignedOnly: this.filters.unassignedOnly
                 },
+                // '' (すべて) is saved as 'all' so it is told apart from "not saved"
+                createdMonth: this.filters.created_month || 'all',
+                showClosed: !this.filters.excludeCompleted,
                 searchQuery: this.searchQuery,
                 quickFilter: this.quickFilter,
                 memberFilterIds: this.memberFilterIds.slice(),
+                statusKeys: this.selectedStatusKeys.slice(),
                 activeTab: this.activeTab,
                 weeklyHoursByWeek: this.weeklyHoursByWeek,
                 weeklyShowEntries: this.weeklyShowEntries
             };
+        },
+        // 部署 options: all for administrators; otherwise only the user's own departments
+        // (a user without any department still sees all, so the page is never empty)
+        departmentOptions() {
+            if (window.currentUser && window.currentUser.isAdministrator) {
+                return this.departments;
+            }
+            const own = this.departments.filter(d => this.isMyDepartment(d.id));
+            return own.length ? own : this.departments;
         },
         currentDepartmentName() {
             if (!this.filters.department_id) return '';
@@ -226,7 +267,7 @@ createApp({
         },
         // People shown in the member bar, with how many visible tasks each one has
         boardMembers() {
-            if (this.filters.myTask || this.filters.user_id) return [];
+            if (this.filters.myTask || this.filters.unassignedOnly) return [];
             const counts = new Map();
             let unassigned = 0;
             this.baseBoardTasks.forEach(task => {
@@ -250,9 +291,6 @@ createApp({
                 if (user) pushUser(user);
             });
             members.sort((a, b) => (b.count - a.count) || String(a.name).localeCompare(String(b.name), 'ja'));
-            if (this.filters.showUnassignedTasks && unassigned > 0) {
-                members.push({ id: 'none', name: this.$t('未割り当て'), user: null, count: unassigned });
-            }
             return members;
         },
         memberFilteredTasks() {
@@ -281,6 +319,27 @@ createApp({
                 ? this.memberFilteredTasks.filter(t => this.matchesQuickFilter(t, this.quickFilter))
                 : this.memberFilteredTasks.slice();
             return list.sort((a, b) => this.compareBoardTasks(a, b));
+        },
+        // Status buttons for the list view (完了 / キャンセル only while closed tasks are shown)
+        listStatusOptions() {
+            const counts = {};
+            this.sortedBoardTasks.forEach(t => { counts[t.status] = (counts[t.status] || 0) + 1; });
+            return this.taskStatuses
+                .filter(s => !this.filters.excludeCompleted || !this.isTerminalStatus(s.value))
+                .map(s => ({ ...s, count: counts[s.value] || 0 }));
+        },
+        // Selected statuses that can actually match (hidden closed statuses are ignored)
+        effectiveStatusKeys() {
+            const visible = new Set(this.listStatusOptions.map(s => s.value));
+            return this.selectedStatusKeys.filter(k => visible.has(k));
+        },
+        isAllStatusFilterSelected() {
+            return this.effectiveStatusKeys.length === 0;
+        },
+        listTasks() {
+            const keys = this.effectiveStatusKeys;
+            if (!keys.length) return this.sortedBoardTasks;
+            return this.sortedBoardTasks.filter(t => keys.includes(t.status));
         },
         boardColumns() {
             const grouped = {};
@@ -364,12 +423,21 @@ createApp({
                 return false;
             }
             const f = saved.filters && typeof saved.filters === 'object' ? saved.filters : {};
-            ['department_id', 'team_id', 'user_id', 'created_month'].forEach((key) => {
+            // 作成月: only the newer `createdMonth` key counts (older saves had '' = old default)
+            if (saved.createdMonth === 'all') {
+                this.filters.created_month = '';
+            } else if (/^\d{4}-\d{2}$/.test(String(saved.createdMonth || ''))) {
+                this.filters.created_month = String(saved.createdMonth);
+            }
+            ['department_id', 'team_id', 'user_id'].forEach((key) => {
                 if (typeof f[key] === 'string' || typeof f[key] === 'number') {
                     this.filters[key] = String(f[key]);
                 }
             });
-            ['excludeCompleted', 'myTask', 'timerActiveOnly', 'showUnassignedTasks'].forEach((key) => {
+            if (typeof saved.showClosed === 'boolean') {
+                this.filters.excludeCompleted = !saved.showClosed;
+            }
+            ['myTask', 'timerActiveOnly', 'unassignedOnly'].forEach((key) => {
                 if (typeof f[key] === 'boolean') {
                     this.filters[key] = f[key];
                 }
@@ -377,16 +445,33 @@ createApp({
             if (typeof saved.searchQuery === 'string') this.searchQuery = saved.searchQuery;
             if (['', 'overdue', 'week', 'high', 'unack'].includes(saved.quickFilter)) this.quickFilter = saved.quickFilter;
             if (Array.isArray(saved.memberFilterIds)) this.memberFilterIds = saved.memberFilterIds.map(String);
+            if (Array.isArray(saved.statusKeys)) this.selectedStatusKeys = this.sanitizeStatusKeys(saved.statusKeys);
             if (['tasks', 'weekly'].includes(saved.activeTab)
                 || (saved.activeTab === 'unassigned' && this.canSelectUser)) {
                 this.activeTab = saved.activeTab;
             }
             if (typeof saved.weeklyHoursByWeek === 'boolean') this.weeklyHoursByWeek = saved.weeklyHoursByWeek;
             if (typeof saved.weeklyShowEntries === 'boolean') this.weeklyShowEntries = saved.weeklyShowEntries;
-            if (this.filters.myTask) {
-                this.filters.user_id = '';
-            }
             return true;
+        },
+        // On F5 some browsers restore the previous checked state of form controls after Vue has
+        // rendered, so a switch can look ON while the filter is OFF (list does not change).
+        // Vue only patches on state changes, so push the state back onto the switches.
+        syncFilterSwitchesToState() {
+            const expected = {
+                showClosedTasks: !this.filters.excludeCompleted,
+                myTask: !!this.filters.myTask,
+                filterTimerActiveOnly: !!this.filters.timerActiveOnly,
+                unassignedOnly: !!this.filters.unassignedOnly,
+                weeklyHoursByWeek: !!this.weeklyHoursByWeek,
+                weeklyShowEntries: !!this.weeklyShowEntries
+            };
+            Object.keys(expected).forEach((id) => {
+                const el = document.getElementById(id);
+                if (el && el.checked !== expected[id]) {
+                    el.checked = expected[id];
+                }
+            });
         },
         // Drop remembered member selections that are no longer on the member bar,
         // otherwise the board could be filtered by someone the user cannot see or unselect.
@@ -409,7 +494,7 @@ createApp({
             try {
                 if (window.localStorage) {
                     window.localStorage.setItem(OVERVIEW_BOARD_PREFS_KEY, JSON.stringify({
-                        viewMode: this.viewMode,
+                        view: this.viewMode,
                         boardSort: this.boardSort,
                         collapsedColumns: this.collapsedColumns
                     }));
@@ -425,6 +510,213 @@ createApp({
             if (this.viewMode === 'list') {
                 this.$nextTick(() => this.initTooltips());
             }
+        },
+        sanitizeStatusKeys(keys) {
+            const allowed = new Set(this.taskStatuses.map(s => s.value));
+            return [...new Set((keys || []).map(k => String(k).trim()).filter(k => allowed.has(k)))];
+        },
+        isStatusFilterSelected(status) {
+            return !!status && this.effectiveStatusKeys.includes(status.value);
+        },
+        selectAllStatusFilter() {
+            this.selectedStatusKeys = [];
+            this.syncFiltersToUrl();
+        },
+        toggleTaskStatusFilter(status) {
+            const key = status && status.value;
+            if (!key) return;
+            const keys = this.effectiveStatusKeys.slice();
+            const idx = keys.indexOf(key);
+            if (idx >= 0) keys.splice(idx, 1); else keys.push(key);
+            this.selectedStatusKeys = keys;
+            this.syncFiltersToUrl();
+        },
+        // 作業比重 (%) within the project, computed by the API over all tasks of the project
+        getDrawingWeightPercent(task) {
+            if (!task || task.drawing_weight_pct === null || task.drawing_weight_pct === undefined || task.drawing_weight_pct === '') {
+                return null;
+            }
+            const n = Number(task.drawing_weight_pct);
+            return Number.isFinite(n) ? Math.round(n * 10) / 10 : null;
+        },
+        formatDrawingWeight(task) {
+            const pct = this.getDrawingWeightPercent(task);
+            if (pct === null) return '';
+            return (Number.isInteger(pct) ? String(pct) : pct.toFixed(1)) + '%';
+        },
+        // Tasks currently on screen: list view applies the status buttons on top of the other filters
+        getExportTasks() {
+            return this.viewMode === 'list' ? this.listTasks : this.sortedBoardTasks;
+        },
+        // Human-readable list of the filters behind the current list (for the Excel header)
+        getExportFilterSummary(tr) {
+            const t = tr || ((k) => k);
+            const items = [];
+            const f = this.filters;
+            items.push(t('部署') + '：' + (this.currentDepartmentName || t('すべて')));
+            if (f.team_id) {
+                const team = this.teams.find(x => String(x.id) === String(f.team_id));
+                items.push(t('チーム') + '：' + (team ? team.name : f.team_id));
+            }
+            if (f.created_month) {
+                const m = String(f.created_month).match(/^(\d{4})-(\d{2})$/);
+                items.push(t('作成月') + '：' + (m ? m[1] + '年' + Number(m[2]) + '月' : f.created_month));
+            }
+            if (String(this.searchQuery || '').trim()) {
+                items.push(t('検索') + '：「' + String(this.searchQuery).trim() + '」');
+            }
+            if (f.myTask) items.push(t('自分のタスク'));
+            if (f.timerActiveOnly) items.push(t('作業計測中のタスクのみ'));
+            if (f.unassignedOnly) items.push(t('未割り当てタスクのみ'));
+            items.push(f.excludeCompleted ? t('完了・キャンセルを除く') : t('完了・キャンセルを含む'));
+            if (this.memberFilterIds.length) {
+                const names = this.memberFilterIds.map(id => {
+                    if (id === 'none') return t('未割り当て');
+                    const u = this.getAssigneeUser(id);
+                    return u ? u.realname : id;
+                });
+                items.push(t('担当者') + '：' + names.join('、'));
+            }
+            if (this.quickFilter) {
+                const stat = this.quickStats.find(x => x.key === this.quickFilter);
+                if (stat) items.push(t(stat.label));
+            }
+            if (this.viewMode === 'list' && this.effectiveStatusKeys.length) {
+                items.push(t('ステータス') + '：' + this.effectiveStatusKeys.map(k => this.getStatusLabel(k)).join('、'));
+            }
+            const sort = this.boardSortOptions.find(x => x.value === this.boardSort);
+            if (sort) items.push(t('並び順') + '：' + t(sort.label));
+            return items;
+        },
+        exportTasksExcel() {
+            const tr = (key) => (typeof this.$t === 'function' ? this.$t(key) : key);
+            const notify = (msg, type) => {
+                if (typeof Notiflix !== 'undefined' && Notiflix.Notify) {
+                    Notiflix.Notify[type || 'failure'](msg);
+                } else {
+                    alert(msg);
+                }
+            };
+            if (typeof XLSX === 'undefined') {
+                notify(tr('Excel出力に失敗しました。'));
+                return;
+            }
+            const tasks = this.getExportTasks();
+            if (!tasks.length) {
+                notify(tr('出力するタスクがありません'), 'warning');
+                return;
+            }
+            const dateText = (value) => {
+                const v = String(value || '').trim();
+                if (!v || v.startsWith('0000')) return '';
+                return v.replace('T', ' ').slice(0, 16);
+            };
+            const numberOrBlank = (value) => {
+                const n = parseFloat(value);
+                return Number.isNaN(n) ? '' : n;
+            };
+            const headers = [
+                '案件番号', '工事番号', '案件', 'タスクID', 'タスク', '種別', '作業比重(%)', '担当者', '作成者',
+                'ステータス', '優先度', '進捗(%)', '工数(h)', '開始日', '期限', 'メモ'
+            ].map(tr);
+            const rows = tasks.map(task => {
+                const assignees = (Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [])
+                    .map(id => {
+                        const user = this.getAssigneeUser(id);
+                        return user ? (user.realname || user.user_name || String(id)) : String(id);
+                    })
+                    .join(', ');
+                const creator = this.getCreatorMember(task);
+                const kind = this.getTaskKindDisplayValue(task);
+                return [
+                    Number(task.project_id) || task.project_id || '',
+                    task.project_construction_number || '',
+                    task.project_name || '',
+                    Number(task.id) || task.id,
+                    task.title || '',
+                    kind ? this.getTaskKindLabel(kind) : '',
+                    this.getDrawingWeightPercent(task) === null ? '' : this.getDrawingWeightPercent(task),
+                    assignees,
+                    (creator && creator.user_name) || task.created_by_name || '',
+                    this.getStatusLabel(task.status) || '',
+                    this.getPriorityLabel(task.priority) || '',
+                    numberOrBlank(task.progress) === '' ? 0 : numberOrBlank(task.progress),
+                    numberOrBlank(task.estimated_hours),
+                    dateText(task.start_date),
+                    dateText(task.due_date),
+                    String(task.note || '').replace(/<[^>]*>/g, '').trim()
+                ];
+            });
+            const now = new Date();
+            const pad = (n) => String(n).padStart(2, '0');
+            const exportedAt = now.getFullYear() + '/' + pad(now.getMonth() + 1) + '/' + pad(now.getDate())
+                + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+            const title = tr('全タスク一覧') + (this.currentDepartmentName ? '（' + this.currentDepartmentName + '）' : '');
+            const conditionText = tr('抽出条件') + '：' + this.getExportFilterSummary(tr).join('　／　');
+            const infoText = tr('出力日時') + '：' + exportedAt + '　　' + tr('件数') + '：' + rows.length;
+
+            // Rows 1-3: title, filter conditions, export date; row 4 blank; row 5 header; data below
+            const headerRow = 4;
+            const aoa = [[title], [conditionText], [infoText], [], headers].concat(rows);
+            const sheet = XLSX.utils.aoa_to_sheet(aoa);
+            const lastCol = headers.length - 1;
+            const lastRow = headerRow + rows.length;
+            const widths = [10, 14, 40, 10, 32, 12, 11, 28, 18, 10, 8, 8, 8, 17, 17, 40];
+            sheet['!cols'] = widths.map(wch => ({ wch }));
+            sheet['!merges'] = [0, 1, 2].map(r => ({ s: { r, c: 0 }, e: { r, c: lastCol } }));
+            sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: lastRow, c: lastCol } }) };
+            // The condition line wraps: give it room for roughly the lines it needs
+            const totalWidth = widths.reduce((a, b) => a + b, 0);
+            const conditionLines = Math.max(1, Math.ceil((conditionText.length * 2) / totalWidth));
+            sheet['!rows'] = [{ hpt: 24 }, { hpt: Math.min(15 * conditionLines + 4, 120) }, { hpt: 16 }, { hpt: 6 }, { hpt: 30 }];
+
+            const font = { name: 'Meiryo UI', sz: 10 };
+            const thin = { style: 'thin', color: { rgb: '9E9E9E' } };
+            const border = { top: thin, bottom: thin, left: thin, right: thin };
+            const setStyle = (r, c, style) => {
+                const ref = XLSX.utils.encode_cell({ r, c });
+                if (!sheet[ref]) sheet[ref] = { t: 's', v: '' };
+                sheet[ref].s = style;
+            };
+            setStyle(0, 0, { font: { ...font, sz: 14, bold: true }, alignment: { vertical: 'center' } });
+            setStyle(1, 0, { font, alignment: { vertical: 'top', wrapText: true } });
+            setStyle(2, 0, { font: { ...font, color: { rgb: '555555' } }, alignment: { vertical: 'center' } });
+            const wrapCols = new Set([2, 4, 7, 15]);
+            const centerCols = new Set([0, 3, 5, 9, 10]);
+            const numberCols = new Set([6, 11, 12]);
+            for (let c = 0; c <= lastCol; c++) {
+                setStyle(headerRow, c, {
+                    font: { ...font, bold: true },
+                    fill: { patternType: 'solid', fgColor: { rgb: 'E8EAF6' } },
+                    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                    border
+                });
+                for (let r = headerRow + 1; r <= lastRow; r++) {
+                    setStyle(r, c, {
+                        font,
+                        border,
+                        alignment: {
+                            vertical: 'top',
+                            wrapText: wrapCols.has(c),
+                            horizontal: centerCols.has(c) ? 'center' : (numberCols.has(c) ? 'right' : 'left')
+                        }
+                    });
+                }
+            }
+            // 作業比重(%) / 工数(h): one decimal
+            for (let r = headerRow + 1; r <= lastRow; r++) {
+                [6, 12].forEach(c => {
+                    const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+                    if (cell && cell.t === 'n') cell.z = '0.0';
+                });
+            }
+
+            const book = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(book, sheet, 'タスク一覧');
+            const stamp = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '_' + pad(now.getHours()) + pad(now.getMinutes());
+            const safe = (v) => String(v || '').replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
+            const parts = ['全タスク一覧', safe(this.currentDepartmentName), stamp].filter(Boolean);
+            XLSX.writeFile(book, parts.join('_') + '.xlsx');
         },
         toggleColumn(status) {
             this.collapsedColumns = { ...this.collapsedColumns, [status]: !this.collapsedColumns[status] };
@@ -622,7 +914,10 @@ createApp({
             }
 
             if (params.has('view')) {
-                this.viewMode = params.get('view') === 'list' ? 'list' : 'kanban';
+                this.viewMode = params.get('view') === 'kanban' ? 'kanban' : 'list';
+            }
+            if (params.has('status')) {
+                this.selectedStatusKeys = this.sanitizeStatusKeys(String(params.get('status') || '').split(','));
             }
             if (params.has('department_id')) {
                 this.filters.department_id = params.get('department_id') || '';
@@ -634,10 +929,11 @@ createApp({
                 this.filters.user_id = params.get('user_id') || '';
             }
             if (params.has('created_month')) {
-                this.filters.created_month = params.get('created_month') || '';
+                const month = String(params.get('created_month') || '');
+                this.filters.created_month = /^\d{4}-\d{2}$/.test(month) ? month : '';
             }
             if (params.has('exclude_completed')) {
-                this.filters.excludeCompleted = this.parseBoolParam(params.get('exclude_completed'), true);
+                this.filters.excludeCompleted = this.parseBoolParam(params.get('exclude_completed'), false);
             }
             if (params.has('my_task')) {
                 this.filters.myTask = this.parseBoolParam(params.get('my_task'), false);
@@ -645,8 +941,8 @@ createApp({
             if (params.has('timer_active_only')) {
                 this.filters.timerActiveOnly = this.parseBoolParam(params.get('timer_active_only'), false);
             }
-            if (params.has('show_unassigned')) {
-                this.filters.showUnassignedTasks = this.parseBoolParam(params.get('show_unassigned'), false);
+            if (params.has('unassigned_only')) {
+                this.filters.unassignedOnly = this.parseBoolParam(params.get('unassigned_only'), false);
             }
 
             const tab = params.get('tab') || '';
@@ -692,25 +988,25 @@ createApp({
             if (this.filters.team_id) {
                 params.set('team_id', String(this.filters.team_id));
             }
-            if (this.filters.user_id && !this.filters.myTask) {
+            if (this.activeTab === 'weekly' && this.filters.user_id) {
                 params.set('user_id', String(this.filters.user_id));
             }
-            if (this.filters.created_month) {
-                params.set('created_month', String(this.filters.created_month));
-            }
+            params.set('created_month', this.filters.created_month ? String(this.filters.created_month) : 'all');
             params.set('exclude_completed', this.filters.excludeCompleted ? '1' : '0');
             params.set('my_task', this.filters.myTask ? '1' : '0');
             if (this.filters.timerActiveOnly) {
                 params.set('timer_active_only', '1');
             }
-            if (this.filters.showUnassignedTasks) {
-                params.set('show_unassigned', '1');
+            if (this.filters.unassignedOnly) {
+                params.set('unassigned_only', '1');
             }
             if (this.activeTab && this.activeTab !== 'tasks') {
                 params.set('tab', this.activeTab);
             }
-            if (this.viewMode === 'list') {
-                params.set('view', 'list');
+            if (this.viewMode === 'kanban') {
+                params.set('view', 'kanban');
+            } else if (this.effectiveStatusKeys.length) {
+                params.set('status', this.effectiveStatusKeys.join(','));
             }
             if (this.activeTab === 'weekly' && this.weeklyWeekStart) {
                 params.set('week_start', this.weeklyWeekStart);
@@ -1043,12 +1339,16 @@ createApp({
             // Lọc theoユーザー đã được xử lý ở phía API (listOverview), 
             // nên không cần kiểm tra lại ở đây để tránh sai khi task có nhiều assignee.
             const assignedIds = Array.isArray(task.assigned_to_ids) ? task.assigned_to_ids : [];
-            if (!this.filters.showUnassignedTasks && assignedIds.length === 0) {
+            // 未割り当てタスクのみ: ON → only tasks with no assignee; OFF → hide them
+            if (this.filters.unassignedOnly) {
+                if (assignedIds.length > 0) return false;
+            } else if (assignedIds.length === 0) {
                 return false;
             }
 
             // Nếu filter theo team: ít nhất 1 user được assign thuộc team đó
-            if (this.filters.team_id) {
+            // (team comes from assignees, so it cannot apply to unassigned tasks)
+            if (this.filters.team_id && !this.filters.unassignedOnly) {
                 const teamId = parseInt(this.filters.team_id, 10);
                 const hasUserInTeam = assignedIds.some(uid => {
                     const user = this.users.find(u => u.id == uid);
@@ -1070,11 +1370,11 @@ createApp({
             if (!taskId) {
                 return false;
             }
-            if (window.TaskTimer) {
-                return window.TaskTimer.hasActiveTimerForTask(taskId);
-            }
-            if (taskOrId && typeof taskOrId === 'object' && taskOrId.timer_active) {
-                return true;
+            // Read the reactive task.timer_active flag (kept in sync with TaskTimer by
+            // syncTaskTimerActiveFlags). Reading window.TaskTimer directly is not tracked by Vue,
+            // so computed lists such as "作業計測中のタスクのみ" would keep stale results.
+            if (taskOrId && typeof taskOrId === 'object' && 'timer_active' in taskOrId) {
+                return !!taskOrId.timer_active;
             }
             const canonical = this.tasks.find((t) => parseInt(t.id, 10) === parseInt(taskId, 10));
             return !!(canonical && canonical.timer_active);
@@ -1169,8 +1469,14 @@ createApp({
         getCreatorTooltip(member) {
             return member ? (member.user_name || '') : '';
         },
-        async loadOverview() {
+        async loadOverview(fallbackAttempt = 0) {
             this.loading = true;
+            let needsDepartmentReload = false;
+            // Only the latest request may update the board: an older, slower response
+            // (e.g. with 自分のタスク still on) must not overwrite a newer one.
+            this._overviewRequestSeq = (this._overviewRequestSeq || 0) + 1;
+            const requestSeq = this._overviewRequestSeq;
+            const isStale = () => requestSeq !== this._overviewRequestSeq;
             try {
                 const params = new URLSearchParams({
                     model: 'task',
@@ -1185,24 +1491,41 @@ createApp({
                 if (this.filters.created_month) {
                     params.append('created_month', this.filters.created_month);
                 }
-                // Nếu myTask được chọn, gửi user_id của user hiện tại
+                // 自分のタスク: only the current user's tasks. (filters.user_id is the weekly tab's
+                // user only; the task list narrows people with the 担当者 bar instead.)
                 if (this.filters.myTask && window.currentUser?.user_id) {
                     params.append('user_id', window.currentUser.user_id);
-                } else if (this.filters.user_id) {
-                    params.append('user_id', this.filters.user_id);
                 }
                 if (this.filters.excludeCompleted) {
                     params.append('exclude_completed', 1);
                 }
                 const response = await axios.get('/api/index.php?' + params.toString());
+                if (isStale()) {
+                    return;
+                }
                 const data = response.data || {};
                 this.departments = data.departments || [];
+                // The department filter has no "all" option: an empty / unknown department
+                // (old link, saved state, deleted department) falls back to the first one.
+                // (templates call loadOverview(event), so only the explicit retry value 1 counts)
+                const allowedDepartments = this.departmentOptions;
+                if (fallbackAttempt !== 1 && allowedDepartments.length
+                    && !allowedDepartments.some(d => String(d.id) === String(this.filters.department_id))) {
+                    this.filters.department_id = String(allowedDepartments[0].id);
+                    this.filters.team_id = '';
+                    this.filters.user_id = '';
+                    needsDepartmentReload = true;
+                    // leave the try block; the retry runs after `finally`
+                    throw OVERVIEW_DEPARTMENT_FALLBACK;
+                }
                 this.teams = data.teams || [];
                 this.users = data.users || [];
                 this.tasks = data.tasks || [];
                 this.unassignedUsers = data.unassigned_users || [];
                 if (window.TaskTimer && Array.isArray(data.active_task_ids)) {
                     window.TaskTimer.updateActiveTaskIds(data.active_task_ids);
+                    // updateActiveTaskIds only fires an event when the set changed, so sync here too
+                    this.syncTaskTimerActiveFlags(window.TaskTimer.activeTaskIds);
                 } else {
                     this.syncTaskTimerActiveFlags(
                         (this.tasks || []).filter((task) => task.timer_active).map((task) => task.id)
@@ -1213,6 +1536,9 @@ createApp({
                     this.initTooltips();
                 });
             } catch (e) {
+                if (e === OVERVIEW_DEPARTMENT_FALLBACK || isStale()) {
+                    // not an error: fallback reload below / a newer request superseded this one
+                } else {
                 console.error('Error loading task overview:', e);
                 console.error('Error details:', e.response?.data || e.message);
                 if (typeof showMessage === 'function') {
@@ -1220,10 +1546,20 @@ createApp({
                 } else {
                     alert('タスク一覧の読み込みに失敗しました: ' + (e.response?.data?.error || e.message));
                 }
+                }
             } finally {
-                this.loading = false;
-                this.syncFiltersToUrl();
-                this.$nextTick(() => this.initUserSelect2());
+                // a superseded request leaves the spinner / URL to the newer one
+                if (!needsDepartmentReload && !isStale()) {
+                    this.loading = false;
+                    this.syncFiltersToUrl();
+                    this.$nextTick(() => {
+                        this.initUserSelect2();
+                        this.syncFilterSwitchesToState();
+                    });
+                }
+            }
+            if (needsDepartmentReload) {
+                return this.loadOverview(1);
             }
         },
         initUserSelect2() {
@@ -1288,53 +1624,58 @@ createApp({
                 this.loadWeeklyTasks();
             }
         },
-        onMyTaskChange() {
-            // When "My Task" is checked, set user_id to current user and reload from API
-            // When unchecked, clear user_id and reload to show all tasks
-            if (this.filters.myTask) {
-                // Clear manual user selection when showing own tasks
-                this.filters.user_id = '';
-                // If not project manager, also clear department_id when showing own tasks
-                if (!window.currentUser?.isProjectManager) {
-                    this.filters.department_id = '';
-                }
-                // Reload data from API with current user filter
-                this.loadOverview();
-            } else {
-                // When unchecked, go back to the user's own department instead of every department
-                if (!this.filters.department_id && window.currentUser?.department_id) {
-                    this.filters.department_id = String(window.currentUser.department_id);
-                }
-                this.loadOverview();
+        onUnassignedOnlyChange() {
+            if (!this.filters.unassignedOnly) {
+                this.syncFiltersToUrl();
+                return;
             }
+            // Only unassigned tasks: filters that look at assignees / timers make no sense
+            this.filters.timerActiveOnly = false;
             this.memberFilterIds = [];
-            this.$nextTick(() => this.syncUserSelect2Value());
-            if (this.activeTab === 'weekly') {
-                this.loadWeeklyTasks();
+            if (this.filters.myTask) {
+                this.filters.myTask = false;
+                this.onMyTaskChange(); // reloads without the own-task restriction
+                return;
             }
+            this.syncFiltersToUrl();
+        },
+        onTimerActiveOnlyChange() {
+            if (this.filters.timerActiveOnly) {
+                this.filters.unassignedOnly = false;
+            }
+            this.syncFiltersToUrl();
+        },
+        onMyTaskChange() {
+            if (this.filters.myTask) {
+                this.filters.unassignedOnly = false;
+            }
+            // 自分のタスク reloads the list from the API with the current user's id
+            this.loadOverview();
+            this.memberFilterIds = [];
         },
         onUserChange() {
-            // When user is manually selected, uncheck "My Task"
-            if (this.filters.user_id) {
-                this.filters.myTask = false;
-            }
-            this.loadOverview();
+            // The user select lives on the weekly tab only: it does not filter the task list
             if (this.activeTab === 'weekly') {
                 this.loadWeeklyTasks();
             }
+            this.syncFiltersToUrl();
         },
         getDefaultFilters() {
             const isProjectManager = !!(window.currentUser && window.currentUser.isProjectManager);
-            const userDepartmentId = window.currentUser?.department_id ? String(window.currentUser.department_id) : '';
+            let userDepartmentId = getOverviewPreferredDepartmentId();
+            const allowedDepartments = this.departmentOptions;
+            if (allowedDepartments.length && !allowedDepartments.some(d => String(d.id) === userDepartmentId)) {
+                userDepartmentId = String(allowedDepartments[0].id);
+            }
             return {
                 department_id: userDepartmentId,
                 team_id: '',
                 user_id: '',
-                created_month: '',
-                excludeCompleted: true,
+                created_month: getOverviewCurrentMonth(),
+                excludeCompleted: false,
                 myTask: userDepartmentId ? false : !isProjectManager,
                 timerActiveOnly: false,
-                showUnassignedTasks: false
+                unassignedOnly: false
             };
         },
         resetFilters() {
@@ -1342,6 +1683,7 @@ createApp({
             this.searchQuery = '';
             this.quickFilter = '';
             this.memberFilterIds = [];
+            this.selectedStatusKeys = [];
             this.columnLimits = {};
             this.weeklyHoursByWeek = true;
             this.weeklyShowEntries = false;
@@ -1389,9 +1731,6 @@ createApp({
         getWeeklyTargetUserId() {
             if (!this.canSelectUser) {
                 return window.currentUser?.user_id || '';
-            }
-            if (this.filters.myTask && window.currentUser?.user_id) {
-                return window.currentUser.user_id;
             }
             return this.filters.user_id || window.currentUser?.user_id || '';
         },
@@ -1577,6 +1916,25 @@ createApp({
         if (!appliedFromUrl) {
             this.restoreFilterState();
         }
+        // Department: URL parameter > department chosen on the project list > saved state > fallback
+        const urlHasDepartment = new URLSearchParams(window.location.search || '').has('department_id');
+        if (!urlHasDepartment) {
+            const fromProjectList = readProjectListDepartmentId();
+            if (fromProjectList && fromProjectList !== String(this.filters.department_id)) {
+                this.filters.department_id = fromProjectList;
+                this.filters.team_id = '';
+                this.filters.user_id = '';
+                this.memberFilterIds = [];
+            }
+        }
+        if (!this.filters.department_id) {
+            this.filters.department_id = getOverviewPreferredDepartmentId();
+        }
+        // 未割り当てタスクのみ excludes the assignee-based switches
+        if (this.filters.unassignedOnly) {
+            this.filters.myTask = false;
+            this.filters.timerActiveOnly = false;
+        }
 
         // Non-managers cannot pick another user. Defaults (own department, or own tasks
         // when the user has no department) come from data() unless the URL overrides them.
@@ -1594,6 +1952,9 @@ createApp({
         if (typeof i18next !== 'undefined' && i18next.on) {
             i18next.on('languageChanged', this._onI18nLanguageChanged);
         }
+        this._onPageShow = () => this.syncFilterSwitchesToState();
+        window.addEventListener('pageshow', this._onPageShow);
+        window.addEventListener('load', this._onPageShow);
         this._onTaskTimerChanged = (event) => this.onTaskTimerChanged(event);
         document.addEventListener('task-timer-changed', this._onTaskTimerChanged);
         this.loadOverview().then(() => {
@@ -1604,6 +1965,11 @@ createApp({
         });
     },
     beforeUnmount() {
+        if (this._onPageShow) {
+            window.removeEventListener('pageshow', this._onPageShow);
+            window.removeEventListener('load', this._onPageShow);
+            this._onPageShow = null;
+        }
         if (this._onTaskTimerChanged) {
             document.removeEventListener('task-timer-changed', this._onTaskTimerChanged);
             this._onTaskTimerChanged = null;

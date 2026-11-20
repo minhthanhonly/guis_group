@@ -6,8 +6,8 @@ if($_SESSION['show_project'] == 0){
     exit;
 }
 
-// Departments the current user belongs to (active only). The board opens on the first one;
-// a user with no department gets the second active department (same order as the department filter).
+// Fallback department for the board (the page JS prefers the department chosen on the project list):
+// the user's first department, or the first active department when the user belongs to none.
 $overviewMyDepartmentIds = array();
 $overviewDefaultDepartmentId = '';
 try {
@@ -26,11 +26,9 @@ try {
     if ($overviewMyDepartmentIds) {
         $overviewDefaultDepartmentId = (string)$overviewMyDepartmentIds[0];
     } else {
-        // Second active department (falls back to the first when only one exists)
-        $overviewFallbackDepts = $overviewDeptModel->fetchAll(
-            "SELECT id FROM " . DB_PREFIX . "departments WHERE is_active = 1 ORDER BY id ASC LIMIT 2"
+        $overviewFallbackDept = $overviewDeptModel->fetchOne(
+            "SELECT id FROM " . DB_PREFIX . "departments WHERE is_active = 1 ORDER BY id ASC LIMIT 1"
         );
-        $overviewFallbackDept = isset($overviewFallbackDepts[1]) ? $overviewFallbackDepts[1] : ($overviewFallbackDepts[0] ?? null);
         if (!empty($overviewFallbackDept['id'])) {
             $overviewDefaultDepartmentId = (string)(int)$overviewFallbackDept['id'];
         }
@@ -54,63 +52,62 @@ try {
             <div class="row g-2 align-items-end">
                 <div class="col-6 col-md-3 col-xl-2">
                     <label class="form-label small mb-1"><span data-i18n="部署">部署</span></label>
-                    <select class="form-select form-select-sm" v-model="filters.department_id" @change="onDepartmentChange">
-                        <option value="" data-i18n="すべて">すべて</option>
-                        <option v-for="dep in departments" :key="dep.id" :value="String(dep.id)">{{ isMyDepartment(dep.id) ? '★ ' : '' }}{{ dep.name }}</option>
+                    <select autocomplete="off" class="form-select form-select-sm" v-model="filters.department_id" @change="onDepartmentChange">
+                        <option v-for="dep in departmentOptions" :key="dep.id" :value="String(dep.id)">{{ isMyDepartment(dep.id) ? '★ ' : '' }}{{ dep.name }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-3 col-xl-2">
+                <div class="col-6 col-md-3 col-xl-2" :class="{ 'kb-filter-on': !!filters.team_id }">
                     <label class="form-label small mb-1"><span data-i18n="チーム">チーム</span></label>
-                    <select class="form-select form-select-sm" v-model="filters.team_id" @change="loadOverview">
+                    <select autocomplete="off" class="form-select form-select-sm" v-model="filters.team_id" @change="loadOverview">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-3 col-xl-2" v-if="canSelectUser">
+                <div class="col-6 col-md-3 col-xl-2" v-if="canSelectUser" v-show="activeTab === 'weekly'" :class="{ 'kb-filter-on': !!filters.user_id }">
                     <label class="form-label small mb-1"><span data-i18n="ユーザー">ユーザー</span></label>
-                    <select id="overviewUserFilter" class="form-select form-select-sm" ref="userFilterSelect">
+                    <select autocomplete="off" id="overviewUserFilter" class="form-select form-select-sm" ref="userFilterSelect">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="user in filteredUsers" :key="user.id" :value="String(user.id)">{{ user.realname }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-3 col-xl-2">
+                <div class="col-6 col-md-3 col-xl-2" v-show="activeTab === 'tasks'" :class="{ 'kb-filter-on': !!filters.created_month }">
                     <label class="form-label small mb-1"><span data-i18n="作成月">作成月</span></label>
-                    <select class="form-select form-select-sm" v-model="filters.created_month" @change="loadOverview">
+                    <select autocomplete="off" class="form-select form-select-sm" v-model="filters.created_month" @change="loadOverview">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="month in createdMonthOptions" :key="month.value" :value="month.value">{{ month.label }}</option>
                     </select>
                 </div>
-                <div class="col-12 col-md-6 col-xl-4" v-show="activeTab === 'tasks'">
+                <div class="col-12 col-md-6 col-xl-4" v-show="activeTab === 'tasks'" :class="{ 'kb-filter-on': !!searchQuery }">
                     <label class="form-label small mb-1" for="kbSearch"><span data-i18n="検索">検索</span></label>
                     <div class="input-group input-group-sm">
                         <span class="input-group-text"><i class="fa fa-search"></i></span>
-                        <input id="kbSearch" type="search" class="form-control" v-model.trim="searchQuery"
+                        <input autocomplete="off" id="kbSearch" type="search" class="form-control" v-model.trim="searchQuery"
                                :placeholder="$t('タスク名・案件名・番号で検索')">
                     </div>
                 </div>
             </div>
             <div class="d-flex flex-wrap align-items-center column-gap-4 row-gap-2 mt-3">
-            <div class="form-check form-switch mb-0">
-                <input class="form-check-input" type="checkbox" id="showClosedTasks"
+            <div class="form-check form-switch mb-0" :class="{ 'kb-filter-on': !filters.excludeCompleted }">
+                <input autocomplete="off" class="form-check-input" type="checkbox" id="showClosedTasks"
                        :checked="!filters.excludeCompleted" @change="setShowClosedTasks($event.target.checked)">
                 <label class="form-check-label text-nowrap" for="showClosedTasks"><span data-i18n="完了・キャンセルを表示">完了・キャンセルを表示</span></label>
             </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="myTask"
+            <div class="form-check form-switch" :class="{ 'kb-filter-on': filters.myTask }">
+                <input autocomplete="off" class="form-check-input" type="checkbox" id="myTask"
                        v-model="filters.myTask" @change="onMyTaskChange">
                 <label class="form-check-label" for="myTask"><span data-i18n="自分のタスク">自分のタスク</span></label>
             </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
-                       v-model="filters.timerActiveOnly" @change="syncFiltersToUrl">
+            <div class="form-check form-switch" :class="{ 'kb-filter-on': filters.timerActiveOnly }">
+                <input autocomplete="off" class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
+                       v-model="filters.timerActiveOnly" @change="onTimerActiveOnlyChange">
                 <label class="form-check-label text-nowrap" for="filterTimerActiveOnly" data-i18n="作業計測中のタスクのみ">作業計測中のタスクのみ</label>
             </div>
-            <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="showUnassignedTasks"
-                       v-model="filters.showUnassignedTasks" @change="syncFiltersToUrl">
-                <label class="form-check-label text-nowrap" for="showUnassignedTasks" data-i18n="未割り当てタスクを表示">未割り当てタスクを表示</label>
+            <div class="form-check form-switch" :class="{ 'kb-filter-on': filters.unassignedOnly }">
+                <input autocomplete="off" class="form-check-input" type="checkbox" id="unassignedOnly"
+                       v-model="filters.unassignedOnly" @change="onUnassignedOnlyChange">
+                <label class="form-check-label text-nowrap" for="unassignedOnly" data-i18n="未割り当てタスクのみ">未割り当てタスクのみ</label>
             </div>
-            <button class="btn btn-sm btn-outline-secondary ms-auto" type="button" @click="resetFilters" :disabled="loading || weeklyLoading"
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="resetFilters" :disabled="loading || weeklyLoading"
                     :title="$t('自分の部署の表示に戻す')">
                 <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
             </button>
@@ -161,7 +158,7 @@ try {
                 </button>
             </div>
             <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
-                <select class="form-select form-select-sm kb-sort" v-model="boardSort" @change="persistBoardPrefs" :aria-label="$t('並び替え')">
+                <select autocomplete="off" class="form-select form-select-sm kb-sort" v-model="boardSort" @change="persistBoardPrefs" :aria-label="$t('並び替え')">
                     <option v-for="opt in boardSortOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</option>
                 </select>
                 <div class="btn-group btn-group-sm" role="group">
@@ -172,6 +169,9 @@ try {
                         <i class="fa fa-list me-1"></i><span data-i18n="リスト">リスト</span>
                     </button>
                 </div>
+                <button type="button" class="btn btn-sm btn-outline-success text-nowrap" @click="exportTasksExcel" :disabled="loading || !getExportTasks().length" :title="$t('表示中のタスクをExcelに出力')">
+                    <i class="fa fa-file-excel me-1"></i><span data-i18n="Excel出力">Excel出力</span>
+                </button>
                 <button type="button" class="btn btn-sm btn-outline-secondary" @click="loadOverview" :disabled="loading" :title="$t('更新')" :aria-label="$t('更新')">
                     <i class="fa fa-refresh" :class="{ 'fa-spin': loading }"></i>
                 </button>
@@ -241,7 +241,7 @@ try {
                                 <div class="kb-card-tags">
                                     <span class="kb-prio-tag" :class="'kb-prio-tag--' + (task.priority || 'medium')">{{ getPriorityLabel(task.priority) }}</span>
                                     <span v-if="getTaskKindDisplayValue(task)" class="badge kb-kind" :class="getTaskKindBadgeClass(getTaskKindDisplayValue(task))">{{ getTaskKindLabel(getTaskKindDisplayValue(task)) }}</span>
-                                    <span v-if="shouldShowTaskDrawingCount(task)" class="kb-meta" :title="$t('図面')"><i class="fa fa-drafting-compass"></i>{{ getTaskDrawingCount(task) }}</span>
+                                    <span v-if="formatDrawingWeight(task)" class="kb-meta" :title="$t('作業比重')"><i class="fa fa-drafting-compass"></i>{{ formatDrawingWeight(task) }}</span>
                                     <span v-if="getTaskNoteSnippet(task.note)" class="kb-meta" :title="getTaskNoteSnippet(task.note, 300)"><i class="far fa-sticky-note"></i></span>
                                 </div>
                                 <div v-if="Number(task.progress) > 0" class="kb-progress" :title="$t('進捗') + ' ' + (task.progress || 0) + '%'">
@@ -284,12 +284,28 @@ try {
         <!-- List view -->
         <div v-else class="card mb-3">
             <div class="card-body">
+                    <div class="btn-group flex-wrap task-status-filter-group mb-4" role="group" :aria-label="$t('ステータス')">
+                        <button type="button" class="btn btn-sm status-filter-btn"
+                                :class="{ 'btn-label-secondary': !isAllStatusFilterSelected, 'btn-secondary': isAllStatusFilterSelected, 'active': isAllStatusFilterSelected }"
+                                :aria-pressed="isAllStatusFilterSelected ? 'true' : 'false'"
+                                @click="selectAllStatusFilter">
+                            <span data-i18n="すべて">{{ $t('すべて') }}</span>
+                            <span class="status-filter-count">{{ sortedBoardTasks.length }}</span>
+                        </button>
+                        <button v-for="status in listStatusOptions" :key="status.value" type="button" class="btn btn-sm status-filter-btn"
+                                :class="{ [`btn-label-${status.color}`]: !isStatusFilterSelected(status), [`btn-${status.color}`]: isStatusFilterSelected(status), 'active': isStatusFilterSelected(status) }"
+                                :aria-pressed="isStatusFilterSelected(status) ? 'true' : 'false'"
+                                @click="toggleTaskStatusFilter(status)">
+                            {{ $t(status.i18nKey || status.label) }}
+                            <span class="status-filter-count">{{ status.count }}</span>
+                        </button>
+                    </div>
                     <div v-if="loading" class="text-center py-4">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
                     </div>
-                    <div v-else-if="sortedBoardTasks.length === 0" class="text-center text-muted py-3">
+                    <div v-else-if="listTasks.length === 0" class="text-center text-muted py-3">
                         <i class="fa fa-inbox fa-2x mb-2"></i>
                         <p class="mb-0"><span data-i18n="タスクがありません">タスクがありません</span></p>
                     </div>
@@ -300,7 +316,7 @@ try {
                                     <th><span data-i18n="案件">案件</span></th>
                                     <th><span data-i18n="タスク">タスク</span></th>
                                     <th><span data-i18n="種別">種別</span></th>
-                                    <th><span data-i18n="図面">図面</span></th>
+                                    <th class="text-end text-nowrap"><span data-i18n="作業比重">作業比重</span></th>
                                     <th><span data-i18n="担当者">担当者</span></th>
                                     <th><span data-i18n="作成者">作成者</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
@@ -312,7 +328,7 @@ try {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="task in sortedBoardTasks" :key="task.id">
+                                <tr v-for="task in listTasks" :key="task.id">
                                     <td>
                                         <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
                                             <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
@@ -328,16 +344,17 @@ try {
                                     <td>
                                         <span v-if="getTaskKindDisplayValue(task)" class="badge small" :class="getTaskKindBadgeClass(getTaskKindDisplayValue(task))">{{ getTaskKindLabel(getTaskKindDisplayValue(task)) }}</span>
                                     </td>
-                                    <td>
-                                        <span v-if="shouldShowTaskDrawingCount(task)" class="small">{{ getTaskDrawingCount(task) }}</span>
+                                    <td class="text-end text-nowrap">
+                                        <span v-if="formatDrawingWeight(task)" class="small">{{ formatDrawingWeight(task) }}</span>
+                                        <span v-else class="text-muted small">—</span>
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center flex-wrap gap-1">
                                             <template v-if="task.assigned_to_ids && task.assigned_to_ids.length">
                                                 <template v-for="userId in task.assigned_to_ids.slice(0, 4)" :key="userId">
                                                     <div class="avatar position-relative" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
-                                                        <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getAssigneeUser(userId) || '') }}</span>
-                                                        <img v-if="getAssigneeUser(userId) && !getAssigneeUser(userId).avatarError && getAvatarSrc(getAssigneeUser(userId))" class="rounded-circle" :src="getAvatarSrc(getAssigneeUser(userId))" :alt="getAssigneeUser(userId).realname" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(getAssigneeUser(userId)); $event.target.remove()">
+                                                        <img v-if="getMemberAvatarSrc(getAssigneeUser(userId))" class="rounded-circle" :src="getMemberAvatarSrc(getAssigneeUser(userId))" :alt="getAssigneeUser(userId).realname" @error="handleAvatarError(getAssigneeUser(userId))">
+                                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getAssigneeUser(userId) || '') }}</span>
                                                         <span v-if="isAcknowledged(task, userId)" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-check"></i></span>
                                                         <span v-else class="badge bg-secondary position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-clock"></i></span>
                                                     </div>
@@ -421,7 +438,7 @@ try {
                     </h5>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div class="form-check form-switch mb-0 me-1">
-                            <input
+                            <input autocomplete="off"
                                 class="form-check-input"
                                 type="checkbox"
                                 id="weeklyHoursByWeek"
@@ -432,7 +449,7 @@ try {
                             </label>
                         </div>
                         <div class="form-check form-switch mb-0 me-1">
-                            <input
+                            <input autocomplete="off"
                                 class="form-check-input"
                                 type="checkbox"
                                 id="weeklyShowEntries"
@@ -750,6 +767,49 @@ try {
 .kb-member.is-active .kb-member-count { background: var(--bs-primary); color: #fff; }
 
 /* Avatars */
+/* Filters that are in effect: highlighted input + label */
+.kb-filter-card .kb-filter-on .form-label {
+    color: var(--bs-primary, #7650b0);
+    font-weight: 600;
+}
+.kb-filter-card .kb-filter-on .form-select,
+.kb-filter-card .kb-filter-on .form-control,
+.kb-filter-card .kb-filter-on .input-group-text,
+.kb-filter-card .kb-filter-on .select2-container--default .select2-selection {
+    border-color: var(--bs-primary, #7650b0) !important;
+    background-color: rgba(var(--bs-primary-rgb, 118, 80, 176), 0.08);
+    font-weight: 600;
+}
+.kb-filter-card .kb-filter-on .input-group-text { color: var(--bs-primary, #7650b0); }
+.kb-filter-card .form-check.kb-filter-on .form-check-label {
+    color: var(--bs-primary, #7650b0);
+    font-weight: 600;
+}
+
+/* List view status filter (same pattern as the project task page) */
+.task-status-filter-group { overflow: visible !important; }
+.status-filter-btn { position: relative; overflow: visible; }
+.status-filter-btn .status-filter-count { margin-left: 0.25rem; opacity: 0.75; font-weight: 600; }
+.status-filter-btn::after {
+    content: '';
+    position: absolute;
+    bottom: -0.65rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    pointer-events: none;
+    display: none;
+}
+.status-filter-btn.active::after { display: block; }
+.status-filter-btn.btn-secondary.active::after { background-color: #6c757d; }
+.status-filter-btn.btn-primary.active::after { background-color: #7650b0; }
+.status-filter-btn.btn-success.active::after { background-color: #198754; }
+.status-filter-btn.btn-warning.active::after { background-color: #ffc107; }
+.status-filter-btn.btn-danger.active::after { background-color: #dc3545; }
+
 .kb-avatar {
     display: inline-flex;
     align-items: center;
@@ -1165,10 +1225,13 @@ window.currentUser = {
     id: <?= json_encode($_SESSION['userid'] ?? '') ?>,
     department_id: <?= json_encode($overviewDefaultDepartmentId) ?>,
     department_ids: <?= json_encode(array_map('strval', $overviewMyDepartmentIds)) ?>,
-    isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>
+    isProjectManager: <?= json_encode($_SESSION['isProjectManager'] ?? false) ?>,
+    // 部署 filter: administrators see every department, others only their own
+    isAdministrator: <?= json_encode(($_SESSION['authority'] ?? '') === 'administrator') ?>
 };
 </script>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" crossorigin="anonymous"></script>
 <script src="assets/js/task-overview.js?v=<?=STATS_CACHE_VERSION?>"></script>
 
 
