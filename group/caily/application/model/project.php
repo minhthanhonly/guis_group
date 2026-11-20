@@ -6298,7 +6298,7 @@ class Project extends ApplicationModel {
         $summaryCaily = $this->buildMonthlyRevenueSummaryByCompany($baseFrom, $baseWhere, $companyLabel, $monthEsc, $lines, 'CAILY');
         $summaryGuis = $this->buildMonthlyRevenueSummaryByCompany($baseFrom, $baseWhere, $companyLabel, $monthEsc, $lines, 'GUIS');
 
-        // 請求済み: one row per 発行済 請求 line dated in the month.
+        // 請求済み: one row per 発行済 (or 無償, amount 0) 請求 line dated in the month.
         // amount / estimate_status: the 見積 lines of the same 種別.
         $invoicedQuery = "SELECT
                 {$projectColumns},
@@ -6317,12 +6317,12 @@ class Project extends ApplicationModel {
             LEFT JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate' AND ge.item_type = l.item_type
             WHERE {$baseWhere}
               AND l.kind = 'invoice'
-              AND l.status = '発行済'
+              AND l.status IN ('発行済', '無償')
               AND l.item_date IS NOT NULL
               AND DATE_FORMAT(l.item_date, '%Y-%m') = '{$monthEsc}'
             ORDER BY invoice_date ASC, company_name ASC, p.id ASC, fee_type ASC, row_key ASC";
 
-        // 見積済 (未完了): one row per dated 見積 line whose 種別 is not invoiced yet
+        // 見積済 (未完了): one row per dated 発行済 (or 無償) 見積 line whose 種別 is not invoiced yet
         // (no 請求 line of that 種別, or they are still 未発行 / 請求準備).
         $estimatedMonthFilter = $estimatedAllTime ? '' : "AND DATE_FORMAT(l.item_date, '%Y-%m') = '{$monthEsc}'";
         $estimatedQuery = "SELECT
@@ -6340,6 +6340,7 @@ class Project extends ApplicationModel {
             WHERE {$baseWhere}
               AND p.status NOT IN ('waiting_invoice', 'completed', 'cancelled', 'deleted')
               AND l.kind = 'estimate'
+              AND l.status IN ('発行済', '無償')
               AND l.item_date IS NOT NULL
               AND COALESCE(gi.group_status, '未発行') IN ('未発行', '請求準備')
               {$estimatedMonthFilter}
@@ -6351,11 +6352,13 @@ class Project extends ApplicationModel {
         $invoicedProjects = $this->fetchAll($invoicedQuery);
         $this->enrichMonthlyRevenueStatsProjects($invoicedProjects);
 
-        // 未請求 (請求待ち・完了): per 種別 with a 発行済 見積 whose 請求 is not done.
-        // amount = 発行済 見積 − 発行済 請求 of that 種別 (what is left to invoice).
-        $backlogQuery = "SELECT
+        // 未請求 (請求待ち・完了): per 種別 whose 請求 is not done (未発行 / 請求準備; all 無償 = done):
+        //  - 種別 with a 発行済 (or all 無償) 見積: amount = 発行済 見積 − 発行済 請求 (0 when 見積 無償);
+        //  - 請求 種別 with no 見積 of that 種別: amount = the 請求 not issued yet.
+        $backlogQuery = "SELECT * FROM (SELECT
                 {$projectColumns},
-                GREATEST(ge.issued_amount - COALESCE(gi.issued_amount, 0), 0) AS amount,
+                CASE WHEN ge.group_status = '無償' THEN 0
+                     ELSE GREATEST(ge.issued_amount - COALESCE(gi.issued_amount, 0), 0) END AS amount,
                 COALESCE(gi.total_amount, 0) AS invoice_amount,
                 ge.group_status AS estimate_status,
                 COALESCE(gi.group_status, '未発行') AS invoice_status,
@@ -6366,18 +6369,36 @@ class Project extends ApplicationModel {
             LEFT JOIN {$groups} gi ON gi.project_id = p.id AND gi.kind = 'invoice' AND gi.item_type = ge.item_type
             WHERE {$baseWhere}
               AND p.status IN ('waiting_invoice', 'completed')
-              AND ge.issued_count > 0
+              AND (ge.issued_count > 0 OR ge.group_status = '無償')
               AND COALESCE(gi.group_status, '未発行') IN ('未発行', '請求準備')
-            ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC, fee_type ASC";
+            UNION ALL
+            SELECT
+                {$projectColumns},
+                GREATEST(gi.total_amount - gi.issued_amount, 0) AS amount,
+                gi.total_amount AS invoice_amount,
+                NULL AS estimate_status,
+                gi.group_status AS invoice_status,
+                gi.item_type AS fee_type,
+                CONCAT(p.id, ':', gi.item_type) AS row_key
+            {$baseFrom}
+            INNER JOIN {$groups} gi ON gi.project_id = p.id AND gi.kind = 'invoice'
+            LEFT JOIN {$groups} ge ON ge.project_id = p.id AND ge.kind = 'estimate' AND ge.item_type = gi.item_type
+            WHERE {$baseWhere}
+              AND p.status IN ('waiting_invoice', 'completed')
+              AND ge.project_id IS NULL
+              AND gi.group_status IN ('未発行', '請求準備')
+            ) b
+            ORDER BY (b.end_date IS NULL) ASC, b.end_date ASC, b.company_name ASC, b.id ASC, b.fee_type ASC";
         $completedUninvoiced = $this->fetchAll($backlogQuery);
         $this->enrichMonthlyRevenueStatsProjects($completedUninvoiced);
 
         // キャンセル: per 見積 種別 (a project with no 見積 line: one row, amount 0).
-        // 見積済みのみ: the 種別 has a 発行済 見積 line.
-        $cancelledEstimatedWhere = $cancelledEstimatedOnly ? 'AND ge.issued_count > 0' : '';
+        // 見積済みのみ: the 種別 has a 発行済 見積 line (or its 見積 are all 無償).
+        // Month: 完了日, else 期限日, else the last update, else the creation date (never left out).
+        $cancelledEstimatedWhere = $cancelledEstimatedOnly ? "AND (ge.issued_count > 0 OR ge.group_status = '無償')" : '';
         $cancelledMonthFilter = $cancelledAllTime
             ? ''
-            : "AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date), '%Y-%m') = '{$monthEsc}'";
+            : "AND DATE_FORMAT(COALESCE(p.actual_end_date, p.end_date, p.updated_at, p.created_at), '%Y-%m') = '{$monthEsc}'";
         $cancelledQuery = "SELECT
                 {$projectColumns},
                 COALESCE(ge.total_amount, 0) AS amount,
@@ -6393,6 +6414,46 @@ class Project extends ApplicationModel {
             ORDER BY company_name ASC, (p.end_date IS NULL) ASC, p.end_date ASC, p.id ASC, fee_type ASC";
         $cancelledProjects = $this->fetchAll($cancelledQuery);
         $this->enrichMonthlyRevenueStatsProjects($cancelledProjects);
+
+        // 未見積: projects (not キャンセル) with no 発行済 見積 line and no 発行済 請求 line (all periods).
+        // Left out: projects whose 見積 lines are all 無償 / 対象外 (counted as quoted), and projects
+        // already listed in 未請求 (a 請求 with no 見積), so a project is never in both.
+        // amount = the 見積 lines not issued yet (draft amount); estimate_status = 見積作成中 when any line is.
+        $unquotedQuery = "SELECT
+                {$projectColumns},
+                COALESCE(ua.estimate_amount, 0) AS amount,
+                CASE
+                    WHEN COALESCE(ua.estimate_lines, 0) = 0 THEN NULL
+                    WHEN ua.drafting_lines > 0 THEN '見積作成中'
+                    ELSE '未発行'
+                END AS estimate_status,
+                CONCAT('unq-', p.id) AS row_key
+            {$baseFrom}
+            LEFT JOIN (SELECT ul.project_id,
+                    SUM(CASE WHEN ul.kind = 'estimate' THEN 1 ELSE 0 END) AS estimate_lines,
+                    SUM(CASE WHEN ul.kind = 'estimate' AND ul.status NOT IN ('無償', '対象外') THEN 1 ELSE 0 END) AS estimate_chargeable,
+                    SUM(CASE WHEN ul.kind = 'estimate' AND ul.status = '見積作成中' THEN 1 ELSE 0 END) AS drafting_lines,
+                    SUM(CASE WHEN ul.kind = 'estimate' AND ul.status NOT IN ('無償', '対象外') THEN COALESCE(ul.amount, 0) ELSE 0 END) AS estimate_amount,
+                    SUM(CASE WHEN ul.status = '発行済' THEN 1 ELSE 0 END) AS issued_lines
+                FROM {$lines} ul
+                GROUP BY ul.project_id) ua ON ua.project_id = p.id
+            WHERE {$baseWhere}
+              AND p.status NOT IN ('cancelled', 'deleted')
+              AND COALESCE(ua.issued_lines, 0) = 0
+              AND NOT (COALESCE(ua.estimate_lines, 0) > 0 AND COALESCE(ua.estimate_chargeable, 0) = 0)
+            ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC";
+        $backlogIds = [];
+        foreach ($completedUninvoiced as $backlogRow) {
+            $backlogIds[(int)$backlogRow['id']] = true;
+        }
+        $unquotedProjects = array_values(array_filter($this->fetchAll($unquotedQuery), function ($row) use ($backlogIds) {
+            return !isset($backlogIds[(int)$row['id']]);
+        }));
+        $this->enrichMonthlyRevenueStatsProjects($unquotedProjects);
+        foreach ($unquotedProjects as &$unquotedProject) {
+            $unquotedProject['status_label'] = $this->getProjectStatusLabelJa($unquotedProject['status'] ?? '');
+        }
+        unset($unquotedProject);
 
         $monthsQuery = "SELECT DISTINCT month_value AS month,
                 DATE_FORMAT(STR_TO_DATE(CONCAT(month_value, '-01'), '%Y-%m-%d'), '%Y年%m月') AS month_label
@@ -6441,6 +6502,7 @@ class Project extends ApplicationModel {
             'invoiced_projects' => $invoicedProjects,
             'completed_uninvoiced' => $completedUninvoiced,
             'cancelled_projects' => $cancelledProjects,
+            'unquoted_projects' => $unquotedProjects,
         ];
     }
 
