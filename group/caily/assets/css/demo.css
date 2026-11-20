@@ -1394,9 +1394,12 @@ span.avatar-initial:not(.avatar .avatar-initial) {
     display: none;
 }
 
-/* 進捗率: a short slider is enough for 5% steps */
-.project-detail-grid .position-relative:has(> .form-range) {
+/* 進捗率: a short select (5% steps) with a display-only bar under it */
+.project-detail-grid .progress-select-wrap {
     max-width: 200px;
+}
+.project-detail-grid .progress-select-wrap .progress-display {
+    pointer-events: none;
 }
 
 /* A 状況 field belongs to the field above it (see groupStatusCompanionFields): no rule

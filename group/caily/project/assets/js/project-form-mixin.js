@@ -850,6 +850,17 @@
             canUpdateProgress() {
                 return this.permission.is_member;
             },
+            /** 進捗率 choices: 0–100 in 5% steps, plus the current value when it is off-step (e.g. recalculated from tasks). */
+            progressOptions() {
+                const options = [];
+                for (let p = 0; p <= 100; p += 5) options.push(p);
+                const current = Number(this.project && this.project.progress);
+                if (Number.isFinite(current) && current >= 0 && current <= 100 && !options.includes(current)) {
+                    options.push(current);
+                    options.sort((a, b) => a - b);
+                }
+                return options;
+            },
             /** Non-CAILY always; CAILY when project_view_end_date (view, and editable in project edit mode). */
             canViewEndDate() {
                 if (!this.isCailyBranchUser) return true;

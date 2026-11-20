@@ -171,19 +171,18 @@
                             <!-- 進捗率 is not used by 省エネ departments (progress is followed by tasks) -->
                             <div class="col-md-4" v-show="!isEnergyDepartmentProject">
                                 <label class="form-label"><span data-i18n="進捗率">進捗率</span></label>
-                                <div class="position-relative">
-                                    <input
-                                        type="range"
-                                        min="0"
-                                        max="100"
-                                        step="5"
-                                        v-model="project.progress"
+                                <!-- Chosen from a list (5% steps); the bar only shows the value -->
+                                <div class="progress-select-wrap">
+                                    <select
+                                        v-model.number="project.progress"
                                         @change="updateProgress"
-                                        class="form-range"
-                                        :class="{'prevent-click': !canUpdateProgress}"
+                                        class="form-select form-select-sm progress-select"
+                                        :disabled="!canUpdateProgress"
                                     >
-                                    <div class="progress-value-label text-center">
-                                        {{ project.progress }}%
+                                        <option v-for="p in progressOptions" :key="p" :value="p">{{ p }}%</option>
+                                    </select>
+                                    <div class="progress progress-display mt-2" style="height: 6px;" aria-hidden="true">
+                                        <div class="progress-bar" :style="{ width: (Number(project.progress) || 0) + '%' }"></div>
                                     </div>
                                 </div>
                             </div>
