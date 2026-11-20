@@ -70,7 +70,7 @@ try {
                         <option v-for="user in filteredUsers" :key="user.id" :value="String(user.id)">{{ user.realname }}</option>
                     </select>
                 </div>
-                <div class="col-6 col-md-3 col-xl-2" :class="{ 'kb-filter-on': !!filters.created_month }">
+                <div class="col-6 col-md-3 col-xl-2" v-show="activeTab === 'tasks'" :class="{ 'kb-filter-on': !!filters.created_month }">
                     <label class="form-label small mb-1"><span data-i18n="作成月">作成月</span></label>
                     <select autocomplete="off" class="form-select form-select-sm" v-model="filters.created_month" @change="loadOverview">
                         <option value="" data-i18n="すべて">すべて</option>
