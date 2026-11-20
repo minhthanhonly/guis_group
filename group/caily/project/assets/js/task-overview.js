@@ -406,6 +406,25 @@ createApp({
             }
             return true;
         },
+        // On F5 some browsers restore the previous checked state of form controls after Vue has
+        // rendered, so a switch can look ON while the filter is OFF (list does not change).
+        // Vue only patches on state changes, so push the state back onto the switches.
+        syncFilterSwitchesToState() {
+            const expected = {
+                showClosedTasks: !this.filters.excludeCompleted,
+                myTask: !!this.filters.myTask,
+                filterTimerActiveOnly: !!this.filters.timerActiveOnly,
+                unassignedOnly: !!this.filters.unassignedOnly,
+                weeklyHoursByWeek: !!this.weeklyHoursByWeek,
+                weeklyShowEntries: !!this.weeklyShowEntries
+            };
+            Object.keys(expected).forEach((id) => {
+                const el = document.getElementById(id);
+                if (el && el.checked !== expected[id]) {
+                    el.checked = expected[id];
+                }
+            });
+        },
         // Drop remembered member selections that are no longer on the member bar,
         // otherwise the board could be filtered by someone the user cannot see or unselect.
         pruneMemberFilter() {
@@ -1274,7 +1293,10 @@ createApp({
                 if (!needsDepartmentReload && !isStale()) {
                     this.loading = false;
                     this.syncFiltersToUrl();
-                    this.$nextTick(() => this.initUserSelect2());
+                    this.$nextTick(() => {
+                        this.initUserSelect2();
+                        this.syncFilterSwitchesToState();
+                    });
                 }
             }
             if (needsDepartmentReload) {
@@ -1692,6 +1714,9 @@ createApp({
         if (typeof i18next !== 'undefined' && i18next.on) {
             i18next.on('languageChanged', this._onI18nLanguageChanged);
         }
+        this._onPageShow = () => this.syncFilterSwitchesToState();
+        window.addEventListener('pageshow', this._onPageShow);
+        window.addEventListener('load', this._onPageShow);
         this._onTaskTimerChanged = (event) => this.onTaskTimerChanged(event);
         document.addEventListener('task-timer-changed', this._onTaskTimerChanged);
         this.loadOverview().then(() => {
@@ -1702,6 +1727,11 @@ createApp({
         });
     },
     beforeUnmount() {
+        if (this._onPageShow) {
+            window.removeEventListener('pageshow', this._onPageShow);
+            window.removeEventListener('load', this._onPageShow);
+            this._onPageShow = null;
+        }
         if (this._onTaskTimerChanged) {
             document.removeEventListener('task-timer-changed', this._onTaskTimerChanged);
             this._onTaskTimerChanged = null;

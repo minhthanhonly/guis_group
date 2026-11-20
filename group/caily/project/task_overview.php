@@ -52,27 +52,27 @@ try {
             <div class="row g-2 align-items-end">
                 <div class="col-6 col-md-3 col-xl-2">
                     <label class="form-label small mb-1"><span data-i18n="部署">部署</span></label>
-                    <select class="form-select form-select-sm" v-model="filters.department_id" @change="onDepartmentChange">
+                    <select autocomplete="off" class="form-select form-select-sm" v-model="filters.department_id" @change="onDepartmentChange">
                         <option v-for="dep in departments" :key="dep.id" :value="String(dep.id)">{{ isMyDepartment(dep.id) ? '★ ' : '' }}{{ dep.name }}</option>
                     </select>
                 </div>
                 <div class="col-6 col-md-3 col-xl-2">
                     <label class="form-label small mb-1"><span data-i18n="チーム">チーム</span></label>
-                    <select class="form-select form-select-sm" v-model="filters.team_id" @change="loadOverview">
+                    <select autocomplete="off" class="form-select form-select-sm" v-model="filters.team_id" @change="loadOverview">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="team in filteredTeams" :key="team.id" :value="team.id">{{ team.name }}</option>
                     </select>
                 </div>
                 <div class="col-6 col-md-3 col-xl-2" v-if="canSelectUser">
                     <label class="form-label small mb-1"><span data-i18n="ユーザー">ユーザー</span></label>
-                    <select id="overviewUserFilter" class="form-select form-select-sm" ref="userFilterSelect">
+                    <select autocomplete="off" id="overviewUserFilter" class="form-select form-select-sm" ref="userFilterSelect">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="user in filteredUsers" :key="user.id" :value="String(user.id)">{{ user.realname }}</option>
                     </select>
                 </div>
                 <div class="col-6 col-md-3 col-xl-2">
                     <label class="form-label small mb-1"><span data-i18n="作成月">作成月</span></label>
-                    <select class="form-select form-select-sm" v-model="filters.created_month" @change="loadOverview">
+                    <select autocomplete="off" class="form-select form-select-sm" v-model="filters.created_month" @change="loadOverview">
                         <option value="" data-i18n="すべて">すべて</option>
                         <option v-for="month in createdMonthOptions" :key="month.value" :value="month.value">{{ month.label }}</option>
                     </select>
@@ -81,29 +81,29 @@ try {
                     <label class="form-label small mb-1" for="kbSearch"><span data-i18n="検索">検索</span></label>
                     <div class="input-group input-group-sm">
                         <span class="input-group-text"><i class="fa fa-search"></i></span>
-                        <input id="kbSearch" type="search" class="form-control" v-model.trim="searchQuery"
+                        <input autocomplete="off" id="kbSearch" type="search" class="form-control" v-model.trim="searchQuery"
                                :placeholder="$t('タスク名・案件名・番号で検索')">
                     </div>
                 </div>
             </div>
             <div class="d-flex flex-wrap align-items-center column-gap-4 row-gap-2 mt-3">
             <div class="form-check form-switch mb-0">
-                <input class="form-check-input" type="checkbox" id="showClosedTasks"
+                <input autocomplete="off" class="form-check-input" type="checkbox" id="showClosedTasks"
                        :checked="!filters.excludeCompleted" @change="setShowClosedTasks($event.target.checked)">
                 <label class="form-check-label text-nowrap" for="showClosedTasks"><span data-i18n="完了・キャンセルを表示">完了・キャンセルを表示</span></label>
             </div>
             <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="myTask"
+                <input autocomplete="off" class="form-check-input" type="checkbox" id="myTask"
                        v-model="filters.myTask" @change="onMyTaskChange">
                 <label class="form-check-label" for="myTask"><span data-i18n="自分のタスク">自分のタスク</span></label>
             </div>
             <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
+                <input autocomplete="off" class="form-check-input" type="checkbox" id="filterTimerActiveOnly"
                        v-model="filters.timerActiveOnly" @change="onTimerActiveOnlyChange">
                 <label class="form-check-label text-nowrap" for="filterTimerActiveOnly" data-i18n="作業計測中のタスクのみ">作業計測中のタスクのみ</label>
             </div>
             <div class="form-check form-switch">
-                <input class="form-check-input" type="checkbox" id="unassignedOnly"
+                <input autocomplete="off" class="form-check-input" type="checkbox" id="unassignedOnly"
                        v-model="filters.unassignedOnly" @change="onUnassignedOnlyChange">
                 <label class="form-check-label text-nowrap" for="unassignedOnly" data-i18n="未割り当てタスクのみ">未割り当てタスクのみ</label>
             </div>
@@ -158,7 +158,7 @@ try {
                 </button>
             </div>
             <div class="ms-auto d-flex align-items-center gap-2 flex-wrap">
-                <select class="form-select form-select-sm kb-sort" v-model="boardSort" @change="persistBoardPrefs" :aria-label="$t('並び替え')">
+                <select autocomplete="off" class="form-select form-select-sm kb-sort" v-model="boardSort" @change="persistBoardPrefs" :aria-label="$t('並び替え')">
                     <option v-for="opt in boardSortOptions" :key="opt.value" :value="opt.value">{{ $t(opt.label) }}</option>
                 </select>
                 <div class="btn-group btn-group-sm" role="group">
@@ -418,7 +418,7 @@ try {
                     </h5>
                     <div class="d-flex align-items-center gap-2 flex-wrap">
                         <div class="form-check form-switch mb-0 me-1">
-                            <input
+                            <input autocomplete="off"
                                 class="form-check-input"
                                 type="checkbox"
                                 id="weeklyHoursByWeek"
@@ -429,7 +429,7 @@ try {
                             </label>
                         </div>
                         <div class="form-check form-switch mb-0 me-1">
-                            <input
+                            <input autocomplete="off"
                                 class="form-check-input"
                                 type="checkbox"
                                 id="weeklyShowEntries"
