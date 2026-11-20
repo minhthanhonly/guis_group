@@ -345,6 +345,20 @@ class Project extends ApplicationModel {
             . " ELSE COALESCE(NULLIF(TRIM(pp_c.company_name), ''), NULLIF(TRIM(pp.company_name), '')) END";
     }
 
+    /** Effective 会社名 of one project (same rule as the 案件一覧 column), '' when none. */
+    private function getEffectiveCompanyNameForProject($projectId) {
+        $row = $this->fetchOne(sprintf(
+            "SELECT %s AS effective_company_name
+            FROM {$this->table} p
+            LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+            " . $this->getProjectListCustomerJoinSql() . "
+            WHERE p.id = %d",
+            $this->sqlEffectiveCompanyName(),
+            intval($projectId)
+        ));
+        return $row && isset($row['effective_company_name']) ? (string)$row['effective_company_name'] : '';
+    }
+
     private function sqlEffectiveBranchName() {
         return "CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.branch), '')"
             . " ELSE COALESCE(NULLIF(TRIM(pp_c.branch), ''), NULLIF(TRIM(pp.branch_name), '')) END";
@@ -4621,6 +4635,8 @@ class Project extends ApplicationModel {
             $project['yotei'] = $this->parseYoteiField(isset($project['yotei']) ? $project['yotei'] : null);
             $project['has_energy_sibling'] = $this->hasEnergySavingSiblingProject($project) ? 1 : 0;
             $project['task_weight_mode'] = $this->isTaskWeightModeProject($projectId) ? 1 : 0;
+            // 会社名 as on 案件一覧: the project's own customer, else the 建物's (決済情報 default lines)
+            $project['effective_company_name'] = $this->getEffectiveCompanyNameForProject($projectId);
             $project['payment_items'] = $this->getPaymentItemsForProject($project);
             $project['payment_item_types'] = $this->getPaymentItemTypeSuggestions();
             $project['closed_months'] = $this->getClosedMonthsForDepartment($project['department_id'] ?? 0);

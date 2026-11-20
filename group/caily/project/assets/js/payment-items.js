@@ -40,6 +40,13 @@
     // default blank lines per 見積/請求 when there is none (the old fixed fields)
     var DEFAULT_TYPES = ['設計費'];
     var DEFAULT_TYPES_ENERGY = ['申請費', '設計費'];
+    // 省エネ for 東建 (東建コーポレーション, not 大東建託): 申請費 only
+    var DEFAULT_TYPES_ENERGY_TOKEN = ['申請費'];
+
+    function isTokenCompany(project) {
+        var name = project ? String(project.effective_company_name || project.company_name || '') : '';
+        return /^\s*東建/.test(name);
+    }
     // 注文書 per 種別 (Project::ORDER_FORM_FIELDS)
     var ORDER_FORM_TYPES = ['申請費', '設計費'];
     var ORDER_FORM_FIELDS = { '申請費': 'order_form_application_at', '設計費': 'order_form_design_at' };
@@ -800,13 +807,14 @@
             },
             /**
              * No line of this kind yet: show the default blank lines, like the old fixed fields
-             * (省エネ: 申請費 + 設計費, other departments: 設計費). Blank lines are not stored
+             * (省エネ: 申請費 + 設計費, 東建 申請費 only; other departments: 設計費). Blank lines are not stored
              * (the server skips them), so an untouched project comes back with them again.
              */
             fillDefaultItems: function () {
                 if (!this.editable || !uses(this.project) || itemsOf(this.project, this.kind).length) return;
                 var self = this;
-                var types = this.energy ? DEFAULT_TYPES_ENERGY : DEFAULT_TYPES;
+                var types = !this.energy ? DEFAULT_TYPES
+                    : (isTokenCompany(this.project) ? DEFAULT_TYPES_ENERGY_TOKEN : DEFAULT_TYPES_ENERGY);
                 this.insertItems(types.map(function (t) {
                     var it = self.newItem(null);
                     it.item_type = t;
