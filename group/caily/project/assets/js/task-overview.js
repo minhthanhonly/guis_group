@@ -509,6 +509,19 @@ createApp({
             this.selectedStatusKeys = keys;
             this.syncFiltersToUrl();
         },
+        // 作業比重 (%) within the project, computed by the API over all tasks of the project
+        getDrawingWeightPercent(task) {
+            if (!task || task.drawing_weight_pct === null || task.drawing_weight_pct === undefined || task.drawing_weight_pct === '') {
+                return null;
+            }
+            const n = Number(task.drawing_weight_pct);
+            return Number.isFinite(n) ? Math.round(n * 10) / 10 : null;
+        },
+        formatDrawingWeight(task) {
+            const pct = this.getDrawingWeightPercent(task);
+            if (pct === null) return '';
+            return (Number.isInteger(pct) ? String(pct) : pct.toFixed(1)) + '%';
+        },
         // Tasks currently on screen: list view applies the status buttons on top of the other filters
         getExportTasks() {
             return this.viewMode === 'list' ? this.listTasks : this.sortedBoardTasks;
@@ -541,7 +554,7 @@ createApp({
                 return Number.isNaN(n) ? '' : n;
             };
             const headers = [
-                '案件番号', '工事番号', '案件', 'タスクID', 'タスク', '種別', '担当者', '作成者',
+                '案件番号', '工事番号', '案件', 'タスクID', 'タスク', '種別', '作業比重(%)', '担当者', '作成者',
                 'ステータス', '優先度', '進捗(%)', '工数(h)', '開始日', '期限', 'メモ'
             ].map(tr);
             const rows = tasks.map(task => {
@@ -560,6 +573,7 @@ createApp({
                     Number(task.id) || task.id,
                     task.title || '',
                     kind ? this.getTaskKindLabel(kind) : '',
+                    this.getDrawingWeightPercent(task) === null ? '' : this.getDrawingWeightPercent(task),
                     assignees,
                     (creator && creator.user_name) || task.created_by_name || '',
                     this.getStatusLabel(task.status) || '',
@@ -572,7 +586,7 @@ createApp({
                 ];
             });
             const sheet = XLSX.utils.aoa_to_sheet([headers].concat(rows));
-            const widths = [10, 14, 40, 10, 32, 12, 28, 18, 10, 8, 8, 8, 17, 17, 40];
+            const widths = [10, 14, 40, 10, 32, 12, 11, 28, 18, 10, 8, 8, 8, 17, 17, 40];
             sheet['!cols'] = widths.map(wch => ({ wch }));
             sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
             const book = XLSX.utils.book_new();

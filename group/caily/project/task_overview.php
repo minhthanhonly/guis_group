@@ -241,7 +241,7 @@ try {
                                 <div class="kb-card-tags">
                                     <span class="kb-prio-tag" :class="'kb-prio-tag--' + (task.priority || 'medium')">{{ getPriorityLabel(task.priority) }}</span>
                                     <span v-if="getTaskKindDisplayValue(task)" class="badge kb-kind" :class="getTaskKindBadgeClass(getTaskKindDisplayValue(task))">{{ getTaskKindLabel(getTaskKindDisplayValue(task)) }}</span>
-                                    <span v-if="shouldShowTaskDrawingCount(task)" class="kb-meta" :title="$t('図面')"><i class="fa fa-drafting-compass"></i>{{ getTaskDrawingCount(task) }}</span>
+                                    <span v-if="formatDrawingWeight(task)" class="kb-meta" :title="$t('作業比重')"><i class="fa fa-drafting-compass"></i>{{ formatDrawingWeight(task) }}</span>
                                     <span v-if="getTaskNoteSnippet(task.note)" class="kb-meta" :title="getTaskNoteSnippet(task.note, 300)"><i class="far fa-sticky-note"></i></span>
                                 </div>
                                 <div v-if="Number(task.progress) > 0" class="kb-progress" :title="$t('進捗') + ' ' + (task.progress || 0) + '%'">
@@ -316,6 +316,7 @@ try {
                                     <th><span data-i18n="案件">案件</span></th>
                                     <th><span data-i18n="タスク">タスク</span></th>
                                     <th><span data-i18n="種別">種別</span></th>
+                                    <th class="text-end text-nowrap"><span data-i18n="作業比重">作業比重</span></th>
                                     <th><span data-i18n="担当者">担当者</span></th>
                                     <th><span data-i18n="作成者">作成者</span></th>
                                     <th><span data-i18n="ステータス">ステータス</span></th>
@@ -342,6 +343,10 @@ try {
                                     </td>
                                     <td>
                                         <span v-if="getTaskKindDisplayValue(task)" class="badge small" :class="getTaskKindBadgeClass(getTaskKindDisplayValue(task))">{{ getTaskKindLabel(getTaskKindDisplayValue(task)) }}</span>
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        <span v-if="formatDrawingWeight(task)" class="small">{{ formatDrawingWeight(task) }}</span>
+                                        <span v-else class="text-muted small">—</span>
                                     </td>
                                     <td>
                                         <div class="d-flex align-items-center flex-wrap gap-1">
