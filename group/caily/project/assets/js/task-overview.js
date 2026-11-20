@@ -526,6 +526,50 @@ createApp({
         getExportTasks() {
             return this.viewMode === 'list' ? this.listTasks : this.sortedBoardTasks;
         },
+        // Human-readable list of the filters behind the current list (for the Excel header)
+        getExportFilterSummary(tr) {
+            const t = tr || ((k) => k);
+            const items = [];
+            const f = this.filters;
+            items.push(t('部署') + '：' + (this.currentDepartmentName || t('すべて')));
+            if (f.team_id) {
+                const team = this.teams.find(x => String(x.id) === String(f.team_id));
+                items.push(t('チーム') + '：' + (team ? team.name : f.team_id));
+            }
+            if (f.user_id && !f.myTask) {
+                const user = this.users.find(x => String(x.id) === String(f.user_id));
+                items.push(t('ユーザー') + '：' + (user ? user.realname : f.user_id));
+            }
+            if (f.created_month) {
+                const m = String(f.created_month).match(/^(\d{4})-(\d{2})$/);
+                items.push(t('作成月') + '：' + (m ? m[1] + '年' + Number(m[2]) + '月' : f.created_month));
+            }
+            if (String(this.searchQuery || '').trim()) {
+                items.push(t('検索') + '：「' + String(this.searchQuery).trim() + '」');
+            }
+            if (f.myTask) items.push(t('自分のタスク'));
+            if (f.timerActiveOnly) items.push(t('作業計測中のタスクのみ'));
+            if (f.unassignedOnly) items.push(t('未割り当てタスクのみ'));
+            items.push(f.excludeCompleted ? t('完了・キャンセルを除く') : t('完了・キャンセルを含む'));
+            if (this.memberFilterIds.length) {
+                const names = this.memberFilterIds.map(id => {
+                    if (id === 'none') return t('未割り当て');
+                    const u = this.getAssigneeUser(id);
+                    return u ? u.realname : id;
+                });
+                items.push(t('担当者') + '：' + names.join('、'));
+            }
+            if (this.quickFilter) {
+                const stat = this.quickStats.find(x => x.key === this.quickFilter);
+                if (stat) items.push(t(stat.label));
+            }
+            if (this.viewMode === 'list' && this.effectiveStatusKeys.length) {
+                items.push(t('ステータス') + '：' + this.effectiveStatusKeys.map(k => this.getStatusLabel(k)).join('、'));
+            }
+            const sort = this.boardSortOptions.find(x => x.value === this.boardSort);
+            if (sort) items.push(t('並び順') + '：' + t(sort.label));
+            return items;
+        },
         exportTasksExcel() {
             const tr = (key) => (typeof this.$t === 'function' ? this.$t(key) : key);
             const notify = (msg, type) => {
@@ -585,16 +629,74 @@ createApp({
                     String(task.note || '').replace(/<[^>]*>/g, '').trim()
                 ];
             });
-            const sheet = XLSX.utils.aoa_to_sheet([headers].concat(rows));
-            const widths = [10, 14, 40, 10, 32, 12, 11, 28, 18, 10, 8, 8, 8, 17, 17, 40];
-            sheet['!cols'] = widths.map(wch => ({ wch }));
-            sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rows.length, c: headers.length - 1 } }) };
-            const book = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(book, sheet, 'タスク一覧');
             const now = new Date();
             const pad = (n) => String(n).padStart(2, '0');
+            const exportedAt = now.getFullYear() + '/' + pad(now.getMonth() + 1) + '/' + pad(now.getDate())
+                + ' ' + pad(now.getHours()) + ':' + pad(now.getMinutes());
+            const title = tr('全タスク一覧') + (this.currentDepartmentName ? '（' + this.currentDepartmentName + '）' : '');
+            const conditionText = tr('抽出条件') + '：' + this.getExportFilterSummary(tr).join('　／　');
+            const infoText = tr('出力日時') + '：' + exportedAt + '　　' + tr('件数') + '：' + rows.length;
+
+            // Rows 1-3: title, filter conditions, export date; row 4 blank; row 5 header; data below
+            const headerRow = 4;
+            const aoa = [[title], [conditionText], [infoText], [], headers].concat(rows);
+            const sheet = XLSX.utils.aoa_to_sheet(aoa);
+            const lastCol = headers.length - 1;
+            const lastRow = headerRow + rows.length;
+            const widths = [10, 14, 40, 10, 32, 12, 11, 28, 18, 10, 8, 8, 8, 17, 17, 40];
+            sheet['!cols'] = widths.map(wch => ({ wch }));
+            sheet['!merges'] = [0, 1, 2].map(r => ({ s: { r, c: 0 }, e: { r, c: lastCol } }));
+            sheet['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: headerRow, c: 0 }, e: { r: lastRow, c: lastCol } }) };
+            // The condition line wraps: give it room for roughly the lines it needs
+            const totalWidth = widths.reduce((a, b) => a + b, 0);
+            const conditionLines = Math.max(1, Math.ceil((conditionText.length * 2) / totalWidth));
+            sheet['!rows'] = [{ hpt: 24 }, { hpt: Math.min(15 * conditionLines + 4, 120) }, { hpt: 16 }, { hpt: 6 }, { hpt: 30 }];
+
+            const font = { name: 'Meiryo UI', sz: 10 };
+            const thin = { style: 'thin', color: { rgb: '9E9E9E' } };
+            const border = { top: thin, bottom: thin, left: thin, right: thin };
+            const setStyle = (r, c, style) => {
+                const ref = XLSX.utils.encode_cell({ r, c });
+                if (!sheet[ref]) sheet[ref] = { t: 's', v: '' };
+                sheet[ref].s = style;
+            };
+            setStyle(0, 0, { font: { ...font, sz: 14, bold: true }, alignment: { vertical: 'center' } });
+            setStyle(1, 0, { font, alignment: { vertical: 'top', wrapText: true } });
+            setStyle(2, 0, { font: { ...font, color: { rgb: '555555' } }, alignment: { vertical: 'center' } });
+            const wrapCols = new Set([2, 4, 7, 15]);
+            const centerCols = new Set([0, 3, 5, 9, 10]);
+            const numberCols = new Set([6, 11, 12]);
+            for (let c = 0; c <= lastCol; c++) {
+                setStyle(headerRow, c, {
+                    font: { ...font, bold: true },
+                    fill: { patternType: 'solid', fgColor: { rgb: 'E8EAF6' } },
+                    alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+                    border
+                });
+                for (let r = headerRow + 1; r <= lastRow; r++) {
+                    setStyle(r, c, {
+                        font,
+                        border,
+                        alignment: {
+                            vertical: 'top',
+                            wrapText: wrapCols.has(c),
+                            horizontal: centerCols.has(c) ? 'center' : (numberCols.has(c) ? 'right' : 'left')
+                        }
+                    });
+                }
+            }
+            // 作業比重(%) / 工数(h): one decimal
+            for (let r = headerRow + 1; r <= lastRow; r++) {
+                [6, 12].forEach(c => {
+                    const cell = sheet[XLSX.utils.encode_cell({ r, c })];
+                    if (cell && cell.t === 'n') cell.z = '0.0';
+                });
+            }
+
+            const book = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(book, sheet, 'タスク一覧');
             const stamp = now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + '_' + pad(now.getHours()) + pad(now.getMinutes());
-            const safe = (v) => String(v || '').replace(/[\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
+            const safe = (v) => String(v || '').replace(/[\\/:*?"<>|\s]+/g, '_').replace(/^_+|_+$/g, '');
             const parts = ['全タスク一覧', safe(this.currentDepartmentName), stamp].filter(Boolean);
             XLSX.writeFile(book, parts.join('_') + '.xlsx');
         },

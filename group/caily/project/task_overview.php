@@ -1210,7 +1210,7 @@ window.currentUser = {
 };
 </script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" crossorigin="anonymous"></script>
 <script src="assets/js/task-overview.js?v=<?=STATS_CACHE_VERSION?>"></script>
 
 
