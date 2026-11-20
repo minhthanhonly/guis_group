@@ -107,7 +107,7 @@ try {
                        v-model="filters.unassignedOnly" @change="onUnassignedOnlyChange">
                 <label class="form-check-label text-nowrap" for="unassignedOnly" data-i18n="未割り当てタスクのみ">未割り当てタスクのみ</label>
             </div>
-            <button class="btn btn-sm btn-outline-secondary ms-auto" type="button" @click="resetFilters" :disabled="loading || weeklyLoading"
+            <button class="btn btn-sm btn-outline-secondary" type="button" @click="resetFilters" :disabled="loading || weeklyLoading"
                     :title="$t('自分の部署の表示に戻す')">
                 <i class="fa fa-undo me-1"></i><span data-i18n="リセット">リセット</span>
             </button>
