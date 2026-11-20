@@ -27,6 +27,8 @@
     global.ProjectNoteBoardMixin = {
         data() {
             return {
+                /** note id → true: the collapsed card cuts its text (a ⌄ says there is more) */
+                noteOverflow: {},
                 noteFilterLabel: '',
                 noteFilterType: '',
                 noteFilterVisibility: '', // '' | all | members | self
@@ -144,7 +146,11 @@
         },
         watch: {
             // save the user's choice — not the temporary on of 全画面表示 (restored on exit)
+            boardNotes() {
+                this.scheduleNoteOverflow();
+            },
             noteShowFull(on) {
+                this.scheduleNoteOverflow();
                 if (this.noteBoardFullscreen) return;
                 try { localStorage.setItem(NOTE_SHOW_FULL_STORAGE_KEY, on ? '1' : '0'); } catch (e) { /* storage blocked */ }
             },
@@ -161,6 +167,7 @@
             document.addEventListener('visibilitychange', this._onNoteEditVisible);
         },
         beforeUnmount() {
+            if (this._noteOverflowRo) this._noteOverflowRo.disconnect();
             clearInterval(this._noteEditPoll);
             document.removeEventListener('visibilitychange', this._onNoteEditVisible);
             this.cancelNoteDrag();
@@ -175,6 +182,36 @@
             }
         },
         methods: {
+            /** After the board renders / resizes: which collapsed cards cut their text */
+            scheduleNoteOverflow() {
+                if (this._noteOverflowPending) return;
+                this._noteOverflowPending = true;
+                this.$nextTick(() => {
+                    setTimeout(() => {
+                        this._noteOverflowPending = false;
+                        this.measureNoteOverflow();
+                    }, 0);
+                });
+            },
+            measureNoteOverflow() {
+                const grid = this.$refs.noteBoardGrid;
+                const next = {};
+                if (grid && !this.noteShowFull) {
+                    if (global.ResizeObserver && this._noteOverflowGrid !== grid) {
+                        if (this._noteOverflowRo) this._noteOverflowRo.disconnect();
+                        this._noteOverflowRo = new ResizeObserver(() => this.scheduleNoteOverflow());
+                        this._noteOverflowRo.observe(grid);
+                        this._noteOverflowGrid = grid;
+                    }
+                    grid.querySelectorAll('.note-card[data-note-id]').forEach(function (card) {
+                        const c = card.querySelector('.note-card-content');
+                        if (c && c.scrollHeight > c.clientHeight + 2) next[card.getAttribute('data-note-id')] = true;
+                    });
+                }
+                const a = Object.keys(next).sort().join(',');
+                const b = Object.keys(this.noteOverflow).sort().join(',');
+                if (a !== b) this.noteOverflow = next;
+            },
             /** Refresh note.edit_locked_name (someone else has the note open in the editor) */
             async pollNoteEditors() {
                 const presence = global.NoteEditPresence;
