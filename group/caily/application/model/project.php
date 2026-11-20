@@ -6478,7 +6478,7 @@ class Project extends ApplicationModel {
         $cancelledProjects = $this->fetchAll($cancelledQuery);
         $this->enrichMonthlyRevenueStatsProjects($cancelledProjects);
 
-        // 未見積: projects (not キャンセル) with no 発行済 見積 line and no 発行済 請求 line (all periods).
+        // 未見積: projects (not キャンセル / 完了) with no 発行済 見積 line and no 発行済 請求 line (all periods).
         // Left out: projects whose 見積 lines are all 無償 / 対象外 (counted as quoted), and projects
         // already listed in 未請求 (a 請求 with no 見積), so a project is never in both.
         // amount = the 見積 lines not issued yet (draft amount); estimate_status = 見積作成中 when any line is.
@@ -6501,7 +6501,7 @@ class Project extends ApplicationModel {
                 FROM {$lines} ul
                 GROUP BY ul.project_id) ua ON ua.project_id = p.id
             WHERE {$baseWhere}
-              AND p.status NOT IN ('cancelled', 'deleted')
+              AND p.status NOT IN ('completed', 'cancelled', 'deleted')
               AND COALESCE(ua.issued_lines, 0) = 0
               AND NOT (COALESCE(ua.estimate_lines, 0) > 0 AND COALESCE(ua.estimate_chargeable, 0) = 0)
             ORDER BY (p.end_date IS NULL) ASC, p.end_date ASC, company_name ASC, p.id ASC";

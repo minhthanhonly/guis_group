@@ -663,7 +663,7 @@ if (!$canAccessRevenueStats) {
                             <input class="form-check-input" type="checkbox" id="tantouGuisUnquotedToggle" v-model="showTantouGuis">
                             <label class="form-check-label small" for="tantouGuisUnquotedToggle">GUIS</label>
                         </span>
-                        <div class="small text-muted fw-normal mt-1" data-i18n="見積・請求がどちらも未発行の案件（キャンセル・見積無償・未請求案件に表示中の案件を除く）">見積・請求がどちらも未発行の案件（キャンセル・見積無償・未請求案件に表示中の案件を除く）</div>
+                        <div class="small text-muted fw-normal mt-1" data-i18n="見積・請求がどちらも未発行の案件（完了・キャンセル・見積無償・未請求案件に表示中の案件を除く）">見積・請求がどちらも未発行の案件（完了・キャンセル・見積無償・未請求案件に表示中の案件を除く）</div>
                     </h5>
                     <div class="revenue-stats-card-header-actions">
                         <div v-if="unquotedGroups.length" class="revenue-stats-card-header-totals revenue-stats-card-header-totals-unquoted">
