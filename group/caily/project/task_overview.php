@@ -333,8 +333,8 @@ try {
                                             <template v-if="task.assigned_to_ids && task.assigned_to_ids.length">
                                                 <template v-for="userId in task.assigned_to_ids.slice(0, 4)" :key="userId">
                                                     <div class="avatar position-relative" data-bs-toggle="tooltip" :title="getAssigneeTooltip(task, userId)">
-                                                        <span class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getAssigneeUser(userId) || '') }}</span>
-                                                        <img v-if="getAssigneeUser(userId) && !getAssigneeUser(userId).avatarError && getAvatarSrc(getAssigneeUser(userId))" class="rounded-circle" :src="getAvatarSrc(getAssigneeUser(userId))" :alt="getAssigneeUser(userId).realname" style="display:none;" @load="$event.target.style.display='block'; if ($event.target.previousElementSibling) $event.target.previousElementSibling.style.display='none';" @error="handleAvatarError(getAssigneeUser(userId)); $event.target.remove()">
+                                                        <img v-if="getMemberAvatarSrc(getAssigneeUser(userId))" class="rounded-circle" :src="getMemberAvatarSrc(getAssigneeUser(userId))" :alt="getAssigneeUser(userId).realname" @error="handleAvatarError(getAssigneeUser(userId))">
+                                                        <span v-else class="avatar-initial rounded-circle bg-label-primary">{{ getInitials(getAssigneeUser(userId) || '') }}</span>
                                                         <span v-if="isAcknowledged(task, userId)" class="badge bg-success position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-check"></i></span>
                                                         <span v-else class="badge bg-secondary position-absolute top-0 start-100 translate-middle" style="font-size: 8px; padding: 2px 4px;"><i class="fa fa-clock"></i></span>
                                                     </div>
