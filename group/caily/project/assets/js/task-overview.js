@@ -92,7 +92,10 @@ createApp({
         const sortValues = ['due', 'priority', 'project', 'newest'];
 
         return {
-            viewMode: prefs.viewMode === 'list' ? 'list' : 'kanban',
+            // Default: list. Only an explicit choice (saved as `view`) switches to kanban.
+            viewMode: prefs.view === 'kanban' ? 'kanban' : 'list',
+            // List view status filter (empty = すべて)
+            selectedStatusKeys: [],
             boardSort: sortValues.includes(prefs.boardSort) ? prefs.boardSort : 'due',
             collapsedColumns: (prefs.collapsedColumns && typeof prefs.collapsedColumns === 'object')
                 ? prefs.collapsedColumns
@@ -211,6 +214,7 @@ createApp({
                 searchQuery: this.searchQuery,
                 quickFilter: this.quickFilter,
                 memberFilterIds: this.memberFilterIds.slice(),
+                statusKeys: this.selectedStatusKeys.slice(),
                 activeTab: this.activeTab,
                 weeklyHoursByWeek: this.weeklyHoursByWeek,
                 weeklyShowEntries: this.weeklyShowEntries
@@ -299,6 +303,27 @@ createApp({
                 ? this.memberFilteredTasks.filter(t => this.matchesQuickFilter(t, this.quickFilter))
                 : this.memberFilteredTasks.slice();
             return list.sort((a, b) => this.compareBoardTasks(a, b));
+        },
+        // Status buttons for the list view (完了 / キャンセル only while closed tasks are shown)
+        listStatusOptions() {
+            const counts = {};
+            this.sortedBoardTasks.forEach(t => { counts[t.status] = (counts[t.status] || 0) + 1; });
+            return this.taskStatuses
+                .filter(s => !this.filters.excludeCompleted || !this.isTerminalStatus(s.value))
+                .map(s => ({ ...s, count: counts[s.value] || 0 }));
+        },
+        // Selected statuses that can actually match (hidden closed statuses are ignored)
+        effectiveStatusKeys() {
+            const visible = new Set(this.listStatusOptions.map(s => s.value));
+            return this.selectedStatusKeys.filter(k => visible.has(k));
+        },
+        isAllStatusFilterSelected() {
+            return this.effectiveStatusKeys.length === 0;
+        },
+        listTasks() {
+            const keys = this.effectiveStatusKeys;
+            if (!keys.length) return this.sortedBoardTasks;
+            return this.sortedBoardTasks.filter(t => keys.includes(t.status));
         },
         boardColumns() {
             const grouped = {};
@@ -395,6 +420,7 @@ createApp({
             if (typeof saved.searchQuery === 'string') this.searchQuery = saved.searchQuery;
             if (['', 'overdue', 'week', 'high', 'unack'].includes(saved.quickFilter)) this.quickFilter = saved.quickFilter;
             if (Array.isArray(saved.memberFilterIds)) this.memberFilterIds = saved.memberFilterIds.map(String);
+            if (Array.isArray(saved.statusKeys)) this.selectedStatusKeys = this.sanitizeStatusKeys(saved.statusKeys);
             if (['tasks', 'weekly'].includes(saved.activeTab)
                 || (saved.activeTab === 'unassigned' && this.canSelectUser)) {
                 this.activeTab = saved.activeTab;
@@ -446,7 +472,7 @@ createApp({
             try {
                 if (window.localStorage) {
                     window.localStorage.setItem(OVERVIEW_BOARD_PREFS_KEY, JSON.stringify({
-                        viewMode: this.viewMode,
+                        view: this.viewMode,
                         boardSort: this.boardSort,
                         collapsedColumns: this.collapsedColumns
                     }));
@@ -462,6 +488,26 @@ createApp({
             if (this.viewMode === 'list') {
                 this.$nextTick(() => this.initTooltips());
             }
+        },
+        sanitizeStatusKeys(keys) {
+            const allowed = new Set(this.taskStatuses.map(s => s.value));
+            return [...new Set((keys || []).map(k => String(k).trim()).filter(k => allowed.has(k)))];
+        },
+        isStatusFilterSelected(status) {
+            return !!status && this.effectiveStatusKeys.includes(status.value);
+        },
+        selectAllStatusFilter() {
+            this.selectedStatusKeys = [];
+            this.syncFiltersToUrl();
+        },
+        toggleTaskStatusFilter(status) {
+            const key = status && status.value;
+            if (!key) return;
+            const keys = this.effectiveStatusKeys.slice();
+            const idx = keys.indexOf(key);
+            if (idx >= 0) keys.splice(idx, 1); else keys.push(key);
+            this.selectedStatusKeys = keys;
+            this.syncFiltersToUrl();
         },
         toggleColumn(status) {
             this.collapsedColumns = { ...this.collapsedColumns, [status]: !this.collapsedColumns[status] };
@@ -659,7 +705,10 @@ createApp({
             }
 
             if (params.has('view')) {
-                this.viewMode = params.get('view') === 'list' ? 'list' : 'kanban';
+                this.viewMode = params.get('view') === 'kanban' ? 'kanban' : 'list';
+            }
+            if (params.has('status')) {
+                this.selectedStatusKeys = this.sanitizeStatusKeys(String(params.get('status') || '').split(','));
             }
             if (params.has('department_id')) {
                 this.filters.department_id = params.get('department_id') || '';
@@ -746,8 +795,10 @@ createApp({
             if (this.activeTab && this.activeTab !== 'tasks') {
                 params.set('tab', this.activeTab);
             }
-            if (this.viewMode === 'list') {
-                params.set('view', 'list');
+            if (this.viewMode === 'kanban') {
+                params.set('view', 'kanban');
+            } else if (this.effectiveStatusKeys.length) {
+                params.set('status', this.effectiveStatusKeys.join(','));
             }
             if (this.activeTab === 'weekly' && this.weeklyWeekStart) {
                 params.set('week_start', this.weeklyWeekStart);
@@ -1442,6 +1493,7 @@ createApp({
             this.searchQuery = '';
             this.quickFilter = '';
             this.memberFilterIds = [];
+            this.selectedStatusKeys = [];
             this.columnLimits = {};
             this.weeklyHoursByWeek = true;
             this.weeklyShowEntries = false;

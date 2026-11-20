@@ -281,12 +281,28 @@ try {
         <!-- List view -->
         <div v-else class="card mb-3">
             <div class="card-body">
+                    <div class="btn-group flex-wrap task-status-filter-group mb-4" role="group" :aria-label="$t('ステータス')">
+                        <button type="button" class="btn btn-sm status-filter-btn"
+                                :class="{ 'btn-label-secondary': !isAllStatusFilterSelected, 'btn-secondary': isAllStatusFilterSelected, 'active': isAllStatusFilterSelected }"
+                                :aria-pressed="isAllStatusFilterSelected ? 'true' : 'false'"
+                                @click="selectAllStatusFilter">
+                            <span data-i18n="すべて">{{ $t('すべて') }}</span>
+                            <span class="status-filter-count">{{ sortedBoardTasks.length }}</span>
+                        </button>
+                        <button v-for="status in listStatusOptions" :key="status.value" type="button" class="btn btn-sm status-filter-btn"
+                                :class="{ [`btn-label-${status.color}`]: !isStatusFilterSelected(status), [`btn-${status.color}`]: isStatusFilterSelected(status), 'active': isStatusFilterSelected(status) }"
+                                :aria-pressed="isStatusFilterSelected(status) ? 'true' : 'false'"
+                                @click="toggleTaskStatusFilter(status)">
+                            {{ $t(status.i18nKey || status.label) }}
+                            <span class="status-filter-count">{{ status.count }}</span>
+                        </button>
+                    </div>
                     <div v-if="loading" class="text-center py-4">
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
                     </div>
-                    <div v-else-if="sortedBoardTasks.length === 0" class="text-center text-muted py-3">
+                    <div v-else-if="listTasks.length === 0" class="text-center text-muted py-3">
                         <i class="fa fa-inbox fa-2x mb-2"></i>
                         <p class="mb-0"><span data-i18n="タスクがありません">タスクがありません</span></p>
                     </div>
@@ -309,7 +325,7 @@ try {
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr v-for="task in sortedBoardTasks" :key="task.id">
+                                <tr v-for="task in listTasks" :key="task.id">
                                     <td>
                                         <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
                                             <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
@@ -747,6 +763,30 @@ try {
 .kb-member.is-active .kb-member-count { background: var(--bs-primary); color: #fff; }
 
 /* Avatars */
+/* List view status filter (same pattern as the project task page) */
+.task-status-filter-group { overflow: visible !important; }
+.status-filter-btn { position: relative; overflow: visible; }
+.status-filter-btn .status-filter-count { margin-left: 0.25rem; opacity: 0.75; font-weight: 600; }
+.status-filter-btn::after {
+    content: '';
+    position: absolute;
+    bottom: -0.65rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: currentColor;
+    pointer-events: none;
+    display: none;
+}
+.status-filter-btn.active::after { display: block; }
+.status-filter-btn.btn-secondary.active::after { background-color: #6c757d; }
+.status-filter-btn.btn-primary.active::after { background-color: #7650b0; }
+.status-filter-btn.btn-success.active::after { background-color: #198754; }
+.status-filter-btn.btn-warning.active::after { background-color: #ffc107; }
+.status-filter-btn.btn-danger.active::after { background-color: #dc3545; }
+
 .kb-avatar {
     display: inline-flex;
     align-items: center;
