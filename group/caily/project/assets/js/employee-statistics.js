@@ -41,6 +41,10 @@ createApp({
         return {
             teams: [],
             departments: [],
+            // null = all departments; array of id strings = only these (業務担当「統計」 users)
+            restrictedDepartmentIds: Array.isArray(window.EMPLOYEE_STATS_ALLOWED_DEPT_IDS)
+                ? window.EMPLOYEE_STATS_ALLOWED_DEPT_IDS.map(String)
+                : null,
             sharedFilters: {
                 department_id: null,
                 team_id: null
@@ -106,6 +110,7 @@ createApp({
     mounted() {
         this.initYearOptions();
         this.applyFiltersFromUrl();
+        this.enforceAllowedDepartment();
         this.loadTeams();
         this.loadDepartments(); // used by teams + employees tabs
         // Auto load statistics for last 12 months
@@ -563,10 +568,26 @@ createApp({
             }
         },
 
+        /** Restricted users cannot use 「すべての部署」 or a department outside their 統計 permission. */
+        enforceAllowedDepartment() {
+            const allowed = this.restrictedDepartmentIds;
+            if (!allowed || !allowed.length) return;
+            const current = this.sharedFilters.department_id;
+            if (current == null || !allowed.includes(String(current))) {
+                this.sharedFilters.department_id = allowed[0];
+                this.sharedFilters.team_id = null;
+                this.selectedDepartmentId = allowed[0];
+            }
+        },
+
         async loadDepartments() {
             try {
                 const response = await axios.get('/api/index.php?model=department&method=list');
-                this.departments = response.data || [];
+                const all = response.data || [];
+                const allowed = this.restrictedDepartmentIds;
+                this.departments = allowed
+                    ? all.filter(d => allowed.includes(String(d.id)))
+                    : all;
             } catch (error) {
                 console.error('Error loading departments:', error);
                 this.departments = [];
@@ -939,6 +960,7 @@ createApp({
             this.sharedFilters.department_id = null;
             this.sharedFilters.team_id = null;
             this.selectedDepartmentId = null;
+            this.enforceAllowedDepartment();
             this.selectedUserId = null;
             this.selectedUserName = '';
             if (this.chartInstance) {

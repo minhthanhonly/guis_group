@@ -97,6 +97,7 @@
                     && ($_SESSION['group'] ?? '') != '7'
                     && ($_SESSION['group'] ?? '') != '6')
                 || $isHayashidaUser
+                || $_revenuePermModel->hasDepartmentPermission('project_director_stat')
             );
             $showRevenueStatsMenu = ($_SESSION['authority'] ?? '') === 'administrator'
                 || $_revenuePermModel->hasDepartmentPermission('project_director_stat')
