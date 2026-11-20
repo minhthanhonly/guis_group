@@ -140,6 +140,8 @@ $nbStandalone = !empty($noteBoardStandalone);
                         </div>
                         <div v-if="note.content" class="ql-editor note-card-content" v-html="decodeNoteHtml(note.content)"></div>
                     </div>
+                    <span v-if="!noteShowFull && noteOverflow[note.id]" class="note-more-icon"
+                          :title="translateLabel('続きあり')" @click.stop="openNoteModal(note)"><i class="fa fa-angle-down"></i></span>
                     <div class="note-card-footer" @click="openNoteModal(note)">
                         {{ formatShortDateTime(note.created_at) }} · {{ note.realname || 'Unknown' }}
                     </div>
