@@ -56,7 +56,7 @@
                 </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'task_overview') echo 'active'; ?>">
                   <a href="<?=$root?>project/task_overview.php" class="menu-link">
-                    <div data-i18n="タスク一覧">タスク一覧</div>
+                    <div data-i18n="全タスク一覧">全タスク一覧</div>
                   </a>
                 </li>
                 <li class="menu-item <?php if($directory == 'project' && $page == 'project_gantt') echo 'active'; ?>">

@@ -330,10 +330,21 @@ try {
                             <tbody>
                                 <tr v-for="task in listTasks" :key="task.id">
                                     <td>
-                                        <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
-                                            <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
-                                            <span>{{ task.project_name }}</span>
-                                        </a>
+                                        <div v-if="task.project_construction_number" class="mb-1">
+                                            <span class="badge bg-label-info"><span data-i18n="工事">工事</span>: {{ task.project_construction_number }}</span>
+                                        </div>
+                                        <div>
+                                            <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
+                                                <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
+                                                <span>{{ task.project_name }}</span>
+                                            </a>
+                                        </div>
+                                        <div v-if="task.project_company_name" class="small text-muted">
+                                            <i class="fa fa-building me-1"></i>{{ task.project_company_name }}
+                                        </div>
+                                        <div v-if="task.project_branch_name" class="small text-muted">
+                                            <i class="fa fa-map-marker-alt me-1"></i>{{ task.project_branch_name }}
+                                        </div>
                                     </td>
                                     <td>
                                         <a :href="getTaskPageUrl(task)" class="text-decoration-none fw-bold">
@@ -501,13 +512,21 @@ try {
                                 <template v-for="task in weeklyTasks" :key="'weekly-' + task.id">
                                     <tr class="weekly-task-row">
                                         <td>
-                                            <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
-                                                <span v-if="task.project_construction_number" class="badge bg-label-info me-1">
-                                                    <span data-i18n="工事">工事</span>: {{ task.project_construction_number }}
-                                                </span>
-                                                <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
-                                                <span>{{ task.project_name }}</span>
-                                            </a>
+                                            <div v-if="task.project_construction_number" class="mb-1">
+                                                <span class="badge bg-label-info"><span data-i18n="工事">工事</span>: {{ task.project_construction_number }}</span>
+                                            </div>
+                                            <div>
+                                                <a :href="`detail.php?id=${task.project_id}`" class="text-decoration-none">
+                                                    <span class="badge bg-label-primary me-1">#{{ task.project_id }}</span>
+                                                    <span>{{ task.project_name }}</span>
+                                                </a>
+                                            </div>
+                                            <div v-if="task.project_company_name" class="small text-muted">
+                                                <i class="fa fa-building me-1"></i>{{ task.project_company_name }}
+                                            </div>
+                                            <div v-if="task.project_branch_name" class="small text-muted">
+                                                <i class="fa fa-map-marker-alt me-1"></i>{{ task.project_branch_name }}
+                                            </div>
                                         </td>
                                         <td>
                                             <a :href="getTaskPageUrl(task)" class="text-decoration-none fw-bold">

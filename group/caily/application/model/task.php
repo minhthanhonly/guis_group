@@ -4441,6 +4441,8 @@ class Task extends ApplicationModel {
                 p.id AS project_id,
                 p.name AS project_name,
                 pp.construction_number AS project_construction_number,
+                CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.company_name), '') ELSE COALESCE(NULLIF(TRIM(pp_c.company_name), ''), NULLIF(TRIM(pp.company_name), '')) END AS project_company_name,
+                CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.branch), '') ELSE COALESCE(NULLIF(TRIM(pp_c.branch), ''), NULLIF(TRIM(pp.branch_name), '')) END AS project_branch_name,
                 p.department_id,
                 p.end_date AS project_end_date,
                 d.name AS department_name,
@@ -4449,6 +4451,8 @@ class Task extends ApplicationModel {
              FROM " . DB_PREFIX . "tasks t
              LEFT JOIN " . DB_PREFIX . "projects p ON t.project_id = p.id
              LEFT JOIN " . DB_PREFIX . "parent_projects pp ON p.parent_project_id = pp.id
+             LEFT JOIN " . DB_PREFIX . "customer pc ON pc.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+             LEFT JOIN " . DB_PREFIX . "customer pp_c ON pp_c.id = SUBSTRING_INDEX(pp.customer_id, ',', 1)
              LEFT JOIN " . DB_PREFIX . "departments d ON p.department_id = d.id
              LEFT JOIN " . DB_PREFIX . "user u_creator ON t.created_by = u_creator.id
              $taskWhere
@@ -4501,6 +4505,8 @@ class Task extends ApplicationModel {
                 'project_number' => isset($row['project_number']) ? $row['project_number'] : null,
                 'project_name' => $row['project_name'],
                 'project_construction_number' => isset($row['project_construction_number']) ? $row['project_construction_number'] : '',
+                'project_company_name' => isset($row['project_company_name']) ? (string)$row['project_company_name'] : '',
+                'project_branch_name' => isset($row['project_branch_name']) ? (string)$row['project_branch_name'] : '',
                 'title' => $row['title'],
                 'status' => $row['status'],
                 'priority' => $row['priority'],
@@ -4768,12 +4774,18 @@ class Task extends ApplicationModel {
                 p.name AS project_name,
                 p.department_id,
                 p.end_date AS project_end_date,
+                CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.company_name), '') ELSE COALESCE(NULLIF(TRIM(pp_c.company_name), ''), NULLIF(TRIM(pp.company_name), '')) END AS project_company_name,
+                CASE WHEN pc.id IS NOT NULL THEN NULLIF(TRIM(pc.branch), '') ELSE COALESCE(NULLIF(TRIM(pp_c.branch), ''), NULLIF(TRIM(pp.branch_name), '')) END AS project_branch_name,
                 pp.construction_number AS project_construction_number
              FROM %stasks t
              LEFT JOIN %sprojects p ON t.project_id = p.id
              LEFT JOIN %sparent_projects pp ON p.parent_project_id = pp.id
+             LEFT JOIN %scustomer pc ON pc.id = SUBSTRING_INDEX(p.customer_id, ',', 1)
+             LEFT JOIN %scustomer pp_c ON pp_c.id = SUBSTRING_INDEX(pp.customer_id, ',', 1)
              WHERE t.id IN (%s)
              ORDER BY t.id ASC",
+            DB_PREFIX,
+            DB_PREFIX,
             DB_PREFIX,
             DB_PREFIX,
             DB_PREFIX,
@@ -4817,6 +4829,8 @@ class Task extends ApplicationModel {
                 'project_id' => isset($row['project_id']) ? intval($row['project_id']) : 0,
                 'project_name' => $row['project_name'] ?? '',
                 'project_construction_number' => $row['project_construction_number'] ?? '',
+                'project_company_name' => (string)($row['project_company_name'] ?? ''),
+                'project_branch_name' => (string)($row['project_branch_name'] ?? ''),
                 'title' => $row['title'] ?? '',
                 'status' => $row['status'] ?? '',
                 'priority' => $row['priority'] ?? '',
