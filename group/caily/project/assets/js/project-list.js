@@ -11400,6 +11400,16 @@ var projectTable;
                     }
                     this.applyStatusFilterChange();
                 },
+                /** すべて解除: no status filter; すべて選択 mode falls back to 複数選択 */
+                clearProjectStatusFilter() {
+                    if (!this.selectedStatusKeys.length) return;
+                    if (this.statusSelectMode === 'all') {
+                        this.statusSelectMode = 'multiple';
+                        saveStatusSelectMode('multiple');
+                    }
+                    this.selectedStatusKeys = [];
+                    this.applyStatusFilterChange();
+                },
                 applyStatusFilterChange() {
                     if (typeof saveFiltersToLocalStorage === 'function') {
                         saveFiltersToLocalStorage();

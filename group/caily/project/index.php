@@ -198,6 +198,10 @@ if($_SESSION['show_project'] == 0){
                         <option value="single" data-i18n="単一選択">単一選択</option>
                         <option value="multiple" data-i18n="複数選択">複数選択</option>
                     </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="statusDeselectAll"
+                            :disabled="!selectedStatusKeys.length" @click="clearProjectStatusFilter">
+                        <span data-i18n="すべて解除">すべて解除</span>
+                    </button>
                     <div class="btn-group flex-wrap">
                         <button 
                             v-for="status in visibleStatuses" 
