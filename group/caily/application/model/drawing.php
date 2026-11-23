@@ -1218,7 +1218,7 @@ class Drawing extends ApplicationModel {
     }
 
     /**
-     * Split used before 作業比重 (task_weight_mode = 0): default tasks keep fixed 15%/20% when completed,
+     * Split used before 作業比重 (task_weight_mode = 0): default tasks get their 既定タスク 比率(%) when completed,
      * other drawings share the remainder by drawing_count among completed ones.
      */
     private function autoCalculateLegacyDrawingPrices($projectId, $amount) {
@@ -1242,13 +1242,34 @@ class Drawing extends ApplicationModel {
         $fixedAllocated = 0;
         $otherDrawings = array();
 
+        // 比率(%) from 既定タスク (customer rule applied) overrides the built-in 15%/20%
         $defaultPcts = $this->getDefaultTaskDrawingPricePercents();
+        if (!class_exists('Department')) {
+            require_once DIR_MODEL . 'department.php';
+        }
+        $project = (new Project())->getById(array('id' => $projectId));
+        $shares = (new Department())->getProjectDefaultTaskShares(
+            $projectId,
+            isset($project['department_id']) ? intval($project['department_id']) : 0
+        );
+        foreach ($shares['percents'] as $title => $pct) {
+            if (isset($shares['titles'][$title])) {
+                $defaultPcts[$title] = floatval($pct) / 100;
+            }
+        }
 
         foreach ($drawings as $drawing) {
             $drawingId = intval($drawing['id']);
             $taskId = isset($drawing['task_id']) ? intval($drawing['task_id']) : 0;
             $taskStatus = isset($drawing['task_status']) ? (string) $drawing['task_status'] : '';
-            $defaultKey = $this->resolveDefaultTaskDrawingTitleKey($drawing);
+            $defaultKey = null;
+            foreach (array('task_title', 'name') as $field) {
+                $key = isset($drawing[$field]) ? trim((string) $drawing[$field]) : '';
+                if ($key !== '' && isset($defaultPcts[$key])) {
+                    $defaultKey = $key;
+                    break;
+                }
+            }
 
             if ($defaultKey !== null) {
                 if ($taskStatus === 'completed' && isset($defaultPcts[$defaultKey])) {

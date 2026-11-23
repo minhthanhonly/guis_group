@@ -48,8 +48,8 @@ function formatDrawingDateTimeForDisplay(value) {
 
 // Default-task drawings (not real drawings): left out of 図面 counts.
 // They keep a fixed % of the amount once completed; the other drawings share the rest by weight.
-// Projects from before 作業比重 (task_weight_mode = 0) use these two titles as before;
-// 作業比重 projects use the 比率(%) set in 既定タスク (loadDefaultTaskPercents).
+// Both modes use the 比率(%) set in 既定タスク (loadDefaultTaskPercents); projects from before
+// 作業比重 (task_weight_mode = 0) also keep these two titles when 既定タスク does not set them.
 const DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
     'お客様との連絡・調整・納品対応': 0.15,
     '全図面のチェック・確認作業': 0.20
@@ -527,7 +527,7 @@ createApp({
         },
         /** 作業比重 projects: default-task 比率(%) from 既定タスク (department + building's customer). */
         async loadDefaultTaskPercents() {
-            if (!this.isTaskWeightMode || !this.project || !this.project.department_id) {
+            if (!this.project || !this.project.department_id) {
                 return;
             }
             try {
@@ -545,7 +545,10 @@ createApp({
                     }
                 });
                 if (Object.keys(map).length) {
-                    this.defaultTaskPercents = map;
+                    // 案件 cũ keep the built-in titles not set in 既定タスク (same as the server)
+                    this.defaultTaskPercents = this.isTaskWeightMode
+                        ? map
+                        : Object.assign({}, DEFAULT_TASK_DRAWING_PRICE_PERCENTS, map);
                 }
             } catch (error) {
                 console.error('Error loading default tasks:', error);
