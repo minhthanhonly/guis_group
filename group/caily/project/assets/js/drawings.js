@@ -47,8 +47,9 @@ function formatDrawingDateTimeForDisplay(value) {
 }
 
 // Default-task drawings (not real drawings): left out of 図面 counts.
-// 作業比重 projects: their price follows the weight like the rest.
-// Projects from before 作業比重 (task_weight_mode = 0): fixed % of the amount once completed.
+// They keep a fixed % of the amount once completed; the other drawings share the rest by weight.
+// Projects from before 作業比重 (task_weight_mode = 0) use these two titles as before;
+// 作業比重 projects use the 比率(%) set in 既定タスク (loadDefaultTaskPercents).
 const DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
     'お客様との連絡・調整・納品対応': 0.15,
     '全図面のチェック・確認作業': 0.20
@@ -58,6 +59,8 @@ createApp({
     data() {
         return {
             project: null,
+            // title => fraction of the amount for default-task drawings (see DEFAULT_TASK_DRAWING_PRICE_PERCENTS)
+            defaultTaskPercents: Object.assign({}, DEFAULT_TASK_DRAWING_PRICE_PERCENTS),
             drawings: [],
             selectedDrawings: [],
             searchQuery: '',
@@ -224,13 +227,16 @@ createApp({
         remainingDrawingsCount() {
             return this.remainingDrawingsList.reduce((sum, d) => sum + this.getDrawingQuantity(d), 0);
         },
-        // 作業比重 of every drawing without a price, unfinished tasks included (their share waits until 完了).
-        // 案件 cũ: only the drawings that get a share now.
+        // 作業比重 of every non-default drawing without a price, unfinished tasks included
+        // (their share waits until 完了). 案件 cũ: only the drawings that get a share now.
         unpricedDrawingsWeight() {
             if (!this.isTaskWeightMode) {
                 return this.remainingDrawingsCount;
             }
-            return this.drawings.reduce((sum, d) => sum + (this.hasPrice(d) ? 0 : this.getDrawingQuantity(d)), 0);
+            return this.drawings.reduce((sum, d) => {
+                if (this.hasPrice(d) || this.isDefaultTaskDrawing(d)) return sum;
+                return sum + this.getDrawingQuantity(d);
+            }, 0);
         },
         autoPricePerRemaining() {
             if (this.projectAmount <= 0 || this.remainingDrawingsCount <= 0) return null;
@@ -430,7 +436,7 @@ createApp({
         },
         resolveDefaultTaskDrawingTitleKey(drawing) {
             const name = (drawing?.name || '').trim();
-            return Object.prototype.hasOwnProperty.call(DEFAULT_TASK_DRAWING_PRICE_PERCENTS, name)
+            return Object.prototype.hasOwnProperty.call(this.defaultTaskPercents, name)
                 ? name
                 : null;
         },
@@ -446,14 +452,14 @@ createApp({
             }, 0);
         },
         getDefaultTaskDrawingReservedPrice(drawing) {
-            if (this.isTaskWeightMode || this.projectAmount <= 0) {
+            if (this.projectAmount <= 0) {
                 return 0;
             }
             const key = this.resolveDefaultTaskDrawingTitleKey(drawing);
             if (!key || (drawing?.status || '') !== 'completed') {
                 return 0;
             }
-            return Math.round(this.projectAmount * DEFAULT_TASK_DRAWING_PRICE_PERCENTS[key] * 100) / 100;
+            return Math.round(this.projectAmount * this.defaultTaskPercents[key] * 100) / 100;
         },
         getEffectiveDrawingPrice(drawing) {
             if (!drawing) return 0;
@@ -467,7 +473,7 @@ createApp({
             if (!drawing || this.hasPrice(drawing)) {
                 return false;
             }
-            if (!this.isTaskWeightMode && this.isDefaultTaskDrawing(drawing)) {
+            if (this.isDefaultTaskDrawing(drawing)) {
                 return false;
             }
             const taskId = parseInt(drawing.task_id, 10);
@@ -512,10 +518,37 @@ createApp({
                 const response = await axios.get(`/api/index.php?model=project&method=getById&id=${PROJECT_ID}`);
                 if (response.data && response.data.id) {
                     this.project = response.data;
+                    await this.loadDefaultTaskPercents();
                 }
             } catch (error) {
                 console.error('Error loading project:', error);
                 this.showError('プロジェクトの読み込みに失敗しました');
+            }
+        },
+        /** 作業比重 projects: default-task 比率(%) from 既定タスク (department + building's customer). */
+        async loadDefaultTaskPercents() {
+            if (!this.isTaskWeightMode || !this.project || !this.project.department_id) {
+                return;
+            }
+            try {
+                const res = await axios.get('/api/index.php?model=department&method=getDefaultTasks'
+                    + '&department_id=' + encodeURIComponent(this.project.department_id)
+                    + '&project_id=' + encodeURIComponent(this.project.id));
+                const tasks = res && res.data && Array.isArray(res.data.tasks) ? res.data.tasks : [];
+                const map = {};
+                tasks.forEach((t) => {
+                    const title = String(t && t.title ? t.title : '').trim();
+                    const count = t && t.drawing_count != null ? parseInt(t.drawing_count, 10) : 1;
+                    const pct = Number(t && t.price_pct);
+                    if (title && !(count <= 0) && Number.isFinite(pct)) {
+                        map[title] = pct / 100;
+                    }
+                });
+                if (Object.keys(map).length) {
+                    this.defaultTaskPercents = map;
+                }
+            } catch (error) {
+                console.error('Error loading default tasks:', error);
             }
         },
         

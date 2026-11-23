@@ -909,6 +909,33 @@ class Department extends ApplicationModel {
     }
 
     /**
+     * 作業比重 of a project's default tasks: the 比率(%) set in 既定タスク (customer rule applied).
+     * 'titles' = default titles linked to drawings (they keep that fixed %, never a weight),
+     * 'percents' = title => 比率(%).
+     */
+    public function getProjectDefaultTaskShares($projectId, $departmentId) {
+        $defs = $this->resolveDefaultTaskDefinitionsForCustomer(
+            intval($departmentId),
+            $this->getProjectCompanyName(intval($projectId))
+        );
+        $titles = array();
+        $percents = array();
+        foreach ($defs as $def) {
+            $title = isset($def['title']) ? trim((string) $def['title']) : '';
+            if ($title === '') {
+                continue;
+            }
+            if (!isset($def['drawing_count']) || intval($def['drawing_count']) > 0) {
+                $titles[$title] = true;
+            }
+            if (isset($def['price_pct']) && is_numeric($def['price_pct'])) {
+                $percents[$title] = floatval($def['price_pct']);
+            }
+        }
+        return array('titles' => $titles, 'percents' => $percents);
+    }
+
+    /**
      * List all department default-task configs (admin UI).
      * With project_id: the tasks for that project (department + building company name).
      */

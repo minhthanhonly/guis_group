@@ -1030,10 +1030,6 @@ const TaskApp = createApp({
             const title = (task.title || '').trim();
             return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(title) !== -1;
         },
-        /** 作業比重 project (new); projects from before it keep fixed default-task %. */
-        isTaskWeightMode() {
-            return !!(this.projectInfo && String(this.projectInfo.task_weight_mode) === '1');
-        },
         getExistingDefaultTaskPercentTotal() {
             const titles = new Set((this.tasks || []).map((t) => (t.title || '').trim()));
             let total = 0;
@@ -1045,10 +1041,9 @@ const TaskApp = createApp({
             return total;
         },
         collectDrawingLinkedTasksForPercent() {
-            const weightMode = this.isTaskWeightMode();
             return (this.tasks || []).filter((task) => {
                 return task && task.id && this.isTaskLinkedToDrawings(task)
-                    && (weightMode || !this.isDefaultTaskWithAutoDrawingLink(task));
+                    && !this.isDefaultTaskWithAutoDrawingLink(task);
             });
         },
         getTaskDrawingSlotCount(task) {
@@ -1061,15 +1056,14 @@ const TaskApp = createApp({
             }, 0);
         },
         /**
-         * 作業比重: weight (drawing_count) / total weight of all linked tasks, default tasks included.
-         * Projects from before it: default tasks fixed %, others share the rest by drawing_count.
+         * 作業比重: default tasks keep the 比率(%) set in 既定タスク (customer rule applied);
+         * the other drawing-linked tasks share the rest by their weight (drawing_count).
          */
         getTaskDrawingPricePercent(task) {
             if (!task || !task.id) {
                 return null;
             }
-            const weightMode = this.isTaskWeightMode();
-            if (!weightMode && this.isDefaultTaskWithAutoDrawingLink(task)) {
+            if (this.isDefaultTaskWithAutoDrawingLink(task)) {
                 const fixed = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[(task.title || '').trim()];
                 return fixed != null ? fixed : null;
             }
@@ -1080,7 +1074,7 @@ const TaskApp = createApp({
             if (totalSlots <= 0) {
                 return null;
             }
-            const pool = weightMode ? 100 : Math.max(0, 100 - this.getExistingDefaultTaskPercentTotal());
+            const pool = Math.max(0, 100 - this.getExistingDefaultTaskPercentTotal());
             return (pool * this.getTaskDrawingSlotCount(task)) / totalSlots;
         },
         formatTaskDrawingPricePercent(task) {

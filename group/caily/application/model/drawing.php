@@ -1109,7 +1109,7 @@ class Drawing extends ApplicationModel {
     }
 
     /**
-     * Redistribute project amount by 作業比重 (drawing_count) over all drawings; unfinished tasks get 0.
+     * Redistribute project amount: default tasks keep their 比率(%), the rest is shared by 作業比重 (drawing_count).
      */
     function autoCalculateAllDrawingPricesForProject($projectId) {
         $projectId = intval($projectId);
@@ -1130,8 +1130,18 @@ class Drawing extends ApplicationModel {
             return $this->autoCalculateLegacyDrawingPrices($projectId, $amount);
         }
 
+        // 作業比重: default tasks keep the 比率(%) set in 既定タスク (customer rule applied);
+        // the other drawings share the rest by weight (drawing_count), unfinished tasks included
+        // in the total so the split matches the % on the task page. Unfinished task drawings get 0 for now.
+        if (!class_exists('Department')) {
+            require_once DIR_MODEL . 'department.php';
+        }
+        $shares = (new Department())->getProjectDefaultTaskShares(
+            $projectId,
+            isset($project['department_id']) ? intval($project['department_id']) : 0
+        );
         $drawings = $this->fetchAll(sprintf(
-            "SELECT d.id, d.drawing_count, d.name, d.task_id, t.status AS task_status
+            "SELECT d.id, d.drawing_count, d.name, d.task_id, t.title AS task_title, t.status AS task_status
             FROM %s d
             LEFT JOIN %stasks t ON d.task_id = t.id
             WHERE d.project_id = %d
@@ -1144,30 +1154,60 @@ class Drawing extends ApplicationModel {
             return false;
         }
 
-        // 作業比重: every drawing (default tasks included) weighs its drawing_count;
-        // share = amount x weight / total weight. Unfinished task drawings get 0 for now.
-        $totalQty = 0;
-        foreach ($drawings as $drawing) {
-            $totalQty += max(1, intval($drawing['drawing_count']));
+        $fixedTotal = 0;
+        foreach ($this->fetchAll(sprintf(
+            "SELECT DISTINCT title FROM %stasks WHERE project_id = %d",
+            DB_PREFIX,
+            $projectId
+        )) as $row) {
+            $title = trim((string) $row['title']);
+            if (isset($shares['percents'][$title])) {
+                $fixedTotal += $shares['percents'][$title];
+            }
         }
-        if ($totalQty <= 0) {
+        $pool = $amount * max(0, 100 - $fixedTotal) / 100;
+
+        $now = date('Y-m-d H:i:s');
+        $others = array();
+        foreach ($drawings as $drawing) {
+            $taskId = isset($drawing['task_id']) ? intval($drawing['task_id']) : 0;
+            $title = trim((string) (isset($drawing['task_title']) ? $drawing['task_title'] : ''));
+            if ($taskId > 0 && isset($shares['titles'][$title])) {
+                $done = isset($drawing['task_status']) && (string) $drawing['task_status'] === 'completed';
+                $pct = isset($shares['percents'][$title]) ? $shares['percents'][$title] : 0;
+                $this->query_update(
+                    array('price' => $done ? round($amount * $pct / 100, 2) : 0, 'updated_at' => $now),
+                    array('id' => intval($drawing['id']))
+                );
+                continue;
+            }
+            $others[] = $drawing;
+        }
+        if (empty($others)) {
             return true;
         }
 
-        $now = date('Y-m-d H:i:s');
+        $totalQty = 0;
+        $allDone = true;
+        foreach ($others as $drawing) {
+            $totalQty += max(1, intval($drawing['drawing_count']));
+            if (intval($drawing['task_id']) > 0 && (string) $drawing['task_status'] !== 'completed') {
+                $allDone = false;
+            }
+        }
         $allocated = 0;
-        $count = count($drawings);
-        foreach ($drawings as $index => $drawing) {
+        $count = count($others);
+        foreach ($others as $index => $drawing) {
             $qty = max(1, intval($drawing['drawing_count']));
-            if ($index === $count - 1) {
-                $share = round($amount - $allocated, 2);
+            // The last row takes the rounding remainder only when every share is paid out
+            if ($allDone && $index === $count - 1) {
+                $share = round($pool - $allocated, 2);
             } else {
-                $share = (int) floor(($amount * $qty) / $totalQty);
+                $share = (int) floor(($pool * $qty) / $totalQty);
                 $allocated += $share;
             }
-            $taskId = isset($drawing['task_id']) ? intval($drawing['task_id']) : 0;
-            $taskStatus = isset($drawing['task_status']) ? (string) $drawing['task_status'] : '';
-            $price = ($taskId > 0 && $taskStatus !== 'completed') ? 0 : $share;
+            $taskId = intval($drawing['task_id']);
+            $price = ($taskId > 0 && (string) $drawing['task_status'] !== 'completed') ? 0 : $share;
             $this->query_update(
                 array('price' => $price, 'updated_at' => $now),
                 array('id' => intval($drawing['id']))

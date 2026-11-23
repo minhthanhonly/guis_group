@@ -541,13 +541,12 @@ class Task extends ApplicationModel {
             : array();
     }
 
-    /** 作業比重 project (projects.task_weight_mode = 1)? Projects from before it return false. */
     /**
      * 作業比重 (%) of each task within its project, same rule as the project task page
      * (task-manager.js getTaskDrawingPricePercent), computed over ALL tasks of the project
-     * so filtered lists still show the real share.
-     * - 作業比重 projects: drawing_count / total drawing_count of linked tasks (default tasks included).
-     * - Projects from before 作業比重: default tasks keep their fixed %, the others share the rest.
+     * so filtered lists still show the real share:
+     * default tasks keep the 比率(%) set in 既定タスク (customer rule applied),
+     * the other drawing-linked tasks share the rest by their weight (drawing_count).
      * Sets 'drawing_weight_pct' (float, 1 decimal) or null when the task has no share.
      */
     private function attachDrawingWeightPercents(array &$tasks) {
@@ -566,18 +565,13 @@ class Task extends ApplicationModel {
         }
         $idList = implode(',', array_map('intval', array_keys($projectIds)));
 
-        $projectRows = $this->fetchAll(sprintf(
-            "SELECT * FROM %sprojects WHERE id IN (%s)",
+        $departmentByProject = array();
+        foreach ($this->fetchAll(sprintf(
+            "SELECT id, department_id FROM %sprojects WHERE id IN (%s)",
             DB_PREFIX,
             $idList
-        ));
-        $projectInfo = array();
-        foreach ($projectRows as $row) {
-            $projectInfo[intval($row['id'])] = array(
-                // Missing column = every project is 作業比重 (same as Project::isTaskWeightModeProject)
-                'weight_mode' => !array_key_exists('task_weight_mode', $row) || intval($row['task_weight_mode']) === 1,
-                'department_id' => isset($row['department_id']) ? intval($row['department_id']) : 0,
-            );
+        )) as $row) {
+            $departmentByProject[intval($row['id'])] = intval($row['department_id']);
         }
 
         $projectTasks = array();
@@ -590,33 +584,10 @@ class Task extends ApplicationModel {
             $projectTasks[intval($row['project_id'])][] = $row;
         }
 
-        // Department default-task config (titles linked to drawings + fixed % for old projects)
         if (!class_exists('Department')) {
             require_once DIR_MODEL . 'department.php';
         }
         $departmentModel = new Department();
-        $defaultConfigCache = array();
-        $getDefaultConfig = function ($departmentId) use (&$defaultConfigCache, $departmentModel) {
-            if (isset($defaultConfigCache[$departmentId])) {
-                return $defaultConfigCache[$departmentId];
-            }
-            $titles = array();
-            $percents = array();
-            foreach ($departmentModel->resolveDefaultTaskDefinitions($departmentId) as $def) {
-                $title = isset($def['title']) ? trim((string) $def['title']) : '';
-                if ($title === '') {
-                    continue;
-                }
-                $count = isset($def['drawing_count']) ? intval($def['drawing_count']) : 1;
-                if ($count > 0) {
-                    $titles[$title] = true;
-                }
-                if (isset($def['price_pct']) && is_numeric($def['price_pct'])) {
-                    $percents[$title] = floatval($def['price_pct']);
-                }
-            }
-            return $defaultConfigCache[$departmentId] = array('titles' => $titles, 'percents' => $percents);
-        };
 
         $slots = function ($task) {
             $n = isset($task['drawing_count']) ? intval($task['drawing_count']) : 0;
@@ -626,24 +597,21 @@ class Task extends ApplicationModel {
             return isset($task['drawing_count']) && intval($task['drawing_count']) > 0;
         };
 
-        // Per project: total slots and the % pool shared by linked tasks
+        // Per project: default-task %, total weight of the other linked tasks, and the % they share
         $projectShare = array();
         foreach ($projectTasks as $pid => $list) {
-            $info = isset($projectInfo[$pid]) ? $projectInfo[$pid] : array('weight_mode' => true, 'department_id' => 0);
-            $config = $getDefaultConfig($info['department_id']);
-            $weightMode = $info['weight_mode'];
+            $config = $departmentModel->getProjectDefaultTaskShares(
+                $pid,
+                isset($departmentByProject[$pid]) ? $departmentByProject[$pid] : 0
+            );
             $totalSlots = 0;
             $existingTitles = array();
             foreach ($list as $task) {
                 $title = trim((string) $task['title']);
                 $existingTitles[$title] = true;
-                if (!$isLinked($task)) {
-                    continue;
+                if ($isLinked($task) && !isset($config['titles'][$title])) {
+                    $totalSlots += $slots($task);
                 }
-                if (!$weightMode && isset($config['titles'][$title])) {
-                    continue;
-                }
-                $totalSlots += $slots($task);
             }
             $fixedTotal = 0;
             foreach ($config['percents'] as $title => $pct) {
@@ -652,10 +620,9 @@ class Task extends ApplicationModel {
                 }
             }
             $projectShare[$pid] = array(
-                'weight_mode' => $weightMode,
                 'config' => $config,
                 'total_slots' => $totalSlots,
-                'pool' => $weightMode ? 100 : max(0, 100 - $fixedTotal),
+                'pool' => max(0, 100 - $fixedTotal),
             );
         }
 
@@ -668,7 +635,7 @@ class Task extends ApplicationModel {
             $share = $projectShare[$pid];
             $title = trim((string) $task['title']);
             $pct = null;
-            if (!$share['weight_mode'] && isset($share['config']['titles'][$title])) {
+            if (isset($share['config']['titles'][$title])) {
                 $pct = isset($share['config']['percents'][$title]) ? $share['config']['percents'][$title] : null;
             } elseif ($isLinked($task) && $share['total_slots'] > 0) {
                 $pct = ($share['pool'] * $slots($task)) / $share['total_slots'];
@@ -678,6 +645,7 @@ class Task extends ApplicationModel {
         unset($task);
     }
 
+    /** 作業比重 project (projects.task_weight_mode = 1)? Projects from before it return false. */
     private function isTaskWeightModeProject($projectId) {
         if (!class_exists('Project')) {
             require_once DIR_MODEL . 'project.php';
@@ -748,12 +716,10 @@ class Task extends ApplicationModel {
             : 'お客様との連絡・調整・納品対応';
 
         $taskDefs = $this->resolveDepartmentDefaultTaskDefinitions($departmentId, $projectId);
-        $weightMode = $this->isTaskWeightModeProject($projectId);
         $defaults = array();
         foreach ($taskDefs as $def) {
             $title = isset($def['title']) ? trim((string) $def['title']) : '';
             $isContact = ($title === $contactTitle);
-            $pricePctDisplay = isset($def['price_pct']) ? floatval($def['price_pct']) : 0;
             $defaults[] = array(
                 'title' => $title,
                 'task_kind' => isset($def['task_kind']) ? (string) $def['task_kind'] : '',
@@ -761,11 +727,8 @@ class Task extends ApplicationModel {
                 'assigned_to' => ($isContact && $contactTaskAssignee > 0) ? (string) $contactTaskAssignee : null,
                 'status' => $isContact ? 'completed' : 'todo',
                 'progress' => $isContact ? 100 : 0,
-                // 作業比重: a linked default task starts with its 比率(%) as weight (min 1).
-                // Projects from before 作業比重 keep the configured drawing_count (fixed % applies).
-                'drawing_count' => (isset($def['drawing_count']) ? intval($def['drawing_count']) : 1) > 0
-                    ? ($weightMode ? max(1, (int) round($pricePctDisplay)) : max(1, intval($def['drawing_count'])))
-                    : 0,
+                // Default tasks keep their 比率(%) from 既定タスク; drawing_count only links the drawing
+                'drawing_count' => isset($def['drawing_count']) ? max(0, intval($def['drawing_count'])) : 1,
                 'assign_guis_receiver' => $isContact ? 1 : 0,
             );
         }
