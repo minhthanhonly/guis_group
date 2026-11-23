@@ -463,9 +463,9 @@ var projectTable;
 
     var PROJECT_STATUS_KEYS = statuses.map(function(s) { return s.key; });
 
-    // Status filter button behaviour: すべて選択 / 単一選択 / 複数選択 (per browser)
+    // Status filter button behaviour: 単一選択 / 複数選択 (per browser; a stored 'all' falls back to 複数選択)
     var STATUS_SELECT_MODE_STORAGE_KEY = 'projectListStatusSelectMode';
-    var STATUS_SELECT_MODES = { all: true, single: true, multiple: true };
+    var STATUS_SELECT_MODES = { single: true, multiple: true };
     function loadStatusSelectMode() {
         try {
             var v = localStorage.getItem(STATUS_SELECT_MODE_STORAGE_KEY);
@@ -5611,14 +5611,6 @@ var projectTable;
         if (filters.statusKeys !== undefined && app) {
             app.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys);
         }
-        applyAllStatusSelectModeIfActive();
-    }
-
-    /** すべて選択 mode: select every status this department shows (省エネ has extra ones). */
-    function applyAllStatusSelectModeIfActive() {
-        var app = window.app;
-        if (!app || app.statusSelectMode !== 'all') return;
-        app.selectedStatusKeys = getVisibleProjectStatuses().map(function(s) { return s.key; });
     }
 
     function buildProjectListFiltersAfterReset() {
@@ -10204,6 +10196,11 @@ var projectTable;
                     void this.selectedDepartment;
                     return isEnergyDepartmentSelectedForStatus();
                 },
+                allStatusesSelected() {
+                    var keys = this.selectedStatusKeys || [];
+                    var visible = this.visibleStatuses || [];
+                    return visible.length > 0 && visible.every(function(s) { return keys.indexOf(s.key) !== -1; });
+                },
                 visibleStatuses() {
                     // Depend on selectedDepartment so filter buttons refresh when dept changes
                     void this.selectedDepartment;
@@ -11283,8 +11280,6 @@ var projectTable;
                             return !ENERGY_ONLY_PROJECT_STATUS_KEYS[String(k || '').trim()];
                         });
                     }
-                    // すべて選択 follows the department's own status list (省エネ has extra statuses)
-                    applyAllStatusSelectModeIfActive();
                     // Cập nhật context chat để AI biết đang xem danh sách dự án của department nào
                     if (typeof window !== 'undefined') {
                         window.__chatPageContext = window.__chatPageContext || {};
@@ -11370,21 +11365,24 @@ var projectTable;
                 getVisibleStatusKeys() {
                     return (this.visibleStatuses || []).map(function(s) { return s.key; });
                 },
-                /** すべて選択 = every visible status selected; 単一選択 = at most one; 複数選択 = free toggle */
+                /** 単一選択 = at most one status; 複数選択 = free toggle */
                 setStatusSelectMode(mode) {
                     if (!STATUS_SELECT_MODES[mode]) mode = 'multiple';
                     this.statusSelectMode = mode;
                     saveStatusSelectMode(mode);
-                    var next = null;
-                    if (mode === 'all') {
-                        next = this.getVisibleStatusKeys();
-                    } else if (mode === 'single' && this.selectedStatusKeys.length > 1) {
-                        next = [this.selectedStatusKeys[0]];
-                    }
-                    if (next) {
-                        this.selectedStatusKeys = next;
+                    if (mode === 'single' && this.selectedStatusKeys.length > 1) {
+                        this.selectedStatusKeys = [this.selectedStatusKeys[0]];
                         this.applyStatusFilterChange();
                     }
+                },
+                /** すべて選択: every status this department shows; needs 複数選択 */
+                selectAllProjectStatusFilter() {
+                    if (this.statusSelectMode !== 'multiple') {
+                        this.statusSelectMode = 'multiple';
+                        saveStatusSelectMode('multiple');
+                    }
+                    this.selectedStatusKeys = this.getVisibleStatusKeys();
+                    this.applyStatusFilterChange();
                 },
                 toggleProjectStatusFilter(status) {
                     const key = status && status.key;
@@ -11393,20 +11391,15 @@ var projectTable;
                     if (this.statusSelectMode === 'single') {
                         this.selectedStatusKeys = idx >= 0 ? [] : [key];
                     } else if (idx >= 0) {
-                        // In すべて選択 this deselects one; the watcher then switches to 複数選択
                         this.selectedStatusKeys.splice(idx, 1);
                     } else {
                         this.selectedStatusKeys.push(key);
                     }
                     this.applyStatusFilterChange();
                 },
-                /** すべて解除: no status filter; すべて選択 mode falls back to 複数選択 */
+                /** すべて解除: no status filter */
                 clearProjectStatusFilter() {
                     if (!this.selectedStatusKeys.length) return;
-                    if (this.statusSelectMode === 'all') {
-                        this.statusSelectMode = 'multiple';
-                        saveStatusSelectMode('multiple');
-                    }
                     this.selectedStatusKeys = [];
                     this.applyStatusFilterChange();
                 },
@@ -12001,11 +11994,7 @@ var projectTable;
                     handler(keys) {
                         keys = Array.isArray(keys) ? keys : [];
                         var mode = this.statusSelectMode;
-                        if (mode === 'all') {
-                            var visible = this.getVisibleStatusKeys();
-                            var coversAll = visible.length > 0 && visible.every(function(k) { return keys.indexOf(k) !== -1; });
-                            if (!coversAll) mode = 'multiple';
-                        } else if (mode === 'single' && keys.length > 1) {
+                        if (mode === 'single' && keys.length > 1) {
                             mode = 'multiple';
                         }
                         if (mode !== this.statusSelectMode) {

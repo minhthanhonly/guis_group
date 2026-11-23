@@ -194,12 +194,15 @@ if($_SESSION['show_project'] == 0){
                     <select class="form-select form-select-sm w-auto" id="statusSelectMode"
                             title="選択モード"
                             :value="statusSelectMode" @change="setStatusSelectMode($event.target.value)">
-                        <option value="all" data-i18n="すべて選択">すべて選択</option>
                         <option value="single" data-i18n="単一選択">単一選択</option>
                         <option value="multiple" data-i18n="複数選択">複数選択</option>
                     </select>
+                    <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="statusSelectAll"
+                            v-show="!allStatusesSelected" @click="selectAllProjectStatusFilter">
+                        <span data-i18n="すべて選択">すべて選択</span>
+                    </button>
                     <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="statusDeselectAll"
-                            :disabled="!selectedStatusKeys.length" @click="clearProjectStatusFilter">
+                            v-show="allStatusesSelected" @click="clearProjectStatusFilter">
                         <span data-i18n="すべて解除">すべて解除</span>
                     </button>
                     <div class="btn-group flex-wrap">
