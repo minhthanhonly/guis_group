@@ -11375,12 +11375,8 @@ var projectTable;
                         this.applyStatusFilterChange();
                     }
                 },
-                /** すべて選択: every status this department shows; needs 複数選択 */
+                /** すべて選択: every status this department shows; the mode stays as it is */
                 selectAllProjectStatusFilter() {
-                    if (this.statusSelectMode !== 'multiple') {
-                        this.statusSelectMode = 'multiple';
-                        saveStatusSelectMode('multiple');
-                    }
                     this.selectedStatusKeys = this.getVisibleStatusKeys();
                     this.applyStatusFilterChange();
                 },
@@ -11389,7 +11385,9 @@ var projectTable;
                     if (!isValidProjectStatusKey(key)) return;
                     const idx = this.selectedStatusKeys.indexOf(key);
                     if (this.statusSelectMode === 'single') {
-                        this.selectedStatusKeys = idx >= 0 ? [] : [key];
+                        // Clicking the only selected one clears it; otherwise (incl. after すべて選択) keep just this one
+                        const onlyThis = idx >= 0 && this.selectedStatusKeys.length === 1;
+                        this.selectedStatusKeys = onlyThis ? [] : [key];
                     } else if (idx >= 0) {
                         this.selectedStatusKeys.splice(idx, 1);
                     } else {
@@ -11987,21 +11985,6 @@ var projectTable;
                 },
                 noteDisplayOneLine(newVal) {
                     setNoteDisplayOneLine(!!newVal);
-                },
-                // Keys changed from elsewhere (reset, saved filters, URL, a click): keep the mode honest
-                selectedStatusKeys: {
-                    deep: true,
-                    handler(keys) {
-                        keys = Array.isArray(keys) ? keys : [];
-                        var mode = this.statusSelectMode;
-                        if (mode === 'single' && keys.length > 1) {
-                            mode = 'multiple';
-                        }
-                        if (mode !== this.statusSelectMode) {
-                            this.statusSelectMode = mode;
-                            saveStatusSelectMode(mode);
-                        }
-                    }
                 }
             }
         }).mount('#app');
