@@ -3587,8 +3587,10 @@ class Project extends ApplicationModel {
     function update() {
         $id = isset($_POST['id']) ? intval($_POST['id']) : 0;
         if (!$id) return ['status' => 'error', 'error' => 'No project id'];
-        // Phase 4.1 – Permission check for project update (AI-triggered or any caller)
-        if (!$this->canUserEditProject($id)) {
+        // Phase 4.1 – Permission check for project update (AI-triggered or any caller).
+        // Same rule as the form (canEditProject): canUserEditProject(), or an involved user
+        // whose department rule has 案件編集 (project_edit).
+        if (!$this->canUserQuickEditProject($id)) {
             return ['status' => 'error', 'error' => 'Forbidden', 'http_status' => 403];
         }
         $old = $this->getById($id);

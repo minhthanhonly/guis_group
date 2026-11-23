@@ -868,6 +868,10 @@
                 const rule = this.permission && this.permission.rule;
                 return !!(rule && (rule.project_view_end_date == 1 || rule.project_view_end_date === '1'));
             },
+            /** 担当 / GUIS納期 / its 納品済み: CAILY branch users only with 期限日閲覧 (same as canViewEndDate). */
+            canEditGuisFields() {
+                return this.canViewEndDate;
+            },
         },
         watch: {
             isEditMode(newVal) {
@@ -3496,7 +3500,7 @@
                 const caily = (this.project.caily_nouki || '').trim();
                 const guis = (this.project.guis_nouki || '').trim();
                 const end = (this.project.end_date || '').trim();
-                const showGuisFields = !this.isCailyBranchUser;
+                const showGuisFields = this.canEditGuisFields;
                 const endFilled = showGuisFields && this.hasProjectDateValue(end);
 
                 if (endFilled) {
@@ -3563,7 +3567,8 @@
                         valid = false;
                     }
                     // 担当 is not used by 省エネ departments and is read-only for CAILY branch users
-                    if (!this.isEnergyDepartmentProject && !this.isCailyBranchUser
+                    // without 期限日閲覧
+                    if (!this.isEnergyDepartmentProject && this.canEditGuisFields
                         && !String(this.project.tantou || '').trim()) {
                         this.validationErrors.tantou = '担当は必須です';
                         valid = false;

@@ -1090,21 +1090,28 @@ createApp({
             }
             return canDeleteChildProject;
         },
+        /**
+         * Same rule as project.update (Project::canUserQuickEditProject): admin, a project_manager
+         * of any department, the creator, a 管理 of the project, or a user with 案件編集 on the
+         * project's department who is involved in it (メンバー or 業務担当).
+         */
         canEditChildProject(project) {
+            if (!project) return false;
             if (this.isAdmin) return true;
             if (this.isDepartmentManager) return true;
             if (this.isChildProjectCreator(project)) return true;
-            let canEditChildProject = false;
-            if (this.permission && this.permission.length > 0) {
-                for (const rule of this.permission) {
-                    if ((rule.project_edit === "1" || rule.project_edit === 1)
-                        && project.department_id == rule.department_id) {
-                        canEditChildProject = true;
-                        break;
-                    }
-                }
-            }
-            return canEditChildProject;
+            if (this.isCurrentUserInChildProjectPeople(project.manager_id)) return true;
+            const rule = (this.permission || []).find(r => String(r.department_id) === String(project.department_id));
+            if (!rule || !(rule.project_edit == 1)) return false;
+            const isDirector = ['project_director', 'project_director_stat', 'project_director_view', 'project_director_edit']
+                .some(key => rule[key] == 1);
+            return isDirector || this.isCurrentUserInChildProjectPeople(project.member_id);
+        },
+        /** Whether the current user is in a manager_id / member_id string ("authId:realname:…" entries). */
+        isCurrentUserInChildProjectPeople(value) {
+            if (typeof CURRENT_USER_NUM_ID === 'undefined' || !CURRENT_USER_NUM_ID) return false;
+            return this.splitChildProjectPeople(value)
+                .some(entry => entry.split(':')[0] === String(CURRENT_USER_NUM_ID));
         },
         async loadPermission() {
             try {

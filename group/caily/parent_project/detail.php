@@ -3227,6 +3227,7 @@ $view->footing();
 <script>
     const PARENT_PROJECT_ID = <?php echo $parent_project_id; ?>;
     const CURRENT_USER_ID = '<?php echo $_SESSION['userid'] ?? ''; ?>';
+    const CURRENT_USER_NUM_ID = '<?php echo intval($_SESSION['id'] ?? 0); ?>';
     const CURRENT_USER_NAME = '<?php echo $_SESSION['realname'] ?? $_SESSION['userid'] ?? ''; ?>';
     const IS_PROJECT_MANAGER = <?php echo isset($_SESSION['isProjectManager']) && $_SESSION['isProjectManager'] ? 'true' : 'false'; ?>;
     window.IS_CAILY_BRANCH_USER = <?php echo $isCailyBranchUser ? 'true' : 'false'; ?>;

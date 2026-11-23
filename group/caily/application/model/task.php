@@ -3100,7 +3100,8 @@ class Task extends ApplicationModel {
 
         return [
             'is_team_leader' => $isTeamLeader,
-            // Same answer as Project::canUserEditProject(), i.e. what project.update accepts
+            // Same answer as Project::canUserEditProject(). project.update also accepts an
+            // involved user with rule.project_edit (the form's canEditProject adds that part)
             'can_edit_project' => $isAdmin || $isProjectManager || $isAnyDepartmentManager || $isCreator,
             'is_member' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector || $isMember || $isCreator,
             'is_director' => $isAdmin || $isProjectManager || $isDepartmentManager || $isProjectDirector,

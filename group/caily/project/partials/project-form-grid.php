@@ -154,8 +154,8 @@
                                 </div>
                             </div>
                             <div class="col-md-4 pf-full-only" v-show="(!isEnergyDepartmentProject) && showField('tantou')">
-                                <label class="form-label"><span data-i18n="担当">担当</span> <span v-if="isEditMode && !isCailyBranchUser" class="text-danger">*</span></label>
-                                <div v-if="isEditMode && !isCailyBranchUser" class="d-flex gap-3">
+                                <label class="form-label"><span data-i18n="担当">担当</span> <span v-if="isEditMode && canEditGuisFields" class="text-danger">*</span></label>
+                                <div v-if="isEditMode && canEditGuisFields" class="d-flex gap-3">
                                     <div class="form-check">
                                         <input class="form-check-input" type="radio" v-model="project.tantou" value="CAILY" id="tantou_caily">
                                         <label class="form-check-label" for="tantou_caily">CAILY</label>
@@ -300,13 +300,13 @@
                             </div>
                             <div class="col-md-4" v-if="canViewEndDate" v-show="showField('guis')">
                                 <label class="form-label"><span data-i18n="GUIS納期">GUIS納期</span>
-                                    <span v-if="isEditMode && !isCailyBranchUser && project.end_date && project.tantou === 'GUIS' && !isEnergyDepartmentProject" class="text-danger">*</span>
+                                    <span v-if="isEditMode && canEditGuisFields && project.end_date && project.tantou === 'GUIS' && !isEnergyDepartmentProject" class="text-danger">*</span>
                                 </label>
                                 <div class="pd-deadline-badges">
                                     <span v-if="guisNoukiTimeRemaining()" :class="'badge ' + guisNoukiTimeRemaining().class" :title="guisNoukiTimeRemaining().isOverdue ? '期限を超過しています' : '残り時間'"> {{ guisNoukiTimeRemaining().text }} </span>
                                     <span v-if="getNoukiJudgmentBadge('guis')" :class="'badge ' + getNoukiJudgmentBadge('guis').className"> {{ translateLabel(getNoukiJudgmentBadge('guis').textKey) }} </span>
                                 </div>
-                                <div v-if="isEditMode && !isCailyBranchUser">
+                                <div v-if="isEditMode && canEditGuisFields">
                                     <div class="input-group mb-1">
                                         <input type="text" class="form-control" v-model="project.guis_nouki" id="guis_nouki_picker" :placeholder="getProjectDateTimePlaceholder()" autocomplete="off"
                                             :class="{ 'is-invalid': validationErrors.guis_nouki }">
@@ -322,7 +322,7 @@
                                 </div>
                                 <div v-else class="d-flex flex-column">
                                     <input type="text" class="form-control" :value="formatDateTime(project.guis_nouki)" :data-time="project.guis_nouki || ''" :data-todo-title="(project ? ('#' + project.id + ' ' + (project.name || '')) : '') + ' GUIS納期'" :data-todo-link="project ? ('/project/detail.php?id=' + project.id) : ''" data-bs-toggle="tooltip" :data-bs-title="getVietnamTimeTooltip(project.guis_nouki)" readonly>
-                                    <div class="form-check mt-1" v-if="canEditProject && !isCailyBranchUser">
+                                    <div class="form-check mt-1" v-if="canEditProject && canEditGuisFields">
                                         <input class="form-check-input" type="checkbox" id="guis_nouki_status_view" v-model="project.guis_nouki_status" true-value="納品済み" false-value="" @change="quickUpdateNoukiStatus('guis')">
                                         <label class="form-check-label" for="guis_nouki_status_view"><span data-i18n="納品済み">納品済み</span></label>
                                     </div>
