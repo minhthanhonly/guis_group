@@ -462,6 +462,21 @@ var projectTable;
     ];
 
     var PROJECT_STATUS_KEYS = statuses.map(function(s) { return s.key; });
+
+    // Status filter button behaviour: すべて選択 / 単一選択 / 複数選択 (per browser)
+    var STATUS_SELECT_MODE_STORAGE_KEY = 'projectListStatusSelectMode';
+    var STATUS_SELECT_MODES = { all: true, single: true, multiple: true };
+    function loadStatusSelectMode() {
+        try {
+            var v = localStorage.getItem(STATUS_SELECT_MODE_STORAGE_KEY);
+            return STATUS_SELECT_MODES[v] ? v : 'multiple';
+        } catch (e) {
+            return 'multiple';
+        }
+    }
+    function saveStatusSelectMode(mode) {
+        try { localStorage.setItem(STATUS_SELECT_MODE_STORAGE_KEY, mode); } catch (e) {}
+    }
     var ENERGY_ONLY_PROJECT_STATUS_KEYS = {
         calculation_completed: true,
         application_in_progress: true
@@ -5596,6 +5611,14 @@ var projectTable;
         if (filters.statusKeys !== undefined && app) {
             app.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys);
         }
+        applyAllStatusSelectModeIfActive();
+    }
+
+    /** すべて選択 mode: select every status this department shows (省エネ has extra ones). */
+    function applyAllStatusSelectModeIfActive() {
+        var app = window.app;
+        if (!app || app.statusSelectMode !== 'all') return;
+        app.selectedStatusKeys = getVisibleProjectStatuses().map(function(s) { return s.key; });
     }
 
     function buildProjectListFiltersAfterReset() {
@@ -10087,6 +10110,7 @@ var projectTable;
                     departments: [],
                     branches: [],
                     selectedStatusKeys: [],
+                    statusSelectMode: loadStatusSelectMode(),
                     statuses: statuses,
                     userPermissions: null,
                     newProject: {
@@ -11259,6 +11283,8 @@ var projectTable;
                             return !ENERGY_ONLY_PROJECT_STATUS_KEYS[String(k || '').trim()];
                         });
                     }
+                    // すべて選択 follows the department's own status list (省エネ has extra statuses)
+                    applyAllStatusSelectModeIfActive();
                     // Cập nhật context chat để AI biết đang xem danh sách dự án của department nào
                     if (typeof window !== 'undefined') {
                         window.__chatPageContext = window.__chatPageContext || {};
@@ -11341,15 +11367,40 @@ var projectTable;
                 isStatusFilterSelected(status) {
                     return this.selectedStatusKeys.indexOf(status.key) !== -1;
                 },
+                getVisibleStatusKeys() {
+                    return (this.visibleStatuses || []).map(function(s) { return s.key; });
+                },
+                /** すべて選択 = every visible status selected; 単一選択 = at most one; 複数選択 = free toggle */
+                setStatusSelectMode(mode) {
+                    if (!STATUS_SELECT_MODES[mode]) mode = 'multiple';
+                    this.statusSelectMode = mode;
+                    saveStatusSelectMode(mode);
+                    var next = null;
+                    if (mode === 'all') {
+                        next = this.getVisibleStatusKeys();
+                    } else if (mode === 'single' && this.selectedStatusKeys.length > 1) {
+                        next = [this.selectedStatusKeys[0]];
+                    }
+                    if (next) {
+                        this.selectedStatusKeys = next;
+                        this.applyStatusFilterChange();
+                    }
+                },
                 toggleProjectStatusFilter(status) {
                     const key = status && status.key;
                     if (!isValidProjectStatusKey(key)) return;
                     const idx = this.selectedStatusKeys.indexOf(key);
-                    if (idx >= 0) {
+                    if (this.statusSelectMode === 'single') {
+                        this.selectedStatusKeys = idx >= 0 ? [] : [key];
+                    } else if (idx >= 0) {
+                        // In すべて選択 this deselects one; the watcher then switches to 複数選択
                         this.selectedStatusKeys.splice(idx, 1);
                     } else {
                         this.selectedStatusKeys.push(key);
                     }
+                    this.applyStatusFilterChange();
+                },
+                applyStatusFilterChange() {
                     if (typeof saveFiltersToLocalStorage === 'function') {
                         saveFiltersToLocalStorage();
                     }
@@ -11933,6 +11984,25 @@ var projectTable;
                 },
                 noteDisplayOneLine(newVal) {
                     setNoteDisplayOneLine(!!newVal);
+                },
+                // Keys changed from elsewhere (reset, saved filters, URL, a click): keep the mode honest
+                selectedStatusKeys: {
+                    deep: true,
+                    handler(keys) {
+                        keys = Array.isArray(keys) ? keys : [];
+                        var mode = this.statusSelectMode;
+                        if (mode === 'all') {
+                            var visible = this.getVisibleStatusKeys();
+                            var coversAll = visible.length > 0 && visible.every(function(k) { return keys.indexOf(k) !== -1; });
+                            if (!coversAll) mode = 'multiple';
+                        } else if (mode === 'single' && keys.length > 1) {
+                            mode = 'multiple';
+                        }
+                        if (mode !== this.statusSelectMode) {
+                            this.statusSelectMode = mode;
+                            saveStatusSelectMode(mode);
+                        }
+                    }
                 }
             }
         }).mount('#app');

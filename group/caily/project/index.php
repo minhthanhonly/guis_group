@@ -191,6 +191,13 @@ if($_SESSION['show_project'] == 0){
                 </form>
 
                 <div class="d-flex align-items-center gap-2 mb-2 mt-4">
+                    <select class="form-select form-select-sm w-auto" id="statusSelectMode"
+                            title="選択モード"
+                            :value="statusSelectMode" @change="setStatusSelectMode($event.target.value)">
+                        <option value="all" data-i18n="すべて選択">すべて選択</option>
+                        <option value="single" data-i18n="単一選択">単一選択</option>
+                        <option value="multiple" data-i18n="複数選択">複数選択</option>
+                    </select>
                     <div class="btn-group flex-wrap">
                         <button 
                             v-for="status in visibleStatuses" 
