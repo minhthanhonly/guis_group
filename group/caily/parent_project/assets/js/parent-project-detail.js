@@ -1597,6 +1597,33 @@ createApp({
             const s = this.projectStatuses.find(s => s.value === status);
             return s ? this.translateLabel(s.label) : status;
         },
+        /** Bootstrap colour of a status (primary / info / success ...), the tone of its child project card. */
+        getProjectStatusColor(status) {
+            const s = this.projectStatuses.find(s => s.value === status);
+            return (s && s.color) || 'secondary';
+        },
+        /**
+         * Icon per status: several statuses share a colour (納期検討 / 仮受 / 見積 / 請負 are all info),
+         * so the icon and the label tell them apart, not the colour alone.
+         */
+        getProjectStatusIcon(status) {
+            const icons = {
+                draft: 'fa-inbox',
+                open: 'fa-calendar-alt',
+                confirming: 'fa-hourglass-half',
+                quotation: 'fa-file-invoice',
+                contract: 'fa-handshake',
+                waiting_documents: 'fa-folder-open',
+                in_progress: 'fa-play-circle',
+                calculation_completed: 'fa-calculator',
+                application_in_progress: 'fa-paper-plane',
+                waiting_invoice: 'fa-file-invoice-dollar',
+                completed: 'fa-check-circle',
+                paused: 'fa-pause-circle',
+                cancelled: 'fa-ban'
+            };
+            return icons[status] || 'fa-circle';
+        },
         getProjectStatusBadgeClass(status) {
             const s = this.projectStatuses.find(s => s.value === status);
             return `bg-${s?.color || 'secondary'}`;

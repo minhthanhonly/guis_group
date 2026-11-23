@@ -158,8 +158,22 @@ $view->heading('建物詳細');
                     </div>
                     <div v-if="childProjects.length > 0" class="child-project-cards" id="childProjectCards">
                         <div class="child-project-card" v-for="project in filteredChildProjects" :key="project.id"
-                             :class="{ 'is-selected': selectedChildProjectIds.includes(project.id), 'is-cancelled': project.status === 'cancelled' }"
+                             :class="['cp-tone-' + getProjectStatusColor(project.status), 'cp-status-' + project.status, { 'is-selected': selectedChildProjectIds.includes(project.id), 'is-cancelled': project.status === 'cancelled' }]"
                              @contextmenu.prevent="onChildProjectContextMenu($event, project)">
+                            <!-- status first: tone (left edge + header tint) + icon + label, then 進捗 -->
+                            <div class="cp-statusbar">
+                                <span class="cp-status-pill">
+                                    <i class="fa" :class="getProjectStatusIcon(project.status)" aria-hidden="true"></i>
+                                    {{ getProjectStatusLabel(project.status) }}
+                                </span>
+                                <span class="cp-progress-text" v-if="mapDepartmentNameToRequestType(project.department_name) !== '省エネ'">
+                                    <span data-i18n="進捗">進捗</span> <strong>{{ project.progress || 0 }}%</strong>
+                                </span>
+                            </div>
+                            <div class="cp-progress" v-if="mapDepartmentNameToRequestType(project.department_name) !== '省エネ'"
+                                 role="progressbar" :aria-valuenow="project.progress || 0" aria-valuemin="0" aria-valuemax="100">
+                                <div class="cp-progress-bar" :style="{ width: Math.max(0, Math.min(100, Number(project.progress) || 0)) + '%' }"></div>
+                            </div>
                             <div class="cp-head">
                                 <div class="cp-title">
                                     <i class="fa fa-star cp-fav"
@@ -171,10 +185,6 @@ $view->heading('建物詳細');
                                         <span v-for="item in project.project_order_type.split(',').map(v => v.trim()).filter(Boolean)" :key="item" class="badge" :class="getOrderTypeBadgeClass(item)">{{ item }}</span>
                                     </template>
                                     <a :href="'../project/detail.php?id=' + project.id" class="cp-name text-decoration-none">{{ project.name }}</a>
-                                </div>
-                                <div class="cp-state">
-                                    <span class="badge" :class="getProjectStatusBadgeClass(project.status)">{{ getProjectStatusLabel(project.status) }}</span>
-                                    <span class="fw-bold" v-if="mapDepartmentNameToRequestType(project.department_name) !== '省エネ'">{{ project.progress }}%</span>
                                 </div>
                             </div>
                             <div class="cp-body">
@@ -2981,23 +2991,74 @@ $view->footing();
     @media (max-width: 575.98px) {
         .child-project-cards { grid-template-columns: minmax(0, 1fr); }
     }
+    /* Status tone: the card's left edge, header tint, status pill and progress bar share the
+       status colour; the icon + label in the pill tell apart statuses of the same colour. */
     .child-project-card {
+        --cp-tone: var(--bs-secondary);
+        --cp-on-tone: #fff;
         display: flex;
         flex-direction: column;
         border: 1px solid var(--bs-border-color);
+        border-left: 5px solid var(--cp-tone);
         border-radius: 0.5rem;
         background: var(--bs-body-bg);
         overflow: hidden;
+        transition: box-shadow .15s ease;
     }
-    .child-project-card.is-selected { border-color: var(--bs-primary); }
-    .child-project-card.is-cancelled { opacity: 0.65; }
+    .child-project-card:hover { box-shadow: 0 2px 10px color-mix(in srgb, var(--cp-tone) 22%, transparent); }
+    .child-project-card.cp-tone-primary { --cp-tone: var(--bs-primary); }
+    .child-project-card.cp-tone-info { --cp-tone: var(--bs-info); }
+    .child-project-card.cp-tone-success { --cp-tone: var(--bs-success); }
+    .child-project-card.cp-tone-warning { --cp-tone: var(--bs-warning); --cp-on-tone: #3d2c00; }
+    .child-project-card.cp-tone-danger { --cp-tone: var(--bs-danger); }
+    .child-project-card.cp-tone-dark { --cp-tone: var(--bs-dark, #233446); }
+    .child-project-card.cp-tone-secondary { --cp-tone: var(--bs-secondary); }
+    .child-project-card.is-selected { box-shadow: 0 0 0 2px var(--bs-primary); }
+    .child-project-card.is-cancelled { opacity: 0.7; }
+    .child-project-card.is-cancelled .cp-name { text-decoration: line-through; }
+    .child-project-card .cp-statusbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        padding: 0.55rem 0.75rem 0.45rem;
+        background: color-mix(in srgb, var(--cp-tone) 14%, transparent);
+    }
+    .child-project-card .cp-status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.25rem 0.7rem;
+        border-radius: 999px;
+        background: var(--cp-tone);
+        color: var(--cp-on-tone);
+        font-size: 0.875rem;
+        font-weight: 700;
+        line-height: 1.3;
+        white-space: nowrap;
+    }
+    .child-project-card .cp-progress-text {
+        font-size: 0.8125rem;
+        color: var(--bs-secondary-color, #8592a3);
+        white-space: nowrap;
+    }
+    .child-project-card .cp-progress-text strong { color: var(--bs-heading-color, var(--bs-body-color)); font-size: 0.9375rem; }
+    .child-project-card .cp-progress {
+        height: 4px;
+        background: color-mix(in srgb, var(--cp-tone) 18%, transparent);
+    }
+    .child-project-card .cp-progress-bar {
+        height: 100%;
+        background: var(--cp-tone);
+        transition: width .3s ease;
+    }
     .child-project-card .cp-head {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
         gap: 0.75rem;
         padding: 0.6rem 0.75rem;
-        background: color-mix(in srgb, var(--bs-primary) 6%, transparent);
+        background: color-mix(in srgb, var(--cp-tone) 5%, transparent);
         border-bottom: 1px solid var(--bs-border-color);
     }
     .child-project-card .cp-title {
@@ -3014,12 +3075,6 @@ $view->footing();
         word-break: break-word;
     }
     .child-project-card .cp-fav { cursor: pointer; }
-    .child-project-card .cp-state {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-        flex-shrink: 0;
-    }
     .child-project-card .cp-body { flex: 1 1 auto; }
     .child-project-card .cp-row {
         display: grid;
