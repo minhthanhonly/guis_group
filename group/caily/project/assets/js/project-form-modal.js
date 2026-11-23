@@ -112,7 +112,9 @@
                     var parent = opts.parentProject || {};
                     if (!parent.id) throw new Error('parentProject is required to create a project');
                     // The host only offers "create" to users who may; the server checks again.
-                    this.permission = { can_manage_project: true, is_member: true, is_creator: true, rule: { project_edit: 1 } };
+                    // Whoever may create fills in every field: project_view_end_date also opens
+                    // 担当 / 期限日 / GUIS納期 to CAILY branch users (canViewEndDate).
+                    this.permission = { can_manage_project: true, is_member: true, is_creator: true, rule: { project_edit: 1, project_view_end_date: 1 } };
                     this.project = {
                         id: null,
                         version: 1,
