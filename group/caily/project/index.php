@@ -1284,6 +1284,32 @@ body.note-sorting-active {
 #projectTable .confirmation-note-item .note-text.ql-editor {
     padding: 0 !important;
 }
+/* 名前付きデフォルトタスク列のメモ: Quill HTML をそのまま表示 */
+#projectTable .named-default-task-note .note-text.ql-editor {
+    display: block;
+    height: auto;
+    overflow: visible;
+    padding: 0 !important;
+    margin: 0 !important;
+    white-space: normal;
+    word-break: break-word;
+    color: #6c757d;
+}
+#projectTable .named-default-task-note .note-text.ql-editor > * {
+    margin: 0;
+    padding: 0;
+}
+/* 1行表示モードでは他のメモと同様に1行に切り詰める */
+body.project-notes-one-line #projectTable .named-default-task-note .note-text.ql-editor,
+#projectTableCard.project-notes-one-line #projectTable .named-default-task-note .note-text.ql-editor {
+    display: -webkit-box !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    max-height: 1.4em !important;
+    line-height: 1.4em !important;
+    overflow: hidden !important;
+}
 
 #projectTable .note-text-row {
     display: flex;

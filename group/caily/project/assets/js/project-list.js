@@ -3354,10 +3354,12 @@ var projectTable;
         var assignee = String(task.assignee_name || '').trim();
         var statusMeta = getNamedDefaultTaskStatusMeta(task.status);
         var note = String(task.note || '').trim();
+        // Task notes are Quill HTML (may be entity-encoded): text for sort/tooltip, HTML for display
+        var notePlain = note ? noteSnippetText(note).full : '';
         var dueRaw = String(task.due_date || '').trim();
         var dueStr = formatNamedDefaultTaskDueDate(dueRaw);
         if (type === 'sort' || type === 'type' || type === 'filter') {
-            return [assignee, statusMeta.label, dueStr, note].filter(Boolean).join(' ');
+            return [assignee, statusMeta.label, dueStr, notePlain].filter(Boolean).join(' ');
         }
         var parts = [];
         parts.push('<div class="small text-nowrap">' + escapeHtmlForNote(assignee || '-') + '</div>');
@@ -3373,12 +3375,12 @@ var projectTable;
             + escapeHtmlForNote(dueStr || '-')
             + '</div>'
         );
-        if (note) {
-            var tip = note.length > 80 ? note.substring(0, 80) + '…' : note;
+        if (notePlain) {
+            var noteHtml = decodeHtmlForNote(note).replace(/ /g, ' ').replace(/&nbsp;/gi, ' ');
             parts.push(
-                '<div class="small text-muted text-truncate" style="max-width:140px;" title="'
-                + escapeHtmlForNote(note).replace(/"/g, '&quot;')
-                + '">' + escapeHtmlForNote(tip) + '</div>'
+                '<div class="named-default-task-note" title="'
+                + escapeHtmlForNote(notePlain).replace(/"/g, '&quot;')
+                + '">' + buildNoteTextRowHtml(noteHtml) + '</div>'
             );
         }
         return '<div class="d-flex flex-column gap-1">' + parts.join('') + '</div>';
