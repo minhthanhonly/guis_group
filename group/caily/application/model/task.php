@@ -1318,7 +1318,7 @@ class Task extends ApplicationModel {
             require_once DIR_MODEL . 'project.php';
         }
         $projectModel = new Project();
-        $dueDate = isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '' ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
+        $dueDate = isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '' ? $this->normalize_datetime_with_default($_POST['due_date'], '18:30') : null;
         $startDate = isset($_POST['start_date']) && trim((string)$_POST['start_date']) !== '' ? $this->normalize_datetime_with_default($_POST['start_date'], '09:00') : null;
         $title = isset($_POST['title']) ? trim((string) $_POST['title']) : '';
         $taskKind = $this->normalize_task_kind(isset($_POST['task_kind']) ? $_POST['task_kind'] : '');
@@ -1466,7 +1466,7 @@ class Task extends ApplicationModel {
         }
         $priority = isset($_POST['priority']) ? $_POST['priority'] : (isset($old['priority']) ? $old['priority'] : 'medium');
         $assignedTo = isset($_POST['assigned_to']) ? $_POST['assigned_to'] : (isset($old['assigned_to']) ? $old['assigned_to'] : null);
-        $dueDate = (isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '') ? $this->normalize_datetime_with_default($_POST['due_date'], '18:00') : null;
+        $dueDate = (isset($_POST['due_date']) && trim((string)$_POST['due_date']) !== '') ? $this->normalize_datetime_with_default($_POST['due_date'], '18:30') : null;
         $startDate = (isset($_POST['start_date']) && trim((string)$_POST['start_date']) !== '') ? $this->normalize_datetime_with_default($_POST['start_date'], '09:00') : null;
         if (array_key_exists('task_kind', $_POST)) {
             $taskKind = $this->normalize_task_kind($_POST['task_kind']);
@@ -3268,7 +3268,7 @@ class Task extends ApplicationModel {
             $data['start_date'] = $this->normalize_datetime_with_default($start_date, '09:00');
         }
         if ($due_date !== null) {
-            $data['due_date'] = $this->normalize_datetime_with_default($due_date, '18:00');
+            $data['due_date'] = $this->normalize_datetime_with_default($due_date, '18:30');
         }
         if ($progress !== null) {
             $data['progress'] = $progress;

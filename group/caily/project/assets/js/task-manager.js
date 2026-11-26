@@ -987,12 +987,12 @@ const TaskApp = createApp({
             return moment().format(TASK_DATETIME_MOMENT_FORMAT);
         },
         getDefaultDueDateTime() {
-            // Server default is 18:00 Asia/Tokyo → 16:00 when display locale is Vietnamese
+            // Server default is 18:30 Asia/Tokyo → 16:30 when display locale is Vietnamese
             if (typeof moment !== 'undefined' && moment.tz) {
-                const dueTokyo = moment().tz(SERVER_TASK_TIMEZONE).format('YYYY/M/D') + ' 18:00';
+                const dueTokyo = moment().tz(SERVER_TASK_TIMEZONE).format('YYYY/M/D') + ' 18:30';
                 return this.toTaskDateTimeInputValue(dueTokyo);
             }
-            const dueHour = this.isVietnameseLocale() ? '16:00' : '18:00';
+            const dueHour = this.isVietnameseLocale() ? '16:30' : '18:30';
             return moment().format('YYYY/M/D') + ' ' + dueHour;
         },
         getDefaultTaskKind() {
@@ -2235,10 +2235,7 @@ const TaskApp = createApp({
                 this.showMessage('タスク名は必須です。', true);
                 return;
             }
-            if (!inlineTask.assignees || !inlineTask.assignees.length) {
-                this.showMessage('担当者は必須です。', true);
-                return;
-            }
+            // 担当者は任意: 期限だけ先に入れて、担当者は案件が動き出してから決められる
             if (!inlineTask.due_date || !inlineTask.due_date.trim()) {
                 this.showMessage('期限日は必須です。', true);
                 return;
@@ -2258,7 +2255,7 @@ const TaskApp = createApp({
                     ? (this.fromTaskDateTimeInputValue(inlineTask.start_date) || '')
                     : this.fromTaskDateTimeInputValue(this.getDefaultStartDateTime()));
                 formData.append('due_date', this.fromTaskDateTimeInputValue(inlineTask.due_date));
-                formData.append('assigned_to', inlineTask.assignees[0] || '');
+                formData.append('assigned_to', (inlineTask.assignees && inlineTask.assignees[0]) || '');
                 formData.append('created_by', this.currentUserId);
                 formData.append('status', inlineTask.status);
                 formData.append('progress', inlineTask.progress);
@@ -2762,9 +2759,22 @@ const TaskApp = createApp({
                 .join('\n');
         },
         
+        /** 期限日の既定時刻: 18:30 JST（ベトナム語表示はベトナム時間 16:30） */
+        getDueDefaultTime() {
+            const jst = moment.tz('2000-01-01 18:30', 'YYYY-MM-DD HH:mm', SERVER_TASK_TIMEZONE);
+            const local = jst.clone().tz(this.isVietnameseLocale() ? VIETNAM_TASK_TIMEZONE : SERVER_TASK_TIMEZONE);
+            return { hour: local.hours(), minute: local.minutes() };
+        },
+
         initFlatpickr(force = false) {
             if (!window.flatpickr) return;
-            const flatpickrOptions = this.getFlatpickrOptions();
+            const dueDefault = this.getDueDefaultTime();
+            // .datetimepicker = 期限日 only; 工数調整 keeps flatpickr's own default
+            const flatpickrOptions = {
+                ...this.getFlatpickrOptions(),
+                defaultHour: dueDefault.hour,
+                defaultMinute: dueDefault.minute
+            };
             document.querySelectorAll('.datetimepicker').forEach(el => {
                 if (el._flatpickr) {
                     // Never rebuild while calendar is open (time arrows trigger Vue updates).
