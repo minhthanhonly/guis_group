@@ -77,6 +77,20 @@ try {
                         <option v-for="month in createdMonthOptions" :key="month.value" :value="month.value">{{ month.label }}</option>
                     </select>
                 </div>
+                <div class="col-6 col-md-3 col-xl-2" v-show="activeTab === 'tasks'" :class="{ 'kb-filter-on': !!companyFilter }">
+                    <label class="form-label small mb-1" for="kbCompanyFilter"><span data-i18n="会社">会社</span></label>
+                    <select autocomplete="off" id="kbCompanyFilter" class="form-select form-select-sm" v-model="companyFilter" @change="onCompanyFilterChange">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option v-for="name in companyFilterOptions" :key="name" :value="name">{{ name }}</option>
+                    </select>
+                </div>
+                <div class="col-6 col-md-3 col-xl-2" v-show="activeTab === 'tasks'" :class="{ 'kb-filter-on': !!branchFilter }">
+                    <label class="form-label small mb-1" for="kbBranchFilter"><span data-i18n="支店">支店</span></label>
+                    <select autocomplete="off" id="kbBranchFilter" class="form-select form-select-sm" v-model="branchFilter">
+                        <option value="" data-i18n="すべて">すべて</option>
+                        <option v-for="name in branchFilterOptions" :key="name" :value="name">{{ name }}</option>
+                    </select>
+                </div>
                 <div class="col-12 col-md-6 col-xl-4" v-show="activeTab === 'tasks'" :class="{ 'kb-filter-on': !!searchQuery }">
                     <label class="form-label small mb-1" for="kbSearch"><span data-i18n="検索">検索</span></label>
                     <div class="input-group input-group-sm">

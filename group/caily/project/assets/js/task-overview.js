@@ -108,6 +108,9 @@ createApp({
                 : { cancelled: true },
             columnLimits: {},
             searchQuery: '',
+            // 顧客 会社 / 支店 (project customer): client-side, on top of the panel filters
+            companyFilter: '',
+            branchFilter: '',
             quickFilter: '',
             memberFilterIds: [],
             loading: false,
@@ -219,6 +222,8 @@ createApp({
                 createdMonth: this.filters.created_month || 'all',
                 showClosed: !this.filters.excludeCompleted,
                 searchQuery: this.searchQuery,
+                companyFilter: this.companyFilter,
+                branchFilter: this.branchFilter,
                 quickFilter: this.quickFilter,
                 memberFilterIds: this.memberFilterIds.slice(),
                 statusKeys: this.selectedStatusKeys.slice(),
@@ -249,12 +254,31 @@ createApp({
                 { value: 'newest', label: '新しい順' }
             ];
         },
-        // Server/filter-panel filters + search box
+        // 会社 options: the customer companies of the loaded tasks (after the panel filters)
+        companyFilterOptions() {
+            return this.collectTaskNames(this.filteredTasks, 'project_company_name', this.companyFilter);
+        },
+        // 支店 options: branches of the chosen company (all branches while no company is chosen)
+        branchFilterOptions() {
+            const company = this.companyFilter;
+            const tasks = company
+                ? this.filteredTasks.filter(task => String(task.project_company_name || '').trim() === company)
+                : this.filteredTasks;
+            return this.collectTaskNames(tasks, 'project_branch_name', this.branchFilter);
+        },
+        // Server/filter-panel filters + 会社 / 支店 + search box
         baseBoardTasks() {
+            const company = this.companyFilter;
+            const branch = this.branchFilter;
+            const tasks = (company || branch)
+                ? this.filteredTasks.filter(task =>
+                    (!company || String(task.project_company_name || '').trim() === company)
+                    && (!branch || String(task.project_branch_name || '').trim() === branch))
+                : this.filteredTasks;
             const q = String(this.searchQuery || '').trim().toLowerCase();
-            if (!q) return this.filteredTasks;
+            if (!q) return tasks;
             const terms = q.split(/\s+/).filter(Boolean);
-            return this.filteredTasks.filter(task => {
+            return tasks.filter(task => {
                 const hay = [
                     task.title,
                     task.project_name,
@@ -443,6 +467,8 @@ createApp({
                 }
             });
             if (typeof saved.searchQuery === 'string') this.searchQuery = saved.searchQuery;
+            if (typeof saved.companyFilter === 'string') this.companyFilter = saved.companyFilter;
+            if (typeof saved.branchFilter === 'string') this.branchFilter = saved.branchFilter;
             if (['', 'overdue', 'week', 'high', 'unack'].includes(saved.quickFilter)) this.quickFilter = saved.quickFilter;
             if (Array.isArray(saved.memberFilterIds)) this.memberFilterIds = saved.memberFilterIds.map(String);
             if (Array.isArray(saved.statusKeys)) this.selectedStatusKeys = this.sanitizeStatusKeys(saved.statusKeys);
@@ -562,6 +588,8 @@ createApp({
                 const m = String(f.created_month).match(/^(\d{4})-(\d{2})$/);
                 items.push(t('作成月') + '：' + (m ? m[1] + '年' + Number(m[2]) + '月' : f.created_month));
             }
+            if (this.companyFilter) items.push(t('会社') + '：' + this.companyFilter);
+            if (this.branchFilter) items.push(t('支店') + '：' + this.branchFilter);
             if (String(this.searchQuery || '').trim()) {
                 items.push(t('検索') + '：「' + String(this.searchQuery).trim() + '」');
             }
@@ -1678,9 +1706,28 @@ createApp({
                 unassignedOnly: false
             };
         },
+        // Distinct trimmed values of task[key], sorted (ja); the current choice stays listed even
+        // when no loaded task has it (other department / month), so the select never goes blank
+        collectTaskNames(tasks, key, current) {
+            const seen = new Set();
+            (tasks || []).forEach(task => {
+                const name = String(task[key] || '').trim();
+                if (name) seen.add(name);
+            });
+            if (current) seen.add(current);
+            return Array.from(seen).sort((a, b) => a.localeCompare(b, 'ja'));
+        },
+        onCompanyFilterChange() {
+            // a branch of another company would leave the list empty
+            if (this.branchFilter && !this.branchFilterOptions.includes(this.branchFilter)) {
+                this.branchFilter = '';
+            }
+        },
         resetFilters() {
             this.filters = this.getDefaultFilters();
             this.searchQuery = '';
+            this.companyFilter = '';
+            this.branchFilter = '';
             this.quickFilter = '';
             this.memberFilterIds = [];
             this.selectedStatusKeys = [];
