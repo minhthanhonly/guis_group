@@ -30,7 +30,7 @@ createApp({
                 { value: 'その他', label: 'その他', color: 'dark' }
             ],
             // Tooltip of the search box: what it searches (ParentProject::list).
-            searchBoxHint: 'お施主様名・会社名・支店名・担当様・工事番号・管理番号・建物規模・市区町村・種類1・住宅種類・構造事務所・特徴で検索できます。スペース、「,」または「、」で区切ると、すべての語を含む建物を表示します。',
+            searchBoxHint: 'お施主様名・会社名・支店名・担当様・工事番号・管理番号・建物規模・種類1・住宅種類・構造事務所・特徴で検索できます。スペース、「,」または「、」で区切ると、すべての語を含む建物を表示します。',
             statusFilter: 'all',
 
             favoritesOnly: false,

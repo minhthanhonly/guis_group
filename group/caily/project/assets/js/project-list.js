@@ -347,6 +347,8 @@ var projectTable;
                 }).join(' ');
                 init.createdRow.call(projectTable, tr, fresh, rowIndex);
             }
+            // The cells were rebuilt: put back the notes shown under other columns (表示列)
+            appendDisplayColumnNoteSnippets(rowIndex, fresh, getDisplayColumnNoteConfigs());
             if (tr && typeof window.applyDataI18n === 'function') {
                 window.applyDataI18n(tr);
             }
@@ -358,6 +360,64 @@ var projectTable;
 
     // Lazy-loaded list modules (quick edit, ...) live outside this closure
     window.__refreshProjectListRow = refreshProjectRow;
+
+    /** Columns that can show notes with a matching 表示列: [{ colIndex, displayColumnKey }] */
+    function getDisplayColumnNoteConfigs() {
+        var customDefs = customFieldColumnDefinitions || [];
+        var noteColumnConfigs = [];
+        (NOTE_DISPLAY_COLUMNS || []).forEach(function(c) {
+            if (isProjectColumnUnavailable(c.key)) return;
+            if (isProjectDirectorColumn(c.key) && !canViewProjectDirectorColumns()) return;
+            var idx = getDataTableColumnIndexByKey(c.key, customDefs);
+            if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });
+        });
+        customDefs.forEach(function(c) {
+            var idx = getDataTableColumnIndexByKey(c.key, customDefs);
+            if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: 'custom:' + (c.label || '').trim() });
+        });
+        (namedDefaultTaskColumnDefinitions || []).forEach(function(c) {
+            var idx = getDataTableColumnIndexByKey(c.key, customDefs);
+            if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });
+        });
+        return noteColumnConfigs;
+    }
+
+    /**
+     * Note snippets under the cells of one row (notes whose 表示列 is that column).
+     * Runs on every table draw and after a single-row refresh, which rebuilds the cells.
+     */
+    function appendDisplayColumnNoteSnippets(rowIdx, rowData, noteColumnConfigs) {
+        if (!projectTable || !rowData) return;
+        var notesByCol = rowData.notes_by_display_column || {};
+        (noteColumnConfigs || []).forEach(function(cfg) {
+            var notes = notesByCol[cfg.displayColumnKey];
+            if (!notes || !notes.length) return;
+            var node = projectTable.cell(rowIdx, cfg.colIndex).node();
+            if (!node) return;
+            var $cell = $(node);
+            $cell.find('.cell-note-snippets').remove();
+            var parts = [];
+            notes.forEach(function(n) {
+                var content = n.content || '';
+                var decodedHtml = decodeHtmlForNote(content);
+                decodedHtml = (decodedHtml || '').replace(/ /g, ' ').replace(/&nbsp;/gi, ' ');
+                var isImportant = n.is_important == 1;
+                var isPinnedSelf = n.is_pinned_self == 1;
+                var snCls = 'confirmation-note-item mb-1 cell-note-snippet-item';
+                if (isImportant) snCls += ' important-note';
+                if (isPinnedSelf) snCls += ' pinned-self-note';
+                snCls += noteBgClassForList(n.bg_color);
+                // Label only on CAILYメモ / GUISメモ columns — not on other column snippets
+                parts.push(
+                    '<div class="' + snCls + '" data-note-id="' + (n.id || '') + '" data-project-id="' + (rowData.id || '') + '" style="cursor:pointer">' +
+                        buildNoteTextRowHtml(decodedHtml || '-', buildNoteVisibilityIconHtml(n.visibility)) +
+                    '</div>'
+                );
+            });
+            $cell.append('<div class="cell-note-snippets">' + parts.join('') + '</div>');
+            appendNoteBoardOpenButton(node);
+        });
+    }
 
     function reloadProjectTable(resetPaging, options) {
         options = options || {};
@@ -3839,16 +3899,15 @@ var projectTable;
 
     var BELS_ZEH_GRADE_OPTIONS = [
         { value: '', label: '' },
-        { value: '0', label: '0 : 該当なし（非ZEH）' },
-        { value: '1', label: '1 : ZEH' },
-        { value: '2', label: '2 : Nearly ZEH' },
-        { value: '3', label: '3 : ZEH Oriented' },
-        { value: '4', label: '4 : ZEH-M' },
-        { value: '5', label: '5 : Nearly ZEH-M' },
-        { value: '6', label: '6 : ZEH-M Oriented' },
-        { value: '7', label: '7 : ZEH Ready' },
-        { value: '8', label: '8 : DK-ZEH' },
-        { value: '9', label: '9 : 関西限定DK-ZEH' }
+        { value: '1', label: 'ZEH' },
+        { value: '8', label: 'DK-ZEH' },
+        { value: '2', label: 'Nearly ZEH' },
+        { value: '7', label: 'ZEH Ready' },
+        { value: '3', label: 'ZEH Oriented' },
+        { value: '9', label: '関西限定DK-ZEH' },
+        { value: '4', label: 'ZEH-M' },
+        { value: '5', label: 'Nearly ZEH-M' },
+        { value: '6', label: 'ZEH-M Oriented' }
     ];
 
     function formatParentFeatureLabels(features, type2) {
@@ -3866,7 +3925,8 @@ var projectTable;
 
     function formatBelsZehGradeLabel(code) {
         var value = String(code == null ? '' : code).trim();
-        if (value === '') return '';
+        // 0 (該当なし) was removed: treated as 未選択
+        if (value === '' || value === '0') return '';
         for (var i = 0; i < BELS_ZEH_GRADE_OPTIONS.length; i++) {
             if (BELS_ZEH_GRADE_OPTIONS[i].value === value) {
                 return BELS_ZEH_GRADE_OPTIONS[i].label;
@@ -4484,6 +4544,7 @@ var projectTable;
         if (isPinnedSelf) cls += ' pinned-self-note';
         cls += noteBgClassForList(parsed.bgColor);
         var pinEveryoneTitle = isImportant ? 'ピン（全員）解除' : 'ピン（全員）';
+        var pinSelfTitle = isPinnedSelf ? 'ピン（自分）解除' : 'ピン（自分）';
         var boardTitle = typeof translateText === 'function' ? translateText('メモボードを全画面表示') : 'メモボードを全画面表示';
         return `
             <div class="${cls}" ${parsed.id ? `data-note-id="${parsed.id}"` : ''} data-is-important="${isImportant ? 1 : 0}" data-is-pinned-self="${isPinnedSelf ? 1 : 0}">
@@ -4493,6 +4554,9 @@ var projectTable;
                     ${buildNoteTextRowHtml(decodedText || '-', buildNoteVisibilityIconHtml(parsed.visibility))}
                 </div>
                 <span class="note-actions">
+                    <span class="note-pin-self-icon ${isPinnedSelf ? 'is-active' : ''}" title="${pinSelfTitle}" style="cursor: pointer;">
+                        <i class="fa fa-bookmark"></i>
+                    </span>
                     ${parsed.visibility === 'self' ? '' : `<span class="note-pin-everyone-icon ${isImportant ? 'is-active' : ''}" title="${pinEveryoneTitle}" style="cursor: pointer;">
                         <i class="fa fa-thumb-tack"></i>
                     </span>`}
@@ -4683,7 +4747,7 @@ var projectTable;
     async function toggleNotePinFromList($item, mode) {
         var noteId = $item.data('note-id');
         if (!noteId) return;
-        var method = 'toggleNoteImportant';
+        var method = mode === 'self' ? 'toggleNotePinSelf' : 'toggleNoteImportant';
         try {
             var formData = new FormData();
             formData.append('id', noteId);
@@ -6876,14 +6940,20 @@ var projectTable;
                         const members = data.split('|').filter(member => member.trim() !== '');
                         if (members.length === 0) return '-';
 
-                        // every member's icon (no "+N"): they wrap onto more lines in the narrow column
+                        // Up to 6 icons (they wrap in the narrow column); from the 7th member on: "+N" with the names on hover
+                        const maxAvatars = 6;
                         let html = '<div class="pl-member-avatars">';
-                        members.forEach(member => {
+                        members.slice(0, maxAvatars).forEach(member => {
                             const parsed = parseListMemberToken(member);
                             html += renderListAvatarHtml(parsed.realname, parsed.userid || parsed.authId, parsed.userImage, {
                                 user_ruby: parsed.user_ruby
                             });
                         });
+                        if (members.length > maxAvatars) {
+                            const remaining = members.slice(maxAvatars).map(member => formatListMemberDisplayName(member)).join(', ');
+                            html += '<div class="avatar me-1"><span class="avatar-initial rounded-circle pull-up" data-bs-toggle="tooltip" title="'
+                                + escapeHtmlForNote(remaining).replace(/"/g, '&quot;') + '">+' + (members.length - maxAvatars) + '</span></div>';
+                        }
                         html += '</div>';
                         return html;
                     },
@@ -7838,58 +7908,9 @@ var projectTable;
         
         // Sau mỗi lần vẽ bảng: thêm note snippet vào ô cột có display_column trùng (dưới cùng ô, >40 ký tự thì cắt + tooltip)
         projectTable.on('draw.dt', function() {
-            var customDefs = customFieldColumnDefinitions || [];
-            var noteColumnConfigs = []; // { colIndex, displayColumnKey }
-            (NOTE_DISPLAY_COLUMNS || []).forEach(function(c) {
-                if (isProjectColumnUnavailable(c.key)) return;
-                if (isProjectDirectorColumn(c.key) && !canViewProjectDirectorColumns()) return;
-                var idx = getDataTableColumnIndexByKey(c.key, customDefs);
-                if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });
-            });
-            customDefs.forEach(function(c) {
-                var idx = getDataTableColumnIndexByKey(c.key, customDefs);
-                if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: 'custom:' + (c.label || '').trim() });
-            });
-            (namedDefaultTaskColumnDefinitions || []).forEach(function(c) {
-                var idx = getDataTableColumnIndexByKey(c.key, customDefs);
-                if (idx !== null) noteColumnConfigs.push({ colIndex: idx, displayColumnKey: c.key });
-            });
+            var noteColumnConfigs = getDisplayColumnNoteConfigs();
             projectTable.rows({ search: 'applied' }).every(function(rowIdx) {
-                var rowData = this.data();
-                var notesByCol = rowData.notes_by_display_column || {};
-                noteColumnConfigs.forEach(function(cfg) {
-                    var notes = notesByCol[cfg.displayColumnKey];
-                    if (!notes || !notes.length) return;
-                    var node = projectTable.cell(rowIdx, cfg.colIndex).node();
-                    if (!node) return;
-                    var $cell = $(node);
-                    $cell.find('.cell-note-snippets').remove();
-                    var parts = [];
-                    notes.forEach(function(n) {
-                        var content = n.content || '';
-                        var decodedHtml = decodeHtmlForNote(content);
-                        decodedHtml = (decodedHtml || '').replace(/\u00A0/g, ' ').replace(/&nbsp;/gi, ' ');
-                        var sn = noteSnippetText(content, 40);
-                        var tooltipAttrs = '';
-                        if (sn.full && sn.full.length > 40) {
-                            tooltipAttrs = ' data-bs-toggle="tooltip" data-bs-title="' + escapeHtmlForNote(sn.full) + '"';
-                        }
-                        var isImportant = n.is_important == 1;
-                        var isPinnedSelf = n.is_pinned_self == 1;
-                        var snCls = 'confirmation-note-item mb-1 cell-note-snippet-item';
-                        if (isImportant) snCls += ' important-note';
-                        if (isPinnedSelf) snCls += ' pinned-self-note';
-                        snCls += noteBgClassForList(n.bg_color);
-                        // Label only on CAILYメモ / GUISメモ columns — not on other column snippets
-                        parts.push(
-                            '<div class="' + snCls + '" data-note-id="' + (n.id || '') + '" data-project-id="' + (rowData.id || '') + '" style="cursor:pointer">' +
-                                buildNoteTextRowHtml(decodedHtml || '-', buildNoteVisibilityIconHtml(n.visibility)) +
-                            '</div>'
-                        );
-                    });
-                    $cell.append('<div class="cell-note-snippets">' + parts.join('') + '</div>');
-                    appendNoteBoardOpenButton(node);
-                });
+                appendDisplayColumnNoteSnippets(rowIdx, this.data(), noteColumnConfigs);
             });
             applyI18nToProjectTableUI();
             reapplyProjectListColumnWidthsAfterLayout(
@@ -8425,7 +8446,6 @@ var projectTable;
                     html += fieldRow('管理番号', textOrEmpty(parent.project_number));
                     html += fieldRow('工事番号', textOrEmpty(parent.construction_number));
                     html += fieldRow('建物規模', textOrEmpty(parent.scale));
-                    html += fieldRow('市区町村', textOrEmpty(parent.city));
                     html += fieldRow('構造事務所', textOrEmpty(parent.structural_office));
                     var type1Items = String(parent.type1 || '').split(',').map(function(v) { return v.trim(); }).filter(Boolean);
                     if (type1Items.length) {
@@ -9398,6 +9418,12 @@ var projectTable;
             e.preventDefault();
             e.stopPropagation();
             toggleNotePinFromList($(this).closest('.confirmation-note-item'), 'everyone');
+        });
+
+        $('#projectTable tbody').on('click', '.confirmation-note-item .note-pin-self-icon', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            toggleNotePinFromList($(this).closest('.confirmation-note-item'), 'self');
         });
 
         // Prevent text-selection when starting a note drag

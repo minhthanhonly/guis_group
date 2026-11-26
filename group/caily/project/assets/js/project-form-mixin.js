@@ -763,17 +763,18 @@
                     return '';
                 }
                 const code = String(this.project.bels_zeh_grade);
+                // 0 (該当なし) was removed: treated as 未選択
+                if (code === '0') return '';
                 const options = [
-                    { value: '0', label: '0 : 該当なし（非ZEH）' },
-                    { value: '1', label: '1 : ZEH' },
-                    { value: '2', label: '2 : Nearly ZEH' },
-                    { value: '3', label: '3 : ZEH Oriented' },
-                    { value: '4', label: '4 : ZEH-M' },
-                    { value: '5', label: '5 : Nearly ZEH-M' },
-                    { value: '6', label: '6 : ZEH-M Oriented' },
-                    { value: '7', label: '7 : ZEH Ready' },
-                    { value: '8', label: '8 : DK-ZEH' },
-                    { value: '9', label: '9 : 関西限定DK-ZEH' }
+                    { value: '1', label: 'ZEH' },
+                    { value: '8', label: 'DK-ZEH' },
+                    { value: '2', label: 'Nearly ZEH' },
+                    { value: '7', label: 'ZEH Ready' },
+                    { value: '3', label: 'ZEH Oriented' },
+                    { value: '9', label: '関西限定DK-ZEH' },
+                    { value: '4', label: 'ZEH-M' },
+                    { value: '5', label: 'Nearly ZEH-M' },
+                    { value: '6', label: 'ZEH-M Oriented' }
                 ];
                 const found = options.find(function(opt) { return opt.value === code; });
                 return found ? found.label : code;

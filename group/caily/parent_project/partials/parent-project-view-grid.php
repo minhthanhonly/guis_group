@@ -46,17 +46,13 @@ $P = $ppv['p'];
                 <div class="pd-value">{{ <?= $ppv['receiver'] ?> }}</div>
             </div>
         </div>
-        <div class="pd-section" v-if="<?= $P ?>.scale || <?= $P ?>.city || <?= $P ?>.structural_office || (<?= $ppv['type1'] ?>).length || (<?= $ppv['type2'] ?>).length || (<?= $ppv['hasNonRes'] ?>)">
+        <div class="pd-section" v-if="<?= $P ?>.scale || <?= $P ?>.structural_office || (<?= $ppv['type1'] ?>).length || (<?= $ppv['type2'] ?>).length || (<?= $ppv['hasNonRes'] ?>)">
             <div class="col-12 project-form-section">
                 <h6 class="project-form-section-title"><span data-i18n="建物情報">建物情報</span></h6>
             </div>
             <div class="col-12" v-if="<?= $P ?>.scale">
                 <label class="form-label"><span data-i18n="建物規模">建物規模</span></label>
                 <div class="pd-value">{{ <?= $P ?>.scale }}</div>
-            </div>
-            <div class="col-12" v-if="<?= $P ?>.city">
-                <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
-                <div class="pd-value">{{ <?= $P ?>.city }}</div>
             </div>
             <div class="col-12" v-if="<?= $P ?>.structural_office">
                 <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>

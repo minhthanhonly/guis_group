@@ -3,8 +3,9 @@
  * opened full screen from a memo cell). Markup: project/partials/project-note-board.php.
  * Styles: project/assets/css/project-notes.css.
  *
- * Each user has their own layout (server: ProjectNote::attachUserBoard): ピン（全員） notes in a band
- * on top, reordered only among themselves; the other notes on a free 3-column grid.
+ * Each user has their own layout (server: ProjectNote::attachUserBoard): ピン（全員） notes and the
+ * user's own ピン（自分） notes in a band on top, reordered only among themselves; the other notes on a
+ * free 3-column grid.
  *
  * The host component provides:
  *   data:     notes (this board's notes, from getNotes)
@@ -24,6 +25,11 @@
     /** 編集ロック: how often the board asks who is editing its notes */
     var NOTE_EDIT_POLL_MS = 20000;
 
+    /** The note sits in the pin band: ピン（全員） or this user's ピン（自分） */
+    function isBandNote(n) {
+        return !!n && (n.is_important == 1 || n.is_pinned_self == 1);
+    }
+
     global.ProjectNoteBoardMixin = {
         data() {
             return {
@@ -32,7 +38,7 @@
                 noteFilterLabel: '',
                 noteFilterType: '',
                 noteFilterVisibility: '', // '' | all | members | self
-                noteFilterPin: '',        // '' | everyone | none
+                noteFilterPin: '',        // '' | everyone | self | none
                 noteFilterVisibilityOptions: [
                     { value: '', text: 'すべて' },
                     { value: 'all', text: '全員', icon: 'fa-globe' },
@@ -42,6 +48,7 @@
                 noteFilterPinOptions: [
                     { value: '', text: 'すべて' },
                     { value: 'everyone', text: 'ピン（全員）', icon: 'fa-thumb-tack text-danger' },
+                    { value: 'self', text: 'ピン（自分）', icon: 'fa-bookmark text-primary' },
                     { value: 'none', text: 'ピンなし' }
                 ],
                 // 全文表示 (default off); 全画面表示 turns it on for the time being without saving that
@@ -99,9 +106,9 @@
                     }
                     if (visibilityFilter && (note.visibility || 'all') !== visibilityFilter) return false;
                     if (pinFilter) {
-                        const everyone = note.is_important == 1;
-                        if (pinFilter === 'everyone' && !everyone) return false;
-                        if (pinFilter === 'none' && everyone) return false;
+                        if (pinFilter === 'everyone' && note.is_important != 1) return false;
+                        if (pinFilter === 'self' && note.is_pinned_self != 1) return false;
+                        if (pinFilter === 'none' && isBandNote(note)) return false;
                     }
                     return true;
                 });
@@ -116,7 +123,7 @@
             /** ピン（全員） first in the user's own pin order, then the others in reading order (row, column) */
             boardNotes() {
                 const key = function (n) {
-                    if (n.is_important == 1) {
+                    if (isBandNote(n)) {
                         const r = n.pin_rank === null || n.pin_rank === undefined ? 9999 : Number(n.pin_rank);
                         return [0, r];
                     }
@@ -129,9 +136,9 @@
                     .sort(function (a, b) { return a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.i - b.i; })
                     .map(function (x) { return x.n; });
             },
-            /** ピン（全員） notes in the user's order — the band at the top of the board */
+            /** ピン（全員） + ピン（自分） notes in the user's order — the band at the top of the board */
             notePinned() {
-                return this.boardNotes.filter(function (n) { return n.is_important == 1; });
+                return this.boardNotes.filter(isBandNote);
             },
             /** Rows taken by the pin band; the grid is drawn this many rows lower */
             notePinRows() {
@@ -140,7 +147,7 @@
             /** Last grid row in use (pinned notes are not on the grid) */
             noteBoardMaxRow() {
                 return (this.notes || []).reduce(function (m, n) {
-                    return n.is_important == 1 ? m : Math.max(m, Number(n.board_row) || 0);
+                    return isBandNote(n) ? m : Math.max(m, Number(n.board_row) || 0);
                 }, 0);
             }
         },
@@ -253,7 +260,7 @@
             /** Grid placement of a card on the free board (null = auto-flow) */
             noteCardGridStyle(note) {
                 if (!this.noteBoardFree) return null;
-                if (note.is_important == 1) {
+                if (isBandNote(note)) {
                     const i = this.notePinned.indexOf(note);
                     if (i < 0) return null;
                     return { gridColumn: String((i % 3) + 1), gridRow: String(Math.floor(i / 3) + 1) };
@@ -339,7 +346,7 @@
                     return this.notePinned.findIndex(function (n) { return n.id == d.id; }) !== d.target.idx;
                 }
                 return (this.notes || []).some(function (n) {
-                    return n.id != d.id && n.is_important != 1
+                    return n.id != d.id && !isBandNote(n)
                         && Number(n.board_col) === d.target.col && Number(n.board_row) === d.target.row;
                 });
             },
@@ -448,7 +455,7 @@
                 };
                 this._noteGhostAnim = anim(ghost, { transform: 'translate3d(0px, 0px, 0) rotate(1.5deg)' });
                 this._noteDropAnim = anim(drop, { opacity: 0 });
-                const pinned = note.is_important == 1;
+                const pinned = isBandNote(note);
                 const pinIdx = pinned ? this.notePinned.indexOf(note) : -1;
                 // raw: moving the target must not re-render the page (see updateNoteDragVisuals)
                 const raw = global.Vue && global.Vue.markRaw ? global.Vue.markRaw : function (o) { return o; };
@@ -612,6 +619,23 @@
                     }
                 } catch (error) {
                     console.error('Error toggling note pin:', error);
+                    this.noteBoardNotify('ピンの更新に失敗しました', 'error');
+                }
+            },
+            /** ピン（自分）: only the own pin band changes; nobody else's board */
+            async toggleNotePinSelf(note) {
+                if (!note || !note.id) return;
+                try {
+                    const formData = new FormData();
+                    formData.append('id', note.id);
+                    const response = await axios.post('/api/index.php?model=project&method=toggleNotePinSelf', formData);
+                    if (response.data && response.data.status === 'success') {
+                        await this.reloadNoteBoard();
+                    } else {
+                        this.noteBoardNotify((response.data && response.data.error) || 'ピンの更新に失敗しました', 'error');
+                    }
+                } catch (error) {
+                    console.error('Error toggling own note pin:', error);
                     this.noteBoardNotify('ピンの更新に失敗しました', 'error');
                 }
             }

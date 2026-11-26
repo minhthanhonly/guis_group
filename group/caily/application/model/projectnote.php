@@ -286,30 +286,44 @@ class ProjectNote extends ApplicationModel {
             "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.TABLES "
             . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "'"
         );
-        if (!empty($row['cnt'])) {
+        if (empty($row['cnt'])) {
+            $this->query(
+                "CREATE TABLE `{$table}` ("
+                . "`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,"
+                . "`project_id` INT NOT NULL,"
+                . "`note_id` INT NOT NULL,"
+                . "`user_id` VARCHAR(64) NOT NULL COMMENT 'userid string',"
+                . "`board_col` TINYINT DEFAULT NULL COMMENT '列 (1-3)、ピン以外',"
+                . "`board_row` INT DEFAULT NULL COMMENT '行 (1-)、ピン以外',"
+                . "`pin_order` INT DEFAULT NULL COMMENT 'ピンの帯の並び順',"
+                . "`pinned_self` TINYINT NOT NULL DEFAULT 0 COMMENT 'ピン（自分）',"
+                . "`pinned_self_at` DATETIME DEFAULT NULL COMMENT 'ピン（自分）にした日時',"
+                . "`updated_at` DATETIME NOT NULL,"
+                . "PRIMARY KEY (`id`),"
+                . "UNIQUE KEY `uniq_note_user` (`note_id`, `user_id`),"
+                . "KEY `idx_project_user` (`project_id`, `user_id`)"
+                . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='メモボード 個人の配置'"
+            );
             return;
         }
-        $this->query(
-            "CREATE TABLE `{$table}` ("
-            . "`id` INT UNSIGNED NOT NULL AUTO_INCREMENT,"
-            . "`project_id` INT NOT NULL,"
-            . "`note_id` INT NOT NULL,"
-            . "`user_id` VARCHAR(64) NOT NULL COMMENT 'userid string',"
-            . "`board_col` TINYINT DEFAULT NULL COMMENT '列 (1-3)、ピン以外',"
-            . "`board_row` INT DEFAULT NULL COMMENT '行 (1-)、ピン以外',"
-            . "`pin_order` INT DEFAULT NULL COMMENT 'ピン（全員）の並び順',"
-            . "`updated_at` DATETIME NOT NULL,"
-            . "PRIMARY KEY (`id`),"
-            . "UNIQUE KEY `uniq_note_user` (`note_id`, `user_id`),"
-            . "KEY `idx_project_user` (`project_id`, `user_id`)"
-            . ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='メモボード 個人の配置'"
+        // ピン（自分） (per user): added after the table was first created
+        $have = $this->fetchOne(
+            "SELECT COUNT(*) AS cnt FROM INFORMATION_SCHEMA.COLUMNS "
+            . "WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = '" . $this->quote($table) . "' AND COLUMN_NAME = 'pinned_self'"
         );
+        if (empty($have['cnt'])) {
+            $this->query(
+                "ALTER TABLE `{$table}` "
+                . "ADD COLUMN `pinned_self` TINYINT NOT NULL DEFAULT 0 COMMENT 'ピン（自分）' AFTER `pin_order`, "
+                . "ADD COLUMN `pinned_self_at` DATETIME DEFAULT NULL COMMENT 'ピン（自分）にした日時' AFTER `pinned_self`"
+            );
+        }
     }
 
     /** Visible notes of a project with the current user's placement (default order first). */
     private function userBoardRows($projectId) {
         return $this->fetchAll(sprintf(
-            "SELECT n.id, n.is_important, n.pinned_at, b.board_col, b.board_row, b.pin_order
+            "SELECT n.id, n.is_important, n.pinned_at, b.board_col, b.board_row, b.pin_order, b.pinned_self, b.pinned_self_at
             FROM {$this->table} n
             LEFT JOIN " . $this->userBoardTable() . " b ON b.note_id = n.id AND b.user_id = '%s'
             WHERE n.project_id = %d AND " . $this->currentVisibilitySql('n') . "
@@ -327,9 +341,15 @@ class ProjectNote extends ApplicationModel {
         $pending = array();
         foreach ((array)$rows as $i => $r) {
             $id = intval($r['id']);
-            if (!empty($r['is_important'])) {
+            // The pin band holds ピン（全員） and this user's own ピン（自分）
+            $self = !empty($r['pinned_self']);
+            if (!empty($r['is_important']) || $self) {
                 if ($r['pin_order'] === null) {
-                    $fresh[] = array('id' => $id, 'at' => (string)$r['pinned_at']);
+                    $at = !empty($r['is_important']) ? (string)$r['pinned_at'] : '';
+                    if ($self && isset($r['pinned_self_at']) && strcmp((string)$r['pinned_self_at'], $at) > 0) {
+                        $at = (string)$r['pinned_self_at'];
+                    }
+                    $fresh[] = array('id' => $id, 'at' => $at);
                 } else {
                     $ordered[] = array('id' => $id, 'o' => intval($r['pin_order']), 'i' => $i);
                 }
@@ -402,7 +422,14 @@ class ProjectNote extends ApplicationModel {
 
     /** Add board_col / board_row (grid) and pin_rank (band) of the current user to each note row. */
     private function attachUserBoard($projectId, &$notes) {
-        $board = $this->computeUserBoard($this->userBoardRows($projectId));
+        $rows = $this->userBoardRows($projectId);
+        $selfPinned = array();
+        foreach ((array)$rows as $r) {
+            if (!empty($r['pinned_self'])) {
+                $selfPinned[intval($r['id'])] = true;
+            }
+        }
+        $board = $this->computeUserBoard($rows);
         // notes that just got a cell (new / unpinned / first visit) keep it from now on
         if ($board['appended'] && $this->currentUserid() !== '') {
             $appended = array_flip($board['appended']);
@@ -426,6 +453,7 @@ class ProjectNote extends ApplicationModel {
             $n['board_col'] = $p[0];
             $n['board_row'] = $p[1];
             $n['pin_rank'] = $p[2];
+            $n['is_pinned_self'] = isset($selfPinned[intval($n['id'])]) ? 1 : 0;
         }
         unset($n);
     }
@@ -543,8 +571,15 @@ class ProjectNote extends ApplicationModel {
             "UPDATE " . $this->userBoardTable() . " SET board_col = NULL, board_row = NULL, pin_order = NULL WHERE note_id = %d",
             $noteId
         ));
+        $keepPinned = array(); // users who still have it as ピン（自分）: it stays in their band
+        foreach ((array)$this->fetchAll(sprintf(
+            "SELECT user_id FROM " . $this->userBoardTable() . " WHERE note_id = %d AND pinned_self = 1",
+            $noteId
+        )) as $r) {
+            $keepPinned[(string)$r['user_id']] = true;
+        }
         foreach ($projectId ? $this->boardUsers($projectId) : array() as $userId) {
-            if (!$this->userCanSeeNote($noteId, $userId)) {
+            if (isset($keepPinned[$userId]) || !$this->userCanSeeNote($noteId, $userId)) {
                 continue;
             }
             $before = $this->loadUserCells($projectId, $userId);
@@ -575,6 +610,9 @@ class ProjectNote extends ApplicationModel {
             return ['status' => 'error', 'error' => 'ピン（全員）のメモはピンの中でのみ並べ替えできます'];
         }
         $board = $this->computeUserBoard($this->userBoardRows($projectId));
+        if (in_array($noteId, $board['pinned'], true)) {
+            return ['status' => 'error', 'error' => 'ピン（自分）のメモはピンの中でのみ並べ替えできます'];
+        }
         $cells = $board['cells'];
         $at = array_search($noteId, $cells, true);
         if ($at !== false) {
@@ -626,6 +664,67 @@ class ProjectNote extends ApplicationModel {
         }
         $this->saveUserBoard($projectId, $values);
         return ['status' => 'success', 'order' => $order];
+    }
+
+    /**
+     * Toggle ピン（自分）: the note goes into / leaves the pin band of the current user's own board
+     * only. Other users' boards, the note itself and ピン（全員） are untouched; any note the user can
+     * see can be pinned for themself (自分のみ notes included). POST: id.
+     */
+    function togglePinSelf($params = null) {
+        $noteId = isset($_POST['id']) ? intval($_POST['id']) : 0;
+        $userId = $this->currentUserid();
+        if (!$noteId || $userId === '') {
+            return ['status' => 'error', 'error' => 'id required'];
+        }
+        $note = $this->getById($noteId); // visibility-checked
+        if (!$note) {
+            return ['status' => 'error', 'error' => 'Note not found'];
+        }
+        $projectId = intval($note['project_id']);
+        $row = $this->fetchOne(sprintf(
+            "SELECT pinned_self FROM " . $this->userBoardTable() . " WHERE note_id = %d AND user_id = '%s'",
+            $noteId,
+            $this->quote($userId)
+        ));
+        $next = empty($row['pinned_self']) ? 1 : 0;
+        $before = $this->loadUserCells($projectId, $userId);
+        $after = $before;
+        $at = array_search($noteId, $before, true);
+        if ($next) {
+            // leave the own grid, closing the gap like ピン（全員）
+            if ($at !== false) {
+                unset($after[$at]);
+                for ($i = $at + 1; isset($after[$i]); $i++) {
+                    $after[$i - 1] = $after[$i];
+                    unset($after[$i]);
+                }
+            }
+        } elseif (empty($note['is_important'])) {
+            // back to the first grid cell, right under the band
+            if ($at !== false) {
+                unset($after[$at]);
+            }
+            self::boardInsert($after, 0, $noteId);
+        }
+        $this->saveChangedCells($projectId, $userId, $before, $after);
+        $placed = array_search($noteId, $after, true);
+        $now = date('Y-m-d H:i:s');
+        $this->query(sprintf(
+            "INSERT INTO " . $this->userBoardTable() . " (`project_id`, `note_id`, `user_id`, `board_col`, `board_row`, `pin_order`, `pinned_self`, `pinned_self_at`, `updated_at`)
+            VALUES (%d, %d, '%s', %s, %s, NULL, %d, %s, '%s')
+            ON DUPLICATE KEY UPDATE `board_col` = VALUES(`board_col`), `board_row` = VALUES(`board_row`), `pin_order` = NULL,
+                `pinned_self` = VALUES(`pinned_self`), `pinned_self_at` = VALUES(`pinned_self_at`), `updated_at` = VALUES(`updated_at`)",
+            $projectId,
+            $noteId,
+            $this->quote($userId),
+            $placed === false ? 'NULL' : (($placed % self::BOARD_COLS) + 1),
+            $placed === false ? 'NULL' : (intdiv($placed, self::BOARD_COLS) + 1),
+            $next,
+            $next ? "'" . $this->quote($now) . "'" : 'NULL',
+            $this->quote($now)
+        ));
+        return ['status' => 'success', 'is_pinned_self' => $next];
     }
 
     /**
@@ -1002,7 +1101,7 @@ class ProjectNote extends ApplicationModel {
             return array();
         }
         $rows = $this->fetchAll(sprintf(
-            "SELECT n.id, n.project_id, n.is_important, n.pinned_at, b.board_col, b.board_row, b.pin_order
+            "SELECT n.id, n.project_id, n.is_important, n.pinned_at, b.board_col, b.board_row, b.pin_order, b.pinned_self, b.pinned_self_at
             FROM {$this->table} n
             LEFT JOIN " . $this->userBoardTable() . " b ON b.note_id = n.id AND b.user_id = '%s'
             WHERE n.project_id IN (%s) AND " . $this->currentVisibilitySql('n') . "

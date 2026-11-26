@@ -138,17 +138,6 @@ $parentProjectQuickModalCanEdit = !empty($_SESSION['isProjectManager']);
                             </div>
                             <div class="col-12">
                                 <div class="mb-3 form-control-validation">
-                                    <label class="form-label"><span data-i18n="市区町村">市区町村</span></label>
-                                    <div class="d-flex align-items-center gap-2">
-                                        <input type="text" class="form-control tagify" id="edit_pp_city_tags" name="edit_pp_city_tags" placeholder="市区町村を入力">
-                                        <button class="btn btn-outline-secondary btn-sm" type="button" @click="clearEditParentTagifyTags('city')" title="すべて削除">
-                                            <i class="fa fa-times"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="col-12">
-                                <div class="mb-3 form-control-validation">
                                     <label class="form-label"><span data-i18n="構造事務所">構造事務所</span></label>
                                     <div class="d-flex align-items-center gap-2">
                                         <input type="text" class="form-control tagify" id="edit_pp_structural_office_tags" name="edit_pp_structural_office_tags" placeholder="構造事務所を入力">

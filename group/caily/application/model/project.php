@@ -235,7 +235,8 @@ class Project extends ApplicationModel {
             if (array_key_exists($field, $_POST)) {
                 $value = trim((string)$_POST[$field]);
                 if ($field === 'bels_zeh_grade') {
-                    $data[$field] = preg_match('/^[0-9]$/', $value) ? $value : '';
+                    // 0 (該当なし) was removed: stored as 未選択
+                    $data[$field] = preg_match('/^[1-9]$/', $value) ? $value : '';
                 } else {
                     $data[$field] = $this->validateUTF8MB4($value);
                 }
@@ -930,16 +931,20 @@ class Project extends ApplicationModel {
         $noteSchema = new ProjectNote();
         $boardRanks = $noteSchema->boardRanksForProjects($projectIds);
         unset($noteSchema);
-        // is_pinned_self: ピン（自分） was removed; kept as 0 so the packed format below stays the same
+        // is_pinned_self: ピン（自分） of the current user (メモボード 個人の配置)
+        $selfUid = $this->quote(isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '');
         $noteRows = $this->fetchAll(sprintf(
             "SELECT n.project_id, n.needs_confirmation, n.id, n.content, n.is_important, n.label, n.sort_order, n.visibility, n.bg_color,
-                    0 AS is_pinned_self
+                    COALESCE(ub.pinned_self, 0) AS is_pinned_self
              FROM %sproject_notes n
+             LEFT JOIN %sproject_note_user_board ub ON ub.note_id = n.id AND ub.user_id = '%s'
              WHERE n.project_id IN (%s) AND n.needs_confirmation IN (1, 2)
                AND " . $this->noteVisibilitySql('n') . "
              ORDER BY n.project_id, n.needs_confirmation,
                       n.is_important DESC, n.sort_order ASC, n.created_at DESC",
             DB_PREFIX,
+            DB_PREFIX,
+            $selfUid,
             $idsList
         ));
         $this->sortNotesByBoardRank($noteRows, $boardRanks);
@@ -1793,10 +1798,13 @@ class Project extends ApplicationModel {
         if (!empty($projectIds)) {
             $idsList = implode(',', array_map('intval', $projectIds));
             $notesTable = DB_PREFIX . 'project_notes';
+            $boardTable = DB_PREFIX . 'project_note_user_board';
+            $selfUid = $this->quote(isset($_SESSION['userid']) ? (string)$_SESSION['userid'] : '');
             $notesRows = $this->fetchAll(
                 "SELECT n.project_id, n.display_column, n.id, n.content, n.is_important, n.label, n.sort_order, n.visibility, n.bg_color,
-                        0 AS is_pinned_self
+                        COALESCE(ub.pinned_self, 0) AS is_pinned_self
                  FROM {$notesTable} n
+                 LEFT JOIN {$boardTable} ub ON ub.note_id = n.id AND ub.user_id = '{$selfUid}'
                  WHERE n.project_id IN ({$idsList}) AND n.display_column IS NOT NULL AND TRIM(n.display_column) != ''
                    AND " . $this->noteVisibilitySql('n') . "
                  ORDER BY n.is_important DESC, n.sort_order ASC, n.created_at DESC"
@@ -2164,16 +2172,16 @@ class Project extends ApplicationModel {
      */
     private function sqlBelsZehGradeLabelExpr($column = 'p.bels_zeh_grade') {
         return "CASE CAST({$column} AS CHAR)
-            WHEN '0' THEN '0 : 該当なし（非ZEH）'
-            WHEN '1' THEN '1 : ZEH'
-            WHEN '2' THEN '2 : Nearly ZEH'
-            WHEN '3' THEN '3 : ZEH Oriented'
-            WHEN '4' THEN '4 : ZEH-M'
-            WHEN '5' THEN '5 : Nearly ZEH-M'
-            WHEN '6' THEN '6 : ZEH-M Oriented'
-            WHEN '7' THEN '7 : ZEH Ready'
-            WHEN '8' THEN '8 : DK-ZEH'
-            WHEN '9' THEN '9 : 関西限定DK-ZEH'
+            WHEN '0' THEN ''
+            WHEN '1' THEN 'ZEH'
+            WHEN '2' THEN 'Nearly ZEH'
+            WHEN '3' THEN 'ZEH Oriented'
+            WHEN '4' THEN 'ZEH-M'
+            WHEN '5' THEN 'Nearly ZEH-M'
+            WHEN '6' THEN 'ZEH-M Oriented'
+            WHEN '7' THEN 'ZEH Ready'
+            WHEN '8' THEN 'DK-ZEH'
+            WHEN '9' THEN '関西限定DK-ZEH'
             ELSE CAST({$column} AS CHAR)
         END";
     }
@@ -8206,6 +8214,13 @@ class Project extends ApplicationModel {
         require_once('projectnote.php');
         $noteModel = new ProjectNote();
         return $noteModel->reorderPinned($params);
+    }
+
+    /** メモ: ピン（自分） — own pin band only (all users' view of the note is unchanged). POST id */
+    function toggleNotePinSelf($params = null) {
+        require_once('projectnote.php');
+        $noteModel = new ProjectNote();
+        return $noteModel->togglePinSelf($params);
     }
 
   

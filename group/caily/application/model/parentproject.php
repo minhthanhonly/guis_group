@@ -601,7 +601,7 @@ class ParentProject extends ApplicationModel {
                 'p.project_number',
                 'CAST(p.id AS CHAR)',
                 'p.scale',
-                'p.city',
+                // 市区町村 is no longer shown, so it is not searched either (column kept)
                 'p.type1',
                 'p.type2',
                 'p.structural_office',
@@ -978,7 +978,8 @@ class ParentProject extends ApplicationModel {
         $features = isset($_POST['features']) ? $this->validateUTF8MB4($_POST['features']) : '';
         $notes = isset($_POST['notes']) ? $this->validateUTF8MB4($_POST['notes']) : '';
         $belsZehGrade = isset($_POST['bels_zeh_grade']) ? trim((string)$_POST['bels_zeh_grade']) : '';
-        if ($belsZehGrade !== '' && !in_array($belsZehGrade, array('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), true)) {
+        // 0 (該当なし) was removed: stored as 未選択
+        if ($belsZehGrade !== '' && !in_array($belsZehGrade, array('1', '2', '3', '4', '5', '6', '7', '8', '9'), true)) {
             $belsZehGrade = '';
         }
         
@@ -1134,11 +1135,17 @@ class ParentProject extends ApplicationModel {
             : (isset($old['application_review_agency']) ? $old['application_review_agency'] : '');
         if (isset($_POST['bels_zeh_grade'])) {
             $belsZehGrade = trim((string)$_POST['bels_zeh_grade']);
-            if ($belsZehGrade !== '' && !in_array($belsZehGrade, array('0', '1', '2', '3', '4', '5', '6', '7', '8', '9'), true)) {
+            if ($belsZehGrade === '0') {
+                // 0 (該当なし) was removed: stored as 未選択
+                $belsZehGrade = '';
+            } elseif ($belsZehGrade !== '' && !in_array($belsZehGrade, array('1', '2', '3', '4', '5', '6', '7', '8', '9'), true)) {
                 $belsZehGrade = isset($old['bels_zeh_grade']) ? (string)$old['bels_zeh_grade'] : '';
             }
         } else {
             $belsZehGrade = isset($old['bels_zeh_grade']) ? (string)$old['bels_zeh_grade'] : '';
+        }
+        if ($belsZehGrade === '0') {
+            $belsZehGrade = '';
         }
         $energyMaterials = isset($_POST['energy_materials'])
             ? $this->validateUTF8MB4($_POST['energy_materials'])

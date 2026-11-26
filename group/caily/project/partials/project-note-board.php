@@ -100,6 +100,7 @@ $nbStandalone = !empty($noteBoardStandalone);
                          'note-bg-' + (note.bg_color || 'default'),
                          {
                              'important-note': note.is_important == 1,
+                             'pinned-self-note': note.is_pinned_self == 1 && note.is_important != 1,
                              'is-dragging': noteDrag && noteDrag.id == note.id
                          }
                      ]"
@@ -115,10 +116,17 @@ $nbStandalone = !empty($noteBoardStandalone);
                             <i class="fa fa-grip-vertical"></i>
                         </span>
                         <i v-if="note.is_important == 1" class="fa fa-thumb-tack text-danger" :title="translateLabel('ピン（全員）')"></i>
+                        <i v-if="note.is_pinned_self == 1" class="fa fa-bookmark text-primary" :title="translateLabel('ピン（自分）')"></i>
                         <span v-if="note.visibility === 'members'" class="note-visibility-icon" :title="translateLabel('公開範囲: 案件メンバー')"><i class="fa fa-users"></i></span>
                         <span v-else-if="note.visibility === 'self'" class="note-visibility-icon" :title="translateLabel('公開範囲: 自分のみ')"><i class="fa fa-lock"></i></span>
                         <span v-if="note.edit_locked_name" class="note-editing-chip" :title="note.edit_locked_name + translateLabel('さんが編集中')"><i class="fa fa-user-edit"></i> {{ note.edit_locked_name }}</span>
                         <span class="note-actions ms-auto" @click.stop>
+                            <span class="note-pin-self-icon"
+                                  :class="{ 'is-active': note.is_pinned_self == 1 }"
+                                  :title="note.is_pinned_self == 1 ? translateLabel('ピン（自分）解除') : translateLabel('ピン（自分）')"
+                                  @click="toggleNotePinSelf(note)">
+                                <i class="fa fa-bookmark"></i>
+                            </span>
                             <span v-if="note.visibility !== 'self'"
                                   class="note-pin-everyone-icon"
                                   :class="{ 'is-active': note.is_important == 1 }"
