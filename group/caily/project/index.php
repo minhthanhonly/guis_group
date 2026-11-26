@@ -282,6 +282,12 @@ if($_SESSION['show_project'] == 0){
                            v-model="noteDisplayOneLine" @change="onNoteDisplayOneLineChange">
                     <label class="form-check-label" for="noteDisplayOneLineSwitch" data-i18n="メモを1行表示">メモを1行表示</label>
                 </div>
+                <div class="form-check form-switch mb-0 text-nowrap">
+                    <input class="form-check-input" type="checkbox" id="noteDisplayFullHeightSwitch"
+                           v-model="noteDisplayFullHeight" @change="onNoteDisplayFullHeightChange">
+                    <label class="form-check-label" for="noteDisplayFullHeightSwitch" data-i18n="メモを全部表示"
+                           title="GUISメモ・CAILYメモの高さを制限せず、すべてのメモを表示します">メモを全部表示</label>
+                </div>
                 <div class="dropdown" id="projectListSortTourTarget">
                     <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="projectListSortDropdown"
                             data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
@@ -1018,6 +1024,11 @@ th.pl-measure-nowrap * {
    plain boxes (no scrollbar, no extra compositor layer) */
 body.note-sorting-active #projectTable .confirmation-notes-wrapper:not(.note-sorting-here) {
     overflow: hidden !important;
+}
+/* メモを全部表示: no 200px box — the row grows to show every note (nothing scrolls) */
+#projectTableCard.project-notes-full-height #projectTable .confirmation-notes-wrapper {
+    max-height: none !important;
+    overflow: visible !important;
 }
 
 /* Style for each confirmation note item */

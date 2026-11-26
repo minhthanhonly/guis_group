@@ -736,6 +736,7 @@ var projectTable;
     const FILTER_BY_DEPARTMENT_STORAGE_KEY = 'projectListFiltersByDepartment';
     const FILTER_RESET_PREFS_KEY = 'projectListFilterResetPrefs';
     const NOTE_DISPLAY_ONE_LINE_KEY = 'projectListNoteDisplayOneLine';
+    const NOTE_DISPLAY_FULL_HEIGHT_KEY = 'projectListNoteDisplayFullHeight';
 
     function isNoteDisplayOneLine() {
         try {
@@ -770,6 +771,36 @@ var projectTable;
         var pop = typeof document !== 'undefined' ? document.getElementById('projectNoteHoverPopup') : null;
         if (pop && !on) {
             pop.style.display = 'none';
+        }
+        return on;
+    }
+
+    /** メモを全部表示: GUISメモ / CAILYメモ cells grow to fit every note (no 200px box). Default off. */
+    function isNoteDisplayFullHeight() {
+        try {
+            var v = localStorage.getItem(NOTE_DISPLAY_FULL_HEIGHT_KEY);
+            return v === '1' || v === 'true';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function setNoteDisplayFullHeight(enabled) {
+        try {
+            localStorage.setItem(NOTE_DISPLAY_FULL_HEIGHT_KEY, enabled ? '1' : '0');
+        } catch (e) { /* ignore */ }
+        applyNoteDisplayFullHeightClass(enabled);
+    }
+
+    function applyNoteDisplayFullHeightClass(enabled) {
+        var on = enabled !== undefined && enabled !== null ? !!enabled : isNoteDisplayFullHeight();
+        var card = typeof document !== 'undefined' ? document.getElementById('projectTableCard') : null;
+        if (card) {
+            card.classList.toggle('project-notes-full-height', on);
+        }
+        var $sw = $('#noteDisplayFullHeightSwitch');
+        if ($sw.length && $sw.prop('checked') !== on) {
+            $sw.prop('checked', on);
         }
         return on;
     }
@@ -6881,35 +6912,9 @@ var projectTable;
                     name: 'manager',
                     data: 'manager_id',
                     orderable: false,
-                    width: '60px',
+                    width: '80px',
                     render: function(data) {
-                        if (!data) return '-';
-                        const members = data.split('|').filter(member => member.trim() !== '');
-                        if (members.length === 0) return '-';
-
-                        let html = '<div class="d-flex align-items-center">';
-                        const maxAvatars = 1;
-                        members.slice(0, maxAvatars).forEach(member => {
-                            const parsed = parseListMemberToken(member);
-                            html += renderListAvatarHtml(parsed.realname, parsed.userid || parsed.authId, parsed.userImage, {
-                                user_ruby: parsed.user_ruby
-                            });
-                        });
-
-                        if (members.length > maxAvatars) {
-                            const remaining = members.slice(maxAvatars).map(member => {
-                                return formatListMemberDisplayName(member);
-                            }).join(', ');
-                            html += `
-                                <span class="avatar-initial rounded-circle pull-up" 
-                                    data-bs-toggle="tooltip" title="${remaining}" 
-                                    style="display:inline-flex;">
-                                    +${members.length - maxAvatars}
-                                </span>
-                            `;
-                        }
-                        html += '</div>';
-                        return html;
+                        return renderListMemberAvatarStack(data);
                     },
                     title: buildI18nHeaderTitle(getProjectBaseColumnTitle('manager', '管理'))
                 },
@@ -6936,26 +6941,7 @@ var projectTable;
                     data: 'assignment_id',
                     orderable: false,
                     render: function(data) {
-                        if (!data) return '-';
-                        const members = data.split('|').filter(member => member.trim() !== '');
-                        if (members.length === 0) return '-';
-
-                        // Up to 6 icons (they wrap in the narrow column); from the 7th member on: "+N" with the names on hover
-                        const maxAvatars = 6;
-                        let html = '<div class="pl-member-avatars">';
-                        members.slice(0, maxAvatars).forEach(member => {
-                            const parsed = parseListMemberToken(member);
-                            html += renderListAvatarHtml(parsed.realname, parsed.userid || parsed.authId, parsed.userImage, {
-                                user_ruby: parsed.user_ruby
-                            });
-                        });
-                        if (members.length > maxAvatars) {
-                            const remaining = members.slice(maxAvatars).map(member => formatListMemberDisplayName(member)).join(', ');
-                            html += '<div class="avatar me-1"><span class="avatar-initial rounded-circle pull-up" data-bs-toggle="tooltip" title="'
-                                + escapeHtmlForNote(remaining).replace(/"/g, '&quot;') + '">+' + (members.length - maxAvatars) + '</span></div>';
-                        }
-                        html += '</div>';
-                        return html;
+                        return renderListMemberAvatarStack(data);
                     },
                     width: '80px',
                     title: '<span data-i18n="メンバー">メンバー</span>'
@@ -9805,6 +9791,7 @@ var projectTable;
 
         // Note 1-line switch is Vue-bound (inside #app); apply class early for first paint
         applyNoteDisplayOneLineClass();
+        applyNoteDisplayFullHeightClass();
 
         var savedScrollOnLoad = getSavedProjectListScroll();
         if (savedScrollOnLoad) {
@@ -9862,6 +9849,31 @@ var projectTable;
     /**
      * Avatar HTML: unified via renderUserAvatarHtml (initials first).
      */
+    /**
+     * メンバー / 担当者 cells: "token|token|..." as up to 6 avatar icons (they wrap in the narrow
+     * column); from the 7th person on, one "+N" icon with the remaining names on hover.
+     */
+    function renderListMemberAvatarStack(data) {
+        const LIST_MEMBER_MAX_AVATARS = 6;
+        if (!data) return '-';
+        const members = String(data).split('|').filter(member => member.trim() !== '');
+        if (members.length === 0) return '-';
+        let html = '<div class="pl-member-avatars">';
+        members.slice(0, LIST_MEMBER_MAX_AVATARS).forEach(member => {
+            const parsed = parseListMemberToken(member);
+            html += renderListAvatarHtml(parsed.realname, parsed.userid || parsed.authId, parsed.userImage, {
+                user_ruby: parsed.user_ruby
+            });
+        });
+        if (members.length > LIST_MEMBER_MAX_AVATARS) {
+            const remaining = members.slice(LIST_MEMBER_MAX_AVATARS).map(member => formatListMemberDisplayName(member)).join(', ');
+            html += '<div class="avatar me-1"><span class="avatar-initial rounded-circle pull-up" data-bs-toggle="tooltip" title="'
+                + escapeHtmlForNote(remaining).replace(/"/g, '&quot;') + '">+' + (members.length - LIST_MEMBER_MAX_AVATARS) + '</span></div>';
+        }
+        html += '</div>';
+        return html;
+    }
+
     function renderListAvatarHtml(realname, userId, userImage, opts) {
         opts = opts || {};
         if (typeof renderUserAvatarHtml === 'function') {
@@ -10125,6 +10137,7 @@ var projectTable;
                     loading: true,
                     selectedDepartment: null,
                     noteDisplayOneLine: false,
+                    noteDisplayFullHeight: false,
                     showClearAllFavoritesBtn: false,
                     projects: [],
                     departments: [],
@@ -10348,6 +10361,8 @@ var projectTable;
                 this.selectedStatusKeys = normalizeProjectStatusKeys(filters.statusKeys || filters.statusKey || '');
                 this.noteDisplayOneLine = isNoteDisplayOneLine();
                 applyNoteDisplayOneLineClass(this.noteDisplayOneLine);
+                this.noteDisplayFullHeight = isNoteDisplayFullHeight();
+                applyNoteDisplayFullHeightClass(this.noteDisplayFullHeight);
             
                 // Load column visibility (thứ tự giống bảng khi đã chọn department / có save order)
                 migrateColumnVisibilityStorageIfNeeded(customFieldColumnDefinitions || []);
@@ -10357,6 +10372,7 @@ var projectTable;
                 this.$nextTick(() => {
                     applyI18nToProjectTableUI();
                     applyNoteDisplayOneLineClass(this.noteDisplayOneLine);
+                    applyNoteDisplayFullHeightClass(this.noteDisplayFullHeight);
                 });
             
                 this.loadDepartments();
@@ -11445,6 +11461,9 @@ var projectTable;
                 onNoteDisplayOneLineChange() {
                     setNoteDisplayOneLine(!!this.noteDisplayOneLine);
                 },
+                onNoteDisplayFullHeightChange() {
+                    setNoteDisplayFullHeight(!!this.noteDisplayFullHeight);
+                },
                 onFavoritesFilterChange() {
                     const isChecked = $('#filterFavoritesOnly').is(':checked');
                     this.showClearAllFavoritesBtn = isChecked;
@@ -12013,6 +12032,9 @@ var projectTable;
                 },
                 noteDisplayOneLine(newVal) {
                     setNoteDisplayOneLine(!!newVal);
+                },
+                noteDisplayFullHeight(newVal) {
+                    setNoteDisplayFullHeight(!!newVal);
                 }
             }
         }).mount('#app');
@@ -12023,6 +12045,10 @@ var projectTable;
                 app.noteDisplayOneLine = isNoteDisplayOneLine();
             }
             applyNoteDisplayOneLineClass(isNoteDisplayOneLine());
+            if (app && typeof app.noteDisplayFullHeight !== 'undefined') {
+                app.noteDisplayFullHeight = isNoteDisplayFullHeight();
+            }
+            applyNoteDisplayFullHeightClass(isNoteDisplayFullHeight());
         } catch (eNoteDisp) { /* ignore */ }
         // Must run AFTER Vue mount: createApp().mount() replaces #app children, so
         // pre-mount getElementById refs / listeners would point at detached nodes
