@@ -37,9 +37,14 @@ const FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS = {
 let DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
 let DEFAULT_TASK_KIND_BY_TITLE = Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
 let DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
+// 省エネ: 計算確認 20% with 申請代行, 40% without (null for other departments)
+let ENERGY_APPLICATION_TASK_RULE = null;
 
-function applyDepartmentDefaultTaskConfig(tasks) {
+function applyDepartmentDefaultTaskConfig(tasks, energyRule) {
     const list = Array.isArray(tasks) ? tasks : [];
+    ENERGY_APPLICATION_TASK_RULE = energyRule && energyRule.application_title && energyRule.check_title
+        ? energyRule
+        : null;
     if (!list.length) {
         DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK = FALLBACK_DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.slice();
         DEFAULT_TASK_KIND_BY_TITLE = Object.assign({}, FALLBACK_DEFAULT_TASK_KIND_BY_TITLE);
@@ -73,6 +78,17 @@ function applyDepartmentDefaultTaskConfig(tasks) {
     DEFAULT_TASK_DRAWING_PRICE_PERCENTS = Object.keys(percents).length
         ? percents
         : Object.assign({}, FALLBACK_DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
+    // 東建 has no 申請代行 by default; once added it is a default task with its 比率(%) as in 大東
+    if (ENERGY_APPLICATION_TASK_RULE) {
+        const appTitle = String(ENERGY_APPLICATION_TASK_RULE.application_title).trim();
+        if (DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(appTitle) === -1) {
+            DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.push(appTitle);
+        }
+        const appPct = Number(ENERGY_APPLICATION_TASK_RULE.application_pct);
+        if (DEFAULT_TASK_DRAWING_PRICE_PERCENTS[appTitle] == null && Number.isFinite(appPct)) {
+            DEFAULT_TASK_DRAWING_PRICE_PERCENTS[appTitle] = appPct;
+        }
+    }
 }
 
 const TaskApp = createApp({
@@ -711,7 +727,7 @@ const TaskApp = createApp({
                 const data = res && res.data ? res.data : {};
                 const tasks = Array.isArray(data.tasks) ? data.tasks : [];
                 this.departmentDefaultTasks = tasks;
-                applyDepartmentDefaultTaskConfig(tasks);
+                applyDepartmentDefaultTaskConfig(tasks, data.energy_application_rule || null);
             } catch (e) {
                 console.error('Error loading department default tasks:', e);
                 this.departmentDefaultTasks = [];
@@ -1030,12 +1046,35 @@ const TaskApp = createApp({
             const title = (task.title || '').trim();
             return DEFAULT_TASKS_WITH_AUTO_DRAWING_LINK.indexOf(title) !== -1;
         },
+        /**
+         * 比率(%) of default tasks for this project now: 省エネ 計算確認 is 20% when the project
+         * has a 申請代行 task, 40% when it has none (same rule as the server).
+         */
+        getProjectDefaultTaskPercents() {
+            const percents = Object.assign({}, DEFAULT_TASK_DRAWING_PRICE_PERCENTS);
+            const rule = ENERGY_APPLICATION_TASK_RULE;
+            if (!rule) {
+                return percents;
+            }
+            const checkTitle = String(rule.check_title).trim();
+            if (percents[checkTitle] == null) {
+                return percents;
+            }
+            const appTitle = String(rule.application_title).trim();
+            const hasApplication = (this.tasks || []).some((t) => t && (t.title || '').trim() === appTitle);
+            const pct = Number(hasApplication ? rule.check_pct_with_application : rule.check_pct_without_application);
+            if (Number.isFinite(pct)) {
+                percents[checkTitle] = pct;
+            }
+            return percents;
+        },
         getExistingDefaultTaskPercentTotal() {
             const titles = new Set((this.tasks || []).map((t) => (t.title || '').trim()));
+            const percents = this.getProjectDefaultTaskPercents();
             let total = 0;
-            Object.keys(DEFAULT_TASK_DRAWING_PRICE_PERCENTS).forEach((title) => {
+            Object.keys(percents).forEach((title) => {
                 if (titles.has(title)) {
-                    total += DEFAULT_TASK_DRAWING_PRICE_PERCENTS[title];
+                    total += percents[title];
                 }
             });
             return total;
@@ -1064,7 +1103,7 @@ const TaskApp = createApp({
                 return null;
             }
             if (this.isDefaultTaskWithAutoDrawingLink(task)) {
-                const fixed = DEFAULT_TASK_DRAWING_PRICE_PERCENTS[(task.title || '').trim()];
+                const fixed = this.getProjectDefaultTaskPercents()[(task.title || '').trim()];
                 return fixed != null ? fixed : null;
             }
             if (!this.isTaskLinkedToDrawings(task)) {

@@ -535,6 +535,8 @@ createApp({
                     + '&department_id=' + encodeURIComponent(this.project.department_id)
                     + '&project_id=' + encodeURIComponent(this.project.id));
                 const tasks = res && res.data && Array.isArray(res.data.tasks) ? res.data.tasks : [];
+                const projectPercents = res && res.data && res.data.project_percents
+                    && typeof res.data.project_percents === 'object' ? res.data.project_percents : null;
                 const map = {};
                 tasks.forEach((t) => {
                     const title = String(t && t.title ? t.title : '').trim();
@@ -544,6 +546,15 @@ createApp({
                         map[title] = pct / 100;
                     }
                 });
+                // 比率(%) for this project now (省エネ: 計算確認 20% / 40% by 申請代行), same as the server
+                if (projectPercents) {
+                    Object.keys(projectPercents).forEach((title) => {
+                        const pct = Number(projectPercents[title]);
+                        if (Number.isFinite(pct)) {
+                            map[title] = pct / 100;
+                        }
+                    });
+                }
                 if (Object.keys(map).length) {
                     // 案件 cũ keep the built-in titles not set in 既定タスク (same as the server)
                     this.defaultTaskPercents = this.isTaskWeightMode

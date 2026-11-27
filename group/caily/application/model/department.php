@@ -914,9 +914,11 @@ class Department extends ApplicationModel {
      * 'percents' = title => 比率(%).
      */
     public function getProjectDefaultTaskShares($projectId, $departmentId) {
+        $projectId = intval($projectId);
+        $departmentId = intval($departmentId);
         $defs = $this->resolveDefaultTaskDefinitionsForCustomer(
-            intval($departmentId),
-            $this->getProjectCompanyName(intval($projectId))
+            $departmentId,
+            $this->getProjectCompanyName($projectId)
         );
         $titles = array();
         $percents = array();
@@ -932,7 +934,53 @@ class Department extends ApplicationModel {
                 $percents[$title] = floatval($def['price_pct']);
             }
         }
+
+        $rule = $this->getEnergyApplicationTaskRule($departmentId);
+        if ($rule !== null && $projectId > 0) {
+            $row = $this->fetchOne(sprintf(
+                "SELECT COUNT(*) AS cnt FROM %stasks WHERE project_id = %d AND TRIM(title) = '%s'",
+                DB_PREFIX,
+                $projectId,
+                $this->quote($rule['application_title'])
+            ));
+            $hasApplication = $row && intval($row['cnt']) > 0;
+            if ($hasApplication) {
+                // 東建 has no 申請代行 by default; once added it keeps its 比率(%) as in 大東
+                $titles[$rule['application_title']] = true;
+                $percents[$rule['application_title']] = $rule['application_pct'];
+            }
+            if (isset($titles[$rule['check_title']])) {
+                $percents[$rule['check_title']] = $hasApplication
+                    ? $rule['check_pct_with_application']
+                    : $rule['check_pct_without_application'];
+            }
+        }
         return array('titles' => $titles, 'percents' => $percents);
+    }
+
+    /**
+     * 省エネ: 計算確認 is 40% when the project has no 申請代行 task, 20% when it has one.
+     * Null for other departments.
+     */
+    public function getEnergyApplicationTaskRule($departmentId) {
+        $departmentId = intval($departmentId);
+        if (!$this->isEnergyDepartmentId($departmentId)) {
+            return null;
+        }
+        $applicationPct = 20;
+        foreach ($this->resolveDefaultTaskDefinitions($departmentId) as $def) {
+            $title = isset($def['title']) ? trim((string) $def['title']) : '';
+            if ($title === '申請代行' && isset($def['price_pct']) && is_numeric($def['price_pct'])) {
+                $applicationPct = floatval($def['price_pct']);
+            }
+        }
+        return array(
+            'application_title' => '申請代行',
+            'application_pct' => $applicationPct,
+            'check_title' => '計算確認',
+            'check_pct_with_application' => 20,
+            'check_pct_without_application' => 40,
+        );
     }
 
     /**
@@ -966,6 +1014,9 @@ class Department extends ApplicationModel {
                     ? self::resolveCustomerDefaultTaskVariant($companyName)
                     : '',
                 'tasks' => $this->resolveDefaultTaskDefinitionsForCustomer($departmentId, $companyName),
+                // 比率(%) for this project now (申請代行 present or not), title => %
+                'project_percents' => $this->getProjectDefaultTaskShares($projectId, $departmentId)['percents'],
+                'energy_application_rule' => $this->getEnergyApplicationTaskRule($departmentId),
                 'is_builtin' => !$this->hasSavedDefaultTasks($departmentId) ? 1 : 0,
             );
         }
