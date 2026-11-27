@@ -304,8 +304,8 @@ if($_SESSION['show_project'] == 0){
                                 <option value="" data-i18n="デフォルト">デフォルト</option>
                                 <option value="yotei" data-i18n="予定工程">予定工程</option>
                                 <option value="start_date" data-i18n="開始日">開始日</option>
-                                <option value="caily_nouki" data-i18n="CAILY納期">CAILY納期</option>
-                                <option value="guis_nouki" data-sort-field="guis_nouki" data-i18n="GUIS納期">GUIS納期</option>
+                                <option value="caily_nouki" data-hidden-on-energy="1" data-i18n="CAILY納期">CAILY納期</option>
+                                <option value="guis_nouki" data-sort-field="guis_nouki" data-hidden-on-energy="1" data-i18n="GUIS納期">GUIS納期</option>
                                 <option value="end_date" data-sort-field="end_date" data-i18n="期限日">期限日</option>
                                 <option value="estimate_date" data-sort-field="estimate_date" data-director-only="1" data-i18n="見積日">見積日</option>
                                 <option value="invoice_date" data-sort-field="invoice_date" data-director-only="1" data-i18n="請求日">請求日</option>

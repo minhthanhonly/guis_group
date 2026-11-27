@@ -3582,11 +3582,19 @@ var projectTable;
         'invoice_date'
     ];
 
+    /** 省エネ: 期限 of a default task (task_due:<title>, same titles as 日付検索) */
+    function isEnergyTaskDueSortField(key) {
+        return ENERGY_TASK_DUE_DATE_FILTER_FIELDS.some(function(f) { return f.value === key; });
+    }
+
+    // Saved sort fields are kept whatever the tab (filters load before the department is known);
+    // refreshProjectListSortFieldOptions hides / clears the ones the current tab does not offer.
     function normalizeProjectListSortColumn(value) {
         var key = String(value || '').trim();
         if ((key === 'guis_nouki' || key === 'end_date') && !canViewEndDateColumn()) {
             return '';
         }
+        if (isEnergyTaskDueSortField(key)) return key;
         return PROJECT_LIST_SORT_FIELDS.indexOf(key) >= 0 ? key : '';
     }
 
@@ -3595,6 +3603,8 @@ var projectTable;
     }
 
     function getProjectListSortColumnFromUi() {
+        // an option the current tab does not offer (hidden / disabled) sorts by default
+        if ($('#projectListSortColumn option:selected').prop('disabled')) return '';
         return normalizeProjectListSortColumn($('#projectListSortColumn').val());
     }
 
@@ -3605,6 +3615,27 @@ var projectTable;
     function refreshProjectListSortFieldOptions() {
         var $sel = $('#projectListSortColumn');
         if (!$sel.length) return;
+        // 省エネ tab: the 期限 of the default tasks instead of CAILY納期 / GUIS納期
+        if (!$sel.find('option[data-energy-only="1"]').length) {
+            var $after = $sel.find('option[value="end_date"]');
+            ENERGY_TASK_DUE_DATE_FILTER_FIELDS.slice().reverse().forEach(function(f) {
+                var $opt = $('<option>').attr('value', f.value).attr('data-energy-only', '1').text(f.label);
+                if ($after.length) $opt.insertAfter($after); else $sel.append($opt);
+            });
+        }
+        var isEnergyTab = isEnergyDepartmentSelectedForStatus();
+        $sel.find('option[data-energy-only="1"], option[data-hidden-on-energy="1"]').each(function() {
+            var $opt = $(this);
+            var offered = $opt.attr('data-energy-only') === '1' ? isEnergyTab : !isEnergyTab;
+            if (offered) {
+                $opt.prop('disabled', false).show();
+            } else {
+                if ($sel.val() === $opt.attr('value')) {
+                    $sel.val('');
+                }
+                $opt.prop('disabled', true).hide();
+            }
+        });
         var showDirector = canViewProjectDirectorColumns();
         $sel.find('option[data-director-only="1"]').each(function() {
             var $opt = $(this);
@@ -3620,7 +3651,7 @@ var projectTable;
         var showEndDate = canViewEndDateColumn();
         $sel.find('option[value="guis_nouki"], option[value="end_date"]').each(function() {
             var $opt = $(this);
-            if (showEndDate) {
+            if (showEndDate && !($opt.attr('data-hidden-on-energy') === '1' && isEnergyTab)) {
                 $opt.prop('disabled', false).show();
             } else {
                 if ($sel.val() === $opt.attr('value')) {

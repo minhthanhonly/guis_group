@@ -634,6 +634,18 @@ class Project extends ApplicationModel {
      * ORDER BY expression for project list (computed columns are not p.* fields).
      */
     function resolveProjectListOrderExpression($order_column, $user_id) {
+        // 省エネ: 期限 (due_date) of a default task, e.g. task_due:計算確認 (same whitelist as 日付検索)
+        if (strpos((string)$order_column, 'task_due:') === 0) {
+            $title = substr((string)$order_column, strlen('task_due:'));
+            if (in_array($title, self::ENERGY_TASK_DUE_DATE_FILTER_TITLES, true)) {
+                return sprintf(
+                    "(SELECT MIN(tds.due_date) FROM %stasks tds WHERE tds.project_id = p.id AND tds.title = '%s')",
+                    DB_PREFIX,
+                    $this->escape($title)
+                );
+            }
+            return 'p.end_date';
+        }
         $order_column = preg_replace('/[^a-z0-9_]/i', '', (string)$order_column);
         $user_id = intval($user_id);
 
